@@ -1,0 +1,11 @@
+#
+# project specific stuff
+#
+bin
+clang
+
+#
+# visual studio stuff
+#
+.vs
+x64

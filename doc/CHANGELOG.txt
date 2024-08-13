@@ -1,0 +1,14 @@
+v0.1.0, 13/08/2024:
+
+* Add Rebuild skipping.
+* Add `set_builder_options()`, which lets users customize their builds how they want via C++.
+* Add `--nuke` command line argument that will delete all the contents of a folder, followed by the folder itself.
+* Add `--config=<config>` command line argument which lets users specify their own configs.
+* Add `on_pre_build()` and `on_post_build()` for users.
+* Expose all optimisation levels that Clang provides via `BuilderOptions`, instead of just a boolean toggling them on/off.
+* Detect if a specific version of Clang is installed.  If it's not, then download and install it automatically.
+* Set default output path to the same folder as the source file you are building.
+* Remove Clang-specific syntax from defines, includes, library_paths, and libraries in `BuilderOptions`.
+	* Can't remove it from the ignored warnings list just yet.  That list needs to be moved into a Clang-specific set of options.
+* Remove dependency to Core in the public header `Builder.h`.
+	* We now use STL as the array types instead.  As much as I hate STL, it is ubuiqtous, which is an advantage here.

@@ -13,7 +13,8 @@ Proprietary and confidential.
 
 #pragma once
 
-#include "src/core/core.cpp"
+#include "src/core/array.h"
+#include "src/core/string_helpers.h"
 
 // If you override set_builder_options() you will need preface the function with the BUILDER_CALLBACK #define.
 // This is because when Builder does its user config build stage it will search your code for the function set_builder_options() and BUILDER_DOING_USER_CONFIG_BUILD will be defined.

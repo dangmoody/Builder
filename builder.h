@@ -13,7 +13,7 @@ Proprietary and confidential.
 
 #pragma once
 
-#include <vector>
+#include "src/core/core.cpp"
 
 // If you override set_builder_options() you will need preface the function with the BUILDER_CALLBACK #define.
 // This is because when Builder does its user config build stage it will search your code for the function set_builder_options() and BUILDER_DOING_USER_CONFIG_BUILD will be defined.
@@ -41,20 +41,20 @@ enum OptimizationLevel {
 struct BuilderOptions {
 	// Additional #defines to set for Clang.
 	// Example: IS_AWESOME=1.
-	std::vector<const char*>	defines;
+	Array<const char*>	defines;
 
 	// Additional include paths to set for Clang.
-	std::vector<const char*>	additional_includes;
+	Array<const char*>	additional_includes;
 
 	// Additional library paths to set for Clang.
-	std::vector<const char*>	additional_lib_paths;
+	Array<const char*>	additional_lib_paths;
 
 	// Additional libraries to set for Clang.
-	std::vector<const char*>	additional_libs;
+	Array<const char*>	additional_libs;
 
 	// Additional warnings to tell Clang to ignore.
 	// Uses the Clang syntax (E.G.: -Wno-newline-eof).
-	std::vector<const char*>	ignore_warnings;
+	Array<const char*>	ignore_warnings;
 
 	// What kind of binary do you want to build?
 	// Defaults to EXE.

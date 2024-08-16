@@ -13,8 +13,6 @@ Proprietary and confidential.
 
 #include "../builder.h"
 
-#include "core/core.cpp"
-
 #ifdef _WIN64
 #include <Windows.h>
 #include <Shlwapi.h>
@@ -174,12 +172,12 @@ static s32 BuildEXE( buildContext_t* context, Array<const char*>& sourceFiles ) 
 		1 +	// -o
 		1 +	// binary name
 		sourceFiles.count +
-		context->options.defines.size() +
-		context->options.additional_includes.size() +
-		context->options.additional_lib_paths.size() +
-		context->options.additional_libs.size() +
+		context->options.defines.count +
+		context->options.additional_includes.count +
+		context->options.additional_lib_paths.count +
+		context->options.additional_libs.count +
 		5 +	// warning levels
-		context->options.ignore_warnings.size() +
+		context->options.ignore_warnings.count +
 		1	// null terminator
 	);
 
@@ -203,19 +201,19 @@ static s32 BuildEXE( buildContext_t* context, Array<const char*>& sourceFiles ) 
 
 	array_add_range( &args, sourceFiles.data, sourceFiles.count );
 
-	For ( u32, i, 0, context->options.defines.size() ) {
+	For ( u32, i, 0, context->options.defines.count ) {
 		array_add( &args, tprintf( "-D%s", context->options.defines[i] ) );
 	}
 
-	For ( u32, i, 0, context->options.additional_includes.size() ) {
+	For ( u32, i, 0, context->options.additional_includes.count ) {
 		array_add( &args, tprintf( "-I%s", context->options.additional_includes[i] ) );
 	}
 
-	For ( u32, i, 0, context->options.additional_lib_paths.size() ) {
+	For ( u32, i, 0, context->options.additional_lib_paths.count ) {
 		array_add( &args, tprintf( "-L%s", context->options.additional_lib_paths[i] ) );
 	}
 
-	For ( u32, i, 0, context->options.additional_libs.size() ) {
+	For ( u32, i, 0, context->options.additional_libs.count ) {
 		array_add( &args, tprintf( "-l%s", context->options.additional_libs[i] ) );
 	}
 
@@ -226,8 +224,8 @@ static s32 BuildEXE( buildContext_t* context, Array<const char*>& sourceFiles ) 
 	array_add( &args, "-Wextra" );
 	array_add( &args, "-Wpedantic" );
 
-	if ( context->options.ignore_warnings.size() > 0 ) {
-		array_add_range( &args, context->options.ignore_warnings.data(), context->options.ignore_warnings.size() );
+	if ( context->options.ignore_warnings.count > 0 ) {
+		array_add_range( &args, context->options.ignore_warnings.data, context->options.ignore_warnings.count );
 	}
 
 	array_add( &args, NULL );
@@ -254,12 +252,12 @@ static s32 BuildDynamicLibrary( buildContext_t* context, Array<const char*>& sou
 		1 +	// -o
 		1 +	// binary name
 		sourceFiles.count +
-		context->options.defines.size() +
-		context->options.additional_includes.size() +
-		context->options.additional_lib_paths.size() +
-		context->options.additional_libs.size() +
+		context->options.defines.count +
+		context->options.additional_includes.count +
+		context->options.additional_lib_paths.count +
+		context->options.additional_libs.count +
 		5 +	// warning levels
-		context->options.ignore_warnings.size() +
+		context->options.ignore_warnings.count +
 		1	// null terminator
 	);
 
@@ -284,19 +282,19 @@ static s32 BuildDynamicLibrary( buildContext_t* context, Array<const char*>& sou
 
 	array_add_range( &args, sourceFiles.data, sourceFiles.count );
 
-	For ( u32, i, 0, context->options.defines.size() ) {
+	For ( u32, i, 0, context->options.defines.count ) {
 		array_add( &args, tprintf( "-D%s", context->options.defines[i] ) );
 	}
 
-	For ( u32, i, 0, context->options.additional_includes.size() ) {
+	For ( u32, i, 0, context->options.additional_includes.count ) {
 		array_add( &args, tprintf( "-I%s", context->options.additional_includes[i] ) );
 	}
 
-	For ( u32, i, 0, context->options.additional_lib_paths.size() ) {
+	For ( u32, i, 0, context->options.additional_lib_paths.count ) {
 		array_add( &args, tprintf( "-L%s", context->options.additional_lib_paths[i] ) );
 	}
 
-	For ( u32, i, 0, context->options.additional_libs.size() ) {
+	For ( u32, i, 0, context->options.additional_libs.count ) {
 		array_add( &args, tprintf( "-l%s", context->options.additional_libs[i] ) );
 	}
 
@@ -307,8 +305,8 @@ static s32 BuildDynamicLibrary( buildContext_t* context, Array<const char*>& sou
 	array_add( &args, "-Wextra" );
 	array_add( &args, "-Wpedantic" );
 
-	if ( context->options.ignore_warnings.size() > 0 ) {
-		array_add_range( &args, context->options.ignore_warnings.data(), context->options.ignore_warnings.size() );
+	if ( context->options.ignore_warnings.count > 0 ) {
+		array_add_range( &args, context->options.ignore_warnings.data, context->options.ignore_warnings.count );
 	}
 
 	array_add( &args, NULL );
@@ -342,12 +340,12 @@ static s32 BuildStaticLibrary( buildContext_t* context, Array<const char*>& sour
 		1 +	// -o
 		1 +	// binary name
 		sourceFiles.count +
-		context->options.defines.size() +
-		context->options.additional_includes.size() +
-		context->options.additional_lib_paths.size() +
-		context->options.additional_libs.size() +
+		context->options.defines.count +
+		context->options.additional_includes.count +
+		context->options.additional_lib_paths.count +
+		context->options.additional_libs.count +
 		5 +	// warning levels
-		context->options.ignore_warnings.size() +
+		context->options.ignore_warnings.count +
 		1	// null terminator
 	);
 
@@ -388,11 +386,11 @@ static s32 BuildStaticLibrary( buildContext_t* context, Array<const char*>& sour
 
 		array_add( &args, sourceFile );
 
-		For ( u32, i, 0, context->options.defines.size() ) {
+		For ( u32, i, 0, context->options.defines.count ) {
 			array_add( &args, tprintf( "-D%s", context->options.defines[i] ) );
 		}
 
-		For ( u32, i, 0, context->options.additional_includes.size() ) {
+		For ( u32, i, 0, context->options.additional_includes.count ) {
 			array_add( &args, tprintf( "-I%s", context->options.additional_includes[i] ) );
 		}
 
@@ -403,8 +401,8 @@ static s32 BuildStaticLibrary( buildContext_t* context, Array<const char*>& sour
 		array_add( &args, "-Wextra" );
 		array_add( &args, "-Wpedantic" );
 
-		if ( context->options.ignore_warnings.size() > 0 ) {
-			array_add_range( &args, context->options.ignore_warnings.data(), context->options.ignore_warnings.size() );
+		if ( context->options.ignore_warnings.count > 0 ) {
+			array_add_range( &args, context->options.ignore_warnings.data, context->options.ignore_warnings.count );
 		}
 
 		array_add( &args, NULL );
@@ -512,14 +510,11 @@ int main( int argc, char** argv ) {
 		GetCurrentDirectory( MAX_PATH, oldCWD );
 		defer( SetCurrentDirectory( oldCWD ) );
 
-		// set CWD to whereever builder lives
-		// if were debugging just use root project folder
-#ifndef _DEBUG
+		// set CWD to whereever builder lives for first time setup
 		char selfDir[MAX_PATH] = {};
 		GetModuleFileName( NULL, selfDir, MAX_PATH );
 		PathRemoveFileSpec( selfDir );
 		SetCurrentDirectory( selfDir );
-#endif
 
 		// if we cant find our copy of clang then we definitely need to run first time setup
 		{
@@ -676,39 +671,39 @@ int main( int argc, char** argv ) {
 
 	// set all the additional compiler options that we know we need
 	{
-		context.options.defines.push_back( "_CRT_SECURE_NO_WARNINGS" );
+		array_add(&context.options.defines, "_CRT_SECURE_NO_WARNINGS" );
 
 #ifdef _WIN64
-		context.options.additional_libs.push_back( "user32.lib" );
-		context.options.additional_libs.push_back( "Shlwapi.lib" );
-		context.options.additional_libs.push_back( "msvcrtd.lib" );
-		context.options.additional_libs.push_back( "DbgHelp.lib" );
+		array_add(&context.options.additional_libs, "user32.lib" );
+		array_add(&context.options.additional_libs, "Shlwapi.lib" );
+		array_add(&context.options.additional_libs, "msvcrtd.lib" );
+		array_add(&context.options.additional_libs, "DbgHelp.lib" );
 #endif // _WIN64
 
-		context.options.ignore_warnings.push_back( "-Wno-newline-eof" );
-		context.options.ignore_warnings.push_back( "-Wno-pointer-integer-compare" );
-		context.options.ignore_warnings.push_back( "-Wno-declaration-after-statement" );
-		context.options.ignore_warnings.push_back( "-Wno-gnu-zero-variadic-macro-arguments" );
-		context.options.ignore_warnings.push_back( "-Wno-cast-align" );
-		context.options.ignore_warnings.push_back( "-Wno-bad-function-cast" );
-		context.options.ignore_warnings.push_back( "-Wno-format-nonliteral" );
-		context.options.ignore_warnings.push_back( "-Wno-missing-braces" );
-		context.options.ignore_warnings.push_back( "-Wno-switch-enum" );
-		context.options.ignore_warnings.push_back( "-Wno-covered-switch-default" );
-		context.options.ignore_warnings.push_back( "-Wno-double-promotion" );
-		context.options.ignore_warnings.push_back( "-Wno-cast-qual" );
-		context.options.ignore_warnings.push_back( "-Wno-unused-variable" );
-		context.options.ignore_warnings.push_back( "-Wno-unused-function" );
-		context.options.ignore_warnings.push_back( "-Wno-empty-translation-unit" );
-		context.options.ignore_warnings.push_back( "-Wno-zero-as-null-pointer-constant" );
-		context.options.ignore_warnings.push_back( "-Wno-c++98-compat-pedantic" );
-		context.options.ignore_warnings.push_back( "-Wno-unused-macros" );
-		context.options.ignore_warnings.push_back( "-Wno-unsafe-buffer-usage" );		// LLVM 17.0.1
-		context.options.ignore_warnings.push_back( "-Wno-reorder-init-list" );			// C++: "designated initializers must be in order"
-		context.options.ignore_warnings.push_back( "-Wno-old-style-cast" );				// C++: "C-style casts are banned"
-		context.options.ignore_warnings.push_back( "-Wno-global-constructors" );		// C++: "declaration requires a global destructor"
-		context.options.ignore_warnings.push_back( "-Wno-exit-time-destructors" );		// C++: "declaration requires an exit-time destructor" (same as the above, basically)
-		context.options.ignore_warnings.push_back( "-Wno-missing-field-initializers" );	// LLVM 18.1.8
+		array_add(&context.options.ignore_warnings, "-Wno-newline-eof" );
+		array_add(&context.options.ignore_warnings, "-Wno-pointer-integer-compare" );
+		array_add(&context.options.ignore_warnings, "-Wno-declaration-after-statement" );
+		array_add(&context.options.ignore_warnings, "-Wno-gnu-zero-variadic-macro-arguments" );
+		array_add(&context.options.ignore_warnings, "-Wno-cast-align" );
+		array_add(&context.options.ignore_warnings, "-Wno-bad-function-cast" );
+		array_add(&context.options.ignore_warnings, "-Wno-format-nonliteral" );
+		array_add(&context.options.ignore_warnings, "-Wno-missing-braces" );
+		array_add(&context.options.ignore_warnings, "-Wno-switch-enum" );
+		array_add(&context.options.ignore_warnings, "-Wno-covered-switch-default" );
+		array_add(&context.options.ignore_warnings, "-Wno-double-promotion" );
+		array_add(&context.options.ignore_warnings, "-Wno-cast-qual" );
+		array_add(&context.options.ignore_warnings, "-Wno-unused-variable" );
+		array_add(&context.options.ignore_warnings, "-Wno-unused-function" );
+		array_add(&context.options.ignore_warnings, "-Wno-empty-translation-unit" );
+		array_add(&context.options.ignore_warnings, "-Wno-zero-as-null-pointer-constant" );
+		array_add(&context.options.ignore_warnings, "-Wno-c++98-compat-pedantic" );
+		array_add(&context.options.ignore_warnings, "-Wno-unused-macros" );
+		array_add(&context.options.ignore_warnings, "-Wno-unsafe-buffer-usage" );		// LLVM 17.0.1
+		array_add(&context.options.ignore_warnings, "-Wno-reorder-init-list" );			// C++: "designated initializers must be in order"
+		array_add(&context.options.ignore_warnings, "-Wno-old-style-cast" );				// C++: "C-style casts are banned"
+		array_add(&context.options.ignore_warnings, "-Wno-global-constructors" );		// C++: "declaration requires a global destructor"
+		array_add(&context.options.ignore_warnings, "-Wno-exit-time-destructors" );		// C++: "declaration requires an exit-time destructor" (same as the above, basically)
+		array_add(&context.options.ignore_warnings, "-Wno-missing-field-initializers" );	// LLVM 18.1.8
 	}
 
 	s32 exitCode = 0;
@@ -747,7 +742,12 @@ int main( int argc, char** argv ) {
 		{
 			lastSlash = strrchr( firstSourceFile, '/' );
 			if ( !lastSlash ) lastSlash = strrchr( firstSourceFile, '\\' );
-			lastSlash++;
+
+			if ( lastSlash ) {
+				lastSlash++;
+			} else {
+				lastSlash = firstSourceFile;
+			}
 
 			u64 filenameWithoutPathLength = cast( u64 ) ( firstSourceFile + firstSourceFileLength ) - cast( u64 ) lastSlash;
 
@@ -851,8 +851,10 @@ int main( int argc, char** argv ) {
 	// if they do, then build a DLL first and call that function to set some more build options
 	{
 		typedef void ( *setOptionsCallback_t )( BuilderOptions* options );
+		typedef void ( *initCoreCallback_t )( CoreContext* coreContext);
 
 		setOptionsCallback_t callback = NULL;
+		initCoreCallback_t init_callback = NULL;
 
 		// TODO(DM): 09/08/2024: why does memcpy not work for buildContext_t?
 		// is it because buildContext_t contains a BuilderOptions member, which contains Array<T> which is technically not POD?
@@ -864,13 +866,18 @@ int main( int argc, char** argv ) {
 
 		userBuildConfigContext.options.binary_folder = userBuildConfigFolder;
 
-		userBuildConfigContext.options.defines.push_back( "BUILDER_DOING_USER_CONFIG_BUILD" );
-		userBuildConfigContext.options.ignore_warnings.push_back( "-Wno-missing-prototypes" );
-		userBuildConfigContext.options.ignore_warnings.push_back( "-Wno-unused-parameter" );
+		array_add(&userBuildConfigContext.options.defines, "BUILDER_DOING_USER_CONFIG_BUILD" );
+		array_add(&userBuildConfigContext.options.ignore_warnings, "-Wno-missing-prototypes" );
+		array_add(&userBuildConfigContext.options.ignore_warnings, "-Wno-unused-parameter" );
 
 		const char* lastSlash = strrchr( firstSourceFile, '/' );
 		if ( !lastSlash ) lastSlash = strrchr( firstSourceFile, '\\' );
-		lastSlash++;
+
+		if ( lastSlash ) {
+			lastSlash++;
+		} else {
+			lastSlash = firstSourceFile;
+		}
 
 		firstSourceFile = lastSlash;
 
@@ -879,6 +886,19 @@ int main( int argc, char** argv ) {
 		userBuildConfigContext.fullBinaryName = tprintf( "%s\\%s", userBuildConfigContext.options.binary_folder, userBuildConfigContext.options.binary_name );
 
 		folder_create_if_it_doesnt_exist( userBuildConfigContext.options.binary_folder );
+
+		const char* tempFileName = "core_init.cpp";
+		
+		const char* content =	"#include \"src/core/allocation_context.h\"\n"
+								"extern \"C\" __declspec( dllexport ) void init_core(CoreContext* core)\n"
+								"{\n"
+								"\tcore_hook(core);\n"
+								"}";
+		file_write_entire(tempFileName, content, strlen(content) * sizeof(char));
+		defer(file_delete(tempFileName));
+		array_add(&sourceFiles, tempFileName);
+		const u64 coreInitCPPIndex = sourceFiles.count - 1;
+		defer( array_remove_at( &sourceFiles, coreInitCPPIndex ) );
 
 		exitCode = BuildDynamicLibrary( &userBuildConfigContext, sourceFiles );
 
@@ -890,6 +910,11 @@ int main( int argc, char** argv ) {
 		library = library_load( tprintf( "%s\\%s", userBuildConfigContext.options.binary_folder, userBuildConfigContext.options.binary_name ) );
 
 		callback = cast( setOptionsCallback_t ) library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME );
+		init_callback = cast(initCoreCallback_t) library_get_proc_address( library, "init_core");
+
+		assertf(init_callback != NULL, "Failed to find the core init callback");
+
+		init_callback(&g_core_context);
 
 		if ( callback ) {
 			callback( &context.options );

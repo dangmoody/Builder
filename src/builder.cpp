@@ -486,6 +486,8 @@ int main( int argc, char** argv ) {
 
 	// check if we need to perform first time setup
 	{
+		const char* clangVersion = "18.1.8";
+
 		bool8 doFirstTimeSetup = false;
 
 		// on exit set the CWD back to what we had before
@@ -496,22 +498,51 @@ int main( int argc, char** argv ) {
 		// set CWD to whereever builder lives for first time setup
 		SetCurrentDirectory( paths_get_app_path() );
 
-		// if we cant find our copy of clang then we definitely need to run first time setup
+		
 		{
-			FileInfo fileInfo;
-			File file = file_find_first( "clang\\bin\\clang.exe", &fileInfo );
+			const char* clangAbsolutePath = tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() );
 
+			FileInfo fileInfo;
+			File file = file_find_first( clangAbsolutePath, &fileInfo );
+
+			// if we cant find our copy of clang then we definitely need to run first time setup
 			if ( file.ptr == INVALID_HANDLE_VALUE ) {
 				doFirstTimeSetup = true;
-			}
+			} else {
+				// otherwise if we have clang but the version doesnt match, then we still need to re-download and re-install it
+				bool8 correctClangVersion = false;
 
-			// TODO(DM): 29/07/2024: need a way of checking if we updated clang versions
+				Array<const char*> args;
+				array_add( &args, clangAbsolutePath );
+				array_add( &args, "-v" );
+
+				Process* clangVersionCheck = process_create( &args, NULL );
+				defer( process_destroy( clangVersionCheck ) );
+
+				// this string is at the very start of "clang -v"
+				const char* clangVersionString = tprintf( "clang version %s", clangVersion );
+
+				char buffer[1024];
+				while ( process_read_stdout( clangVersionCheck, buffer, 1024 ) ) {
+					if ( string_contains( buffer, clangVersionString ) ) {
+						correctClangVersion = true;
+						break;
+					}
+				}
+
+				s32 exitCode = process_join( &clangVersionCheck );
+				assertf( exitCode == 0, "Something went terribly wrong.  Go get Dan.\n" );
+
+				if ( !correctClangVersion ) {
+					warning( "Required Clang version not found.  I will need to re-download and re-install Clang.\n" );
+					doFirstTimeSetup = true;
+				}
+			}
 		}
 
 		if ( doFirstTimeSetup ) {
 			printf( "Performing first time setup...\n" );
 
-			const char* clangVersion = "18.1.8";
 			const char* clangInstallerFilename = tprintf( "LLVM-%s-win64.exe", clangVersion );
 
 			folder_create_if_it_doesnt_exist( ".\\temp" );

@@ -80,6 +80,9 @@ bool8	file_write( File* file, const void* data, const u64 size );
 // Returns true if the write was successful, otherwise returns false.
 bool8	file_write( File* file, const void* data, const u64 offset, const u64 size );
 
+// Writes a string to the file and gives you a new line afterwards
+bool8	file_write_line(File* file, const char* line);
+
 // Returns true if successfully deletes the file, otherwise returns false.
 bool8	file_delete( const char* filename );
 

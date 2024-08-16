@@ -267,6 +267,12 @@ bool8 file_write( File* file, const void* data, const u64 size ) {
 	return written;
 }
 
+bool8 file_write_line(File* file, const char* line)
+{
+	bool8 mainWrite = file_write(file,line, strlen(line) * sizeof(char));
+	return mainWrite && file_write(file, "\n", sizeof(char));
+}
+
 bool8 file_write( File* file, const void* data, const u64 offset, const u64 size ) {
 	assertf( file && file->ptr, "File cannot be null." );
 	assertf( data, "Write data cannot be null." );

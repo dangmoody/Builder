@@ -70,4 +70,57 @@ const char* paths_get_app_path() {
 	return g_core_context.paths->app_path;
 }
 
+const char* paths_get_absolute_path( const char* file ) {
+	//char absolute_path[MAX_PATH];
+	char* absolute_path = cast( char* ) mem_temp_alloc( MAX_PATH * sizeof( char ) );
+	GetFullPathName( file, MAX_PATH, absolute_path, NULL );
+	return absolute_path;
+}
+
+const char* paths_remove_file_from_path( const char* path ) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-qual"
+	const char* last_slash = strrchr( path, '/' );
+	if ( !last_slash ) last_slash = strrchr( path, '\\' );
+
+	if ( last_slash ) {
+		u64 offset = cast( u64 ) last_slash - cast( u64 ) path;
+		( cast( char* ) path )[offset] = 0;
+	}
+
+	last_slash = path;
+
+	return last_slash;
+#pragma clang diagnostic pop
+}
+
+const char* paths_remove_path_from_file( const char* path ) {
+	const char* last_slash = strrchr( path, '/' );
+	if ( !last_slash ) last_slash = strrchr( path, '\\' );
+
+	if ( !last_slash ) {
+		last_slash = path;
+	} else {
+		last_slash++;
+	}
+
+	return last_slash;
+}
+
+const char* paths_remove_file_extension( const char* filename ) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-qual"
+	const char* dot = strrchr( filename, '.' );
+
+	if ( dot ) {
+		u64 offset = cast( u64 ) dot - cast( u64 ) filename;
+		( cast( char* ) filename )[offset] = 0;
+	}
+
+	dot = filename;
+
+	return dot;
+#pragma clang diagnostic pop
+}
+
 #endif // _WIN64

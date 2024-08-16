@@ -77,8 +77,6 @@ struct buildContext_t {
 	buildContextFlags_t		flags;
 
 	const char*				fullBinaryName;
-
-	char*					builderAbsolutePath;
 };
 
 static const char* GetFileExtensionFromBinaryType( BinaryType type ) {
@@ -181,7 +179,7 @@ static s32 BuildEXE( buildContext_t* context, Array<const char*>& sourceFiles ) 
 		context->options.ignore_warnings.count
 	);
 
-	array_add( &args, tprintf( "%s\\clang\\bin\\clang.exe", context->builderAbsolutePath ) );
+	array_add( &args, tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() ) );
 
 	For ( u64, i, 0, sourceFiles.count ) {
 		if ( string_ends_with( sourceFiles[i], ".cpp" ) ) {
@@ -260,7 +258,7 @@ static s32 BuildDynamicLibrary( buildContext_t* context, Array<const char*>& sou
 		context->options.ignore_warnings.count
 	);
 
-	array_add( &args, tprintf( "%s\\clang\\bin\\clang.exe", context->builderAbsolutePath ) );
+	array_add( &args, tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() ) );
 	array_add( &args, "-shared" );
 
 	For ( u64, i, 0, sourceFiles.count ) {
@@ -353,7 +351,7 @@ static s32 BuildStaticLibrary( buildContext_t* context, Array<const char*>& sour
 
 		array_reset( &args );
 
-		array_add( &args, tprintf( "%s\\clang\\bin\\clang.exe", context->builderAbsolutePath ) );
+		array_add( &args, tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() ) );
 		array_add( &args, "-c" );
 
 		if ( string_ends_with( sourceFiles[sourceFileIndex], ".cpp" ) ) {
@@ -486,19 +484,6 @@ int main( int argc, char** argv ) {
 	memset( &context, 0, sizeof( buildContext_t ) );
 	context.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS | BUILD_CONTEXT_FLAG_SHOW_STDOUT;
 
-	// get the absolute path of where Builder is running from
-	{
-		context.builderAbsolutePath = cast( char* ) mem_alloc( MAX_PATH * sizeof( char ) );
-
-		GetFullPathName( argv[0], MAX_PATH, context.builderAbsolutePath, NULL );
-		const char* lastSlash = strrchr( context.builderAbsolutePath, '\\' );
-		if ( lastSlash ) {
-			u64 absolutePathLength = cast( u64 ) lastSlash - cast( u64 ) context.builderAbsolutePath;
-			context.builderAbsolutePath[absolutePathLength] = 0;
-		}
-	}
-	defer( mem_free( context.builderAbsolutePath ); context.builderAbsolutePath = NULL );
-
 	// check if we need to perform first time setup
 	{
 		bool8 doFirstTimeSetup = false;
@@ -509,10 +494,7 @@ int main( int argc, char** argv ) {
 		defer( SetCurrentDirectory( oldCWD ) );
 
 		// set CWD to whereever builder lives for first time setup
-		char selfDir[MAX_PATH] = {};
-		GetModuleFileName( NULL, selfDir, MAX_PATH );
-		PathRemoveFileSpec( selfDir );
-		SetCurrentDirectory( selfDir );
+		SetCurrentDirectory( paths_get_app_path() );
 
 		// if we cant find our copy of clang then we definitely need to run first time setup
 		{
@@ -570,7 +552,7 @@ int main( int argc, char** argv ) {
 				array_reserve( &args, 4 );
 				array_add( &args, ".\\temp\\clang_installer.exe" );
 				array_add( &args, "/S" );		// install in silent mode
-				array_add( &args, tprintf( "/D=%s\\%s", context.builderAbsolutePath, clangInstallFolder ) );	// set the install directory, absolute paths only
+				array_add( &args, tprintf( "/D=%s\\%s", paths_get_app_path(), clangInstallFolder ) );	// set the install directory, absolute paths only
 
 				Array<const char*> envVars;
 				array_add( &envVars, "__compat_layer=RunAsInvoker" );	// this tricks the subprocess into thinking we are running with elevation
@@ -714,46 +696,9 @@ int main( int argc, char** argv ) {
 	const char* firstSourceFile = sourceFiles[0];
 	u64 firstSourceFileLength = strlen( firstSourceFile );
 
-	char* defaultBinaryFolder = NULL;
-	char* firstSourceFileNoPath = NULL;
-
 	// the default binary folder is the same folder as the source file
-	{
-		char sourceFilePath[MAX_PATH] = { 0 };
-		DWORD length = GetFullPathName( firstSourceFile, MAX_PATH, sourceFilePath, NULL );
-		length++;
-
-		const char* lastSlash = NULL;
-
-		lastSlash = strrchr( sourceFilePath, '/' );
-		if ( !lastSlash ) lastSlash = strrchr( sourceFilePath, '\\' );
-		lastSlash++;
-
-		{
-			u64 pathLength = cast( u64 ) lastSlash - cast( u64 ) sourceFilePath;
-
-			defaultBinaryFolder = cast( char* ) mem_temp_alloc( pathLength * sizeof( char ) );
-			strncpy( defaultBinaryFolder, sourceFilePath, pathLength * sizeof( char ) );
-			defaultBinaryFolder[pathLength - 1] = 0;
-		}
-
-		{
-			lastSlash = strrchr( firstSourceFile, '/' );
-			if ( !lastSlash ) lastSlash = strrchr( firstSourceFile, '\\' );
-
-			if ( lastSlash ) {
-				lastSlash++;
-			} else {
-				lastSlash = firstSourceFile;
-			}
-
-			u64 filenameWithoutPathLength = cast( u64 ) ( firstSourceFile + firstSourceFileLength ) - cast( u64 ) lastSlash;
-
-			firstSourceFileNoPath = cast( char* ) mem_temp_alloc( filenameWithoutPathLength * sizeof( char ) );
-			strncpy( firstSourceFileNoPath, lastSlash, filenameWithoutPathLength * sizeof( char ) );
-			firstSourceFileNoPath[filenameWithoutPathLength] = 0;
-		}
-	}
+	const char* defaultBinaryFolder = paths_remove_file_from_path( paths_get_absolute_path( firstSourceFile ) );
+	const char* firstSourceFileNoPath = paths_remove_path_from_file( firstSourceFile );
 
 	const char* userBuildConfigFolder = tprintf( "%s\\.user_build_config", defaultBinaryFolder );
 
@@ -849,7 +794,7 @@ int main( int argc, char** argv ) {
 	// if they do, then build a DLL first and call that function to set some more build options
 	{
 		typedef void ( *setOptionsCallback_t )( BuilderOptions* options );
-		typedef void ( *initCoreCallback_t )( CoreContext* coreContext);
+		typedef void ( *initCoreCallback_t )( CoreContext* coreContext );
 
 		setOptionsCallback_t callback = NULL;
 		initCoreCallback_t init_callback = NULL;
@@ -860,7 +805,6 @@ int main( int argc, char** argv ) {
 		userBuildConfigContext.options = context.options;
 		userBuildConfigContext.flags = BUILD_CONTEXT_FLAG_SHOW_STDOUT;
 		userBuildConfigContext.fullBinaryName = context.fullBinaryName;
-		userBuildConfigContext.builderAbsolutePath = context.builderAbsolutePath;
 
 		userBuildConfigContext.options.binary_folder = userBuildConfigFolder;
 
@@ -869,20 +813,9 @@ int main( int argc, char** argv ) {
 		array_add( &userBuildConfigContext.options.ignore_warnings, "-Wno-unused-parameter" );
 
 		// add builder as an additional include path for the user config build so that we can automatically include core because we know where it is
-		array_add( &userBuildConfigContext.options.additional_includes, tprintf( "%s\\src", context.builderAbsolutePath ) );
+		array_add( &userBuildConfigContext.options.additional_includes, tprintf( "%s\\src", paths_get_app_path() ) );
 
-		const char* lastSlash = strrchr( firstSourceFile, '/' );
-		if ( !lastSlash ) lastSlash = strrchr( firstSourceFile, '\\' );
-
-		if ( lastSlash ) {
-			lastSlash++;
-		} else {
-			lastSlash = firstSourceFile;
-		}
-
-		firstSourceFile = lastSlash;
-
-		userBuildConfigContext.options.binary_name = tprintf( "%s.dll", firstSourceFile );
+		userBuildConfigContext.options.binary_name = tprintf( "%s.dll", paths_remove_path_from_file( firstSourceFile ) );
 
 		userBuildConfigContext.fullBinaryName = tprintf( "%s\\%s", userBuildConfigContext.options.binary_folder, userBuildConfigContext.options.binary_name );
 
@@ -904,10 +837,6 @@ int main( int argc, char** argv ) {
 		array_add( &sourceFiles, tempFileName );
 		const u64 coreInitCPPIndex = sourceFiles.count - 1;
 		defer( array_remove_at( &sourceFiles, coreInitCPPIndex ) );
-
-		/*array_add( &sourceFiles, "src\\core\\core.cpp" );
-		const u64 coreCPPIndex = sourceFiles.count - 1;
-		defer( array_remove_at( &sourceFiles, coreCPPIndex ) );*/
 
 		exitCode = BuildDynamicLibrary( &userBuildConfigContext, sourceFiles );
 
@@ -944,26 +873,16 @@ int main( int argc, char** argv ) {
 	// user didnt override the binary name via the callback
 	// so give them a binary name based off the first source file
 	if ( context.options.binary_name == NULL ) {
-		// get the first source file and strip all paths and the file extension
-		const char* lastSlash = strrchr( firstSourceFile, '/' );
-		if ( !lastSlash ) lastSlash = strrchr( firstSourceFile, '\\' );
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-qual"
+		char* firstSourceFileWithoutExtension = cast( char* ) mem_temp_alloc( ( firstSourceFileLength + 1 ) * sizeof( char ) );
+		strncpy( firstSourceFileWithoutExtension, firstSourceFile, firstSourceFileLength * sizeof( char ) );
+		firstSourceFileWithoutExtension[firstSourceFileLength] = 0;
 
-		if ( lastSlash ) {
-			lastSlash++;
-		} else {
-			lastSlash = firstSourceFile;
-		}
+		firstSourceFileWithoutExtension = cast( char* ) paths_remove_file_extension( paths_remove_path_from_file( firstSourceFileWithoutExtension ) );
 
-		const char* dot = strrchr( firstSourceFile, '.' );
-		assertf( dot, "Something went really wrong.  Go get Dan.\n" );
-
-		u64 sourceFilenameStrippedLength = cast( u64 ) dot - cast( u64 ) lastSlash;
-		sourceFilenameStrippedLength++;
-		char* sourceFilenameStripped = cast( char* ) mem_temp_alloc( sourceFilenameStrippedLength * sizeof( char ) );
-		strncpy( sourceFilenameStripped, lastSlash, sourceFilenameStrippedLength - 1 );
-		sourceFilenameStripped[sourceFilenameStrippedLength - 1] = 0;
-
-		context.options.binary_name = sourceFilenameStripped;
+		context.options.binary_name = firstSourceFileWithoutExtension;
+#pragma clang diagnostic pop
 	}
 
 	context.fullBinaryName = tprintf( "%s\\%s", context.options.binary_folder, context.options.binary_name );

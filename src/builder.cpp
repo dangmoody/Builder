@@ -688,11 +688,6 @@ int main( int argc, char** argv ) {
 
 	s32 exitCode = 0;
 
-	/*defer(
-		NukeFolder( ".user_build_config", false );
-		folder_delete( ".user_build_config" );
-	);*/
-
 	const char* firstSourceFile = sourceFiles[0];
 	u64 firstSourceFileLength = strlen( firstSourceFile );
 
@@ -700,7 +695,7 @@ int main( int argc, char** argv ) {
 	const char* defaultBinaryFolder = paths_remove_file_from_path( paths_get_absolute_path( firstSourceFile ) );
 	const char* firstSourceFileNoPath = paths_remove_path_from_file( firstSourceFile );
 
-	const char* userBuildConfigFolder = tprintf( "%s\\.user_build_config", defaultBinaryFolder );
+	const char* userBuildConfigFolder = tprintf( "%s\\.builder", defaultBinaryFolder );
 
 	// if none of the source files have changed since we last checked then do not even try to rebuild
 	{

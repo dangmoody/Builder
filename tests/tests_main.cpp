@@ -44,13 +44,13 @@ TEMPER_TEST( Compile_Basic, TEMPER_FLAG_SHOULD_RUN ) {
 	TEMPER_CHECK_TRUE( FileExists( "tests\\test_basic\\test_basic.pdb" ) );
 	TEMPER_CHECK_TRUE( FileExists( "tests\\test_basic\\test_basic.ilk" ) );
 
-	TEMPER_CHECK_TRUE( folder_exists( "tests\\test_basic\\.user_build_config" ) );
-	TEMPER_CHECK_TRUE( FileExists( "tests\\test_basic\\.user_build_config\\test_basic.cpp.build_info" ) );
-	TEMPER_CHECK_TRUE( FileExists( "tests\\test_basic\\.user_build_config\\test_basic.cpp.dll" ) );
-	TEMPER_CHECK_TRUE( FileExists( "tests\\test_basic\\.user_build_config\\test_basic.cpp.exp" ) );
-	TEMPER_CHECK_TRUE( FileExists( "tests\\test_basic\\.user_build_config\\test_basic.cpp.ilk" ) );
-	TEMPER_CHECK_TRUE( FileExists( "tests\\test_basic\\.user_build_config\\test_basic.cpp.lib" ) );
-	TEMPER_CHECK_TRUE( FileExists( "tests\\test_basic\\.user_build_config\\test_basic.cpp.pdb" ) );
+	TEMPER_CHECK_TRUE( folder_exists( "tests\\test_basic\\.builder" ) );
+	TEMPER_CHECK_TRUE( FileExists( "tests\\test_basic\\.builder\\test_basic.cpp.build_info" ) );
+	TEMPER_CHECK_TRUE( FileExists( "tests\\test_basic\\.builder\\test_basic.cpp.dll" ) );
+	TEMPER_CHECK_TRUE( FileExists( "tests\\test_basic\\.builder\\test_basic.cpp.exp" ) );
+	TEMPER_CHECK_TRUE( FileExists( "tests\\test_basic\\.builder\\test_basic.cpp.ilk" ) );
+	TEMPER_CHECK_TRUE( FileExists( "tests\\test_basic\\.builder\\test_basic.cpp.lib" ) );
+	TEMPER_CHECK_TRUE( FileExists( "tests\\test_basic\\.builder\\test_basic.cpp.pdb" ) );
 }
 
 TEMPER_TEST_PARAMETRIC( Compile_SetBuilderOptions, TEMPER_FLAG_SHOULD_RUN, const char* config ) {
@@ -58,11 +58,11 @@ TEMPER_TEST_PARAMETRIC( Compile_SetBuilderOptions, TEMPER_FLAG_SHOULD_RUN, const
 
 	TEMPER_CHECK_TRUE( FileExists( sourceFile ) );
 
-	if ( FileExists( "tests\\test_set_builder_options\\.user_build_config\\test_set_builder_options.cpp.build_info" ) ) {
-		file_delete( "tests\\test_set_builder_options\\.user_build_config\\test_set_builder_options.cpp.build_info" );
+	if ( FileExists( "tests\\test_set_builder_options\\.builder\\test_set_builder_options.cpp.build_info" ) ) {
+		file_delete( "tests\\test_set_builder_options\\.builder\\test_set_builder_options.cpp.build_info" );
 	}
 
-	TEMPER_CHECK_TRUE( !FileExists( "tests\\test_set_builder_options\\.user_build_config\\test_set_builder_options.cpp.build_info" ) );
+	TEMPER_CHECK_TRUE( !FileExists( "tests\\test_set_builder_options\\.builder\\test_set_builder_options.cpp.build_info" ) );
 
 	Array<const char*> args;
 	array_add( &args, "builder.exe" );
@@ -84,13 +84,13 @@ TEMPER_TEST_PARAMETRIC( Compile_SetBuilderOptions, TEMPER_FLAG_SHOULD_RUN, const
 		TEMPER_CHECK_TRUE( !FileExists( tprintf( "tests\\test_set_builder_options\\bin\\%s\\kenneth.ilk", config ) ) );
 	}
 
-	TEMPER_CHECK_TRUE( folder_exists( "tests\\test_set_builder_options\\.user_build_config" ) );
-	TEMPER_CHECK_TRUE( FileExists( "tests\\test_set_builder_options\\.user_build_config\\test_set_builder_options.cpp.build_info" ) );
-	TEMPER_CHECK_TRUE( FileExists( "tests\\test_set_builder_options\\.user_build_config\\test_set_builder_options.cpp.dll" ) );
-	TEMPER_CHECK_TRUE( FileExists( "tests\\test_set_builder_options\\.user_build_config\\test_set_builder_options.cpp.exp" ) );
-	TEMPER_CHECK_TRUE( FileExists( "tests\\test_set_builder_options\\.user_build_config\\test_set_builder_options.cpp.ilk" ) );
-	TEMPER_CHECK_TRUE( FileExists( "tests\\test_set_builder_options\\.user_build_config\\test_set_builder_options.cpp.lib" ) );
-	TEMPER_CHECK_TRUE( FileExists( "tests\\test_set_builder_options\\.user_build_config\\test_set_builder_options.cpp.pdb" ) );
+	TEMPER_CHECK_TRUE( folder_exists( "tests\\test_set_builder_options\\.builder" ) );
+	TEMPER_CHECK_TRUE( FileExists( "tests\\test_set_builder_options\\.builder\\test_set_builder_options.cpp.build_info" ) );
+	TEMPER_CHECK_TRUE( FileExists( "tests\\test_set_builder_options\\.builder\\test_set_builder_options.cpp.dll" ) );
+	TEMPER_CHECK_TRUE( FileExists( "tests\\test_set_builder_options\\.builder\\test_set_builder_options.cpp.exp" ) );
+	TEMPER_CHECK_TRUE( FileExists( "tests\\test_set_builder_options\\.builder\\test_set_builder_options.cpp.ilk" ) );
+	TEMPER_CHECK_TRUE( FileExists( "tests\\test_set_builder_options\\.builder\\test_set_builder_options.cpp.lib" ) );
+	TEMPER_CHECK_TRUE( FileExists( "tests\\test_set_builder_options\\.builder\\test_set_builder_options.cpp.pdb" ) );
 }
 
 TEMPER_INVOKE_PARAMETRIC_TEST( Compile_SetBuilderOptions, "release" );

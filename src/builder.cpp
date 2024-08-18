@@ -58,6 +58,8 @@ enum {
 #define ARG_NUKE		"--nuke"
 #define ARG_CONFIG		"--config="
 
+#define CLANG_VERSION	"18.1.8"
+
 #define BUILD_INFO_FILE_EXTENSION		"build_info"
 #define SET_BUILDER_OPTIONS_FUNC_NAME	"set_builder_options"
 #define PRE_BUILD_FUNC_NAME				"on_pre_build"
@@ -486,8 +488,6 @@ int main( int argc, char** argv ) {
 
 	// check if we need to perform first time setup
 	{
-		const char* clangVersion = "18.1.8";
-
 		bool8 doFirstTimeSetup = false;
 
 		// on exit set the CWD back to what we had before
@@ -498,7 +498,6 @@ int main( int argc, char** argv ) {
 		// set CWD to whereever builder lives for first time setup
 		SetCurrentDirectory( paths_get_app_path() );
 
-		
 		{
 			const char* clangAbsolutePath = tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() );
 
@@ -520,7 +519,7 @@ int main( int argc, char** argv ) {
 				defer( process_destroy( clangVersionCheck ) );
 
 				// this string is at the very start of "clang -v"
-				const char* clangVersionString = tprintf( "clang version %s", clangVersion );
+				const char* clangVersionString = tprintf( "clang version %s", CLANG_VERSION );
 
 				char buffer[1024];
 				while ( process_read_stdout( clangVersionCheck, buffer, 1024 ) ) {
@@ -543,7 +542,7 @@ int main( int argc, char** argv ) {
 		if ( doFirstTimeSetup ) {
 			printf( "Performing first time setup...\n" );
 
-			const char* clangInstallerFilename = tprintf( "LLVM-%s-win64.exe", clangVersion );
+			const char* clangInstallerFilename = tprintf( "LLVM-%s-win64.exe", CLANG_VERSION );
 
 			folder_create_if_it_doesnt_exist( ".\\temp" );
 
@@ -557,7 +556,7 @@ int main( int argc, char** argv ) {
 				array_add( &args, "-o" );
 				array_add( &args, "temp\\clang_installer.exe" );
 				array_add( &args, "-L" );
-				array_add( &args, tprintf( "https://github.com/llvm/llvm-project/releases/download/llvmorg-%s/%s", clangVersion, clangInstallerFilename ) );
+				array_add( &args, tprintf( "https://github.com/llvm/llvm-project/releases/download/llvmorg-%s/%s", CLANG_VERSION, clangInstallerFilename ) );
 
 				s32 exitCode = RunProc( &args, NULL, false, true );
 

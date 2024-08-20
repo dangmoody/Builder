@@ -78,20 +78,18 @@ const char* paths_get_absolute_path( const char* file ) {
 }
 
 const char* paths_remove_file_from_path( const char* path ) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wcast-qual"
-	const char* last_slash = strrchr( path, '/' );
-	if ( !last_slash ) last_slash = strrchr( path, '\\' );
+	char* result = cast( char* ) mem_temp_alloc( strlen( path ) * sizeof( char ) );
+	strncpy( result, path, strlen( path ) * sizeof( char ) );
+
+	const char* last_slash = strrchr( result, '/' );
+	if ( !last_slash ) last_slash = strrchr( result, '\\' );
 
 	if ( last_slash ) {
-		u64 offset = cast( u64 ) last_slash - cast( u64 ) path;
-		( cast( char* ) path )[offset] = 0;
+		u64 offset = cast( u64 ) last_slash - cast( u64 ) result;
+		result[offset] = 0;
 	}
 
-	last_slash = path;
-
-	return last_slash;
-#pragma clang diagnostic pop
+	return result;
 }
 
 const char* paths_remove_path_from_file( const char* path ) {

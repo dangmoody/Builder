@@ -21,6 +21,8 @@ Proprietary and confidential.
 #include "allocation_context.h"
 #include "math.h"
 
+#include <memory.h>
+
 /*
 ================================================================================================
 

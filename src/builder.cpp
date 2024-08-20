@@ -163,7 +163,7 @@ static const char* OptimizationLevelToString( const OptimizationLevel level ) {
 	}
 }
 
-static s32 BuildEXE( buildContext_t* context, Array<const char*>& sourceFiles ) {
+static s32 BuildEXE( buildContext_t* context ) {
 	Array<const char*> args;
 	array_reserve( &args,
 		1 +	// clang
@@ -172,7 +172,7 @@ static s32 BuildEXE( buildContext_t* context, Array<const char*>& sourceFiles ) 
 		1 +	// optimisation
 		1 +	// -o
 		1 +	// binary name
-		sourceFiles.count +
+		context->options.source_files.count +
 		context->options.defines.count +
 		context->options.additional_includes.count +
 		context->options.additional_lib_paths.count +
@@ -183,8 +183,8 @@ static s32 BuildEXE( buildContext_t* context, Array<const char*>& sourceFiles ) 
 
 	array_add( &args, tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() ) );
 
-	For ( u64, i, 0, sourceFiles.count ) {
-		if ( string_ends_with( sourceFiles[i], ".cpp" ) ) {
+	For ( u64, i, 0, context->options.source_files.count ) {
+		if ( string_ends_with( context->options.source_files[i], ".cpp" ) ) {
 			array_add( &args, "-std=c++20" );
 			break;
 		}
@@ -199,7 +199,7 @@ static s32 BuildEXE( buildContext_t* context, Array<const char*>& sourceFiles ) 
 	array_add( &args, "-o" );
 	array_add( &args, context->fullBinaryName );
 
-	array_add_range( &args, sourceFiles.data, sourceFiles.count );
+	array_add_range( &args, context->options.source_files.data, context->options.source_files.count );
 
 	For ( u32, i, 0, context->options.defines.count ) {
 		array_add( &args, tprintf( "-D%s", context->options.defines[i] ) );
@@ -241,7 +241,7 @@ static s32 BuildEXE( buildContext_t* context, Array<const char*>& sourceFiles ) 
 	return exitCode;
 }
 
-static s32 BuildDynamicLibrary( buildContext_t* context, Array<const char*>& sourceFiles ) {
+static s32 BuildDynamicLibrary( buildContext_t* context ) {
 	Array<const char*> args;
 	array_reserve( &args,
 		1 +	// clang
@@ -251,7 +251,7 @@ static s32 BuildDynamicLibrary( buildContext_t* context, Array<const char*>& sou
 		1 +	// optimisation
 		1 +	// -o
 		1 +	// binary name
-		sourceFiles.count +
+		context->options.source_files.count +
 		context->options.defines.count +
 		context->options.additional_includes.count +
 		context->options.additional_lib_paths.count +
@@ -263,8 +263,8 @@ static s32 BuildDynamicLibrary( buildContext_t* context, Array<const char*>& sou
 	array_add( &args, tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() ) );
 	array_add( &args, "-shared" );
 
-	For ( u64, i, 0, sourceFiles.count ) {
-		if ( string_ends_with( sourceFiles[i], ".cpp" ) ) {
+	For ( u64, i, 0, context->options.source_files.count ) {
+		if ( string_ends_with( context->options.source_files[i], ".cpp" ) ) {
 			array_add( &args, "-std=c++20" );
 			break;
 		}
@@ -279,7 +279,7 @@ static s32 BuildDynamicLibrary( buildContext_t* context, Array<const char*>& sou
 	array_add( &args, "-o" );
 	array_add( &args, context->fullBinaryName );
 
-	array_add_range( &args, sourceFiles.data, sourceFiles.count );
+	array_add_range( &args, context->options.source_files.data, context->options.source_files.count );
 
 	For ( u32, i, 0, context->options.defines.count ) {
 		array_add( &args, tprintf( "-D%s", context->options.defines[i] ) );
@@ -321,7 +321,7 @@ static s32 BuildDynamicLibrary( buildContext_t* context, Array<const char*>& sou
 	return exitCode;
 }
 
-static s32 BuildStaticLibrary( buildContext_t* context, Array<const char*>& sourceFiles ) {
+static s32 BuildStaticLibrary( buildContext_t* context ) {
 	bool8 showArgs = context->flags & BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS;
 	bool8 showStdout = context->flags & BUILD_CONTEXT_FLAG_SHOW_STDOUT;
 
@@ -338,7 +338,7 @@ static s32 BuildStaticLibrary( buildContext_t* context, Array<const char*>& sour
 		1 +	// optimisation
 		1 +	// -o
 		1 +	// binary name
-		sourceFiles.count +
+		context->options.source_files.count +
 		context->options.defines.count +
 		context->options.additional_includes.count +
 		context->options.additional_lib_paths.count +
@@ -348,17 +348,17 @@ static s32 BuildStaticLibrary( buildContext_t* context, Array<const char*>& sour
 	);
 
 	// build .o files of all compilation units
-	For ( u64, sourceFileIndex, 0, sourceFiles.count ) {
-		const char* sourceFile = sourceFiles[sourceFileIndex];
+	For ( u64, sourceFileIndex, 0, context->options.source_files.count ) {
+		const char* sourceFile = context->options.source_files[sourceFileIndex];
 
 		array_reset( &args );
 
 		array_add( &args, tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() ) );
 		array_add( &args, "-c" );
 
-		if ( string_ends_with( sourceFiles[sourceFileIndex], ".cpp" ) ) {
+		if ( string_ends_with( context->options.source_files[sourceFileIndex], ".cpp" ) ) {
 			array_add( &args, "-std=c++20" );
-		} else if ( string_ends_with( sourceFiles[sourceFileIndex], ".c" ) ) {
+		} else if ( string_ends_with( context->options.source_files[sourceFileIndex], ".c" ) ) {
 			array_add( &args, "-std=c99" );
 		} else {
 			assertf( false, "Something went really wrong.  Get Dan.\n" );
@@ -372,7 +372,7 @@ static s32 BuildStaticLibrary( buildContext_t* context, Array<const char*>& sour
 		array_add( &args, OptimizationLevelToString( context->options.optimization_level ) );
 
 		{
-			const char* sourceFileTrimmed = sourceFiles[sourceFileIndex];
+			const char* sourceFileTrimmed = context->options.source_files[sourceFileIndex];
 			sourceFileTrimmed = strrchr( sourceFileTrimmed, '\\' ) + 1;
 
 			const char* outArg = tprintf( "%s\\%s.o", context->options.binary_folder, sourceFileTrimmed );
@@ -609,7 +609,7 @@ int main( int argc, char** argv ) {
 		}
 	}
 
-	Array<const char*> sourceFiles;
+	const char* inputFile = NULL;
 
 	for ( s32 argIndex = 1; argIndex < argc; argIndex++ ) {
 		const char* arg = argv[argIndex];
@@ -663,7 +663,12 @@ int main( int argc, char** argv ) {
 		}
 
 		if ( string_ends_with( arg, ".c" ) || string_ends_with( arg, ".cpp" ) ) {
-			array_add( &sourceFiles, arg );
+			if ( inputFile != NULL ) {
+				error( "You've already specified a file for me to build.  If you want me to build more than one file, specify it via %s().\n", SET_BUILDER_OPTIONS_FUNC_NAME );
+				return 1;
+			}
+
+			inputFile = arg;
 
 			continue;
 		}
@@ -673,8 +678,8 @@ int main( int argc, char** argv ) {
 	}
 
 	// validate cmd line args
-	if ( sourceFiles.count == 0 ) {
-		error( "You haven't told me what source files I need to build.  I need AT LEAST one.\n" );
+	if ( inputFile == NULL ) {
+		error( "You haven't told me what source files I need to build.  I need one.\n" );
 
 		return EXIT_FAILURE;
 	}
@@ -718,92 +723,92 @@ int main( int argc, char** argv ) {
 
 	s32 exitCode = 0;
 
-	const char* firstSourceFile = sourceFiles[0];
+	const char* firstSourceFile = inputFile;
 	u64 firstSourceFileLength = strlen( firstSourceFile );
 
 	// the default binary folder is the same folder as the source file
-	const char* defaultBinaryFolder = paths_remove_file_from_path( paths_get_absolute_path( firstSourceFile ) );
+	const char* buildFilePathAbsolute = paths_remove_file_from_path( paths_get_absolute_path( firstSourceFile ) );
 	const char* firstSourceFileNoPath = paths_remove_path_from_file( firstSourceFile );
 
-	const char* userBuildConfigFolder = tprintf( "%s\\.builder", defaultBinaryFolder );
+	const char* dotBuilderFolder = tprintf( "%s\\.builder", buildFilePathAbsolute );
 
 	// if none of the source files have changed since we last checked then do not even try to rebuild
-	{
-		bool8 rebuild = false;
+	//{
+	//	bool8 rebuild = false;
 
-		const char* buildInfoFilename = tprintf( "%s\\%s.%s", userBuildConfigFolder, firstSourceFileNoPath, BUILD_INFO_FILE_EXTENSION );
+	//	const char* buildInfoFilename = tprintf( "%s\\%s.%s", dotBuilderFolder, firstSourceFileNoPath, BUILD_INFO_FILE_EXTENSION );
 
-		File buildInfoFile = file_open( buildInfoFilename );
+	//	File buildInfoFile = file_open( buildInfoFilename );
 
-		// if we cant find a .build_info file then assume we never built this binary before
-		if ( buildInfoFile.ptr == NULL ) {
-			printf( "Can't open %s.  Rebuilding binary...\n", buildInfoFilename );
-			rebuild = true;
-		} else {
-			// otherwise we have one, so get the build times out of it and check them against what we had before
-			defer( file_close( &buildInfoFile ) );
+	//	// if we cant find a .build_info file then assume we never built this binary before
+	//	if ( buildInfoFile.ptr == NULL ) {
+	//		printf( "Can't open %s.  Rebuilding binary...\n", buildInfoFilename );
+	//		rebuild = true;
+	//	} else {
+	//		// otherwise we have one, so get the build times out of it and check them against what we had before
+	//		defer( file_close( &buildInfoFile ) );
 
-			char* fileBuffer = NULL;
-			u64 fileBufferLength = 0;
-			bool8 read = file_read_entire( buildInfoFilename, &fileBuffer, &fileBufferLength );
+	//		char* fileBuffer = NULL;
+	//		u64 fileBufferLength = 0;
+	//		bool8 read = file_read_entire( buildInfoFilename, &fileBuffer, &fileBufferLength );
 
-			if ( read ) {
-				defer( file_free_buffer( &fileBuffer ) );
+	//		if ( read ) {
+	//			defer( file_free_buffer( &fileBuffer ) );
 
-				u32 sourceFileIndex = 0;
+	//			u32 sourceFileIndex = 0;
 
-				// parse the .build_info file
-				// for each source file, get the filename and the last write time
-				u64 offset = 0;
-				while ( offset < fileBufferLength ) {
-					const char* lineStart = &fileBuffer[offset];
-					const char* colon = strchr( lineStart, ':' );
-					const char* lineEnd = strstr( lineStart, "\r\n" );
-					if ( !lineEnd ) lineEnd = strstr( lineStart, "\n" );
+	//			// parse the .build_info file
+	//			// for each source file, get the filename and the last write time
+	//			u64 offset = 0;
+	//			while ( offset < fileBufferLength ) {
+	//				const char* lineStart = &fileBuffer[offset];
+	//				const char* colon = strchr( lineStart, ':' );
+	//				const char* lineEnd = strstr( lineStart, "\r\n" );
+	//				if ( !lineEnd ) lineEnd = strstr( lineStart, "\n" );
 
-					u64 filenameLength = cast( u64 ) colon - cast( u64 ) lineStart;
-					filenameLength++;
+	//				u64 filenameLength = cast( u64 ) colon - cast( u64 ) lineStart;
+	//				filenameLength++;
 
-					colon += 2;
+	//				colon += 2;
 
-					u64 timestampLength = cast( u64 ) lineEnd - cast( u64 ) colon;
-					timestampLength++;
+	//				u64 timestampLength = cast( u64 ) lineEnd - cast( u64 ) colon;
+	//				timestampLength++;
 
-					char* filename = cast( char* ) mem_temp_alloc( filenameLength * sizeof( char ) );
-					char* timestampString = cast( char* ) mem_temp_alloc( timestampLength * sizeof( char ) );
+	//				char* filename = cast( char* ) mem_temp_alloc( filenameLength * sizeof( char ) );
+	//				char* timestampString = cast( char* ) mem_temp_alloc( timestampLength * sizeof( char ) );
 
-					strncpy( filename, lineStart, filenameLength );
-					filename[filenameLength - 1] = 0;
+	//				strncpy( filename, lineStart, filenameLength );
+	//				filename[filenameLength - 1] = 0;
 
-					strncpy( timestampString, colon, timestampLength );
-					timestampString[timestampLength - 1] = 0;
+	//				strncpy( timestampString, colon, timestampLength );
+	//				timestampString[timestampLength - 1] = 0;
 
-					u64 lastWriteTime = cast( u64 ) atoll( timestampString );
+	//				u64 lastWriteTime = cast( u64 ) atoll( timestampString );
 
-					FileInfo sourceFileInfo;
-					File sourceFile = file_find_first( sourceFiles[sourceFileIndex], &sourceFileInfo );
+	//				FileInfo sourceFileInfo;
+	//				File sourceFile = file_find_first( context.options.source_files[sourceFileIndex], &sourceFileInfo );
 
-					if ( hash_string( filename, 0 ) != hash_string( sourceFiles[sourceFileIndex], 0 ) || lastWriteTime != sourceFileInfo.last_write_time ) {
-						rebuild = true;
-						break;
-					}
+	//				if ( hash_string( filename, 0 ) != hash_string( context.options.source_files[sourceFileIndex], 0 ) || lastWriteTime != sourceFileInfo.last_write_time ) {
+	//					rebuild = true;
+	//					break;
+	//				}
 
-					sourceFileIndex++;
+	//				sourceFileIndex++;
 
-					u64 lineLength = cast( u64 ) ( lineEnd + 1 ) - cast( u64 ) lineStart;
-					offset += lineLength;
-				}
-			} else {
-				error( "Found %s but failed to read it.  Rebuilding binary...\n", buildInfoFilename );
-				rebuild = true;
-			}
-		}
+	//				u64 lineLength = cast( u64 ) ( lineEnd + 1 ) - cast( u64 ) lineStart;
+	//				offset += lineLength;
+	//			}
+	//		} else {
+	//			error( "Found %s but failed to read it.  Rebuilding binary...\n", buildInfoFilename );
+	//			rebuild = true;
+	//		}
+	//	}
 
-		if ( !rebuild ) {
-			printf( "Skipping build for %s.\n", buildInfoFilename );
-			return 0;
-		}
-	}
+	//	if ( !rebuild ) {
+	//		printf( "Skipping build for %s.\n", buildInfoFilename );
+	//		return 0;
+	//	}
+	//}
 
 	Library library;
 	defer( if ( library.ptr ) library_unload( &library ) );
@@ -831,8 +836,9 @@ int main( int argc, char** argv ) {
 		userBuildConfigContext.flags = BUILD_CONTEXT_FLAG_SHOW_STDOUT;
 		userBuildConfigContext.fullBinaryName = context.fullBinaryName;
 
-		userBuildConfigContext.options.binary_folder = userBuildConfigFolder;
+		userBuildConfigContext.options.binary_folder = dotBuilderFolder;
 
+		array_add( &userBuildConfigContext.options.source_files, inputFile );
 		array_add( &userBuildConfigContext.options.defines, "BUILDER_DOING_USER_CONFIG_BUILD" );
 		array_add( &userBuildConfigContext.options.ignore_warnings, "-Wno-missing-prototypes" );
 		array_add( &userBuildConfigContext.options.ignore_warnings, "-Wno-unused-parameter" );
@@ -847,23 +853,22 @@ int main( int argc, char** argv ) {
 		folder_create_if_it_doesnt_exist( userBuildConfigContext.options.binary_folder );
 
 		// create a temp source file which will automatically call core_hook() for us so that the user doesnt have to do it themselves
-		const char* tempFileName = "core_init.cpp";
+		const char* tempFileName = tprintf( "%s\\core_init.cpp", dotBuilderFolder );
 		const char* content =	"#include <core/core.cpp>\n"
 								"\n"
 								"extern \"C\" __declspec( dllexport ) void init_core( CoreContext* core ) {\n"
 								"\tcore_hook( core );\n"
 								"}\n";
 
-		file_write_entire( tempFileName, content, strlen( content ) * sizeof( char ) );
+		bool8 written = file_write_entire( tempFileName, content, strlen( content ) * sizeof( char ) );
+		assertf( written, "Something went really wrong.  Go get Dan." );
 
 		// when were finished, delete this file and remove it from the list of source files to build
 		defer( file_delete( tempFileName ) );
 
-		array_add( &sourceFiles, tempFileName );
-		const u64 coreInitCPPIndex = sourceFiles.count - 1;
-		defer( array_remove_at( &sourceFiles, coreInitCPPIndex ) );
+		array_add( &userBuildConfigContext.options.source_files, tempFileName );
 
-		exitCode = BuildDynamicLibrary( &userBuildConfigContext, sourceFiles );
+		exitCode = BuildDynamicLibrary( &userBuildConfigContext );
 
 		if ( exitCode != 0 ) {
 			error( "Pre-build failed!\n" );
@@ -883,14 +888,51 @@ int main( int argc, char** argv ) {
 			callback( &context.options );
 		}
 
+		// if no source files were added in set_builder_options() then assume we want to build the same file as the one specified via the command line
+		/*if ( context.options.source_files.count == 0 ) {
+			array_add( &context.options.source_files, inputFile );
+		}*/
+
 		preBuildFunc = cast( preBuildFunc_t ) library_get_proc_address( library, PRE_BUILD_FUNC_NAME );
 		postBuildFunc = cast( postBuildFunc_t ) library_get_proc_address( library, POST_BUILD_FUNC_NAME );
 	}
 
-	if ( context.options.binary_folder ) {
-		context.options.binary_folder = tprintf( "%s\\%s", defaultBinaryFolder, context.options.binary_folder );
+	// if no source files were added in set_builder_options() then assume we want to build the same file as the one specified via the command line
+	if ( context.options.source_files.count == 0 ) {
+		array_add( &context.options.source_files, inputFile );
 	} else {
-		context.options.binary_folder = defaultBinaryFolder;
+		// otherwise the user told us to build other source files, so go find and build those instead
+		Array<const char*> finalSourceFilesToBuild;
+
+		For ( u64, i, 0, context.options.source_files.count ) {
+			const char* sourceFile = context.options.source_files[i];
+
+			// otherwise there was a wildcard, so go find the files
+			FileInfo fileInfo;
+			File firstFile = file_find_first( tprintf( "%s\\%s", buildFilePathAbsolute, sourceFile ), &fileInfo );
+
+			assertf( firstFile.ptr != INVALID_HANDLE_VALUE, "Something went really wrong.  Go get Dan." );
+
+			do {
+				if ( string_equals( sourceFile, "." ) || string_equals( sourceFile, ".." ) ) {
+					continue;
+				}
+
+				const char* localPath = paths_remove_file_from_path( sourceFile );
+
+				const char* foundSourceFile = tprintf( "%s\\%s\\%s", buildFilePathAbsolute, localPath, fileInfo.filename );
+
+				array_add( &finalSourceFilesToBuild, foundSourceFile );
+			} while ( file_find_next( &firstFile, &fileInfo ) );
+		}
+
+		context.options.source_files = finalSourceFilesToBuild;
+	}
+
+	if ( context.options.binary_folder ) {
+		context.options.binary_folder = tprintf( "%s\\%s", buildFilePathAbsolute, context.options.binary_folder );
+	} else {
+		context.options.binary_folder = buildFilePathAbsolute;
 	}
 
 	folder_create_if_it_doesnt_exist( context.options.binary_folder );
@@ -923,15 +965,15 @@ int main( int argc, char** argv ) {
 	// now do the actual build
 	switch ( context.options.binary_type ) {
 		case BINARY_TYPE_EXE:
-			exitCode = BuildEXE( &context, sourceFiles );
+			exitCode = BuildEXE( &context );
 			break;
 
 		case BINARY_TYPE_DLL:
-			exitCode = BuildDynamicLibrary( &context, sourceFiles );
+			exitCode = BuildDynamicLibrary( &context );
 			break;
 
 		case BINARY_TYPE_LIB:
-			exitCode = BuildStaticLibrary( &context, sourceFiles );
+			exitCode = BuildStaticLibrary( &context );
 			break;
 	}
 
@@ -942,13 +984,13 @@ int main( int argc, char** argv ) {
 	// if the build was successful, write the .build_info file now
 	// get the timestamp of when each source file was last written to
 	if ( exitCode == EXIT_SUCCESS ) {
-		const char* buildInfoFilename = tprintf( "%s\\%s.%s", userBuildConfigFolder, firstSourceFileNoPath, BUILD_INFO_FILE_EXTENSION );
+		const char* buildInfoFilename = tprintf( "%s\\%s.%s", dotBuilderFolder, firstSourceFileNoPath, BUILD_INFO_FILE_EXTENSION );
 
 		File buildInfoFile = file_open_or_create( buildInfoFilename );
 		defer( file_close( &buildInfoFile ) );
 
-		For ( u32, i, 0, sourceFiles.count ) {
-			const char* sourceFilename = sourceFiles[i];
+		For ( u32, i, 0, context.options.source_files.count ) {
+			const char* sourceFilename = context.options.source_files[i];
 
 			FileInfo sourceFileInfo;
 			File sourceFile = file_find_first( sourceFilename, &sourceFileInfo );

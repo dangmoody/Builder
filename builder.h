@@ -40,6 +40,11 @@ enum OptimizationLevel {
 };
 
 struct BuilderOptions {
+	// The source files that you want to build.
+	// Any files/paths you add to this will be made relative to the .cpp file you passed in via the command line.
+	// Supports paths and wildcards.
+	Array<const char*>	source_files;
+
 	// Additional #defines to set for Clang.
 	// Example: IS_AWESOME=1.
 	Array<const char*>	defines;
@@ -59,29 +64,30 @@ struct BuilderOptions {
 
 	// What kind of binary do you want to build?
 	// Defaults to EXE.
-	BinaryType					binary_type;
+	BinaryType			binary_type;
 
 	// What level of optimization do you want in your binary?
 	// Having optimization disabled helps when debugging, but you definitely want optimizations enabled when you build your retail/shipping binary.
-	OptimizationLevel			optimization_level;
+	OptimizationLevel	optimization_level;
 
 	// Do you want to remove symbols from your binary?
 	// You will probably want symbols for debugging, but then not have these in your retail/shipping binary.
-	bool						remove_symbols;
+	bool				remove_symbols;
 
 	// Do you want to remove the file extension from the name of the binary?
-	bool						remove_file_extension;
+	bool				remove_file_extension;
 
 	// The name of the config that you want to build with.
 	// You need to set this via the command line argument "--config=name" where "name" is the name of your config.
 	// If you do not set this then it will just be null.
-	const char*					config;
+	const char*			config;
 
 	// The folder you want the binary to be put into.
-	// This is always relative to the source file you are building.
-	const char*					binary_folder;
+	// If the folder does not exist, then Builder will create it for you.
+	// This will be relative to the source file you are building.
+	const char*			binary_folder;
 
 	// The name that the built binary is going to have.
 	// This will be placed inside binary_folder, if you set that.
-	const char*					binary_name;
+	const char*			binary_name;
 };

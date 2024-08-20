@@ -1,3 +1,5 @@
+// this test is for configuring as many things through set_builder_options() as possible
+
 #include "../../builder.h"
 
 #include <stdio.h>

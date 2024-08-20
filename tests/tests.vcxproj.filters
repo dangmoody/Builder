@@ -30,5 +30,28 @@
     <ClCompile Include="test_set_builder_options\test_set_builder_options.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="test_multiple_source_files\build.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="test_multiple_source_files\src\main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="test_multiple_source_files\src\marco.linux.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="test_multiple_source_files\src\marco.win64.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="test_multiple_source_files\src\polo.linux.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="test_multiple_source_files\src\polo.win64.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="test_multiple_source_files\src\marco_polo.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

@@ -93,7 +93,16 @@
     <ClCompile Include="test_basic\test_basic.cpp" />
     <ClCompile Include="test_cases\test_basic\test_basic.cpp" />
     <ClCompile Include="test_cases\test_set_builder_options\test_set_builder_options.cpp" />
+    <ClCompile Include="test_multiple_source_files\build.cpp" />
+    <ClCompile Include="test_multiple_source_files\src\main.cpp" />
+    <ClCompile Include="test_multiple_source_files\src\marco.linux.cpp" />
+    <ClCompile Include="test_multiple_source_files\src\marco.win64.cpp" />
+    <ClCompile Include="test_multiple_source_files\src\polo.linux.cpp" />
+    <ClCompile Include="test_multiple_source_files\src\polo.win64.cpp" />
     <ClCompile Include="test_set_builder_options\test_set_builder_options.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="test_multiple_source_files\src\marco_polo.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

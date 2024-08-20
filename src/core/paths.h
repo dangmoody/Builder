@@ -31,4 +31,4 @@ const char*	paths_remove_file_from_path( const char* path );
 const char*	paths_remove_path_from_file( const char* path );
 
 // Returns the name of a file without its file extension, if there is one.
-const char* paths_remove_file_extension( const char* filename );
+const char*	paths_remove_file_extension( const char* filename );

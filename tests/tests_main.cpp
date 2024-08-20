@@ -32,6 +32,12 @@ TEMPER_TEST( Compile_Basic, TEMPER_FLAG_SHOULD_RUN ) {
 
 	TEMPER_CHECK_TRUE( FileExists( sourceFile ) );
 
+	if ( FileExists( "tests\\test_basic\\.builder\\test_basic.build_info" ) ) {
+		file_delete( "tests\\test_basic\\.builder\\test_basic.build_info" );
+	}
+
+	TEMPER_CHECK_TRUE( !FileExists( "tests\\test_basic\\.builder\\test_basic.build_info" ) );
+
 	Array<const char*> args;
 	array_add( &args, "builder.exe" );
 	array_add( &args, sourceFile );
@@ -95,6 +101,34 @@ TEMPER_TEST_PARAMETRIC( Compile_SetBuilderOptions, TEMPER_FLAG_SHOULD_RUN, const
 
 TEMPER_INVOKE_PARAMETRIC_TEST( Compile_SetBuilderOptions, "release" );
 TEMPER_INVOKE_PARAMETRIC_TEST( Compile_SetBuilderOptions, "debug" );
+
+TEMPER_TEST( Compile_MultipleSourceFiles, TEMPER_FLAG_SHOULD_RUN ) {
+	const char* buildSourceFile = "tests\\test_multiple_source_files\\build.cpp";
+
+	TEMPER_CHECK_TRUE( FileExists( buildSourceFile ) );
+
+	if ( FileExists( "tests\\test_multiple_source_files\\.builder\\build.cpp.build_info" ) ) {
+		file_delete( "tests\\test_multiple_source_files\\.builder\\build.cpp.build_info" );
+	}
+
+	TEMPER_CHECK_TRUE( !FileExists( "tests\\test_multiple_source_files\\.builder\\build.cpp.build_info" ) );
+
+	Array<const char*> args;
+	array_add( &args, "builder.exe" );
+	array_add( &args, buildSourceFile );
+
+	s32 exitCode = RunProc( &args );
+
+	TEMPER_CHECK_TRUE( FileExists( "tests\\test_multiple_source_files\\bin\\marco_polo.exe" ) );
+
+	TEMPER_CHECK_TRUE( folder_exists( "tests\\test_multiple_source_files\\.builder" ) );
+	TEMPER_CHECK_TRUE( FileExists( "tests\\test_multiple_source_files\\.builder\\build.cpp.build_info" ) );
+	TEMPER_CHECK_TRUE( FileExists( "tests\\test_multiple_source_files\\.builder\\build.cpp.dll" ) );
+	TEMPER_CHECK_TRUE( FileExists( "tests\\test_multiple_source_files\\.builder\\build.cpp.exp" ) );
+	TEMPER_CHECK_TRUE( FileExists( "tests\\test_multiple_source_files\\.builder\\build.cpp.ilk" ) );
+	TEMPER_CHECK_TRUE( FileExists( "tests\\test_multiple_source_files\\.builder\\build.cpp.lib" ) );
+	TEMPER_CHECK_TRUE( FileExists( "tests\\test_multiple_source_files\\.builder\\build.cpp.pdb" ) );
+}
 
 int main( int argc, char** argv ) {
 	core_init( MEM_KILOBYTES( 64 ), MEM_KILOBYTES( 64 ) );

@@ -888,15 +888,11 @@ int main( int argc, char** argv ) {
 			callback( &context.options );
 		}
 
-		// if no source files were added in set_builder_options() then assume we want to build the same file as the one specified via the command line
-		/*if ( context.options.source_files.count == 0 ) {
-			array_add( &context.options.source_files, inputFile );
-		}*/
-
 		preBuildFunc = cast( preBuildFunc_t ) library_get_proc_address( library, PRE_BUILD_FUNC_NAME );
 		postBuildFunc = cast( postBuildFunc_t ) library_get_proc_address( library, POST_BUILD_FUNC_NAME );
 	}
 
+	// get all the "compilation units" that we are actually going to give to the compiler
 	// if no source files were added in set_builder_options() then assume we want to build the same file as the one specified via the command line
 	if ( context.options.source_files.count == 0 ) {
 		array_add( &context.options.source_files, inputFile );
@@ -907,7 +903,6 @@ int main( int argc, char** argv ) {
 		For ( u64, i, 0, context.options.source_files.count ) {
 			const char* sourceFile = context.options.source_files[i];
 
-			// otherwise there was a wildcard, so go find the files
 			FileInfo fileInfo;
 			File firstFile = file_find_first( tprintf( "%s\\%s", buildFilePathAbsolute, sourceFile ), &fileInfo );
 

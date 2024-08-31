@@ -4,6 +4,9 @@
 bin
 clang
 
+builder.exe
+builder_tests.exe
+
 #
 # visual studio stuff
 #

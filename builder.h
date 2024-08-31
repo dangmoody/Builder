@@ -108,4 +108,7 @@ struct VisualStudioOptions
 	// This is a seperate list to the build options as you likely want the superset of
 	// all files in you're SLN, but may conditionally exclude a subset of files based on config/target etc
 	Array<const char*> 	source_files;
+
+	// Location of the build script
+	const char* build_script_path;
 };

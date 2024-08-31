@@ -4,6 +4,8 @@
 bin
 clang
 
+.builder
+
 builder.exe
 builder_tests.exe
 

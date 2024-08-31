@@ -1065,7 +1065,9 @@ bool8 BuildVisualStudioProject( VisualStudioOptions* visual_studio_options )
 			file_write_line(&vcxproj, tprintf("  <PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='%s|%s'\">", config, platform));
 			
 			// Note(TOM): this assumes two things: 
-			//			A) you use vis studio generation ONLY to point to a build script; NOT the actual source files
+			//			A) you use vis studio generation ONLY to point to a build script; NOT the actual source files. This is because otherwise you need to get source per config 
+			//					which would be tricky since they are conditionally defined in build options. NOTE: the source files in this options is NOT appropiate, 
+			//					since it's the superset of all the files needed for SLN visibility, not the ones that should actually get compiled (eg linux files visible despite building windows)
 			//			B) there's only one cpp involved in your build script. TODO(TOM): make an array. This assumption doesn't need to stick
 			file_write_line(&vcxproj, tprintf("    <NMakeBuildCommandLine>builder.exe %s %s</NMakeBuildCommandLine>", visual_studio_options->build_script_path, config));
 

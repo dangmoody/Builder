@@ -733,82 +733,84 @@ int main( int argc, char** argv ) {
 	const char* dotBuilderFolder = tprintf( "%s\\.builder", buildFilePathAbsolute );
 
 	// if none of the source files have changed since we last checked then do not even try to rebuild
-	//{
-	//	bool8 rebuild = false;
+	{
+		bool8 rebuild = false;
 
-	//	const char* buildInfoFilename = tprintf( "%s\\%s.%s", dotBuilderFolder, firstSourceFileNoPath, BUILD_INFO_FILE_EXTENSION );
+		const char* buildInfoFilename = tprintf( "%s\\%s.%s", dotBuilderFolder, firstSourceFileNoPath, BUILD_INFO_FILE_EXTENSION );
 
-	//	File buildInfoFile = file_open( buildInfoFilename );
+		File buildInfoFile = file_open( buildInfoFilename );
 
-	//	// if we cant find a .build_info file then assume we never built this binary before
-	//	if ( buildInfoFile.ptr == NULL ) {
-	//		printf( "Can't open %s.  Rebuilding binary...\n", buildInfoFilename );
-	//		rebuild = true;
-	//	} else {
-	//		// otherwise we have one, so get the build times out of it and check them against what we had before
-	//		defer( file_close( &buildInfoFile ) );
+		// if we cant find a .build_info file then assume we never built this binary before
+		if ( buildInfoFile.ptr == NULL ) {
+			printf( "Can't open %s.  Rebuilding binary...\n", buildInfoFilename );
+			rebuild = true;
+		} else {
+			// otherwise we have one, so get the build times out of it and check them against what we had before
+			defer( file_close( &buildInfoFile ) );
 
-	//		char* fileBuffer = NULL;
-	//		u64 fileBufferLength = 0;
-	//		bool8 read = file_read_entire( buildInfoFilename, &fileBuffer, &fileBufferLength );
+			char* fileBuffer = NULL;
+			u64 fileBufferLength = 0;
+			bool8 read = file_read_entire( buildInfoFilename, &fileBuffer, &fileBufferLength );
 
-	//		if ( read ) {
-	//			defer( file_free_buffer( &fileBuffer ) );
+			if ( read ) {
+				defer( file_free_buffer( &fileBuffer ) );
 
-	//			u32 sourceFileIndex = 0;
+				u32 sourceFileIndex = 0;
 
-	//			// parse the .build_info file
-	//			// for each source file, get the filename and the last write time
-	//			u64 offset = 0;
-	//			while ( offset < fileBufferLength ) {
-	//				const char* lineStart = &fileBuffer[offset];
-	//				const char* colon = strchr( lineStart, ':' );
-	//				const char* lineEnd = strstr( lineStart, "\r\n" );
-	//				if ( !lineEnd ) lineEnd = strstr( lineStart, "\n" );
+				// parse the .build_info file
+				// for each source file, get the filename and the last write time
+				u64 offset = 0;
+				while ( offset < fileBufferLength ) {
+					const char* lineStart = &fileBuffer[offset];
+					const char* colon = strstr( lineStart, ": " );
+					const char* lineEnd = strstr( lineStart, "\r\n" );
+					if ( !lineEnd ) lineEnd = strstr( lineStart, "\n" );
 
-	//				u64 filenameLength = cast( u64 ) colon - cast( u64 ) lineStart;
-	//				filenameLength++;
+					u64 filenameLength = cast( u64 ) colon - cast( u64 ) lineStart;
+					filenameLength++;
 
-	//				colon += 2;
+					colon += 2;
 
-	//				u64 timestampLength = cast( u64 ) lineEnd - cast( u64 ) colon;
-	//				timestampLength++;
+					u64 timestampLength = cast( u64 ) lineEnd - cast( u64 ) colon;
+					timestampLength++;
 
-	//				char* filename = cast( char* ) mem_temp_alloc( filenameLength * sizeof( char ) );
-	//				char* timestampString = cast( char* ) mem_temp_alloc( timestampLength * sizeof( char ) );
+					char* filename = cast( char* ) mem_temp_alloc( filenameLength * sizeof( char ) );
+					char* timestampString = cast( char* ) mem_temp_alloc( timestampLength * sizeof( char ) );
 
-	//				strncpy( filename, lineStart, filenameLength );
-	//				filename[filenameLength - 1] = 0;
+					strncpy( filename, lineStart, filenameLength );
+					filename[filenameLength - 1] = 0;
 
-	//				strncpy( timestampString, colon, timestampLength );
-	//				timestampString[timestampLength - 1] = 0;
+					strncpy( timestampString, colon, timestampLength );
+					timestampString[timestampLength - 1] = 0;
 
-	//				u64 lastWriteTime = cast( u64 ) atoll( timestampString );
+					u64 lastWriteTime = cast( u64 ) atoll( timestampString );
 
-	//				FileInfo sourceFileInfo;
-	//				File sourceFile = file_find_first( context.options.source_files[sourceFileIndex], &sourceFileInfo );
+					FileInfo sourceFileInfo;
+					File sourceFile = file_find_first( filename, &sourceFileInfo );
 
-	//				if ( hash_string( filename, 0 ) != hash_string( context.options.source_files[sourceFileIndex], 0 ) || lastWriteTime != sourceFileInfo.last_write_time ) {
-	//					rebuild = true;
-	//					break;
-	//				}
+					assert( sourceFile.ptr != INVALID_HANDLE_VALUE );
 
-	//				sourceFileIndex++;
+					if ( lastWriteTime != sourceFileInfo.last_write_time ) {
+						rebuild = true;
+						break;
+					}
 
-	//				u64 lineLength = cast( u64 ) ( lineEnd + 1 ) - cast( u64 ) lineStart;
-	//				offset += lineLength;
-	//			}
-	//		} else {
-	//			error( "Found %s but failed to read it.  Rebuilding binary...\n", buildInfoFilename );
-	//			rebuild = true;
-	//		}
-	//	}
+					sourceFileIndex++;
 
-	//	if ( !rebuild ) {
-	//		printf( "Skipping build for %s.\n", buildInfoFilename );
-	//		return 0;
-	//	}
-	//}
+					u64 lineLength = cast( u64 ) ( lineEnd + 1 ) - cast( u64 ) lineStart;
+					offset += lineLength;
+				}
+			} else {
+				error( "Found %s but failed to read it.  Rebuilding binary...\n", buildInfoFilename );
+				rebuild = true;
+			}
+		}
+
+		if ( !rebuild ) {
+			printf( "Skipping build for %s.\n", buildInfoFilename );
+			return 0;
+		}
+	}
 
 	Library library;
 	defer( if ( library.ptr ) library_unload( &library ) );
@@ -900,8 +902,8 @@ int main( int argc, char** argv ) {
 		// otherwise the user told us to build other source files, so go find and build those instead
 		Array<const char*> finalSourceFilesToBuild;
 
-		For ( u64, i, 0, context.options.source_files.count ) {
-			const char* sourceFile = context.options.source_files[i];
+		For ( u64, sourceFileIndex, 0, context.options.source_files.count ) {
+			const char* sourceFile = context.options.source_files[sourceFileIndex];
 
 			FileInfo fileInfo;
 			File firstFile = file_find_first( tprintf( "%s\\%s", buildFilePathAbsolute, sourceFile ), &fileInfo );
@@ -922,6 +924,80 @@ int main( int argc, char** argv ) {
 		}
 
 		context.options.source_files = finalSourceFilesToBuild;
+	}
+
+	// recursively resolve all includes found in each source file
+	Array<const char*> buildInfoFiles;
+	{
+		array_add_range( &buildInfoFiles, context.options.source_files.data, context.options.source_files.count );
+
+		// for each file, open it and get every include inside it
+		// then go through _those_ included files
+		For ( u64, sourceFileIndex, 0, context.options.source_files.count ) {
+			const char* sourceFile = context.options.source_files[sourceFileIndex];
+
+			const char* sourceFilePath = paths_remove_file_from_path( sourceFile );
+
+			char* fileBuffer = NULL;
+			u64 fileLength = 0;
+			bool8 read = file_read_entire( sourceFile, &fileBuffer, &fileLength );
+
+			if ( !read ) {
+				error( "Failed to read %s.  Can't resolve includes for this file.\n", context.options.source_files[sourceFileIndex] );
+				return EXIT_FAILURE;
+			}
+
+			defer( file_free_buffer( &fileBuffer ) );
+
+			For ( u64, fileOffset, 0, fileLength ) {
+				if ( string_starts_with( fileBuffer + fileOffset, "#include" ) ) {
+					fileOffset += strlen( "#include" );
+
+					while ( fileBuffer[fileOffset] == ' ' ) {
+						fileOffset++;
+					}
+
+					if ( fileBuffer[fileOffset] == '"' ) {
+						// "local" include, so scan from where we are
+						const char* includeStart = fileBuffer + fileOffset;
+						includeStart++;
+
+						const char* includeEnd = strchr( includeStart, '"' );
+
+						u64 filenameLength = cast( u64 ) includeEnd - cast( u64 ) includeStart;
+						filenameLength++;
+
+						char* filename = cast( char* ) mem_temp_alloc( filenameLength * sizeof( char ) );
+						strncpy( filename, includeStart, filenameLength * sizeof( char ) );
+						filename[filenameLength - 1] = 0;
+
+						filename = tprintf( "%s\\%s", sourceFilePath, filename );
+
+						bool8 found = false;
+						For ( u64, fileIndex, 0, buildInfoFiles.count ) {
+							if ( string_equals( buildInfoFiles[fileIndex], filename ) ) {
+								found = true;
+							}
+						}
+
+						if ( !found ) {
+							array_add( &buildInfoFiles, filename );
+						}
+					} else if ( fileBuffer[fileOffset] == '<' ) {
+						// "external" include, so scan all the external include folders that we know about
+						// TODO(DM): this
+					}
+				}
+
+				const char* lineEnd = strchr( fileBuffer + fileOffset, '\n' );
+				if ( !lineEnd ) lineEnd = strstr( fileBuffer + fileOffset, "\r\n" );
+				if ( !lineEnd ) lineEnd = fileBuffer + fileOffset;
+
+				u64 fileLineLength = cast( u64 ) lineEnd - cast( u64 ) ( fileBuffer + fileOffset );
+
+				fileOffset += fileLineLength;
+			}
+		}
 	}
 
 	if ( context.options.binary_folder ) {
@@ -984,8 +1060,8 @@ int main( int argc, char** argv ) {
 		File buildInfoFile = file_open_or_create( buildInfoFilename );
 		defer( file_close( &buildInfoFile ) );
 
-		For ( u32, i, 0, context.options.source_files.count ) {
-			const char* sourceFilename = context.options.source_files[i];
+		For ( u32, i, 0, buildInfoFiles.count ) {
+			const char* sourceFilename = buildInfoFiles[i];
 
 			FileInfo sourceFileInfo;
 			File sourceFile = file_find_first( sourceFilename, &sourceFileInfo );

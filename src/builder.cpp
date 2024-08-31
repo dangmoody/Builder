@@ -1005,3 +1005,91 @@ int main( int argc, char** argv ) {
 
 	return exitCode;
 }
+
+bool8 BuildVisualStudioProject( VisualStudioOptions* visual_studio_options )
+{
+	assert(visual_studio_options);
+
+	File vcxproj = file_open_or_create( tprintf( "%s.vcxproj",visual_studio_options->project_name ) );
+	defer( file_close( &vcxproj ) );
+
+	if(vcxproj.ptr == nullptr)
+	{
+		return false;
+	}
+
+	file_write_line( &vcxproj,					"<?xml version=\"1.0\" encoding=\"utf-8\"?>" );
+	file_write_line( &vcxproj,					"<Project DefaultTargets=\"Build\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">" );
+
+	file_write_line( &vcxproj,					"  <ItemGroup Label=\"ProjectConfigurations\">" );
+	For ( u64, i, 0, visual_studio_options->configs.count )	{
+		// TODO: Alternative targets
+		file_write_line( &vcxproj, tprintf(		"    <ProjectConfiguration Include=\"%s\"\">"				, visual_studio_options->configs[i] ) );
+        file_write_line( &vcxproj, tprintf(		"      <Configuration>%s</Configuration>"					, visual_studio_options->configs[i] ) );
+        file_write_line( &vcxproj,				"      <Platform>x64</Platform>"																  );
+        file_write_line( &vcxproj,				"    </ProjectConfiguration>"																	  );
+	}
+	file_write_line( &vcxproj,					"  </ItemGroup>" );
+
+	file_write_line( &vcxproj,					"  <PropertyGroup Label=\"Globals\">" 						);
+	file_write_line( &vcxproj, tprintf(			"    <ProjectGuid> %u </ProjectGuid>" 						, hash_string(visual_studio_options->project_name , 59049 ) ) );
+	file_write_line( &vcxproj,					"    <Keyword>Win32Proj</Keyword>" 							);
+	file_write_line( &vcxproj, tprintf(			"    <RootNamespace> %s </RootNamespace>" 					, visual_studio_options->project_name ) );
+	file_write_line( &vcxproj,					"  </PropertyGroup>"						 				);
+
+	file_write_line( &vcxproj,					"  <ItemGroup>"												);
+	For ( u64, i, 0, visual_studio_options->source_files.count ) {
+		// TODO: deep recursive file search for ccp, h, c, hpp, inl files
+		file_write_line( &vcxproj, tprintf(		"    <ClCompile Include=\"%s\" />"							, visual_studio_options->source_files[i]				) );
+	}
+	file_write_line( &vcxproj,					"  </ItemGroup>"											);
+
+	file_write_line( &vcxproj,					"  <PropertyGroup Condition=\"'$(VisualStudioVersion)' == '16.0'\">" 				);
+	file_write_line( &vcxproj,					"      <PlatformToolset>v142</PlatformToolset> <!-- VS 2019 -->" 					);
+	file_write_line( &vcxproj,					"  </PropertyGroup>" 																);
+	file_write_line( &vcxproj,					"  <PropertyGroup Condition=\"'$(VisualStudioVersion)' == '17.0'\">" 				);
+	file_write_line( &vcxproj,					"      <PlatformToolset>v143</PlatformToolset> <!-- VS 2022 -->" 					);
+	file_write_line( &vcxproj,					"  </PropertyGroup>" 																);
+
+	file_write_line( &vcxproj, 					"</Project>"																		);
+
+	//This bit is a bit of guff- I got GPT to write it for me and it only really works for debug and release, Win32 && x64. Need a first pass though.
+	For(u64, platform_idx, 0, visual_studio_options->platforms.count)
+	{
+		const char* platform = visual_studio_options->platforms[platform_idx]; // Example: "x64", "Win32"
+
+		For(u64, config_idx, 0, visual_studio_options->configs.count)
+		{
+			const char* config = visual_studio_options->configs[config_idx]; // Example: "Debug", "Release"
+
+			file_write_line(&vcxproj, tprintf("  <PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='%s|%s'\">", config, platform));
+			
+			// Note(TOM): this assumes two things: 
+			//			A) you use vis studio generation ONLY to point to a build script; NOT the actual source files
+			//			B) there's only one cpp involved in your build script. TODO(TOM): make an array. This assumption doesn't need to stick
+			file_write_line(&vcxproj, tprintf("    <NMakeBuildCommandLine>builder.exe %s %s</NMakeBuildCommandLine>", visual_studio_options->build_script_path, config));
+
+			//NOTE(TOM): OUTPUT: This is tricky. I think it's needed for the debugger. The output location is defined in the build script and could be different per config.
+			//					That means duplicating logic between the two. That's gnarly. 
+			//					Perhaps there could be an intermediate set build location at config/platform/build.exe we could use for VS debugging, and then copy that file to user's custom location
+			file_write_line(&vcxproj, tprintf("    <NMakeOutput>??? This is difficult cos it's so dependent on the build logic/NMakeOutput>", config));
+			file_write_line(&vcxproj, tprintf("    <NMakeBuildCommandLine>builder.exe %s %s</NMakeBuildCommandLine>", visual_studio_options->build_script_path, config));
+			
+			// NOTE(TOM): "Standard" preprocessor defns. Ternaries aren't appropiate for configs that aren't debug or release but I wanted SOMETHING working
+			const char* win32_definition = string_equals(platform, "Win32") ? "WIN32;" : "";
+			const char* debug_definition = string_equals(config, "Debug") ? "_DEBUG;" : "NDEBUG;";
+
+			// Write the preprocessor definitions
+			file_write_line(
+				&vcxproj,
+				tprintf(
+					"    <NMakePreprocessorDefinitions>%s%s$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>",
+					win32_definition,    // WIN32 definition if the platform is Win32
+					debug_definition     // _DEBUG for Debug, NDEBUG for Release
+				)
+			);
+
+			file_write_line(&vcxproj, "  </PropertyGroup>");
+		}
+	}
+}

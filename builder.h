@@ -92,23 +92,22 @@ struct BuilderOptions {
 	const char*			binary_name;
 };
 
-struct VisualStudioOptions
-{
+struct VisualStudioOptions {
 	// Visual studio project name
-	const char* 		project_name;
+	const char*			project_name;
 
 	// The names of the configs that VS should allow to select from.
 	// There are no options associated with these configs here as those settings are 
 	// defined in the build script's logic
-	Array<const char*> 	configs;
+	Array<const char*>	configs;
 
 	Array<const char*>	platforms;
 
 	// These are the files that will be included in the SLN.
 	// This is a seperate list to the build options as you likely want the superset of
 	// all files in you're SLN, but may conditionally exclude a subset of files based on config/target etc
-	Array<const char*> 	source_files;
+	Array<const char*>	source_files;
 
 	// Location of the build script
-	const char* build_script_path;
+	const char*			build_script_path;
 };

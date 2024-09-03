@@ -100,6 +100,8 @@
     <ClCompile Include="test_multiple_source_files\src\polo.linux.cpp" />
     <ClCompile Include="test_multiple_source_files\src\polo.win64.cpp" />
     <ClCompile Include="test_set_builder_options\test_set_builder_options.cpp" />
+    <ClCompile Include="test_third_party_libraries\build.cpp" />
+    <ClCompile Include="test_third_party_libraries\sdl_test.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="test_multiple_source_files\src\marco_polo.h" />

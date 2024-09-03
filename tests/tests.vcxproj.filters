@@ -48,6 +48,12 @@
     <ClCompile Include="test_multiple_source_files\src\polo.win64.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="test_third_party_libraries\sdl_test.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="test_third_party_libraries\build.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="test_multiple_source_files\src\marco_polo.h">

@@ -81,6 +81,10 @@ struct buildContext_t {
 	const char*				fullBinaryName;
 };
 
+static u64 maxull( const u64 x, const u64 y ) {
+	return ( x < y ) ? x : y;
+}
+
 static const char* GetFileExtensionFromBinaryType( BinaryType type ) {
 	switch ( type ) {
 		case BINARY_TYPE_EXE: return "exe";
@@ -466,6 +470,38 @@ static void NukeFolder( const char* folder, const bool8 verbose ) {
 			file_delete( fileFullPath );
 		}
 	} while ( file_find_next( &file, &fileInfo ) );
+}
+
+static const char* TryFindFile( const char* filename, const char* folder ) {
+	const char* result = NULL;
+
+	const char* searchPath = tprintf( "%s\\*", folder );
+
+	FileInfo fileInfo;
+	File firstFile = file_find_first( searchPath, &fileInfo );
+
+	do {
+		if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) || fileInfo.filename[0] == 0 ) {
+			continue;
+		}
+
+		const char* fullFilename = tprintf( "%s\\%s", folder, fileInfo.filename );
+
+		if ( fileInfo.is_directory ) {
+			result = TryFindFile( filename, fullFilename );
+		}
+
+		if ( result ) {
+			return result;
+		}
+
+		if ( string_ends_with( fullFilename, filename ) ) {
+			result = fullFilename;
+			return result;
+		}
+	} while ( file_find_next( &firstFile, &fileInfo ) );
+
+	return NULL;
 }
 
 int main( int argc, char** argv ) {
@@ -933,17 +969,18 @@ int main( int argc, char** argv ) {
 
 		// for each file, open it and get every include inside it
 		// then go through _those_ included files
-		For ( u64, sourceFileIndex, 0, context.options.source_files.count ) {
-			const char* sourceFile = context.options.source_files[sourceFileIndex];
+		For ( u64, sourceFileIndex, 0, buildInfoFiles.count ) {
+			const char* sourceFile = buildInfoFiles[sourceFileIndex];
 
 			const char* sourceFilePath = paths_remove_file_from_path( sourceFile );
+			const char* sourceFileNoPath = paths_remove_path_from_file( sourceFile );
 
 			char* fileBuffer = NULL;
 			u64 fileLength = 0;
 			bool8 read = file_read_entire( sourceFile, &fileBuffer, &fileLength );
 
 			if ( !read ) {
-				error( "Failed to read %s.  Can't resolve includes for this file.\n", context.options.source_files[sourceFileIndex] );
+				error( "Failed to read %s.  Can't resolve includes for this file.\n", buildInfoFiles[sourceFileIndex] );
 				return EXIT_FAILURE;
 			}
 
@@ -977,6 +1014,7 @@ int main( int argc, char** argv ) {
 						For ( u64, fileIndex, 0, buildInfoFiles.count ) {
 							if ( string_equals( buildInfoFiles[fileIndex], filename ) ) {
 								found = true;
+								break;
 							}
 						}
 
@@ -985,7 +1023,46 @@ int main( int argc, char** argv ) {
 						}
 					} else if ( fileBuffer[fileOffset] == '<' ) {
 						// "external" include, so scan all the external include folders that we know about
-						// TODO(DM): this
+						const char* includeStart = fileBuffer + fileOffset;
+						includeStart++;
+
+						const char* includeEnd = strchr( includeStart, '>' );
+
+						u64 filenameLength = cast( u64 ) includeEnd - cast( u64 ) includeStart;
+						filenameLength++;
+
+						char* filename = cast( char* ) mem_temp_alloc( filenameLength * sizeof( char ) );
+						strncpy( filename, includeStart, filenameLength * sizeof( char ) );
+						filename[filenameLength - 1] = 0;
+
+						const char* fullFilename = NULL;
+
+						For ( u64, includePathIndex, 0, context.options.additional_includes.count ) {
+							const char* includePath = context.options.additional_includes[includePathIndex];
+
+							fullFilename = TryFindFile( filename, includePath );
+
+							if ( fullFilename != NULL ) {
+								break;
+							}
+						}
+
+						if ( fullFilename ) {
+							bool8 found = false;
+							For ( u64, fileIndex, 0, buildInfoFiles.count ) {
+								if ( string_equals( buildInfoFiles[fileIndex], fullFilename ) ) {
+									found = true;
+									break;
+								}
+							}
+
+							if ( !found ) {
+								array_add( &buildInfoFiles, fullFilename );
+							}
+						}
+						/*else {
+							error( "Failed to find external include \"%s\" from any of the additional include directories.\n" );
+						}*/
 					}
 				}
 
@@ -994,6 +1071,7 @@ int main( int argc, char** argv ) {
 				if ( !lineEnd ) lineEnd = fileBuffer + fileOffset;
 
 				u64 fileLineLength = cast( u64 ) lineEnd - cast( u64 ) ( fileBuffer + fileOffset );
+				fileLineLength = maxull( fileLineLength, 1ULL );
 
 				fileOffset += fileLineLength;
 			}

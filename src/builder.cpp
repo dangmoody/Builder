@@ -477,6 +477,8 @@ static const char* TryFindFile( const char* filename, const char* folder ) {
 
 	const char* searchPath = tprintf( "%s\\*", folder );
 
+	const char* filenamePath = paths_remove_file_from_path( filename );
+
 	FileInfo fileInfo;
 	File firstFile = file_find_first( searchPath, &fileInfo );
 
@@ -485,7 +487,12 @@ static const char* TryFindFile( const char* filename, const char* folder ) {
 			continue;
 		}
 
-		const char* fullFilename = tprintf( "%s\\%s", folder, fileInfo.filename );
+		const char* fullFilename = NULL;
+		if ( strchr( filename, '/' ) ) {
+			fullFilename = tprintf( "%s\\%s\\%s", folder, filenamePath, fileInfo.filename );
+		} else {
+			fullFilename = tprintf( "%s\\%s", folder, fileInfo.filename );
+		}
 
 		if ( fileInfo.is_directory ) {
 			result = TryFindFile( filename, fullFilename );
@@ -511,7 +518,7 @@ int main( int argc, char** argv ) {
 		printf( "Build finished: %f ms\n\n", buildEnd - buildStart );
 	);
 
-	core_init( MEM_KILOBYTES( 1 ), MEM_KILOBYTES( 64 ) );
+	core_init( MEM_KILOBYTES( 1 ), MEM_MEGABYTES( 64 ) );
 	defer( core_shutdown() );
 
 	set_command_line_args( argc, argv );
@@ -924,6 +931,14 @@ int main( int argc, char** argv ) {
 
 		if ( callback ) {
 			callback( &context.options );
+
+			For ( u64, includeIndex, 0, context.options.additional_includes.count ) {
+				context.options.additional_includes[includeIndex] = tprintf( "%s\\%s", buildFilePathAbsolute, context.options.additional_includes[includeIndex] );
+			}
+
+			For ( u64, libPathIndex, 0, context.options.additional_lib_paths.count ) {
+				context.options.additional_lib_paths[libPathIndex] = tprintf( "%s\\%s", buildFilePathAbsolute, context.options.additional_lib_paths[libPathIndex] );
+			}
 		}
 
 		preBuildFunc = cast( preBuildFunc_t ) library_get_proc_address( library, PRE_BUILD_FUNC_NAME );
@@ -951,9 +966,15 @@ int main( int argc, char** argv ) {
 					continue;
 				}
 
-				const char* localPath = paths_remove_file_from_path( sourceFile );
+				const char* foundSourceFile = NULL;
 
-				const char* foundSourceFile = tprintf( "%s\\%s\\%s", buildFilePathAbsolute, localPath, fileInfo.filename );
+				if ( strchr( sourceFile, '/' ) != NULL ) {
+					const char* localPath = paths_remove_file_from_path( sourceFile );
+
+					foundSourceFile = tprintf( "%s\\%s\\%s", buildFilePathAbsolute, localPath, fileInfo.filename );
+				} else {
+					foundSourceFile = tprintf( "%s\\%s", buildFilePathAbsolute, fileInfo.filename );
+				}
 
 				array_add( &finalSourceFilesToBuild, foundSourceFile );
 			} while ( file_find_next( &firstFile, &fileInfo ) );
@@ -1040,6 +1061,11 @@ int main( int argc, char** argv ) {
 						For ( u64, includePathIndex, 0, context.options.additional_includes.count ) {
 							const char* includePath = context.options.additional_includes[includePathIndex];
 
+							// DM!!!	this doesnt account for the fact that includes can have paths in them
+							// 			so make this code do that!
+
+							//const char* includeSearchBasePath = tprintf( "%s\\%s", sourceFilePath, includePath );
+
 							fullFilename = TryFindFile( filename, includePath );
 
 							if ( fullFilename != NULL ) {
@@ -1071,7 +1097,7 @@ int main( int argc, char** argv ) {
 				if ( !lineEnd ) lineEnd = fileBuffer + fileOffset;
 
 				u64 fileLineLength = cast( u64 ) lineEnd - cast( u64 ) ( fileBuffer + fileOffset );
-				fileLineLength = maxull( fileLineLength, 1ULL );
+				fileLineLength = maxull( fileLineLength, 1ULL );	// TODO(DM): this line is hiding a bug in the parser - find the bug
 
 				fileOffset += fileLineLength;
 			}

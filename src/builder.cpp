@@ -1061,11 +1061,6 @@ int main( int argc, char** argv ) {
 						For ( u64, includePathIndex, 0, context.options.additional_includes.count ) {
 							const char* includePath = context.options.additional_includes[includePathIndex];
 
-							// DM!!!	this doesnt account for the fact that includes can have paths in them
-							// 			so make this code do that!
-
-							//const char* includeSearchBasePath = tprintf( "%s\\%s", sourceFilePath, includePath );
-
 							fullFilename = TryFindFile( filename, includePath );
 
 							if ( fullFilename != NULL ) {

@@ -78,8 +78,10 @@ const char* paths_get_absolute_path( const char* file ) {
 }
 
 const char* paths_remove_file_from_path( const char* path ) {
-	char* result = cast( char* ) mem_temp_alloc( strlen( path ) * sizeof( char ) );
-	strncpy( result, path, strlen( path ) * sizeof( char ) );
+	u64 pathLength = strlen( path );
+
+	char* result = cast( char* ) mem_temp_alloc( ( pathLength + 1 ) * sizeof( char ) );
+	strncpy( result, path, pathLength * sizeof( char ) );
 
 	const char* last_slash = strrchr( result, '/' );
 	if ( !last_slash ) last_slash = strrchr( result, '\\' );
@@ -87,6 +89,8 @@ const char* paths_remove_file_from_path( const char* path ) {
 	if ( last_slash ) {
 		u64 offset = cast( u64 ) last_slash - cast( u64 ) result;
 		result[offset] = 0;
+	} else {
+		return path;
 	}
 
 	return result;

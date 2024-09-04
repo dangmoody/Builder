@@ -76,10 +76,14 @@ void* mem_alloc_linear_aligned( void* allocator_data, const u64 size_bytes, cons
 
 	AllocatorLinearData* allocator = cast( AllocatorLinearData* ) allocator_data;
 
-	assertf( allocator->offset + size_bytes <= allocator->size_bytes,
-		"Linear allocator wanted to allocate %d bytes, but it only has %d bytes left.  It needs another %d bytes.\n",
-		size_bytes, ( allocator->size_bytes - allocator->offset ), ( allocator->size_bytes - size_bytes )
-	);
+	{
+		u64 remaining_bytes = allocator->size_bytes - allocator->offset;
+
+		assertf( allocator->offset + size_bytes <= allocator->size_bytes,
+				 "Linear allocator wanted to allocate %d bytes, but it only has %d bytes left.  It needs at least another %d bytes.\n",
+				 size_bytes, remaining_bytes, ( size_bytes - remaining_bytes )
+		);
+	}
 
 	allocator->offset = align_up( allocator->offset, cast( u64 ) alignment );
 

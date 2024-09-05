@@ -139,7 +139,7 @@ TEMPER_TEST( SetThirdPartyLibrariesViaSetBuilderOptions, TEMPER_FLAG_SHOULD_RUN 
 
 	TEMPER_CHECK_TRUE( FileExists( "tests\\test_third_party_libraries\\bin\\sdl_test.exe" ) );
 
-	DoBuildInfoPostTest( "test_third_party_libraries", "sdl_test.cpp" );
+	DoBuildInfoPostTest( "test_third_party_libraries", "build.cpp" );
 
 	{
 		Array<const char*> args;

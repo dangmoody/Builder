@@ -472,6 +472,15 @@ static void NukeFolder( const char* folder, const bool8 verbose ) {
 	} while ( file_find_next( &file, &fileInfo ) );
 }
 
+static bool8 PathHasSlash( const char* path ) {
+	bool8 hasSlash = false;
+
+	hasSlash |= strchr( path, '/' ) != NULL;
+	hasSlash |= strchr( path, '\\' ) != NULL;
+
+	return hasSlash;
+}
+
 static const char* TryFindFile( const char* filename, const char* folder ) {
 	const char* result = NULL;
 
@@ -488,7 +497,7 @@ static const char* TryFindFile( const char* filename, const char* folder ) {
 		}
 
 		const char* fullFilename = NULL;
-		if ( strchr( filename, '/' ) ) {
+		if ( PathHasSlash( filename ) ) {
 			fullFilename = tprintf( "%s\\%s\\%s", folder, filenamePath, fileInfo.filename );
 		} else {
 			fullFilename = tprintf( "%s\\%s", folder, fileInfo.filename );
@@ -968,7 +977,7 @@ int main( int argc, char** argv ) {
 
 				const char* foundSourceFile = NULL;
 
-				if ( strchr( sourceFile, '/' ) != NULL ) {
+				if ( PathHasSlash( sourceFile ) ) {
 					const char* localPath = paths_remove_file_from_path( sourceFile );
 
 					foundSourceFile = tprintf( "%s\\%s\\%s", buildFilePathAbsolute, localPath, fileInfo.filename );
@@ -1001,8 +1010,9 @@ int main( int argc, char** argv ) {
 			bool8 read = file_read_entire( sourceFile, &fileBuffer, &fileLength );
 
 			if ( !read ) {
-				error( "Failed to read %s.  Can't resolve includes for this file.\n", buildInfoFiles[sourceFileIndex] );
-				return EXIT_FAILURE;
+				//error( "Failed to read %s.  Can't resolve includes for this file.\n", buildInfoFiles[sourceFileIndex] );
+				//return EXIT_FAILURE;
+				continue;
 			}
 
 			defer( file_free_buffer( &fileBuffer ) );

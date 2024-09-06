@@ -193,6 +193,52 @@ TEMPER_TEST( Compile_StaticLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 	}
 }
 
+TEMPER_TEST( Compile_DynamicLibrary, TEMPER_FLAG_SHOULD_RUN ) {
+	// build the dynamic library itself
+	{
+		DoBuildInfoPreTest( "tests\\test_dynamic_lib\\lib\\.builder\\build.cpp.build_info" );
+
+		Array<const char*> args;
+		array_add( &args, "builder.exe" );
+		array_add( &args, "tests\\test_dynamic_lib\\lib\\build.cpp" );
+
+		s32 exitCode = RunProc( &args );
+
+		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
+
+		DoBuildInfoPostTest( "test_dynamic_lib\\lib", "build.cpp" );
+	}
+
+	// now build the exe that uses it
+	{
+		DoBuildInfoPreTest( "tests\\test_dynamic_lib\\program\\.builder\\build.cpp.build_info" );
+
+		Array<const char*> args;
+		array_add( &args, "builder.exe" );
+		array_add( &args, "tests\\test_dynamic_lib\\program\\build.cpp" );
+
+		s32 exitCode = RunProc( &args );
+
+		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
+
+		DoBuildInfoPostTest( "test_dynamic_lib\\program", "build.cpp" );
+	}
+
+	// run the program to make sure everything actually works
+	{
+		// TODO(DM): setup pre/post build steps and make this file copy a post build step after building the .exe
+		bool8 copied = file_copy( "tests\\test_dynamic_lib\\lib\\bin\\test_dynamic_lib.dll", "tests\\test_dynamic_lib\\program\\bin\\test_dynamic_lib.dll" );
+		TEMPER_CHECK_TRUE( copied );
+
+		Array<const char*> args;
+		array_add( &args, "tests\\test_dynamic_lib\\program\\bin\\test_dynamic_library_program.exe" );
+
+		s32 exitCode = RunProc( &args );
+
+		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
+	}
+}
+
 int main( int argc, char** argv ) {
 	core_init( MEM_KILOBYTES( 64 ), MEM_KILOBYTES( 64 ) );
 	defer( core_shutdown() );

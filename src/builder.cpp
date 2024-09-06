@@ -87,9 +87,9 @@ static u64 maxull( const u64 x, const u64 y ) {
 
 static const char* GetFileExtensionFromBinaryType( BinaryType type ) {
 	switch ( type ) {
-		case BINARY_TYPE_EXE: return "exe";
-		case BINARY_TYPE_DLL: return "dll";
-		case BINARY_TYPE_LIB: return "lib";
+		case BINARY_TYPE_EXE:				return "exe";
+		case BINARY_TYPE_DYNAMIC_LIBRARY:	return "dll";
+		case BINARY_TYPE_STATIC_LIBRARY:	return "lib";
 	}
 
 	assertf( false, "Something went really wrong here.  Get Dan.\n" );
@@ -312,8 +312,6 @@ static s32 BuildDynamicLibrary( buildContext_t* context ) {
 		array_add_range( &args, context->options.ignore_warnings.data, context->options.ignore_warnings.count );
 	}
 
-	array_add( &args, NULL );
-
 	bool8 showArgs = context->flags & BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS;
 	bool8 showStdout = context->flags & BUILD_CONTEXT_FLAG_SHOW_STDOUT;
 	s32 exitCode = RunProc( &args, NULL, showArgs, showStdout );
@@ -407,8 +405,6 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 			array_add_range( &args, context->options.ignore_warnings.data, context->options.ignore_warnings.count );
 		}
 
-		array_add( &args, NULL );
-
 		exitCode = RunProc( &args, NULL, showArgs, showStdout );
 
 		if ( exitCode != EXIT_SUCCESS ) {
@@ -430,8 +426,6 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 		array_add( &args, tprintf( "/OUT:%s", context->fullBinaryName ) );
 
 		array_add_range( &args, intermediateFiles.data, intermediateFiles.count );
-
-		//array_add( &args, NULL );
 
 		exitCode = RunProc( &args, NULL, showArgs, showStdout );
 
@@ -1148,11 +1142,11 @@ int main( int argc, char** argv ) {
 			exitCode = BuildEXE( &context );
 			break;
 
-		case BINARY_TYPE_DLL:
+		case BINARY_TYPE_DYNAMIC_LIBRARY:
 			exitCode = BuildDynamicLibrary( &context );
 			break;
 
-		case BINARY_TYPE_LIB:
+		case BINARY_TYPE_STATIC_LIBRARY:
 			exitCode = BuildStaticLibrary( &context );
 			break;
 	}

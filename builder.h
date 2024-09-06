@@ -27,9 +27,9 @@ Proprietary and confidential.
 #endif
 
 enum BinaryType {
-	BINARY_TYPE_EXE	= 0,	// Build an executable (.exe on Windows)
-	BINARY_TYPE_DLL,		// Build a dynamic linked library (.dll on Windows)
-	BINARY_TYPE_LIB,		// Build a static library (.lib on Windows)
+	BINARY_TYPE_EXE	= 0,			// .exe on Windows
+	BINARY_TYPE_DYNAMIC_LIBRARY,	// .dll on Windows
+	BINARY_TYPE_STATIC_LIBRARY,		// .lib on Windows
 };
 
 enum OptimizationLevel {

@@ -151,6 +151,48 @@ TEMPER_TEST( SetThirdPartyLibrariesViaSetBuilderOptions, TEMPER_FLAG_SHOULD_RUN 
 	}
 }
 
+TEMPER_TEST( Compile_StaticLibrary, TEMPER_FLAG_SHOULD_RUN ) {
+	// build the static library itself
+	{
+		DoBuildInfoPreTest( "tests\\test_static_lib\\lib\\.builder\\lib.cpp.build_info" );
+
+		Array<const char*> args;
+		array_add( &args, "builder.exe" );
+		array_add( &args, "tests\\test_static_lib\\lib\\lib.cpp" );
+
+		s32 exitCode = RunProc( &args );
+
+		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
+
+		DoBuildInfoPostTest( "test_static_lib\\lib", "lib.cpp" );
+	}
+
+	// now build the exe that uses it
+	{
+		DoBuildInfoPreTest( "tests\\test_static_lib\\program\\.builder\\build.cpp.build_info" );
+
+		Array<const char*> args;
+		array_add( &args, "builder.exe" );
+		array_add( &args, "tests\\test_static_lib\\program\\build.cpp" );
+
+		s32 exitCode = RunProc( &args );
+
+		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
+
+		DoBuildInfoPostTest( "test_static_lib\\program", "build.cpp" );
+	}
+
+	// run the program to make sure everything actually works
+	{
+		Array<const char*> args;
+		array_add( &args, "tests\\test_static_lib\\program\\bin\\test_static_library_program.exe" );
+
+		s32 exitCode = RunProc( &args );
+
+		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
+	}
+}
+
 int main( int argc, char** argv ) {
 	core_init( MEM_KILOBYTES( 64 ), MEM_KILOBYTES( 64 ) );
 	defer( core_shutdown() );

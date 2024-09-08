@@ -87,6 +87,8 @@ const char* paths_remove_file_from_path( const char* path ) {
 	if ( last_slash ) {
 		u64 offset = cast( u64 ) last_slash - cast( u64 ) result;
 		result[offset] = 0;
+	} else {
+		return path;
 	}
 
 	return result;

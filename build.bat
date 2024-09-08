@@ -51,7 +51,7 @@ if /I [%config%]==[release] (
 )
 
 set includes=""
-set libraries=-luser32.lib -lShlwapi.lib -lDbgHelp.lib
+set libraries=-luser32.lib -lShlwapi.lib -lDbgHelp.lib -lOle32.lib
 if /I [%config%]==[debug] (
 	set libraries=!libraries! -lmsvcrtd.lib
 )

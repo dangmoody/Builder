@@ -90,6 +90,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\builder.cpp" />
+    <ClCompile Include="test_sln\src\main.cpp" />
+    <ClCompile Include="test_sln\src\test_sln.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

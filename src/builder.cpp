@@ -478,6 +478,15 @@ static void NukeFolder( const char* folder, const bool8 verbose ) {
 	} while ( file_find_next( &file, &fileInfo ) );
 }
 
+static bool8 PathHasSlash( const char* path ) {
+	bool8 hasSlash = false;
+
+	hasSlash |= strchr( path, '/' ) != NULL;
+	hasSlash |= strchr( path, '\\' ) != NULL;
+
+	return hasSlash;
+}
+
 static const char* TryFindFile( const char* filename, const char* folder ) {
 	const char* result = NULL;
 
@@ -510,7 +519,7 @@ static const char* TryFindFile( const char* filename, const char* folder ) {
 	return NULL;
 }
 
-static bool8 GenerateVisualStudioSolution( VisualStudioOptions* visualStudioOptions );
+static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution );
 
 int main( int argc, char** argv ) {
 	float64 buildStart = time_ms();
@@ -815,7 +824,7 @@ int main( int argc, char** argv ) {
 		assertf( coreInitFunc != NULL, "Failed to find the core init callback" );
 		coreInitFunc( &g_core_context );
 
-		typedef void ( *setVisualStudioOptionsFunc_t )( VisualStudioOptions* options );
+		typedef void ( *setVisualStudioOptionsFunc_t )( VisualStudioSolution* solution );
 
 		setVisualStudioOptionsFunc_t setVisualStudioOptionsFunc = cast( setVisualStudioOptionsFunc_t ) library_get_proc_address( library, SET_VISUAL_STUDIO_OPTIONS_FUNC_NAME );
 
@@ -828,10 +837,10 @@ int main( int argc, char** argv ) {
 			return 1;
 		}
 
-		VisualStudioOptions visualStudioOptions = {};
-		setVisualStudioOptionsFunc( &visualStudioOptions );
+		VisualStudioSolution solution = {};
+		setVisualStudioOptionsFunc( &solution );
 
-		bool8 generated = GenerateVisualStudioSolution( &visualStudioOptions );
+		bool8 generated = GenerateVisualStudioSolution( &solution );
 
 		if ( !generated ) {
 			error( "Failed to generate Visual Studio solution.\n" );	// TODO(DM): better error message
@@ -1289,97 +1298,411 @@ int main( int argc, char** argv ) {
 	return exitCode;
 }
 
-static bool8 GenerateVisualStudioSolution( VisualStudioOptions* visualStudioOptions )
-{
-	assert( visualStudioOptions );
+// project type guids are pre-determined by visual studio
+// C++ is the only language that builder knows/cares about
+#define VISUAL_STUDIO_CPP_PROJECT_TYPE_GUID "8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942"
 
-	File vcxproj = file_open_or_create( tprintf( "%s.vcxproj",visualStudioOptions->project_name ) );
-	defer( file_close( &vcxproj ) );
+#define CHECK_WRITE( func ) \
+	do { \
+		bool8 written = (func); \
+		assertf( written, "Failed to write a visual studio project/solution file.  Go get Dan.\n" ); \
+	} while ( 0 )
 
-	if ( vcxproj.ptr == nullptr )
-	{
-		return false;
-	}
+// data layout comes from: https://learn.microsoft.com/en-us/windows/win32/api/guiddef/ns-guiddef-guid
+static const char* GuidToString( const GUID* guid ) {
+	return tprintf( "%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X", guid->Data1, guid->Data2, guid->Data3, guid->Data4[0], guid->Data4[1], guid->Data4[2], guid->Data4[3], guid->Data4[4], guid->Data4[5], guid->Data4[6], guid->Data4[7] );
+}
 
-	file_write_line( &vcxproj,					"<?xml version=\"1.0\" encoding=\"utf-8\"?>" );
+static void FindAllFiles( const char* basePath, const char* searchFilter, Array<const char*>* outFiles ) {
+	const char* fullSearchPath = tprintf( "%s\\%s", basePath, searchFilter );
 
-	file_write_line( &vcxproj,					"<Project DefaultTargets=\"Build\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">" );
+	FileInfo fileInfo;
+	File firstFile = file_find_first( fullSearchPath, &fileInfo );
 
-	file_write_line( &vcxproj,					"  <ItemGroup Label=\"ProjectConfigurations\">" );
-	For ( u64, i, 0, visualStudioOptions->configs.count ) {
-		// TODO: Alternative targets
-		file_write_line( &vcxproj, tprintf(		"    <ProjectConfiguration Include=\"%s\"\">"				, visualStudioOptions->configs[i] ) );
-		file_write_line( &vcxproj, tprintf(		"      <Configuration>%s</Configuration>"					, visualStudioOptions->configs[i] ) );
-		file_write_line( &vcxproj,				"      <Platform>x64</Platform>"																  );
-		file_write_line( &vcxproj,				"    </ProjectConfiguration>"																	  );
-	}
-	file_write_line( &vcxproj,					"  </ItemGroup>" );
+	const char* searchFilterPath = paths_remove_file_from_path( searchFilter );
 
-	file_write_line( &vcxproj,					"  <PropertyGroup Label=\"Globals\">" 						);
-	file_write_line( &vcxproj, tprintf(			"    <ProjectGuid> %u </ProjectGuid>" 						, hash_string(visualStudioOptions->project_name , 59049 ) ) );
-	file_write_line( &vcxproj,					"    <Keyword>Win32Proj</Keyword>" 							);
-	file_write_line( &vcxproj, tprintf(			"    <RootNamespace> %s </RootNamespace>" 					, visualStudioOptions->project_name ) );
-	file_write_line( &vcxproj,					"  </PropertyGroup>"						 				);
-
-	file_write_line( &vcxproj,					"  <ItemGroup>"												);
-	For ( u64, i, 0, visualStudioOptions->source_files.count ) {
-		// TODO: deep recursive file search for ccp, h, c, hpp, inl files
-		file_write_line( &vcxproj, tprintf(		"    <ClCompile Include=\"%s\" />"							, visualStudioOptions->source_files[i]				) );
-	}
-	file_write_line( &vcxproj,					"  </ItemGroup>"											);
-
-	file_write_line( &vcxproj,					"  <PropertyGroup Condition=\"'$(VisualStudioVersion)' == '16.0'\">" 				);
-	file_write_line( &vcxproj,					"      <PlatformToolset>v142</PlatformToolset> <!-- VS 2019 -->" 					);
-	file_write_line( &vcxproj,					"  </PropertyGroup>" 																);
-	file_write_line( &vcxproj,					"  <PropertyGroup Condition=\"'$(VisualStudioVersion)' == '17.0'\">" 				);
-	file_write_line( &vcxproj,					"      <PlatformToolset>v143</PlatformToolset> <!-- VS 2022 -->" 					);
-	file_write_line( &vcxproj,					"  </PropertyGroup>" 																);
-
-	file_write_line( &vcxproj, 					"</Project>"																		);
-
-	//This bit is a bit of guff- I got GPT to write it for me and it only really works for debug and release, Win32 && x64. Need a first pass though.
-	For ( u64, platform_idx, 0, visualStudioOptions->platforms.count )
-	{
-		const char* platform = visualStudioOptions->platforms[platform_idx]; // Example: "x64", "Win32"
-
-		For ( u64, config_idx, 0, visualStudioOptions->configs.count )
-		{
-			const char* config = visualStudioOptions->configs[config_idx]; // Example: "Debug", "Release"
-
-			file_write_line( &vcxproj, tprintf( "  <PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='%s|%s'\">", config, platform ) );
-			
-			// Note(TOM): this assumes two things: 
-			//			A) you use vis studio generation ONLY to point to a build script; NOT the actual source files. This is because otherwise you need to get source per config 
-			//					which would be tricky since they are conditionally defined in build options. NOTE: the source files in this options is NOT appropiate, 
-			//					since it's the superset of all the files needed for SLN visibility, not the ones that should actually get compiled (eg linux files visible despite building windows)
-			//			B) there's only one cpp involved in your build script. TODO(TOM): make an array. This assumption doesn't need to stick
-			file_write_line( &vcxproj, tprintf( "    <NMakeBuildCommandLine>builder.exe %s %s</NMakeBuildCommandLine>", visualStudioOptions->build_script_path, config ) );
-
-			//NOTE(TOM): OUTPUT: This is tricky. I think it's needed for the debugger. The output location is defined in the build script and could be different per config.
-			//					That means duplicating logic between the two. That's gnarly. 
-			//					Perhaps there could be an intermediate set build location at config/platform/build.exe we could use for VS debugging, and then copy that file to user's custom location
-			file_write_line( &vcxproj, tprintf( "    <NMakeOutput>??? This is difficult cos it's so dependent on the build logic/NMakeOutput>", config ) );
-			file_write_line( &vcxproj, tprintf( "    <NMakeBuildCommandLine>builder.exe %s %s</NMakeBuildCommandLine>", visualStudioOptions->build_script_path, config ) );
-			
-			// NOTE(TOM): "Standard" preprocessor defns. Ternaries aren't appropiate for configs that aren't debug or release but I wanted SOMETHING working
-			const char* win32_definition = string_equals( platform, "Win32" ) ? "WIN32;"  : "";
-			const char* debug_definition = string_equals( config,   "Debug" ) ? "_DEBUG;" : "NDEBUG;";
-
-			// Write the preprocessor definitions
-			file_write_line(
-				&vcxproj,
-				tprintf(
-					"    <NMakePreprocessorDefinitions>%s%s$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>",
-					win32_definition,    // WIN32 definition if the platform is Win32
-					debug_definition     // _DEBUG for Debug, NDEBUG for Release
-				)
-			);
-
-			file_write_line( &vcxproj, "  </PropertyGroup>" );
+	do {
+		if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) ) {
+			continue;
 		}
+
+		const char* fullFilename = tprintf( "%s\\%s", searchFilterPath, fileInfo.filename );
+
+		if ( fileInfo.is_directory ) {
+			FindAllFiles( basePath, fullFilename, outFiles );
+		} else {
+			array_add( outFiles, fullFilename );
+		}
+	} while ( file_find_next( &firstFile, &fileInfo ) );
+}
+
+static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution ) {
+	assert( solution );
+
+	Array<const char*> projectGuids;
+	array_resize( &projectGuids, solution->projects.count );
+
+	// give each project a guid
+	For ( u64, i, 0, projectGuids.count ) {
+		GUID guid;
+		HRESULT hr = CoCreateGuid( &guid );
+		assert( hr == S_OK );
+
+		projectGuids[i] = GuidToString( &guid );
 	}
 
-	file_write_line( &vcxproj,					"</Project>\n" );
+	// generate each .vcxproj
+	For ( u64, projectIndex, 0, solution->projects.count ) {
+		VisualStudioProject* project = &solution->projects[projectIndex];
+
+		const char* projectPath = NULL;
+		if ( solution->path ) {
+			projectPath = tprintf( "%s\\%s.vcxproj", solution->path, project->name );
+		} else {
+			projectPath = tprintf( "%s.vcxproj", project->name );
+		}
+
+		File vcxproj = file_open_or_create( projectPath );
+		defer( file_close( &vcxproj ) );
+
+		CHECK_WRITE( file_write_line( &vcxproj, "<?xml version=\"1.0\" encoding=\"utf-8\"?>" ) );
+		CHECK_WRITE( file_write_line( &vcxproj, "<Project DefaultTargets=\"Build\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">" ) );
+
+		// generate every single config and platform pairing
+		{
+			CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup Label=\"ProjectConfigurations\">" ) );
+			For ( u64, configIndex, 0, solution->configs.count ) {
+				const char* config = solution->configs[configIndex];
+
+				For ( u64, platformIndex, 0, solution->platforms.count ) {
+					const char* platform = solution->platforms[platformIndex];
+
+					// TODO: Alternative targets
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ProjectConfiguration Include=\"%s|%s\">", config, platform ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Configuration>%s</Configuration>", config ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Platform>%s</Platform>", platform ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj,			"\t\t</ProjectConfiguration>" ) );
+				}
+			}
+			CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemGroup>" ) );
+		}
+
+		// project globals
+		{
+			CHECK_WRITE( file_write_line( &vcxproj,			"\t<PropertyGroup Label=\"Globals\">" ) );
+			CHECK_WRITE( file_write_line( &vcxproj,			"\t<VCProjectVersion>17.0</VCProjectVersion>" ) );
+			CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ProjectGuid>{%s}</ProjectGuid>", projectGuids[projectIndex] ) ) );
+			CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<IgnoreWarnCompileDuplicatedFilename>true</IgnoreWarnCompileDuplicatedFilename>" ) );
+			CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<Keyword>MakeFileProj</Keyword>" ) );
+			CHECK_WRITE( file_write_line( &vcxproj,			"\t</PropertyGroup>" ) );
+		}
+
+		CHECK_WRITE( file_write_line( &vcxproj, "\t<Import Project=\"$(VCTargetsPath)\\Microsoft.Cpp.Default.props\" />" ) );
+
+		// for each config and platform, define config type, toolset, out dir, and intermediate dir
+		For ( u64, configIndex, 0, solution->configs.count ) {
+			const char* config = solution->configs[configIndex];
+
+			For ( u64, platformIndex, 0, solution->platforms.count ) {
+				const char* platform = solution->platforms[platformIndex];
+
+				CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\" Label=\"Configuration\">", config, platform ) ) );
+				CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<ConfigurationType>Makefile</ConfigurationType>" ) );
+				CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<UseDebugLibraries>false</UseDebugLibraries>" ) );
+				CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<PlatformToolset>v143</PlatformToolset>" ) );
+
+				// TODO(DM): what are we doing here?
+#if 0
+				CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<OutDir>%s</OutDir>", project->out_dir ) ) );
+				CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<IntDir>%s</IntDir>", project->intermediate_dir ) ) );
+#else
+				CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<OutDir></OutDir>" ) );
+				CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<IntDir></IntDir>" ) );
+#endif
+				CHECK_WRITE( file_write_line( &vcxproj,			"\t</PropertyGroup>" ) );
+			}
+		}
+
+		CHECK_WRITE( file_write_line( &vcxproj, "\t<Import Project=\"$(VCTargetsPath)\\Microsoft.Cpp.props\" />" ) );
+
+		// not sure what this is or why we need this one but visual studio seems to want it
+		CHECK_WRITE( file_write_line( &vcxproj, "\t<ImportGroup Label=\"ExtensionSettings\">" ) );
+		CHECK_WRITE( file_write_line( &vcxproj, "\t</ImportGroup>" ) );
+
+		// for each config and platform, import the property sheets that visual studio requires
+		For ( u64, configIndex, 0, solution->configs.count ) {
+			const char* config = solution->configs[configIndex];
+
+			For ( u64, platformIndex, 0, solution->platforms.count ) {
+				const char* platform = solution->platforms[platformIndex];
+
+				CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<ImportGroup Label=\"PropertySheets\" Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">", config, platform ) ) );
+				CHECK_WRITE( file_write_line( &vcxproj,			"\t<Import Project=\"$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props\" Condition=\"exists(\'$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props\')\" Label=\"LocalAppDataPlatform\" />" ) );
+				CHECK_WRITE( file_write_line( &vcxproj,			"\t</ImportGroup>" ) );
+			}
+		}
+
+		// not sure what this is or why we need this one but visual studio seems to want it
+		CHECK_WRITE( file_write_line( &vcxproj, "\t<PropertyGroup Label=\"UserMacros\" />" ) );
+		
+		// for each config and platform, set the following:
+		//	external include paths
+		//	external library paths
+		//	output path
+		//	build command
+		//	rebuild command
+		//	clean command
+		//	preprocessor definitions
+		For ( u64, configIndex, 0, solution->configs.count ) {
+			const char* config = solution->configs[configIndex];
+
+			For ( u64, platformIndex, 0, solution->platforms.count ) {
+				const char* platform = solution->platforms[platformIndex];
+
+				CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">", config, platform ) ) );
+
+				// external include paths
+				CHECK_WRITE( file_write( &vcxproj, "\t\t<ExternalIncludePath>" ) );
+				For ( u64, includePathIndex, 0, project->include_paths.count ) {
+					CHECK_WRITE( file_write( &vcxproj, tprintf( "%s;", project->include_paths[includePathIndex] ) ) );
+				}
+				CHECK_WRITE( file_write( &vcxproj, "$(ExternalIncludePath)" ) );
+				CHECK_WRITE( file_write( &vcxproj, "</ExternalIncludePath>\n" ) );
+
+				// external library paths
+				CHECK_WRITE( file_write( &vcxproj, "\t\t<LibraryPath>" ) );
+				For ( u64, libPathIndex, 0, project->lib_paths.count ) {
+					CHECK_WRITE( file_write( &vcxproj, tprintf( "%s;", project->lib_paths[libPathIndex] ) ) );
+				}
+				CHECK_WRITE( file_write( &vcxproj, "$(LibraryPath)" ) );
+				CHECK_WRITE( file_write( &vcxproj, "</LibraryPath>\n" ) );
+
+				// output path
+				CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeOutput>%s</NMakeOutput>", project->out_path ) ) );
+
+				CHECK_WRITE( file_write_line( &vcxproj, "\t\t<NMakeBuildCommandLine>%s</NMakeBuildCommandLine>" ) );
+				CHECK_WRITE( file_write_line( &vcxproj, "\t\t<NMakeReBuildCommandLine>%s</NMakeReBuildCommandLine>" ) );
+				CHECK_WRITE( file_write_line( &vcxproj, "\t\t<NMakeCleanCommandLine>%s</NMakeCleanCommandLine>" ) );
+
+				// proprocessor definitions
+				CHECK_WRITE( file_write( &vcxproj, "\t\t<NMakePreprocessorDefinitions>" ) );
+				For ( u64, definitionIndex, 0, project->definitions.count ) {
+					CHECK_WRITE( file_write( &vcxproj, tprintf( "%s;", project->definitions[definitionIndex] ) ) );
+				}
+				CHECK_WRITE( file_write( &vcxproj, "$(NMakePreprocessorDefinitions)" ) );
+				CHECK_WRITE( file_write( &vcxproj, "</NMakePreprocessorDefinitions>\n" ) );
+
+				CHECK_WRITE( file_write_line( &vcxproj, "\t</PropertyGroup>" ) );
+			}
+		}
+
+		CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemDefinitionGroup>" ) );
+		CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemDefinitionGroup>" ) );
+
+		// tell visual studio what files we have in this project
+		// this is typically done via a filter (E.G: src/*.cpp)
+		{
+			CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
+
+			For ( u64, fileTypeIndex, 0, project->source_files.count ) {
+				const char* searchPath = project->source_files[fileTypeIndex];
+
+				Array<const char*> files;
+				FindAllFiles( solution->path, searchPath, &files );
+
+				For ( u64, fileIndex, 0, files.count ) {
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ClCompile Include=\"%s\" />", files[fileIndex] ) ) );
+				}
+			}
+
+			CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemGroup>" ) );
+		}
+
+		CHECK_WRITE( file_write_line( &vcxproj, "\t<Import Project=\"$(VCTargetsPath)\\Microsoft.Cpp.targets\" />" ) );
+
+		// not sure what this is or why we need this one but visual studio seems to want it
+		CHECK_WRITE( file_write_line( &vcxproj, "\t<ImportGroup Label=\"ExtensionTargets\">" ) );
+		CHECK_WRITE( file_write_line( &vcxproj, "\t</ImportGroup>" ) );
+
+		CHECK_WRITE( file_write_line( &vcxproj, "</Project>" ) );
+	}
+
+	// now generate .sln file
+	{
+		const char* solutionPath = NULL;
+		if ( solution->path ) {
+			solutionPath = tprintf( "%s\\%s.sln", solution->path, solution->name );
+		} else {
+			solutionPath = tprintf( "%s.sln", solution->name );
+		}
+
+		File sln = file_open_or_create( solutionPath );
+		defer( file_close( &sln ) );
+
+		CHECK_WRITE( file_write(      &sln, "\n" ) );
+		CHECK_WRITE( file_write_line( &sln, "Microsoft Visual Studio Solution File, Format Version 12.00" ) );
+		CHECK_WRITE( file_write_line( &sln, "# Visual Studio Version 17" ) );
+		CHECK_WRITE( file_write_line( &sln, "VisualStudioVersion = 17.7.34202.233" ) );			// TODO(DM): how do we query windows for this?
+		CHECK_WRITE( file_write_line( &sln, "MinimunVisualStudioVersion = 10.0.40219.1" ) );	// TODO(DM): how do we query windows for this?
+
+		// generate project dependencies
+		For ( u64, projectIndex, 0, solution->projects.count ) {
+			VisualStudioProject* project = &solution->projects[projectIndex];
+
+			CHECK_WRITE( file_write_line( &sln, tprintf( "Project(\"{%s}\") = \"%s\", \"%s.vcxproj\", \"{%s}\"", VISUAL_STUDIO_CPP_PROJECT_TYPE_GUID, project->name, project->name, projectGuids[projectIndex] ) ) );
+			// TODO: project dependencies go here and look like this:
+			//	ProjectSection(ProjectDependencies) = postProject
+			//		{NAME_GUID} = {NAME_GUID}
+			//	EndProjectSection
+			CHECK_WRITE( file_write_line( &sln, "EndProject" ) );
+		}
+
+		CHECK_WRITE( file_write_line( &sln, "Global" ) );
+		{
+			// which config|platform maps to which config|platform?
+			CHECK_WRITE( file_write_line( &sln, "\tGlobalSection(SolutionConfigurationPlatforms) = preSolution" ) );
+			For ( u64, configIndex, 0, solution->configs.count ) {
+				const char* config = solution->configs[configIndex];
+
+				For ( u64, platformIndex, 0, solution->platforms.count ) {
+					const char* platform = solution->platforms[platformIndex];
+
+					CHECK_WRITE( file_write_line( &sln, tprintf( "\t\t%s|%s = %s|%s", config, platform, config, platform ) ) );
+				}
+			}
+			CHECK_WRITE( file_write_line( &sln, "\tEndGlobalSection" ) );
+
+			// which project config|platform maps to which config|platform listed above?
+			CHECK_WRITE( file_write_line( &sln, "\tGlobalSection(SolutionConfigurationPlatforms) = postSolution" ) );
+			For ( u64, projectIndex, 0, solution->projects.count ) {
+				VisualStudioProject* project = &solution->projects[projectIndex];
+
+				For ( u64, configIndex, 0, solution->configs.count ) {
+					const char* config = solution->configs[configIndex];
+
+					For ( u64, platformIndex, 0, solution->platforms.count ) {
+						const char* platform = solution->platforms[platformIndex];
+
+						// TODO: the first config and platform in this line are actually the ones that the PROJECT has, not the SOLUTION
+						// but we dont use those, and we should
+						CHECK_WRITE( file_write_line( &sln, tprintf( "\t\t{%s}.%s|%s.ActiveCfg = %s|%s", projectGuids[projectIndex], config, platform, config, platform ) ) );
+						CHECK_WRITE( file_write_line( &sln, tprintf( "\t\t{%s}.%s|%s.Build.0 = %s|%s", projectGuids[projectIndex], config, platform, config, platform ) ) );
+					}
+				}
+			}
+			CHECK_WRITE( file_write_line( &sln, "\tEndGlobalSection" ) );
+
+			// tell visual studio to not hide the solution node in the Solution Explorer
+			// why would you ever want it to be hidden?
+			CHECK_WRITE( file_write_line( &sln, "\tGlobalSection(SolutionProperties) = preSolution" ) );
+			CHECK_WRITE( file_write_line( &sln, "\t\tHideSolutionNode = FALSE" ) );
+			CHECK_WRITE( file_write_line( &sln, "\tEndGlobalSection" ) );
+
+			const char* solutionGUID = "TODO-DAN-FILL-THIS-IN-PROPERLY";
+
+			// we need to tell visual studio what the GUID of the solution is, apparently
+			// and we also need to do it in this really roundabout way...for some reason
+			CHECK_WRITE( file_write_line( &sln,			"\tGlobalSection(ExtensibilityGlobals) = postSolution" ) );
+			CHECK_WRITE( file_write_line( &sln, tprintf( "\t\tSolutionGuid = {%s}", solutionGUID ) ) );
+			CHECK_WRITE( file_write_line( &sln,			"\tEndGlobalSection" ) );
+		}
+		CHECK_WRITE( file_write_line( &sln, "EndGlobal" ) );
+	}
 
 	return true;
 }
+
+//static bool8 GenerateVisualStudioProject( VisualStudioProject* project )
+//{
+//	assert( project );
+//
+//	File vcxproj = file_open_or_create( tprintf( "%s.vcxproj",project->name ) );
+//	defer( file_close( &vcxproj ) );
+//
+//	if ( vcxproj.ptr == nullptr )
+//	{
+//		return false;
+//	}
+//
+//	file_write_line( &vcxproj,					"<?xml version=\"1.0\" encoding=\"utf-8\"?>" );
+//
+//	file_write_line( &vcxproj,					"<Project DefaultTargets=\"Build\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">" );
+//
+//	file_write_line( &vcxproj,					"  <ItemGroup Label=\"ProjectConfigurations\">" );
+//	For ( u64, i, 0, project->configs.count ) {
+//		// TODO: Alternative targets
+//		file_write_line( &vcxproj, tprintf(		"    <ProjectConfiguration Include=\"%s\"\">"				, project->configs[i] ) );
+//		file_write_line( &vcxproj, tprintf(		"      <Configuration>%s</Configuration>"					, project->configs[i] ) );
+//		file_write_line( &vcxproj,				"      <Platform>x64</Platform>"																  );
+//		file_write_line( &vcxproj,				"    </ProjectConfiguration>"																	  );
+//	}
+//	file_write_line( &vcxproj,					"  </ItemGroup>" );
+//
+//	file_write_line( &vcxproj,					"  <PropertyGroup Label=\"Globals\">" 						);
+//	file_write_line( &vcxproj, tprintf(			"    <ProjectGuid> %u </ProjectGuid>" 						, hash_string(project->project_name , 59049 ) ) );
+//	file_write_line( &vcxproj,					"    <Keyword>Win32Proj</Keyword>" 							);
+//	file_write_line( &vcxproj, tprintf(			"    <RootNamespace> %s </RootNamespace>" 					, project->project_name ) );
+//	file_write_line( &vcxproj,					"  </PropertyGroup>"						 				);
+//
+//	file_write_line( &vcxproj,					"  <ItemGroup>"												);
+//	For ( u64, i, 0, project->source_files.count ) {
+//		// TODO: deep recursive file search for ccp, h, c, hpp, inl files
+//		file_write_line( &vcxproj, tprintf(		"    <ClCompile Include=\"%s\" />"							, project->source_files[i]				) );
+//	}
+//	file_write_line( &vcxproj,					"  </ItemGroup>"											);
+//
+//	file_write_line( &vcxproj,					"  <PropertyGroup Condition=\"'$(VisualStudioVersion)' == '16.0'\">" 				);
+//	file_write_line( &vcxproj,					"      <PlatformToolset>v142</PlatformToolset> <!-- VS 2019 -->" 					);
+//	file_write_line( &vcxproj,					"  </PropertyGroup>" 																);
+//	file_write_line( &vcxproj,					"  <PropertyGroup Condition=\"'$(VisualStudioVersion)' == '17.0'\">" 				);
+//	file_write_line( &vcxproj,					"      <PlatformToolset>v143</PlatformToolset> <!-- VS 2022 -->" 					);
+//	file_write_line( &vcxproj,					"  </PropertyGroup>" 																);
+//
+//	file_write_line( &vcxproj, 					"</Project>"																		);
+//
+//	//This bit is a bit of guff- I got GPT to write it for me and it only really works for debug and release, Win32 && x64. Need a first pass though.
+//	For ( u64, platform_idx, 0, project->platforms.count )
+//	{
+//		const char* platform = project->platforms[platform_idx]; // Example: "x64", "Win32"
+//
+//		For ( u64, config_idx, 0, project->configs.count )
+//		{
+//			const char* config = project->configs[config_idx]; // Example: "Debug", "Release"
+//
+//			file_write_line( &vcxproj, tprintf( "  <PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='%s|%s'\">", config, platform ) );
+//			
+//			// Note(TOM): this assumes two things: 
+//			//			A) you use vis studio generation ONLY to point to a build script; NOT the actual source files. This is because otherwise you need to get source per config 
+//			//					which would be tricky since they are conditionally defined in build options. NOTE: the source files in this options is NOT appropiate, 
+//			//					since it's the superset of all the files needed for SLN visibility, not the ones that should actually get compiled (eg linux files visible despite building windows)
+//			//			B) there's only one cpp involved in your build script. TODO(TOM): make an array. This assumption doesn't need to stick
+//			file_write_line( &vcxproj, tprintf( "    <NMakeBuildCommandLine>builder.exe %s %s</NMakeBuildCommandLine>", project->build_script_path, config ) );
+//
+//			//NOTE(TOM): OUTPUT: This is tricky. I think it's needed for the debugger. The output location is defined in the build script and could be different per config.
+//			//					That means duplicating logic between the two. That's gnarly. 
+//			//					Perhaps there could be an intermediate set build location at config/platform/build.exe we could use for VS debugging, and then copy that file to user's custom location
+//			file_write_line( &vcxproj, tprintf( "    <NMakeOutput>??? This is difficult cos it's so dependent on the build logic/NMakeOutput>", config ) );
+//			file_write_line( &vcxproj, tprintf( "    <NMakeBuildCommandLine>builder.exe %s %s</NMakeBuildCommandLine>", project->build_script_path, config ) );
+//			
+//			// NOTE(TOM): "Standard" preprocessor defns. Ternaries aren't appropiate for configs that aren't debug or release but I wanted SOMETHING working
+//			const char* win32_definition = string_equals( platform, "Win32" ) ? "WIN32;"  : "";
+//			const char* debug_definition = string_equals( config,   "Debug" ) ? "_DEBUG;" : "NDEBUG;";
+//
+//			// Write the preprocessor definitions
+//			file_write_line(
+//				&vcxproj,
+//				tprintf(
+//					"    <NMakePreprocessorDefinitions>%s%s$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>",
+//					win32_definition,    // WIN32 definition if the platform is Win32
+//					debug_definition     // _DEBUG for Debug, NDEBUG for Release
+//				)
+//			);
+//
+//			file_write_line( &vcxproj, "  </PropertyGroup>" );
+//		}
+//	}
+//
+//	file_write_line( &vcxproj,					"</Project>\n" );
+//
+//	return true;
+//}

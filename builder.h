@@ -92,22 +92,42 @@ struct BuilderOptions {
 	const char*			binary_name;
 };
 
-struct VisualStudioOptions {
+struct VisualStudioProject {
 	// Visual studio project name
-	const char*			project_name;
+	const char*			name;
+
+	// These are the source files that will be included in the "Source Files" filter in the project.
+	// This is a separate list to the build options as you likely want the superset of
+	// all files in your Solution, but may conditionally exclude a subset of files based on config/target etc
+	Array<const char*>	source_files;
+
+	Array<const char*>	include_paths;
+
+	Array<const char*>	lib_paths;
+
+	Array<const char*>	definitions;
+
+	const char*			out_path;
+
+	// Location of the build script
+	const char*			build_script_path;
+};
+
+struct VisualStudioSolution {
+	// The folder where the solution (and it's projects) are going to live.
+	// This is relative to the source file that calls set_visual_studio_options().
+	const char*					path;
+
+	// The name of the solution.
+	// For the sake of simplicity we keep the name of the Solution in Visual Studio and the Solution's filename the same.	TODO: make it actually do that
+	const char*					name;
 
 	// The names of the configs that VS should allow to select from.
 	// There are no options associated with these configs here as those settings are 
 	// defined in the build script's logic
-	Array<const char*>	configs;
+	Array<const char*>			configs;
 
-	Array<const char*>	platforms;
+	Array<const char*>			platforms;
 
-	// These are the files that will be included in the SLN.
-	// This is a seperate list to the build options as you likely want the superset of
-	// all files in you're SLN, but may conditionally exclude a subset of files based on config/target etc
-	Array<const char*>	source_files;
-
-	// Location of the build script
-	const char*			build_script_path;
+	Array<VisualStudioProject>	projects;
 };

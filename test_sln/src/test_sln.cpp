@@ -14,6 +14,5 @@ BUILDER_CALLBACK void set_visual_studio_options( VisualStudioSolution* solution 
 	VisualStudioProject* project = &solution->projects[solution->projects.count - 1];
 	project->name = "test-project";
 	project->out_path = "bin";
-	project->build_script_path = "scripts";
 	array_add( &project->source_files, "src/*.cpp" );
 }

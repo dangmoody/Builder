@@ -1343,6 +1343,29 @@ static void FindAllFiles( const char* basePath, const char* searchFilter, Array<
 static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution ) {
 	assert( solution );
 
+	// validate the solution
+	{
+		if ( solution->name == NULL ) {
+			error( "You never set the name of the solution.  I need that.\n" );
+			return false;
+		}
+
+		if ( solution->configs.count < 1 ) {
+			error( "You must set at least one config when generating a Visual Studio Solution.\n" );
+			return false;
+		}
+
+		if ( solution->platforms.count < 1 ) {
+			error( "You must set at least one platform when generating a Visual Studio Solution.\n" );
+			return false;
+		}
+
+		if ( solution->projects.count < 1 ) {
+			error( "As well as a Solution, you must also generate at least one Visual Studio Project to go with it.\n" );
+			return false;
+		}
+	}
+
 	Array<const char*> projectGuids;
 	array_resize( &projectGuids, solution->projects.count );
 
@@ -1354,6 +1377,24 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution ) {
 	// generate each .vcxproj
 	For ( u64, projectIndex, 0, solution->projects.count ) {
 		VisualStudioProject* project = &solution->projects[projectIndex];
+
+		// validate the project
+		{
+			if ( project->name == NULL ) {
+				error( "There is a Visual Studio Project that doesn't have a name here.  You need to fill that in.\n" );
+				return false;
+			}
+
+			if ( project->source_files.count == 0 ) {
+				error( "No source files were set for project \"%s\".  You need at least one source file.\n", project->name );
+				return false;
+			}
+
+			if ( project->out_path == NULL ) {
+				error( "out_path was not set for project \"%s\".  You need to fill that in.\n" );
+				return false;
+			}
+		}
 
 		const char* projectPath = NULL;
 		if ( solution->path ) {
@@ -1480,9 +1521,9 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution ) {
 				// output path
 				CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeOutput>%s</NMakeOutput>", project->out_path ) ) );
 
-				CHECK_WRITE( file_write_line( &vcxproj, "\t\t<NMakeBuildCommandLine>%s</NMakeBuildCommandLine>" ) );
-				CHECK_WRITE( file_write_line( &vcxproj, "\t\t<NMakeReBuildCommandLine>%s</NMakeReBuildCommandLine>" ) );
-				CHECK_WRITE( file_write_line( &vcxproj, "\t\t<NMakeCleanCommandLine>%s</NMakeCleanCommandLine>" ) );
+				CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeBuildCommandLine>%s\\builder.exe</NMakeBuildCommandLine>", paths_get_app_path() ) ) );
+				CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeReBuildCommandLine>%s\\builder.exe</NMakeReBuildCommandLine>", paths_get_app_path() ) ) );
+				CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeCleanCommandLine>%s\\builder.exe --nuke %s</NMakeCleanCommandLine>", paths_get_app_path(), project->out_path ) ) );
 
 				// proprocessor definitions
 				CHECK_WRITE( file_write( &vcxproj, "\t\t<NMakePreprocessorDefinitions>" ) );

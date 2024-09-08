@@ -108,19 +108,16 @@ struct VisualStudioProject {
 	Array<const char*>	definitions;
 
 	const char*			out_path;
-
-	// Location of the build script
-	const char*			build_script_path;
 };
 
 struct VisualStudioSolution {
-	// The folder where the solution (and it's projects) are going to live.
-	// This is relative to the source file that calls set_visual_studio_options().
-	const char*					path;
-
 	// The name of the solution.
 	// For the sake of simplicity we keep the name of the Solution in Visual Studio and the Solution's filename the same.	TODO: make it actually do that
 	const char*					name;
+
+	// The folder where the solution (and it's projects) are going to live.
+	// This is relative to the source file that calls set_visual_studio_options().
+	const char*					path;
 
 	// The names of the configs that VS should allow to select from.
 	// There are no options associated with these configs here as those settings are 

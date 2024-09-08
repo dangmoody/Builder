@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+	<ItemGroup Label="ProjectConfigurations">
+		<ProjectConfiguration Include="debug|win64">
+			<Configuration>debug</Configuration>
+			<Platform>win64</Platform>
+		</ProjectConfiguration>
+		<ProjectConfiguration Include="release|win64">
+			<Configuration>release</Configuration>
+			<Platform>win64</Platform>
+		</ProjectConfiguration>
+	</ItemGroup>
+	<PropertyGroup Label="Globals">
+	<VCProjectVersion>17.0</VCProjectVersion>
+		<ProjectGuid>{2CB20C1C-751E-43F1-9D67-B682B43CD5E7}</ProjectGuid>
+		<IgnoreWarnCompileDuplicatedFilename>true</IgnoreWarnCompileDuplicatedFilename>
+		<Keyword>MakeFileProj</Keyword>
+	</PropertyGroup>
+	<Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='debug|win64'" Label="Configuration">
+		<ConfigurationType>Makefile</ConfigurationType>
+		<UseDebugLibraries>false</UseDebugLibraries>
+		<PlatformToolset>v143</PlatformToolset>
+		<OutDir></OutDir>
+		<IntDir></IntDir>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='release|win64'" Label="Configuration">
+		<ConfigurationType>Makefile</ConfigurationType>
+		<UseDebugLibraries>false</UseDebugLibraries>
+		<PlatformToolset>v143</PlatformToolset>
+		<OutDir></OutDir>
+		<IntDir></IntDir>
+	</PropertyGroup>
+	<Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+	<ImportGroup Label="ExtensionSettings">
+	</ImportGroup>
+	<ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='debug|win64'">
+	<Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+	</ImportGroup>
+	<ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='release|win64'">
+	<Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+	</ImportGroup>
+	<PropertyGroup Label="UserMacros" />
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='debug|win64'">
+		<ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
+		<LibraryPath>$(LibraryPath)</LibraryPath>
+		<NMakeOutput>bin</NMakeOutput>
+		<NMakeBuildCommandLine>%s</NMakeBuildCommandLine>
+		<NMakeReBuildCommandLine>%s</NMakeReBuildCommandLine>
+		<NMakeCleanCommandLine>%s</NMakeCleanCommandLine>
+		<NMakePreprocessorDefinitions>$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='release|win64'">
+		<ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
+		<LibraryPath>$(LibraryPath)</LibraryPath>
+		<NMakeOutput>bin</NMakeOutput>
+		<NMakeBuildCommandLine>%s</NMakeBuildCommandLine>
+		<NMakeReBuildCommandLine>%s</NMakeReBuildCommandLine>
+		<NMakeCleanCommandLine>%s</NMakeCleanCommandLine>
+		<NMakePreprocessorDefinitions>$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+	</PropertyGroup>
+	<ItemDefinitionGroup>
+	</ItemDefinitionGroup>
+	<ItemGroup>
+		<ClCompile Include="src\main.cpp" />
+		<ClCompile Include="src\test_sln.cpp" />
+	</ItemGroup>
+	<Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+	<ImportGroup Label="ExtensionTargets">
+	</ImportGroup>
+</Project>

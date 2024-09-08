@@ -1309,8 +1309,12 @@ int main( int argc, char** argv ) {
 	} while ( 0 )
 
 // data layout comes from: https://learn.microsoft.com/en-us/windows/win32/api/guiddef/ns-guiddef-guid
-static const char* GuidToString( const GUID* guid ) {
-	return tprintf( "%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X", guid->Data1, guid->Data2, guid->Data3, guid->Data4[0], guid->Data4[1], guid->Data4[2], guid->Data4[3], guid->Data4[4], guid->Data4[5], guid->Data4[6], guid->Data4[7] );
+static const char* CreateVisualStudioGuid() {
+	GUID guid;
+	HRESULT hr = CoCreateGuid( &guid );
+	assert( hr == S_OK );
+
+	return tprintf( "%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X", guid.Data1, guid.Data2, guid.Data3, guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3], guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7] );
 }
 
 static void FindAllFiles( const char* basePath, const char* searchFilter, Array<const char*>* outFiles ) {
@@ -1344,11 +1348,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution ) {
 
 	// give each project a guid
 	For ( u64, i, 0, projectGuids.count ) {
-		GUID guid;
-		HRESULT hr = CoCreateGuid( &guid );
-		assert( hr == S_OK );
-
-		projectGuids[i] = GuidToString( &guid );
+		projectGuids[i] = CreateVisualStudioGuid();
 	}
 
 	// generate each .vcxproj
@@ -1598,7 +1598,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution ) {
 			CHECK_WRITE( file_write_line( &sln, "\t\tHideSolutionNode = FALSE" ) );
 			CHECK_WRITE( file_write_line( &sln, "\tEndGlobalSection" ) );
 
-			const char* solutionGUID = "TODO-DAN-FILL-THIS-IN-PROPERLY";
+			const char* solutionGUID = CreateVisualStudioGuid();
 
 			// we need to tell visual studio what the GUID of the solution is, apparently
 			// and we also need to do it in this really roundabout way...for some reason

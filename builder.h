@@ -96,13 +96,15 @@ struct VisualStudioConfig {
 	// The name of the config.
 	const char*			name;
 
+	const char*			out_path;
+
 	Array<const char*>	definitions;
 
 	Array<const char*>	include_paths;
 
 	Array<const char*>	lib_paths;
 
-	const char*			out_path;
+	Array<const char*>	debugger_arguments;
 };
 
 struct VisualStudioProject {

@@ -1350,10 +1350,10 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution ) {
 			return false;
 		}
 
-		if ( solution->configs.count < 1 ) {
+		/*if ( solution->configs.count < 1 ) {
 			error( "You must set at least one config when generating a Visual Studio Solution.\n" );
 			return false;
-		}
+		}*/
 
 		if ( solution->platforms.count < 1 ) {
 			error( "You must set at least one platform when generating a Visual Studio Solution.\n" );
@@ -1389,11 +1389,6 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution ) {
 				error( "No source files were set for project \"%s\".  You need at least one source file.\n", project->name );
 				return false;
 			}
-
-			if ( project->out_path == NULL ) {
-				error( "out_path was not set for project \"%s\".  You need to fill that in.\n" );
-				return false;
-			}
 		}
 
 		const char* projectPath = NULL;
@@ -1412,15 +1407,15 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution ) {
 		// generate every single config and platform pairing
 		{
 			CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup Label=\"ProjectConfigurations\">" ) );
-			For ( u64, configIndex, 0, solution->configs.count ) {
-				const char* config = solution->configs[configIndex];
+			For ( u64, configIndex, 0, project->configs.count ) {
+				VisualStudioConfig* config = &project->configs[configIndex];
 
 				For ( u64, platformIndex, 0, solution->platforms.count ) {
 					const char* platform = solution->platforms[platformIndex];
 
 					// TODO: Alternative targets
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ProjectConfiguration Include=\"%s|%s\">", config, platform ) ) );
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Configuration>%s</Configuration>", config ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ProjectConfiguration Include=\"%s|%s\">", config->name, platform ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Configuration>%s</Configuration>", config->name ) ) );
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Platform>%s</Platform>", platform ) ) );
 					CHECK_WRITE( file_write_line( &vcxproj,			"\t\t</ProjectConfiguration>" ) );
 				}
@@ -1441,13 +1436,13 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution ) {
 		CHECK_WRITE( file_write_line( &vcxproj, "\t<Import Project=\"$(VCTargetsPath)\\Microsoft.Cpp.Default.props\" />" ) );
 
 		// for each config and platform, define config type, toolset, out dir, and intermediate dir
-		For ( u64, configIndex, 0, solution->configs.count ) {
-			const char* config = solution->configs[configIndex];
+		For ( u64, configIndex, 0, project->configs.count ) {
+			VisualStudioConfig* config = &project->configs[configIndex];
 
 			For ( u64, platformIndex, 0, solution->platforms.count ) {
 				const char* platform = solution->platforms[platformIndex];
 
-				CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\" Label=\"Configuration\">", config, platform ) ) );
+				CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\" Label=\"Configuration\">", config->name, platform ) ) );
 				CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<ConfigurationType>Makefile</ConfigurationType>" ) );
 				CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<UseDebugLibraries>false</UseDebugLibraries>" ) );
 				CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<PlatformToolset>v143</PlatformToolset>" ) );
@@ -1471,13 +1466,13 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution ) {
 		CHECK_WRITE( file_write_line( &vcxproj, "\t</ImportGroup>" ) );
 
 		// for each config and platform, import the property sheets that visual studio requires
-		For ( u64, configIndex, 0, solution->configs.count ) {
-			const char* config = solution->configs[configIndex];
+		For ( u64, configIndex, 0, project->configs.count ) {
+			VisualStudioConfig* config = &project->configs[configIndex];
 
 			For ( u64, platformIndex, 0, solution->platforms.count ) {
 				const char* platform = solution->platforms[platformIndex];
 
-				CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<ImportGroup Label=\"PropertySheets\" Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">", config, platform ) ) );
+				CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<ImportGroup Label=\"PropertySheets\" Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">", config->name, platform ) ) );
 				CHECK_WRITE( file_write_line( &vcxproj,			"\t<Import Project=\"$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props\" Condition=\"exists(\'$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props\')\" Label=\"LocalAppDataPlatform\" />" ) );
 				CHECK_WRITE( file_write_line( &vcxproj,			"\t</ImportGroup>" ) );
 			}
@@ -1494,41 +1489,41 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution ) {
 		//	rebuild command
 		//	clean command
 		//	preprocessor definitions
-		For ( u64, configIndex, 0, solution->configs.count ) {
-			const char* config = solution->configs[configIndex];
+		For ( u64, configIndex, 0, project->configs.count ) {
+			VisualStudioConfig* config = &project->configs[configIndex];
 
 			For ( u64, platformIndex, 0, solution->platforms.count ) {
 				const char* platform = solution->platforms[platformIndex];
 
-				CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">", config, platform ) ) );
+				CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">", config->name, platform ) ) );
 
 				// external include paths
 				CHECK_WRITE( file_write( &vcxproj, "\t\t<ExternalIncludePath>" ) );
-				For ( u64, includePathIndex, 0, project->include_paths.count ) {
-					CHECK_WRITE( file_write( &vcxproj, tprintf( "%s;", project->include_paths[includePathIndex] ) ) );
+				For ( u64, includePathIndex, 0, config->include_paths.count ) {
+					CHECK_WRITE( file_write( &vcxproj, tprintf( "%s;", config->include_paths[includePathIndex] ) ) );
 				}
 				CHECK_WRITE( file_write( &vcxproj, "$(ExternalIncludePath)" ) );
 				CHECK_WRITE( file_write( &vcxproj, "</ExternalIncludePath>\n" ) );
 
 				// external library paths
 				CHECK_WRITE( file_write( &vcxproj, "\t\t<LibraryPath>" ) );
-				For ( u64, libPathIndex, 0, project->lib_paths.count ) {
-					CHECK_WRITE( file_write( &vcxproj, tprintf( "%s;", project->lib_paths[libPathIndex] ) ) );
+				For ( u64, libPathIndex, 0, config->lib_paths.count ) {
+					CHECK_WRITE( file_write( &vcxproj, tprintf( "%s;", config->lib_paths[libPathIndex] ) ) );
 				}
 				CHECK_WRITE( file_write( &vcxproj, "$(LibraryPath)" ) );
 				CHECK_WRITE( file_write( &vcxproj, "</LibraryPath>\n" ) );
 
 				// output path
-				CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeOutput>%s</NMakeOutput>", project->out_path ) ) );
+				CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeOutput>%s</NMakeOutput>", config->out_path ) ) );
 
 				CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeBuildCommandLine>%s\\builder.exe</NMakeBuildCommandLine>", paths_get_app_path() ) ) );
 				CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeReBuildCommandLine>%s\\builder.exe</NMakeReBuildCommandLine>", paths_get_app_path() ) ) );
-				CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeCleanCommandLine>%s\\builder.exe --nuke %s</NMakeCleanCommandLine>", paths_get_app_path(), project->out_path ) ) );
+				CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeCleanCommandLine>%s\\builder.exe --nuke %s</NMakeCleanCommandLine>", paths_get_app_path(), config->out_path ) ) );
 
 				// proprocessor definitions
 				CHECK_WRITE( file_write( &vcxproj, "\t\t<NMakePreprocessorDefinitions>" ) );
-				For ( u64, definitionIndex, 0, project->definitions.count ) {
-					CHECK_WRITE( file_write( &vcxproj, tprintf( "%s;", project->definitions[definitionIndex] ) ) );
+				For ( u64, definitionIndex, 0, config->definitions.count ) {
+					CHECK_WRITE( file_write( &vcxproj, tprintf( "%s;", config->definitions[definitionIndex] ) ) );
 				}
 				CHECK_WRITE( file_write( &vcxproj, "$(NMakePreprocessorDefinitions)" ) );
 				CHECK_WRITE( file_write( &vcxproj, "</NMakePreprocessorDefinitions>\n" ) );
@@ -1602,32 +1597,36 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution ) {
 		{
 			// which config|platform maps to which config|platform?
 			CHECK_WRITE( file_write_line( &sln, "\tGlobalSection(SolutionConfigurationPlatforms) = preSolution" ) );
-			For ( u64, configIndex, 0, solution->configs.count ) {
-				const char* config = solution->configs[configIndex];
+			For( u64, projectIndex, 0, solution->projects.count ) {
+				VisualStudioProject* project = &solution->projects[projectIndex];
 
-				For ( u64, platformIndex, 0, solution->platforms.count ) {
-					const char* platform = solution->platforms[platformIndex];
+				For ( u64, configIndex, 0, project->configs.count ) {
+					VisualStudioConfig* config = &project->configs[configIndex];
 
-					CHECK_WRITE( file_write_line( &sln, tprintf( "\t\t%s|%s = %s|%s", config, platform, config, platform ) ) );
+					For ( u64, platformIndex, 0, solution->platforms.count ) {
+						const char* platform = solution->platforms[platformIndex];
+
+						CHECK_WRITE( file_write_line( &sln, tprintf( "\t\t%s|%s = %s|%s", config->name, platform, config->name, platform ) ) );
+					}
 				}
 			}
 			CHECK_WRITE( file_write_line( &sln, "\tEndGlobalSection" ) );
 
-			// which project config|platform maps to which config|platform listed above?
+			// which project config|platform is active?
 			CHECK_WRITE( file_write_line( &sln, "\tGlobalSection(SolutionConfigurationPlatforms) = postSolution" ) );
 			For ( u64, projectIndex, 0, solution->projects.count ) {
 				VisualStudioProject* project = &solution->projects[projectIndex];
 
-				For ( u64, configIndex, 0, solution->configs.count ) {
-					const char* config = solution->configs[configIndex];
+				For ( u64, configIndex, 0, project->configs.count ) {
+					VisualStudioConfig* config = &project->configs[configIndex];
 
 					For ( u64, platformIndex, 0, solution->platforms.count ) {
 						const char* platform = solution->platforms[platformIndex];
 
 						// TODO: the first config and platform in this line are actually the ones that the PROJECT has, not the SOLUTION
 						// but we dont use those, and we should
-						CHECK_WRITE( file_write_line( &sln, tprintf( "\t\t{%s}.%s|%s.ActiveCfg = %s|%s", projectGuids[projectIndex], config, platform, config, platform ) ) );
-						CHECK_WRITE( file_write_line( &sln, tprintf( "\t\t{%s}.%s|%s.Build.0 = %s|%s", projectGuids[projectIndex], config, platform, config, platform ) ) );
+						CHECK_WRITE( file_write_line( &sln, tprintf( "\t\t{%s}.%s|%s.ActiveCfg = %s|%s", projectGuids[projectIndex], config->name, platform, config->name, platform ) ) );
+						CHECK_WRITE( file_write_line( &sln, tprintf( "\t\t{%s}.%s|%s.Build.0 = %s|%s", projectGuids[projectIndex], config->name, platform, config->name, platform ) ) );
 					}
 				}
 			}

@@ -92,22 +92,29 @@ struct BuilderOptions {
 	const char*			binary_name;
 };
 
-struct VisualStudioProject {
-	// Visual studio project name
+struct VisualStudioConfig {
+	// The name of the config.
 	const char*			name;
 
-	// These are the source files that will be included in the "Source Files" filter in the project.
-	// This is a separate list to the build options as you likely want the superset of
-	// all files in your Solution, but may conditionally exclude a subset of files based on config/target etc
-	Array<const char*>	source_files;
+	Array<const char*>	definitions;
 
 	Array<const char*>	include_paths;
 
 	Array<const char*>	lib_paths;
 
-	Array<const char*>	definitions;
-
 	const char*			out_path;
+};
+
+struct VisualStudioProject {
+	// Visual studio project name
+	const char*					name;
+
+	// These are the source files that will be included in the "Source Files" filter in the project.
+	// This is a separate list to the build options as you likely want the superset of
+	// all files in your Solution, but may conditionally exclude a subset of files based on config/target etc
+	Array<const char*>			source_files;
+
+	Array<VisualStudioConfig>	configs;
 };
 
 struct VisualStudioSolution {
@@ -117,12 +124,13 @@ struct VisualStudioSolution {
 
 	// The folder where the solution (and it's projects) are going to live.
 	// This is relative to the source file that calls set_visual_studio_options().
+	// TODO(DM): make it actually do that
 	const char*					path;
 
 	// The names of the configs that VS should allow to select from.
 	// There are no options associated with these configs here as those settings are 
 	// defined in the build script's logic
-	Array<const char*>			configs;
+	//Array<const char*>			configs;
 
 	Array<const char*>			platforms;
 

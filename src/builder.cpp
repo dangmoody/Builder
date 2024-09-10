@@ -1588,9 +1588,9 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution ) {
 			CHECK_WRITE( file_write_line( &vcxproj, "<?xml version=\"1.0\" encoding=\"utf-8\"?>" ) );
 			CHECK_WRITE( file_write_line( &vcxproj, "<Project ToolsVersion=\"Current\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">" ) );
 
-			CHECK_WRITE( file_write_line( &vcxproj, "  <PropertyGroup>" ) );
-			CHECK_WRITE( file_write_line( &vcxproj, "    <ShowAllFiles>false</ShowAllFiles>" ) );
-			CHECK_WRITE( file_write_line( &vcxproj, "  </PropertyGroup>" ) );
+			CHECK_WRITE( file_write_line( &vcxproj, "\t<PropertyGroup>" ) );
+			CHECK_WRITE( file_write_line( &vcxproj, "\t\t<ShowAllFiles>false</ShowAllFiles>" ) );
+			CHECK_WRITE( file_write_line( &vcxproj, "\t</PropertyGroup>" ) );
 
 			// for each config and platform, generate the debugger settings
 			{
@@ -1600,20 +1600,20 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution ) {
 					For ( u64, platformIndex, 0, solution->platforms.count ) {
 						const char* platform = solution->platforms[platformIndex];
 
-						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "  <PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">", config->name, platform ) ) );
-						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "    <LocalDebuggerCommand>%s</LocalDebuggerCommand>", "todo.exe" ) ) );
-						CHECK_WRITE( file_write_line( &vcxproj,			"    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>" ) );
+						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">", config->name, platform ) ) );
+						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<LocalDebuggerCommand>%s</LocalDebuggerCommand>", "todo.exe" ) ) );
+						CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>" ) );
 
 						// if debugger arguments were specified, put those in
 						if ( config->debugger_arguments.count > 0 ) {
-							CHECK_WRITE( file_write( &vcxproj, "    <LocalDebuggerCommandArguments>" ) );
+							CHECK_WRITE( file_write( &vcxproj, "\t\t<LocalDebuggerCommandArguments>" ) );
 							For ( u64, argIndex, 0, config->debugger_arguments.count ) {
 								CHECK_WRITE( file_write( &vcxproj, tprintf( "%s " ) ) );
 							}
 							CHECK_WRITE( file_write( &vcxproj, "</LocalDebuggerCommandArguments>\n" ) );
 						}
 
-						CHECK_WRITE( file_write_line( &vcxproj, "  </PropertyGroup>" ) );
+						CHECK_WRITE( file_write_line( &vcxproj, "\t</PropertyGroup>" ) );
 					}
 				}
 			}

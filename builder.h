@@ -96,19 +96,27 @@ struct VisualStudioConfig {
 	// The name of the config.
 	const char*			name;
 
-	const char*			out_path;
+	// Where do you want your actual binary to go once it's been built?
+	const char*			output_path;
 
+	// Where do you want the intermediate files to go?
+	// If null, will be the same as 'output_path'.
+	const char*			intermediate_path;
+
+	// Specific #defines to set for this config.
 	Array<const char*>	definitions;
 
+	// Additional include paths to set for this config.
 	Array<const char*>	include_paths;
 
+	// Additional library paths to set for this config.
 	Array<const char*>	lib_paths;
 
 	Array<const char*>	debugger_arguments;
 };
 
 struct VisualStudioProject {
-	// Visual studio project name
+	// Visual Studio project name.
 	const char*					name;
 
 	// These are the source files that will be included in the "Source Files" filter in the project.
@@ -116,6 +124,9 @@ struct VisualStudioProject {
 	// all files in your Solution, but may conditionally exclude a subset of files based on config/target etc
 	Array<const char*>			source_files;
 
+	// Configs that this project knows about.
+	// For example: Debug, Profiling, Shipping, and so on.
+	// You must define at least one of these to make Visual Studio happy.
 	Array<VisualStudioConfig>	configs;
 };
 
@@ -128,11 +139,6 @@ struct VisualStudioSolution {
 	// This is relative to the source file that calls set_visual_studio_options().
 	// TODO(DM): 10/09/2024: make it actually do that
 	const char*					path;
-
-	// The names of the configs that VS should allow to select from.
-	// There are no options associated with these configs here as those settings are 
-	// defined in the build script's logic
-	//Array<const char*>			configs;
 
 	Array<const char*>			platforms;
 

@@ -1391,6 +1391,20 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution ) {
 				error( "No source files were set for project \"%s\".  You need at least one source file.\n", project->name );
 				return false;
 			}
+
+			// validate each config
+			For ( u64, configIndex, 0, project->configs.count ) {
+				VisualStudioConfig* config = &project->configs[configIndex];
+
+				if ( config->output_path == NULL ) {
+					error( "Output path for project \"%s\" config \"%s\" was never set.  You need to fill that in.\n", project->name, config->name );
+					return false;
+				}
+
+				if ( config->intermediate_path == NULL ) {
+					config->intermediate_path = config->output_path;
+				}
+			}
 		}
 
 		// .vcxproj
@@ -1453,14 +1467,8 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution ) {
 					CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<UseDebugLibraries>false</UseDebugLibraries>" ) );
 					CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<PlatformToolset>v143</PlatformToolset>" ) );
 
-					// TODO(DM): what are we doing here?
-	#if 0
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<OutDir>%s</OutDir>", project->out_dir ) ) );
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<IntDir>%s</IntDir>", project->intermediate_dir ) ) );
-	#else
-					CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<OutDir></OutDir>" ) );
-					CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<IntDir></IntDir>" ) );
-	#endif
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<OutDir>%s</OutDir>", config->output_path ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<IntDir>%s</IntDir>", config->intermediate_path ) ) );
 					CHECK_WRITE( file_write_line( &vcxproj,			"\t</PropertyGroup>" ) );
 				}
 			}
@@ -1520,11 +1528,14 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution ) {
 					CHECK_WRITE( file_write( &vcxproj, "</LibraryPath>\n" ) );
 
 					// output path
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeOutput>%s</NMakeOutput>", config->out_path ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeOutput>%s</NMakeOutput>", config->output_path ) ) );
+
+					DM!!!	fill these in!
+							both of the NMake build commands want to be "builder <source>" where source is the source file they want to build
 
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeBuildCommandLine>%s\\builder.exe</NMakeBuildCommandLine>", paths_get_app_path() ) ) );
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeReBuildCommandLine>%s\\builder.exe</NMakeReBuildCommandLine>", paths_get_app_path() ) ) );
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeCleanCommandLine>%s\\builder.exe --nuke %s</NMakeCleanCommandLine>", paths_get_app_path(), config->out_path ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeCleanCommandLine>%s\\builder.exe --nuke %s</NMakeCleanCommandLine>", paths_get_app_path(), config->output_path ) ) );
 
 					// proprocessor definitions
 					CHECK_WRITE( file_write( &vcxproj, "\t\t<NMakePreprocessorDefinitions>" ) );
@@ -1599,6 +1610,9 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution ) {
 
 					For ( u64, platformIndex, 0, solution->platforms.count ) {
 						const char* platform = solution->platforms[platformIndex];
+
+						DM!!!	fill these in!
+								this one looks like this just wants to be whatever the user expects their EXE to be
 
 						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">", config->name, platform ) ) );
 						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<LocalDebuggerCommand>%s</LocalDebuggerCommand>", "todo.exe" ) ) );

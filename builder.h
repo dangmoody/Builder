@@ -91,3 +91,63 @@ struct BuilderOptions {
 	// This will be placed inside binary_folder, if you set that.
 	const char*			binary_name;
 };
+
+struct VisualStudioConfig {
+	// The name of the config.
+	const char*			name;
+
+	// The file that you want Builder to build.
+	// This is relative to the Visual Studio project.
+	const char*			build_source_file;
+
+	// The name of the binary.
+	const char*			binary_name;
+
+	// Where do you want your actual binary to go once it's been built?
+	const char*			output_path;
+
+	// Where do you want the intermediate files to go?
+	// If null, will be the same as 'output_path'.
+	const char*			intermediate_path;
+
+	// Specific #defines to set for this config.
+	Array<const char*>	definitions;
+
+	// Additional include paths to set for this config.
+	Array<const char*>	include_paths;
+
+	// Additional library paths to set for this config.
+	Array<const char*>	lib_paths;
+
+	Array<const char*>	debugger_arguments;
+};
+
+struct VisualStudioProject {
+	// Visual Studio project name.
+	const char*					name;
+
+	// These are the source files that will be included in the "Source Files" filter in the project.
+	// This is a separate list to the build options as you likely want the superset of
+	// all files in your Solution, but may conditionally exclude a subset of files based on config/target etc
+	Array<const char*>			source_files;
+
+	// Configs that this project knows about.
+	// For example: Debug, Profiling, Shipping, and so on.
+	// You must define at least one of these to make Visual Studio happy.
+	Array<VisualStudioConfig>	configs;
+};
+
+struct VisualStudioSolution {
+	// The name of the solution.
+	// For the sake of simplicity we keep the name of the Solution in Visual Studio and the Solution's filename the same.	TODO: make it actually do that
+	const char*					name;
+
+	// The folder where the solution (and it's projects) are going to live.
+	// This is relative to the source file that calls set_visual_studio_options().
+	// TODO(DM): 10/09/2024: make it actually do that
+	const char*					path;
+
+	Array<const char*>			platforms;
+
+	Array<VisualStudioProject>	projects;
+};

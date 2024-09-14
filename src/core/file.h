@@ -76,6 +76,10 @@ bool8	file_write_entire( const char* filename, const void* data, const u64 size 
 // Returns true if the write was successful and increases the file's offset by 'size' bytes, otherwise returns false.
 bool8	file_write( File* file, const void* data, const u64 size );
 
+// writes the specified string into 'file' starting from the file's current offset.
+// Returns true if the write was succesful and increases the file's offset by the length of the string, otherwise returns false.
+bool8	file_write( File* file, const char* data );
+
 // Writes the specified buffer into the file at the specified offset.
 // Returns true if the write was successful, otherwise returns false.
 bool8	file_write( File* file, const void* data, const u64 offset, const u64 size );

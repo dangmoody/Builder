@@ -100,24 +100,7 @@ struct VisualStudioConfig {
 	// This is relative to the Visual Studio project.
 	const char*			build_source_file;
 
-	// The name of the binary.
-	const char*			binary_name;
-
-	// Where do you want your actual binary to go once it's been built?
-	const char*			output_path;
-
-	// Where do you want the intermediate files to go?
-	// If null, will be the same as 'output_path'.
-	const char*			intermediate_path;
-
-	// Specific #defines to set for this config.
-	Array<const char*>	definitions;
-
-	// Additional include paths to set for this config.
-	Array<const char*>	include_paths;
-
-	// Additional library paths to set for this config.
-	Array<const char*>	lib_paths;
+	BuilderOptions		options;
 
 	Array<const char*>	debugger_arguments;
 };

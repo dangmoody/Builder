@@ -24,18 +24,23 @@ BUILDER_CALLBACK void set_visual_studio_options( VisualStudioSolution* solution 
 	project->name = "test-project";
 	array_add( &project->source_files, "src/*.cpp" );
 
+	BuilderOptions options;
+	options.binary_name = "test.exe";
+
 	// project configs
 	VisualStudioConfig* configDebug = add_visual_studio_config( project );
 	configDebug->name = "debug";
 	configDebug->build_source_file = "src/main.cpp";
-	configDebug->binary_name = "test.exe";
-	configDebug->output_path = "bin\\debug";
-	array_add( &configDebug->definitions, "_DEBUG" );
+	configDebug->options.optionsDebug;
+	configDebug->options.binary_folder = "bin\\debug";
+	configDebug->options.optimization_level = OPTIMIZATION_LEVEL_O0;
+	array_add( &configDebug->options.defines, "_DEBUG" );
 
 	VisualStudioConfig* configRelease = add_visual_studio_config( project );
 	configRelease->name = "release";
 	configRelease->build_source_file = "src/main.cpp";
-	configRelease->binary_name = "test.exe";
-	configRelease->output_path = "bin\\release";
-	array_add( &configRelease->definitions, "NDEBUG" );
+	configRelease->options = options;
+	configRelease->options.binary_folder = "bin\\release";
+	configRelease->options.optimization_level = OPTIMIZATION_LEVEL_O3;
+	array_add( &configRelease->options.defines, "NDEBUG" );
 }

@@ -57,7 +57,6 @@ enum {
 #define ARG_HELP_LONG	"--help"
 #define ARG_NUKE		"--nuke"
 #define ARG_CONFIG		"--config="
-#define ARG_SOLUTION	"--solution"
 
 #define CLANG_VERSION	"18.1.8"
 
@@ -154,10 +153,6 @@ static s32 ShowUsage( const s32 exitCode ) {
 		"    " ARG_CONFIG "<config> (optional):\n"
 		"        Sets the config to whatever you specify.  The config value can be whatever you want.\n"
 		"        If you set this then you must also override " SET_BUILDER_OPTIONS_FUNC_NAME " in order to make use of it in your build.\n"
-		"\n"
-		"    " ARG_SOLUTION " <file> (optional):\n"
-		"        Use this argument to generate a Visual Studio solution and projects.\n"
-		"        <file> refers to the source file where you will configure your solution.\n"
 		"\n"
 	);
 
@@ -717,23 +712,6 @@ int main( int argc, char** argv ) {
 			continue;
 		}
 
-		if ( string_equals( arg, ARG_SOLUTION ) ) {
-			const char* nextArg = ( argIndex + 1 < argc ) ? argv[argIndex + 1] : NULL;
-
-			if ( nextArg ) {
-				visualStudioConfigSourceFile = nextArg;
-			} else {
-				error(
-					ARG_SOLUTION " arg was specified, but you never gave me the source file that tells me how you want your solution to be.\n"
-					"Pass a source file after this argument which calls " SET_VISUAL_STUDIO_OPTIONS_FUNC_NAME "( VisualStudioOptions* options ).\n"
-				);
-
-				return 1;
-			}
-
-			continue;
-		}
-
 		if ( string_ends_with( arg, ".c" ) || string_ends_with( arg, ".cpp" ) ) {
 			if ( inputFile != NULL ) {
 				error( "You've already specified a file for me to build.  If you want me to build more than one file, specify it via %s().\n", SET_BUILDER_OPTIONS_FUNC_NAME );
@@ -750,109 +728,6 @@ int main( int argc, char** argv ) {
 	}
 
 	typedef void ( *initCoreCallback_t )( CoreContext* coreContext );
-
-//	if ( visualStudioConfigSourceFile != NULL ) {
-//		printf( "Generating Visual Studio Solution ... \n" );
-//
-//		const char* sourceFileAbsolute = paths_get_absolute_path( visualStudioConfigSourceFile );
-//		const char* sourceFilePath = paths_remove_file_from_path( sourceFileAbsolute );
-//		const char* dotBuilderFolder = tprintf( "%s\\.builder", sourceFilePath );
-//		const char* outputName = tprintf( "%s\\generate_solution.dll", dotBuilderFolder );
-//
-//		folder_create_if_it_doesnt_exist( dotBuilderFolder );
-//
-//		buildContext_t generateSolutionContext = {};
-//		memset( &generateSolutionContext, 0, sizeof( buildContext_t ) );
-//
-//		generateSolutionContext.flags = BUILD_CONTEXT_FLAG_SHOW_STDOUT;
-//		generateSolutionContext.fullBinaryName = outputName;
-//
-//		array_add( &generateSolutionContext.options.source_files, visualStudioConfigSourceFile );
-//
-//		// create a temp source file which will automatically call core_hook() for us so that the user doesnt have to do it themselves
-//		const char* tempFileName = tprintf( "%s\\core_init.cpp", dotBuilderFolder );
-//		const char* content = "#include <core/core.cpp>\n"
-//			"\n"
-//			"extern \"C\" __declspec( dllexport ) void init_core( CoreContext* core ) {\n"
-//			"\tcore_hook( core );\n"
-//			"}\n";
-//
-//		bool8 written = file_write_entire( tempFileName, content, strlen( content ) * sizeof( char ) );
-//		assertf( written, "Something went really wrong.  Go get Dan." );
-//
-//		// when were finished, delete this file and remove it from the list of source files to build
-//		defer( file_delete( tempFileName ) );
-//
-//		array_add( &generateSolutionContext.options.source_files, tempFileName );
-//
-//		array_add( &generateSolutionContext.options.defines, "_CRT_SECURE_NO_WARNINGS" );
-//		array_add( &generateSolutionContext.options.defines, "BUILDER_DOING_USER_CONFIG_BUILD" );
-//
-//		// add builder as an additional include path for the user config build so that we can automatically include core because we know where it is
-//		array_add( &generateSolutionContext.options.additional_includes, tprintf( "%s\\src", paths_get_app_path() ) );
-//
-//#ifdef _WIN64
-//		array_add( &generateSolutionContext.options.additional_libs, "user32.lib" );
-//		array_add( &generateSolutionContext.options.additional_libs, "Shlwapi.lib" );
-//		array_add( &generateSolutionContext.options.additional_libs, "msvcrtd.lib" );
-//		array_add( &generateSolutionContext.options.additional_libs, "DbgHelp.lib" );
-//#endif // _WIN64
-//
-//		array_add( &generateSolutionContext.options.ignore_warnings, "-Wno-newline-eof" );
-//		array_add( &generateSolutionContext.options.ignore_warnings, "-Wno-c++98-compat-pedantic" );
-//		array_add( &generateSolutionContext.options.ignore_warnings, "-Wno-missing-prototypes" );
-//		array_add( &generateSolutionContext.options.ignore_warnings, "-Wno-old-style-cast" );
-//		array_add( &generateSolutionContext.options.ignore_warnings, "-Wno-unsafe-buffer-usage" );
-//		array_add( &generateSolutionContext.options.ignore_warnings, "-Wno-zero-as-null-pointer-constant" );
-//		array_add( &generateSolutionContext.options.ignore_warnings, "-Wno-format-nonliteral" );
-//		array_add( &generateSolutionContext.options.ignore_warnings, "-Wno-missing-field-initializers" );
-//		array_add( &generateSolutionContext.options.ignore_warnings, "-Wno-unused-variable" );
-//		array_add( &generateSolutionContext.options.ignore_warnings, "-Wno-unused-function" );
-//
-//		s32 exitCode = BuildDynamicLibrary( &generateSolutionContext );
-//
-//		if ( exitCode != 0 ) {
-//			error( "Failed to generate Visual Studio solution.\n" );	// TODO(DM): better error message
-//			return 1;
-//		}
-//
-//		Library library = library_load( outputName );
-//
-//		assertf( library.ptr, "Something went really wrong.  Go get Dan.\n" );
-//
-//		defer( library_unload( &library ) );
-//
-//		initCoreCallback_t coreInitFunc = cast( initCoreCallback_t ) library_get_proc_address( library, "init_core" );
-//		assertf( coreInitFunc != NULL, "Failed to find the core init callback" );
-//		coreInitFunc( &g_core_context );
-//
-//		typedef void ( *setVisualStudioOptionsFunc_t )( VisualStudioSolution* solution );
-//
-//		setVisualStudioOptionsFunc_t setVisualStudioOptionsFunc = cast( setVisualStudioOptionsFunc_t ) library_get_proc_address( library, SET_VISUAL_STUDIO_OPTIONS_FUNC_NAME );
-//
-//		if ( !setVisualStudioOptionsFunc ) {
-//			error(
-//				"You asked me to generate a Visual Studio solution via " ARG_SOLUTION ", but you never set the options for it via " SET_VISUAL_STUDIO_OPTIONS_FUNC_NAME "( VisualStudioOptions* options ).\n"
-//				"You need to do this so that you can tell me how you want your Visual Studio Solution to be.\n"
-//			);
-//
-//			return 1;
-//		}
-//
-//		VisualStudioSolution solution = {};
-//		setVisualStudioOptionsFunc( &solution );
-//
-//		bool8 generated = GenerateVisualStudioSolution( &solution );
-//
-//		if ( !generated ) {
-//			error( "Failed to generate Visual Studio solution.\n" );	// TODO(DM): better error message
-//			return 1;
-//		}
-//
-//		printf( "Done.\n" );
-//
-//		return 0;
-//	}
 
 	// validate cmd line args
 	if ( inputFile == NULL ) {
@@ -1586,7 +1461,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution ) {
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeReBuildCommandLine>%s\\builder.exe %s %s%s</NMakeReBuildCommandLine>", paths_get_app_path(), config->build_source_file, ARG_CONFIG, config->name ) ) );
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeCleanCommandLine>%s\\builder.exe --nuke %s</NMakeCleanCommandLine>", paths_get_app_path(), config->options.binary_folder ) ) );
 
-					// proprocessor definitions
+					// preprocessor definitions
 					CHECK_WRITE( file_write( &vcxproj, "\t\t<NMakePreprocessorDefinitions>" ) );
 					For ( u64, definitionIndex, 0, config->options.defines.count ) {
 						CHECK_WRITE( file_write( &vcxproj, tprintf( "%s;", config->options.defines[definitionIndex] ) ) );

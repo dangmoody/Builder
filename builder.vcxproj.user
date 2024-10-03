@@ -6,7 +6,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LocalDebuggerCommand>$(SolutionDir)builder.exe</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>--solution test_sln\\src\\test_sln.cpp</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>test_sln\\src\\test_sln.cpp</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LocalDebuggerCommand>$(SolutionDir)builder.exe</LocalDebuggerCommand>

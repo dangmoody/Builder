@@ -26,6 +26,8 @@ Proprietary and confidential.
 #define BUILDER_CALLBACK	static
 #endif
 
+#define VS_GENERATE_BUILD_SOURCE_FILES 1
+
 enum BinaryType {
 	BINARY_TYPE_EXE	= 0,			// .exe on Windows
 	BINARY_TYPE_DYNAMIC_LIBRARY,	// .dll on Windows
@@ -96,9 +98,11 @@ struct VisualStudioConfig {
 	// The name of the config.
 	const char*			name;
 
+#if !VS_GENERATE_BUILD_SOURCE_FILES
 	// The file that you want Builder to build.
 	// This is relative to the Visual Studio project.
 	const char*			build_source_file;
+#endif
 
 	BuilderOptions		options;
 

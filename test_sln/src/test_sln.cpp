@@ -24,23 +24,28 @@ BUILDER_CALLBACK void set_visual_studio_options( VisualStudioSolution* solution 
 	project->name = "test-project";
 	array_add( &project->source_files, "src/*.cpp" );
 
-	BuilderOptions options;
-	options.binary_name = "test.exe";
+	BuilderOptions options = {};
+	array_add( &options.source_files, "main.cpp" );
+	options.binary_name = "test";
 
 	// project configs
 	VisualStudioConfig* configDebug = add_visual_studio_config( project );
 	configDebug->name = "debug";
+#if !VS_GENERATE_BUILD_SOURCE_FILES
 	configDebug->build_source_file = "src/main.cpp";
-	configDebug->options.optionsDebug;
-	configDebug->options.binary_folder = "bin\\debug";
+#endif
+	configDebug->options = options;
+	configDebug->options.binary_folder = "../bin/debug";
 	configDebug->options.optimization_level = OPTIMIZATION_LEVEL_O0;
 	array_add( &configDebug->options.defines, "_DEBUG" );
 
 	VisualStudioConfig* configRelease = add_visual_studio_config( project );
 	configRelease->name = "release";
+#if !VS_GENERATE_BUILD_SOURCE_FILES
 	configRelease->build_source_file = "src/main.cpp";
+#endif
 	configRelease->options = options;
-	configRelease->options.binary_folder = "bin\\release";
+	configRelease->options.binary_folder = "../bin/release";
 	configRelease->options.optimization_level = OPTIMIZATION_LEVEL_O3;
 	array_add( &configRelease->options.defines, "NDEBUG" );
 }

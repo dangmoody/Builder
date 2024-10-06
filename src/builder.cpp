@@ -1402,7 +1402,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 					CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<UseDebugLibraries>false</UseDebugLibraries>" ) );
 					CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<PlatformToolset>v143</PlatformToolset>" ) );
 
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<OutDir>%s</OutDir>", config->options.binary_folder ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<OutDir>%s</OutDir>", config->output_directory ) ) );
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<IntDir>%s</IntDir>", tprintf( "%s\\intermediate", config->options.binary_folder ) ) ) );
 					CHECK_WRITE( file_write_line( &vcxproj,			"\t</PropertyGroup>" ) );
 				}
@@ -1550,8 +1550,11 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 						const char* platform = solution->platforms[platformIndex];
 
 						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">", config->name, platform ) ) );
-						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<LocalDebuggerCommand>%s\\%s</LocalDebuggerCommand>", config->options.binary_folder, config->options.binary_name ) ) );
-						CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>" ) );	// TODO(DM): do want to include the other debugger types?
+						CHECK_WRITE( file_write_line( &vcxproj,			 "\t\t<DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>" ) );	// TODO(DM): do want to include the other debugger types?
+						CHECK_WRITE( file_write_line( &vcxproj,			 "\t\t<LocalDebuggerDebuggerType>Auto</LocalDebuggerDebuggerType>" ) );
+						CHECK_WRITE( file_write_line( &vcxproj,			 "\t\t<LocalDebuggerAttach>false</LocalDebuggerAttach>" ) );
+						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<LocalDebuggerCommand>%s\\%s</LocalDebuggerCommand>", config->output_directory, config->options.binary_name ) ) );
+						CHECK_WRITE( file_write_line( &vcxproj,			 "\t\t<LocalDebuggerWorkingDirectory>$(SolutionDir)</LocalDebuggerWorkingDirectory>" ) );
 
 						// if debugger arguments were specified, put those in
 						if ( config->debugger_arguments.count > 0 ) {

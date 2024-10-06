@@ -107,6 +107,10 @@ struct VisualStudioConfig {
 	BuilderOptions		options;
 
 	Array<const char*>	debugger_arguments;
+
+	// TODO(DM): 06/10/2024: this shouldnt exist
+	// we should figure this out by taking the binary_folder from the build options and making it relative to the solution instead
+	const char*			output_directory;
 };
 
 struct VisualStudioProject {

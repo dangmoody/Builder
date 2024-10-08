@@ -185,18 +185,18 @@ static s32 BuildEXE( buildContext_t* context ) {
 		1 +	// optimisation
 		1 +	// -o
 		1 +	// binary name
-		context->options.source_files.count +
-		context->options.defines.count +
-		context->options.additional_includes.count +
-		context->options.additional_lib_paths.count +
-		context->options.additional_libs.count +
+		context->options.source_files.size() +
+		context->options.defines.size() +
+		context->options.additional_includes.size() +
+		context->options.additional_lib_paths.size() +
+		context->options.additional_libs.size() +
 		5 +	// warning levels
-		context->options.ignore_warnings.count
+		context->options.ignore_warnings.size()
 	);
 
 	array_add( &args, tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() ) );
 
-	For ( u64, i, 0, context->options.source_files.count ) {
+	For ( u64, i, 0, context->options.source_files.size() ) {
 		if ( string_ends_with( context->options.source_files[i], ".cpp" ) ) {
 			array_add( &args, "-std=c++20" );
 			break;
@@ -212,21 +212,21 @@ static s32 BuildEXE( buildContext_t* context ) {
 	array_add( &args, "-o" );
 	array_add( &args, context->fullBinaryName );
 
-	array_add_range( &args, context->options.source_files.data, context->options.source_files.count );
+	array_add_range( &args, context->options.source_files.data(), context->options.source_files.size() );
 
-	For ( u32, i, 0, context->options.defines.count ) {
+	For ( u32, i, 0, context->options.defines.size() ) {
 		array_add( &args, tprintf( "-D%s", context->options.defines[i] ) );
 	}
 
-	For ( u32, i, 0, context->options.additional_includes.count ) {
+	For ( u32, i, 0, context->options.additional_includes.size() ) {
 		array_add( &args, tprintf( "-I%s", context->options.additional_includes[i] ) );
 	}
 
-	For ( u32, i, 0, context->options.additional_lib_paths.count ) {
+	For ( u32, i, 0, context->options.additional_lib_paths.size() ) {
 		array_add( &args, tprintf( "-L%s", context->options.additional_lib_paths[i] ) );
 	}
 
-	For ( u32, i, 0, context->options.additional_libs.count ) {
+	For ( u32, i, 0, context->options.additional_libs.size() ) {
 		array_add( &args, tprintf( "-l%s", context->options.additional_libs[i] ) );
 	}
 
@@ -237,8 +237,8 @@ static s32 BuildEXE( buildContext_t* context ) {
 	array_add( &args, "-Wextra" );
 	array_add( &args, "-Wpedantic" );
 
-	if ( context->options.ignore_warnings.count > 0 ) {
-		array_add_range( &args, context->options.ignore_warnings.data, context->options.ignore_warnings.count );
+	if ( context->options.ignore_warnings.size() > 0 ) {
+		array_add_range( &args, context->options.ignore_warnings.data(), context->options.ignore_warnings.size() );
 	}
 
 	array_add( &args, NULL );
@@ -264,19 +264,19 @@ static s32 BuildDynamicLibrary( buildContext_t* context ) {
 		1 +	// optimisation
 		1 +	// -o
 		1 +	// binary name
-		context->options.source_files.count +
-		context->options.defines.count +
-		context->options.additional_includes.count +
-		context->options.additional_lib_paths.count +
-		context->options.additional_libs.count +
+		context->options.source_files.size() +
+		context->options.defines.size() +
+		context->options.additional_includes.size() +
+		context->options.additional_lib_paths.size() +
+		context->options.additional_libs.size() +
 		5 +	// warning levels
-		context->options.ignore_warnings.count
+		context->options.ignore_warnings.size()
 	);
 
 	array_add( &args, tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() ) );
 	array_add( &args, "-shared" );
 
-	For ( u64, i, 0, context->options.source_files.count ) {
+	For ( u64, i, 0, context->options.source_files.size() ) {
 		if ( string_ends_with( context->options.source_files[i], ".cpp" ) ) {
 			array_add( &args, "-std=c++20" );
 			break;
@@ -292,21 +292,21 @@ static s32 BuildDynamicLibrary( buildContext_t* context ) {
 	array_add( &args, "-o" );
 	array_add( &args, context->fullBinaryName );
 
-	array_add_range( &args, context->options.source_files.data, context->options.source_files.count );
+	array_add_range( &args, context->options.source_files.data(), context->options.source_files.size() );
 
-	For ( u32, i, 0, context->options.defines.count ) {
+	For ( u32, i, 0, context->options.defines.size() ) {
 		array_add( &args, tprintf( "-D%s", context->options.defines[i] ) );
 	}
 
-	For ( u32, i, 0, context->options.additional_includes.count ) {
+	For ( u32, i, 0, context->options.additional_includes.size() ) {
 		array_add( &args, tprintf( "-I%s", context->options.additional_includes[i] ) );
 	}
 
-	For ( u32, i, 0, context->options.additional_lib_paths.count ) {
+	For ( u32, i, 0, context->options.additional_lib_paths.size() ) {
 		array_add( &args, tprintf( "-L%s", context->options.additional_lib_paths[i] ) );
 	}
 
-	For ( u32, i, 0, context->options.additional_libs.count ) {
+	For ( u32, i, 0, context->options.additional_libs.size() ) {
 		array_add( &args, tprintf( "-l%s", context->options.additional_libs[i] ) );
 	}
 
@@ -317,8 +317,8 @@ static s32 BuildDynamicLibrary( buildContext_t* context ) {
 	array_add( &args, "-Wextra" );
 	array_add( &args, "-Wpedantic" );
 
-	if ( context->options.ignore_warnings.count > 0 ) {
-		array_add_range( &args, context->options.ignore_warnings.data, context->options.ignore_warnings.count );
+	if ( context->options.ignore_warnings.size() > 0 ) {
+		array_add_range( &args, context->options.ignore_warnings.data(), context->options.ignore_warnings.size() );
 	}
 
 	bool8 showArgs = context->flags & BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS;
@@ -349,17 +349,17 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 		1 +	// optimisation
 		1 +	// -o
 		1 +	// binary name
-		context->options.source_files.count +
-		context->options.defines.count +
-		context->options.additional_includes.count +
-		context->options.additional_lib_paths.count +
-		context->options.additional_libs.count +
+		context->options.source_files.size() +
+		context->options.defines.size() +
+		context->options.additional_includes.size() +
+		context->options.additional_lib_paths.size() +
+		context->options.additional_libs.size() +
 		5 +	// warning levels
-		context->options.ignore_warnings.count
+		context->options.ignore_warnings.size()
 	);
 
 	// build .o files of all compilation units
-	For ( u64, sourceFileIndex, 0, context->options.source_files.count ) {
+	For ( u64, sourceFileIndex, 0, context->options.source_files.size() ) {
 		const char* sourceFile = context->options.source_files[sourceFileIndex];
 
 		array_reset( &args );
@@ -395,11 +395,11 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 
 		array_add( &args, sourceFile );
 
-		For ( u32, i, 0, context->options.defines.count ) {
+		For ( u32, i, 0, context->options.defines.size() ) {
 			array_add( &args, tprintf( "-D%s", context->options.defines[i] ) );
 		}
 
-		For ( u32, i, 0, context->options.additional_includes.count ) {
+		For ( u32, i, 0, context->options.additional_includes.size() ) {
 			array_add( &args, tprintf( "-I%s", context->options.additional_includes[i] ) );
 		}
 
@@ -410,8 +410,8 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 		array_add( &args, "-Wextra" );
 		array_add( &args, "-Wpedantic" );
 
-		if ( context->options.ignore_warnings.count > 0 ) {
-			array_add_range( &args, context->options.ignore_warnings.data, context->options.ignore_warnings.count );
+		if ( context->options.ignore_warnings.size() > 0 ) {
+			array_add_range( &args, context->options.ignore_warnings.data(), context->options.ignore_warnings.size() );
 		}
 
 		exitCode = RunProc( &args, NULL, showArgs, showStdout );
@@ -525,6 +525,21 @@ static const char* TryFindFile( const char* filename, const char* folder ) {
 
 static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const char* inputFilePath );
 
+static buildContext_t CreateBuildContext() {
+	buildContext_t context = {};
+
+	context.options.binary_type = BINARY_TYPE_EXE;
+	context.options.optimization_level = OPTIMIZATION_LEVEL_O0;
+	context.options.remove_symbols = false;
+	context.options.remove_file_extension = false;
+	context.options.config = NULL;
+	context.options.binary_folder = NULL;
+	context.options.binary_name = NULL;
+	context.flags = 0;
+
+	return context;
+}
+
 int main( int argc, char** argv ) {
 	float64 buildStart = time_ms();
 	defer(
@@ -539,8 +554,7 @@ int main( int argc, char** argv ) {
 
 	printf( "Builder v%d.%d.%d\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
-	buildContext_t context;
-	memset( &context, 0, sizeof( buildContext_t ) );
+	buildContext_t context = CreateBuildContext();
 	context.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS | BUILD_CONTEXT_FLAG_SHOW_STDOUT;
 
 	// check if we need to perform first time setup
@@ -735,7 +749,7 @@ int main( int argc, char** argv ) {
 		error( "Unrecognised argument \"%s\".\n", arg );
 	}
 
-	typedef void ( *initCoreCallback_t )( CoreContext* coreContext );
+	//typedef void ( *initCoreCallback_t )( CoreContext* coreContext );
 
 	// validate cmd line args
 	if ( inputFile == NULL ) {
@@ -746,39 +760,47 @@ int main( int argc, char** argv ) {
 
 	// set all the additional compiler options that we know we need
 	{
-		array_add( &context.options.defines, "_CRT_SECURE_NO_WARNINGS" );
+		context.options.defines.push_back( "_CRT_SECURE_NO_WARNINGS" );
+
+		// this is needed because this tells the compiler what to set _ITERATOR_DEBUG_LEVEL to
+		// ABI compatibility will be broken if this is not the same between all binaries
+#if _DEBUG
+		context.options.defines.push_back( "_DEBUG" );
+#else
+		context.options.defines.push_back( "NDEBUG" );
+#endif
 
 #ifdef _WIN64
-		array_add( &context.options.additional_libs, "user32.lib" );
-		array_add( &context.options.additional_libs, "Shlwapi.lib" );
-		array_add( &context.options.additional_libs, "msvcrtd.lib" );
-		array_add( &context.options.additional_libs, "DbgHelp.lib" );
+		context.options.additional_libs.push_back( "user32.lib" );
+		context.options.additional_libs.push_back( "Shlwapi.lib" );
+		context.options.additional_libs.push_back( "msvcrtd.lib" );
+		context.options.additional_libs.push_back( "DbgHelp.lib" );
 #endif // _WIN64
 
-		array_add( &context.options.ignore_warnings, "-Wno-newline-eof" );
-		array_add( &context.options.ignore_warnings, "-Wno-pointer-integer-compare" );
-		array_add( &context.options.ignore_warnings, "-Wno-declaration-after-statement" );
-		array_add( &context.options.ignore_warnings, "-Wno-gnu-zero-variadic-macro-arguments" );
-		array_add( &context.options.ignore_warnings, "-Wno-cast-align" );
-		array_add( &context.options.ignore_warnings, "-Wno-bad-function-cast" );
-		array_add( &context.options.ignore_warnings, "-Wno-format-nonliteral" );
-		array_add( &context.options.ignore_warnings, "-Wno-missing-braces" );
-		array_add( &context.options.ignore_warnings, "-Wno-switch-enum" );
-		array_add( &context.options.ignore_warnings, "-Wno-covered-switch-default" );
-		array_add( &context.options.ignore_warnings, "-Wno-double-promotion" );
-		array_add( &context.options.ignore_warnings, "-Wno-cast-qual" );
-		array_add( &context.options.ignore_warnings, "-Wno-unused-variable" );
-		array_add( &context.options.ignore_warnings, "-Wno-unused-function" );
-		array_add( &context.options.ignore_warnings, "-Wno-empty-translation-unit" );
-		array_add( &context.options.ignore_warnings, "-Wno-zero-as-null-pointer-constant" );
-		array_add( &context.options.ignore_warnings, "-Wno-c++98-compat-pedantic" );
-		array_add( &context.options.ignore_warnings, "-Wno-unused-macros" );
-		array_add( &context.options.ignore_warnings, "-Wno-unsafe-buffer-usage" );			// LLVM 17.0.1
-		array_add( &context.options.ignore_warnings, "-Wno-reorder-init-list" );			// C++: "designated initializers must be in order"
-		array_add( &context.options.ignore_warnings, "-Wno-old-style-cast" );				// C++: "C-style casts are banned"
-		array_add( &context.options.ignore_warnings, "-Wno-global-constructors" );			// C++: "declaration requires a global destructor"
-		array_add( &context.options.ignore_warnings, "-Wno-exit-time-destructors" );		// C++: "declaration requires an exit-time destructor" (same as the above, basically)
-		array_add( &context.options.ignore_warnings, "-Wno-missing-field-initializers" );	// LLVM 18.1.8
+		context.options.ignore_warnings.push_back( "-Wno-newline-eof" );
+		context.options.ignore_warnings.push_back( "-Wno-pointer-integer-compare" );
+		context.options.ignore_warnings.push_back( "-Wno-declaration-after-statement" );
+		context.options.ignore_warnings.push_back( "-Wno-gnu-zero-variadic-macro-arguments" );
+		context.options.ignore_warnings.push_back( "-Wno-cast-align" );
+		context.options.ignore_warnings.push_back( "-Wno-bad-function-cast" );
+		context.options.ignore_warnings.push_back( "-Wno-format-nonliteral" );
+		context.options.ignore_warnings.push_back( "-Wno-missing-braces" );
+		context.options.ignore_warnings.push_back( "-Wno-switch-enum" );
+		context.options.ignore_warnings.push_back( "-Wno-covered-switch-default" );
+		context.options.ignore_warnings.push_back( "-Wno-double-promotion" );
+		context.options.ignore_warnings.push_back( "-Wno-cast-qual" );
+		context.options.ignore_warnings.push_back( "-Wno-unused-variable" );
+		context.options.ignore_warnings.push_back( "-Wno-unused-function" );
+		context.options.ignore_warnings.push_back( "-Wno-empty-translation-unit" );
+		context.options.ignore_warnings.push_back( "-Wno-zero-as-null-pointer-constant" );
+		context.options.ignore_warnings.push_back( "-Wno-c++98-compat-pedantic" );
+		context.options.ignore_warnings.push_back( "-Wno-unused-macros" );
+		context.options.ignore_warnings.push_back( "-Wno-unsafe-buffer-usage" );		// LLVM 17.0.1
+		context.options.ignore_warnings.push_back( "-Wno-reorder-init-list" );			// C++: "designated initializers must be in order"
+		context.options.ignore_warnings.push_back( "-Wno-old-style-cast" );				// C++: "C-style casts are banned"
+		context.options.ignore_warnings.push_back( "-Wno-global-constructors" );		// C++: "declaration requires a global destructor"
+		context.options.ignore_warnings.push_back( "-Wno-exit-time-destructors" );		// C++: "declaration requires an exit-time destructor" (same as the above, basically)
+		context.options.ignore_warnings.push_back( "-Wno-missing-field-initializers" );	// LLVM 18.1.8
 	}
 
 	s32 exitCode = 0;
@@ -889,46 +911,28 @@ int main( int argc, char** argv ) {
 		typedef void ( *setVisualStudioOptionsFunc_t )( VisualStudioSolution* solution );
 
 		setOptionsCallback_t callback = NULL;
-		initCoreCallback_t init_callback = NULL;
 
 		// TODO(DM): 09/08/2024: why does memcpy not work for buildContext_t?
 		// is it because buildContext_t contains a BuilderOptions member, which contains Array<T> which is technically not POD?
-		buildContext_t userBuildConfigContext = {};
+		buildContext_t userBuildConfigContext = CreateBuildContext();
 		userBuildConfigContext.options = context.options;
 		userBuildConfigContext.flags = BUILD_CONTEXT_FLAG_SHOW_STDOUT;
 		userBuildConfigContext.fullBinaryName = context.fullBinaryName;
 
 		userBuildConfigContext.options.binary_folder = dotBuilderFolder;
 
-		array_add( &userBuildConfigContext.options.source_files, inputFile );
-		array_add( &userBuildConfigContext.options.defines, "BUILDER_DOING_USER_CONFIG_BUILD" );
-		array_add( &userBuildConfigContext.options.ignore_warnings, "-Wno-missing-prototypes" );
-		array_add( &userBuildConfigContext.options.ignore_warnings, "-Wno-unused-parameter" );
+		userBuildConfigContext.options.source_files.push_back( inputFile );
+
+		userBuildConfigContext.options.defines.push_back( "BUILDER_DOING_USER_CONFIG_BUILD" );
 
 		// add builder as an additional include path for the user config build so that we can automatically include core because we know where it is
-		array_add( &userBuildConfigContext.options.additional_includes, tprintf( "%s\\src", paths_get_app_path() ) );
+		userBuildConfigContext.options.additional_includes.push_back( tprintf( "%s\\src", paths_get_app_path() ) );
 
 		userBuildConfigContext.options.binary_name = tprintf( "%s.dll", paths_remove_path_from_file( firstSourceFile ) );
 
 		userBuildConfigContext.fullBinaryName = tprintf( "%s\\%s", userBuildConfigContext.options.binary_folder, userBuildConfigContext.options.binary_name );
 
 		folder_create_if_it_doesnt_exist( userBuildConfigContext.options.binary_folder );
-
-		// create a temp source file which will automatically call core_hook() for us so that the user doesnt have to do it themselves
-		const char* tempFileName = tprintf( "%s\\core_init.cpp", dotBuilderFolder );
-		const char* content =	"#include <core/core.cpp>\n"
-								"\n"
-								"extern \"C\" __declspec( dllexport ) void init_core( CoreContext* core ) {\n"
-								"\tcore_hook( core );\n"
-								"}\n";
-
-		bool8 written = file_write_entire( tempFileName, content, strlen( content ) * sizeof( char ) );
-		assertf( written, "Something went really wrong.  Go get Dan." );
-
-		// when were finished, delete this file and remove it from the list of source files to build
-		defer( file_delete( tempFileName ) );
-
-		array_add( &userBuildConfigContext.options.source_files, tempFileName );
 
 		exitCode = BuildDynamicLibrary( &userBuildConfigContext );
 
@@ -940,18 +944,13 @@ int main( int argc, char** argv ) {
 		library = library_load( tprintf( "%s\\%s", userBuildConfigContext.options.binary_folder, userBuildConfigContext.options.binary_name ) );
 
 		callback = cast( setOptionsCallback_t ) library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME );
-		init_callback = cast( initCoreCallback_t ) library_get_proc_address( library, "init_core" );
 		setVisualStudioOptionsFunc_t setVisualStudioOptionsFunc = cast( setVisualStudioOptionsFunc_t ) library_get_proc_address( library, SET_VISUAL_STUDIO_OPTIONS_FUNC_NAME );
 
-		assertf( init_callback != NULL, "Failed to find the core init callback" );
-
-		init_callback( &g_core_context );
-
 		if ( setVisualStudioOptionsFunc ) {
-			VisualStudioSolution solution = {};
+			VisualStudioSolution solution;
 			setVisualStudioOptionsFunc( &solution );
 
-			printf( "Generating Visual Studio Solution ... \n" );
+			printf( "Generating Visual Studio Solution\n" );
 
 			bool8 generated = GenerateVisualStudioSolution( &solution, buildFilePathAbsolute );
 
@@ -960,7 +959,7 @@ int main( int argc, char** argv ) {
 				return 1;
 			}
 
-			printf( "Generating Visual Studio Solution ... \n" );
+			printf( "Done\n" );
 
 			return 0;
 		}
@@ -968,11 +967,11 @@ int main( int argc, char** argv ) {
 		if ( callback ) {
 			callback( &context.options );
 
-			For ( u64, includeIndex, 0, context.options.additional_includes.count ) {
+			For ( u64, includeIndex, 0, context.options.additional_includes.size() ) {
 				context.options.additional_includes[includeIndex] = tprintf( "%s\\%s", buildFilePathAbsolute, context.options.additional_includes[includeIndex] );
 			}
 
-			For ( u64, libPathIndex, 0, context.options.additional_lib_paths.count ) {
+			For ( u64, libPathIndex, 0, context.options.additional_lib_paths.size() ) {
 				context.options.additional_lib_paths[libPathIndex] = tprintf( "%s\\%s", buildFilePathAbsolute, context.options.additional_lib_paths[libPathIndex] );
 			}
 		}
@@ -983,13 +982,14 @@ int main( int argc, char** argv ) {
 
 	// get all the "compilation units" that we are actually going to give to the compiler
 	// if no source files were added in set_builder_options() then assume we want to build the same file as the one specified via the command line
-	if ( context.options.source_files.count == 0 ) {
-		array_add( &context.options.source_files, inputFile );
+	if ( context.options.source_files.size() == 0 ) {
+		context.options.source_files.push_back( inputFile );
 	} else {
 		// otherwise the user told us to build other source files, so go find and build those instead
-		Array<const char*> finalSourceFilesToBuild;
+		// keep this as a std::vector because this gets fed back into BuilderOptions::source_files
+		std::vector<const char*> finalSourceFilesToBuild;
 
-		For ( u64, sourceFileIndex, 0, context.options.source_files.count ) {
+		For ( u64, sourceFileIndex, 0, context.options.source_files.size() ) {
 			const char* sourceFile = context.options.source_files[sourceFileIndex];
 
 			FileInfo fileInfo;
@@ -1012,7 +1012,7 @@ int main( int argc, char** argv ) {
 					foundSourceFile = tprintf( "%s\\%s", buildFilePathAbsolute, fileInfo.filename );
 				}
 
-				array_add( &finalSourceFilesToBuild, foundSourceFile );
+				finalSourceFilesToBuild.push_back( foundSourceFile );
 			} while ( file_find_next( &firstFile, &fileInfo ) );
 		}
 
@@ -1022,7 +1022,7 @@ int main( int argc, char** argv ) {
 	// recursively resolve all includes found in each source file
 	Array<const char*> buildInfoFiles;
 	{
-		array_add_range( &buildInfoFiles, context.options.source_files.data, context.options.source_files.count );
+		array_add_range( &buildInfoFiles, context.options.source_files.data(), context.options.source_files.size() );
 
 		// for each file, open it and get every include inside it
 		// then go through _those_ included files
@@ -1095,7 +1095,7 @@ int main( int argc, char** argv ) {
 
 						const char* fullFilename = NULL;
 
-						For ( u64, includePathIndex, 0, context.options.additional_includes.count ) {
+						For ( u64, includePathIndex, 0, context.options.additional_includes.size() ) {
 							const char* includePath = context.options.additional_includes[includePathIndex];
 
 							fullFilename = TryFindFile( filename, includePath );
@@ -1270,34 +1270,34 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 			return false;
 		}
 
-		/*if ( solution->configs.count < 1 ) {
+		/*if ( solution->configs.size() < 1 ) {
 			error( "You must set at least one config when generating a Visual Studio Solution.\n" );
 			return false;
 		}*/
 
-		if ( solution->platforms.count < 1 ) {
+		if ( solution->platforms.size() < 1 ) {
 			error( "You must set at least one platform when generating a Visual Studio Solution.\n" );
 			return false;
 		}
 
-		if ( solution->projects.count < 1 ) {
+		if ( solution->projects.size() < 1 ) {
 			error( "As well as a Solution, you must also generate at least one Visual Studio Project to go with it.\n" );
 			return false;
 		}
 	}
 
 	Array<const char*> projectGuids;
-	array_resize( &projectGuids, solution->projects.count );
+	array_resize( &projectGuids, solution->projects.size() );
 
 	// give each project a guid
 	For ( u64, i, 0, projectGuids.count ) {
 		projectGuids[i] = CreateVisualStudioGuid();
 	}
 
-	printf( "Generating Projects ... \n" );
+	printf( "Generating Projects:\n" );
 
 	// generate each .vcxproj
-	For ( u64, projectIndex, 0, solution->projects.count ) {
+	For ( u64, projectIndex, 0, solution->projects.size() ) {
 		VisualStudioProject* project = &solution->projects[projectIndex];
 
 		// validate the project
@@ -1307,13 +1307,13 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 				return false;
 			}
 
-			if ( project->source_files.count == 0 ) {
+			if ( project->source_files.size() == 0 ) {
 				error( "No source files were set for project \"%s\".  You need at least one source file.\n", project->name );
 				return false;
 			}
 
 			// validate each config
-			For ( u64, configIndex, 0, project->configs.count ) {
+			For ( u64, configIndex, 0, project->configs.size() ) {
 				VisualStudioConfig* config = &project->configs[configIndex];
 
 				if ( config->name == NULL ) {
@@ -1362,10 +1362,10 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 			// generate every single config and platform pairing
 			{
 				CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup Label=\"ProjectConfigurations\">" ) );
-				For ( u64, configIndex, 0, project->configs.count ) {
+				For ( u64, configIndex, 0, project->configs.size() ) {
 					VisualStudioConfig* config = &project->configs[configIndex];
 
-					For ( u64, platformIndex, 0, solution->platforms.count ) {
+					For ( u64, platformIndex, 0, solution->platforms.size() ) {
 						const char* platform = solution->platforms[platformIndex];
 
 						// TODO: Alternative targets
@@ -1391,10 +1391,10 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 			CHECK_WRITE( file_write_line( &vcxproj, "\t<Import Project=\"$(VCTargetsPath)\\Microsoft.Cpp.Default.props\" />" ) );
 
 			// for each config and platform, define config type, toolset, out dir, and intermediate dir
-			For ( u64, configIndex, 0, project->configs.count ) {
+			For ( u64, configIndex, 0, project->configs.size() ) {
 				VisualStudioConfig* config = &project->configs[configIndex];
 
-				For ( u64, platformIndex, 0, solution->platforms.count ) {
+				For ( u64, platformIndex, 0, solution->platforms.size() ) {
 					const char* platform = solution->platforms[platformIndex];
 
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\" Label=\"Configuration\">", config->name, platform ) ) );
@@ -1415,10 +1415,10 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 			CHECK_WRITE( file_write_line( &vcxproj, "\t</ImportGroup>" ) );
 
 			// for each config and platform, import the property sheets that visual studio requires
-			For ( u64, configIndex, 0, project->configs.count ) {
+			For ( u64, configIndex, 0, project->configs.size() ) {
 				VisualStudioConfig* config = &project->configs[configIndex];
 
-				For ( u64, platformIndex, 0, solution->platforms.count ) {
+				For ( u64, platformIndex, 0, solution->platforms.size() ) {
 					const char* platform = solution->platforms[platformIndex];
 
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<ImportGroup Label=\"PropertySheets\" Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">", config->name, platform ) ) );
@@ -1438,17 +1438,17 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 			//	rebuild command
 			//	clean command
 			//	preprocessor definitions
-			For ( u64, configIndex, 0, project->configs.count ) {
+			For ( u64, configIndex, 0, project->configs.size() ) {
 				VisualStudioConfig* config = &project->configs[configIndex];
 
-				For ( u64, platformIndex, 0, solution->platforms.count ) {
+				For ( u64, platformIndex, 0, solution->platforms.size() ) {
 					const char* platform = solution->platforms[platformIndex];
 
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">", config->name, platform ) ) );
 
 					// external include paths
 					CHECK_WRITE( file_write( &vcxproj, "\t\t<ExternalIncludePath>" ) );
-					For ( u64, includePathIndex, 0, config->options.additional_includes.count ) {
+					For ( u64, includePathIndex, 0, config->options.additional_includes.size() ) {
 						CHECK_WRITE( file_write( &vcxproj, tprintf( "%s;", config->options.additional_includes[includePathIndex] ) ) );
 					}
 					CHECK_WRITE( file_write( &vcxproj, "$(ExternalIncludePath)" ) );
@@ -1456,7 +1456,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 					// external library paths
 					CHECK_WRITE( file_write( &vcxproj, "\t\t<LibraryPath>" ) );
-					For ( u64, libPathIndex, 0, config->options.additional_lib_paths.count ) {
+					For ( u64, libPathIndex, 0, config->options.additional_lib_paths.size() ) {
 						CHECK_WRITE( file_write( &vcxproj, tprintf( "%s;", config->options.additional_lib_paths[libPathIndex] ) ) );
 					}
 					CHECK_WRITE( file_write( &vcxproj, "$(LibraryPath)" ) );
@@ -1477,7 +1477,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 					// preprocessor definitions
 					CHECK_WRITE( file_write( &vcxproj, "\t\t<NMakePreprocessorDefinitions>" ) );
-					For ( u64, definitionIndex, 0, config->options.defines.count ) {
+					For ( u64, definitionIndex, 0, config->options.defines.size() ) {
 						CHECK_WRITE( file_write( &vcxproj, tprintf( "%s;", config->options.defines[definitionIndex] ) ) );
 					}
 					CHECK_WRITE( file_write( &vcxproj, "$(NMakePreprocessorDefinitions)" ) );
@@ -1495,7 +1495,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 			{
 				CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
 
-				For ( u64, fileTypeIndex, 0, project->source_files.count ) {
+				For ( u64, fileTypeIndex, 0, project->source_files.size() ) {
 					const char* searchPath = project->source_files[fileTypeIndex];
 
 					Array<const char*> files;
@@ -1543,10 +1543,10 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 			// for each config and platform, generate the debugger settings
 			{
-				For ( u64, configIndex, 0, project->configs.count ) {
+				For ( u64, configIndex, 0, project->configs.size() ) {
 					VisualStudioConfig* config = &project->configs[configIndex];
 
-					For ( u64, platformIndex, 0, solution->platforms.count ) {
+					For ( u64, platformIndex, 0, solution->platforms.size() ) {
 						const char* platform = solution->platforms[platformIndex];
 
 						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">", config->name, platform ) ) );
@@ -1557,9 +1557,9 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 						CHECK_WRITE( file_write_line( &vcxproj,			 "\t\t<LocalDebuggerWorkingDirectory>$(SolutionDir)</LocalDebuggerWorkingDirectory>" ) );
 
 						// if debugger arguments were specified, put those in
-						if ( config->debugger_arguments.count > 0 ) {
+						if ( config->debugger_arguments.size() > 0 ) {
 							CHECK_WRITE( file_write( &vcxproj, "\t\t<LocalDebuggerCommandArguments>" ) );
-							For ( u64, argIndex, 0, config->debugger_arguments.count ) {
+							For ( u64, argIndex, 0, config->debugger_arguments.size() ) {
 								CHECK_WRITE( file_write( &vcxproj, tprintf( "%s " ) ) );
 							}
 							CHECK_WRITE( file_write( &vcxproj, "</LocalDebuggerCommandArguments>\n" ) );
@@ -1597,7 +1597,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 		CHECK_WRITE( file_write_line( &sln, "MinimunVisualStudioVersion = 10.0.40219.1" ) );	// TODO(DM): how do we query windows for this?
 
 		// generate project dependencies
-		For ( u64, projectIndex, 0, solution->projects.count ) {
+		For ( u64, projectIndex, 0, solution->projects.size() ) {
 			VisualStudioProject* project = &solution->projects[projectIndex];
 
 			CHECK_WRITE( file_write_line( &sln, tprintf( "Project(\"{%s}\") = \"%s\", \"%s.vcxproj\", \"{%s}\"", VISUAL_STUDIO_CPP_PROJECT_TYPE_GUID, project->name, project->name, projectGuids[projectIndex] ) ) );
@@ -1612,13 +1612,13 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 		{
 			// which config|platform maps to which config|platform?
 			CHECK_WRITE( file_write_line( &sln, "\tGlobalSection(SolutionConfigurationPlatforms) = preSolution" ) );
-			For ( u64, projectIndex, 0, solution->projects.count ) {
+			For ( u64, projectIndex, 0, solution->projects.size() ) {
 				VisualStudioProject* project = &solution->projects[projectIndex];
 
-				For ( u64, configIndex, 0, project->configs.count ) {
+				For ( u64, configIndex, 0, project->configs.size() ) {
 					VisualStudioConfig* config = &project->configs[configIndex];
 
-					For ( u64, platformIndex, 0, solution->platforms.count ) {
+					For ( u64, platformIndex, 0, solution->platforms.size() ) {
 						const char* platform = solution->platforms[platformIndex];
 
 						CHECK_WRITE( file_write_line( &sln, tprintf( "\t\t%s|%s = %s|%s", config->name, platform, config->name, platform ) ) );
@@ -1629,13 +1629,13 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 			// which project config|platform is active?
 			CHECK_WRITE( file_write_line( &sln, "\tGlobalSection(SolutionConfigurationPlatforms) = postSolution" ) );
-			For ( u64, projectIndex, 0, solution->projects.count ) {
+			For ( u64, projectIndex, 0, solution->projects.size() ) {
 				VisualStudioProject* project = &solution->projects[projectIndex];
 
-				For ( u64, configIndex, 0, project->configs.count ) {
+				For ( u64, configIndex, 0, project->configs.size() ) {
 					VisualStudioConfig* config = &project->configs[configIndex];
 
-					For ( u64, platformIndex, 0, solution->platforms.count ) {
+					For ( u64, platformIndex, 0, solution->platforms.size() ) {
 						const char* platform = solution->platforms[platformIndex];
 
 						// TODO: the first config and platform in this line are actually the ones that the PROJECT has, not the SOLUTION
@@ -1669,10 +1669,10 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 #if VS_GENERATE_BUILD_SOURCE_FILES
 	// generate build source files for each config/platform combo
 	{
-		For ( u64, projectIndex, 0, solution->projects.count ) {
+		For ( u64, projectIndex, 0, solution->projects.size() ) {
 			VisualStudioProject* project = &solution->projects[projectIndex];
 
-			For ( u64, platformIndex, 0, solution->platforms.count ) {
+			For ( u64, platformIndex, 0, solution->platforms.size() ) {
 				const char* platform = solution->platforms[platformIndex];
 
 				File buildSourceFile = file_open_or_create( tprintf( "%s\\build_%s.%s.cpp", inputFilePath, project->name, platform ) );
@@ -1687,51 +1687,51 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 				CHECK_WRITE( file_write( &buildSourceFile, "#include <core/array.inl>\n" ) );
 				CHECK_WRITE( file_write( &buildSourceFile, "\n" ) );
 
-				if ( project->configs.count > 1 ) {
+				if ( project->configs.size() > 1 ) {
 					CHECK_WRITE( file_write( &buildSourceFile, "#include <string.h> // strcmp\n\n" ) );
 				}
 
 				CHECK_WRITE( file_write( &buildSourceFile, "BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {\n" ) );
 
-				For ( u64, configIndex, 0, project->configs.count ) {
+				For ( u64, configIndex, 0, project->configs.size() ) {
 					VisualStudioConfig* config = &project->configs[configIndex];
 
 					CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\tif ( strcmp( options->config, \"%s\" ) == 0 ) {\n", config->name ) ) );
 
-					if ( config->options.source_files.count > 0 ) {
-						For ( u64, sourceFileIndex, 0, config->options.source_files.count ) {
+					if ( config->options.source_files.size() > 0 ) {
+						For ( u64, sourceFileIndex, 0, config->options.source_files.size() ) {
 							CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\tarray_add( &options->source_files, \"%s\" );\n", config->options.source_files[sourceFileIndex] ) ) );
 						}
 
 						CHECK_WRITE( file_write( &buildSourceFile, "\n" ) );
 					}
 
-					if ( config->options.defines.count > 0 ) {
-						For ( u64, defineIndex, 0, config->options.defines.count ) {
+					if ( config->options.defines.size() > 0 ) {
+						For ( u64, defineIndex, 0, config->options.defines.size() ) {
 							CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\tarray_add( &options->defines, \"%s\" );\n", config->options.defines[defineIndex] ) ) );
 						}
 
 						CHECK_WRITE( file_write( &buildSourceFile, "\n" ) );
 					}
 
-					if ( config->options.additional_includes.count > 0 ) {
-						For ( u64, includeIndex, 0, config->options.additional_includes.count ) {
+					if ( config->options.additional_includes.size() > 0 ) {
+						For ( u64, includeIndex, 0, config->options.additional_includes.size() ) {
 							CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\tarray_add( &options->additional_includes, \"%s\" );\n", config->options.additional_includes[includeIndex] ) ) );
 						}
 
 						CHECK_WRITE( file_write( &buildSourceFile, "\n" ) );
 					}
 
-					if ( config->options.additional_lib_paths.count > 0 ) {
-						For ( u64, libPathIndex, 0, config->options.additional_lib_paths.count ) {
+					if ( config->options.additional_lib_paths.size() > 0 ) {
+						For ( u64, libPathIndex, 0, config->options.additional_lib_paths.size() ) {
 							CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\tarray_add( &options->additional_lib_paths, \"%s\" );\n", config->options.additional_lib_paths[libPathIndex] ) ) );
 						}
 
 						CHECK_WRITE( file_write( &buildSourceFile, "\n" ) );
 					}
 
-					if ( config->options.additional_libs.count > 0 ) {
-						For ( u64, libIndex, 0, config->options.additional_libs.count ) {
+					if ( config->options.additional_libs.size() > 0 ) {
+						For ( u64, libIndex, 0, config->options.additional_libs.size() ) {
 							CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\tarray_add( &options->additional_libs, \"%s\" );\n", config->options.additional_libs[libIndex] ) ) );
 						}
 
@@ -1766,7 +1766,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 					CHECK_WRITE( file_write( &buildSourceFile, "\t}\n" ) );
 
-					if ( configIndex != project->configs.count - 1 ) {
+					if ( configIndex != project->configs.size() - 1 ) {
 						CHECK_WRITE( file_write( &buildSourceFile, "\n" ) );
 					}
 				}

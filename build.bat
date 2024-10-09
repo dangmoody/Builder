@@ -54,6 +54,8 @@ set includes=""
 set libraries=-luser32.lib -lShlwapi.lib -lDbgHelp.lib -lOle32.lib
 if /I [%config%]==[debug] (
 	set libraries=!libraries! -lmsvcrtd.lib
+) else (
+	set libraries=!libraries! -lmsvcrt.lib
 )
 
 set warning_levels=-Werror -Wall -Wextra -Weverything -Wpedantic

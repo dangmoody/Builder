@@ -36,7 +36,7 @@ if /I [%config%]==[debug] (
 
 set optimisation=""
 if /I [%config%]==[release] (
-	set optimisation=-O3 -ffast-math
+	set optimisation=-O3
 )
 
 set source_files=src\\builder.cpp

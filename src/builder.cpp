@@ -76,7 +76,7 @@ static const char* GetFileExtensionFromBinaryType( BinaryType type ) {
 		case BINARY_TYPE_STATIC_LIBRARY:	return "lib";
 	}
 
-	assertf( false, "Something went really wrong here.  Get Dan.\n" );
+	assertf( false, "Something went really wrong here.\n" );
 
 	return "ERROR";
 }
@@ -355,7 +355,7 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 		} else if ( string_ends_with( context->options.source_files[sourceFileIndex], ".c" ) ) {
 			array_add( &args, "-std=c99" );
 		} else {
-			assertf( false, "Something went really wrong.  Get Dan.\n" );
+			assertf( false, "Something went really wrong.\n" );
 			return 1;
 		}
 
@@ -584,7 +584,7 @@ int main( int argc, char** argv ) {
 				}
 
 				s32 exitCode = process_join( &clangVersionCheck );
-				assertf( exitCode == 0, "Something went terribly wrong.  Go get Dan.\n" );
+				assertf( exitCode == 0, "Something went terribly wrong..\n" );
 
 				if ( !correctClangVersion ) {
 					warning( "Required Clang version not found.  I will need to re-download and re-install Clang.\n" );
@@ -617,7 +617,7 @@ int main( int argc, char** argv ) {
 				if ( exitCode == 0 ) {
 					printf( "Done.\n" );
 				} else {
-					error( "Failed to download Clang.  The CURL HTTP request failed.  Speak to Dan.\n" );
+					error( "Failed to download Clang.  The CURL HTTP request failed.\n" );
 					return 1;
 				}
 			}
@@ -646,7 +646,7 @@ int main( int argc, char** argv ) {
 				if ( exitCode == 0 ) {
 					printf( "Done.\n" );
 				} else {
-					error( "Failed to install Clang.  Speak to Dan.\n" );
+					error( "Failed to install Clang.\n" );
 					return 1;
 				}
 			}
@@ -975,7 +975,7 @@ int main( int argc, char** argv ) {
 			FileInfo fileInfo;
 			File firstFile = file_find_first( tprintf( "%s\\%s", buildFilePathAbsolute, sourceFile ), &fileInfo );
 
-			assertf( firstFile.ptr != INVALID_HANDLE_VALUE, "Something went really wrong.  Go get Dan." );
+			assertf( firstFile.ptr != INVALID_HANDLE_VALUE, "Something went really wrong.." );
 
 			do {
 				if ( string_equals( sourceFile, "." ) || string_equals( sourceFile, ".." ) ) {
@@ -1205,7 +1205,7 @@ int main( int argc, char** argv ) {
 #define CHECK_WRITE( func ) \
 	do { \
 		bool8 written = (func); \
-		assertf( written, "Failed to write a visual studio project/solution file.  Go get Dan.\n" ); \
+		assertf( written, "Failed to write a visual studio project/solution file..\n" ); \
 	} while ( 0 )
 
 // data layout comes from: https://learn.microsoft.com/en-us/windows/win32/api/guiddef/ns-guiddef-guid

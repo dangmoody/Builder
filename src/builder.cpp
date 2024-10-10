@@ -910,8 +910,8 @@ int main( int argc, char** argv ) {
 		userBuildConfigContext.options.source_files.push_back( inputFile );
 		userBuildConfigContext.options.defines.push_back( "BUILDER_DOING_USER_CONFIG_BUILD" );
 
-		userBuildConfigContext.options.ignore_warnings.push_back( "-Wno-missing-prototypes" );
-		userBuildConfigContext.options.ignore_warnings.push_back( "-Wno-unused-parameter" );
+		userBuildConfigContext.options.ignore_warnings.push_back( "-Wno-missing-prototypes" );	// otherwise the user has to forward declare functions like set_builder_options and thats annoying
+		userBuildConfigContext.options.ignore_warnings.push_back( "-Wno-unused-parameter" );	// user can call set_pre_build (for example) and not actually touch the BuilderOptions parm
 
 		userBuildConfigContext.fullBinaryName = tprintf( "%s\\%s", userBuildConfigContext.options.binary_folder.c_str(), userBuildConfigContext.options.binary_name.c_str() );
 

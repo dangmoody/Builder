@@ -27,23 +27,6 @@ Proprietary and confidential.
 
 	Builder
 
-	IF YOU MAKE ANY CHANGES HERE YOU WILL NEED TO DO THE FOLLOWING:
-		1. Update the version number accordingly.
-		2. Make sure you build both debug and release.
-		3. Submit the newly built binaries.
-
-	This is our custom build tool that is our way of not having to rely on batch/shell scripts.
-
-	We do this as an EXE for speed (we want fast build times and python is too slow).
-
-	Builder deliberately does not link against ANYTHING.  It only has one include dependency,
-	which is to Core (which doesn't link against anything anyway) and that's it.
-
-	TODO(DM):
-		* if --out= is not specified, and if only one source file was given then just build a
-		  .EXE where the name of the .EXE is the name of the source file (this is what Jai does)
-		* ALL the optimisation
-
 ================================================================================================
 */
 

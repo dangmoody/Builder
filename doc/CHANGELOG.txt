@@ -1,13 +1,14 @@
-v0.1.0, 13/08/2024:
+v0.1.0, 10/10/2024:
 
-* Add Rebuild skipping.
-* Add `set_builder_options()`, which lets users customize their builds how they want via C++.
-* Add `--nuke` command line argument that will delete all the contents of a folder, followed by the folder itself.
-* Add `--config=<config>` command line argument which lets users specify their own configs.
-* Add `on_pre_build()` and `on_post_build()` for users.
-* Add an automatically generated code file (`core_init.cpp`) that runs during the user config build and automatically calls `core_hook()` for you.
-* Expose all optimisation levels that Clang provides via `BuilderOptions`, instead of just a boolean toggling them on/off.
+* Add set_builder_options( BuilderOptions* ), which lets you customize your builds how you want via C++.
+* Add --nuke command line argument that will delete all the contents of a folder, followed by the folder itself.
+* Add --config=<config> command line argument which lets you specify your own configs.
+	* BuilderOptions::config gets set to this, so you can use it to configure your builds based off config.
+* Add on_pre_build( BuilderOptions* ) and on_post_build( BuilderOptions* ), which do what you'd expect.
+* Add Visual Studio Solution/Project generation.
+	* This is done by using the entry point set_visual_studio_options( VisualStudioOptions* ).
+* Expose all optimisation levels that Clang provides via BuilderOptions, instead of just a boolean toggling them on/off.
 * Detect if a specific version of Clang is installed.  If it's not, then download and install it automatically.
 * Set default output path to the same folder as the source file you are building.
-* Remove Clang-specific syntax from defines, includes, library_paths, and libraries in `BuilderOptions`.
+* Remove Clang-specific syntax from defines, includes, library_paths, and libraries in BuilderOptions.
 	* Can't remove it from the ignored warnings list just yet.  That list needs to be moved into a Clang-specific set of options.

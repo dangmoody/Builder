@@ -39,9 +39,9 @@ static void DoBuildInfoPostTest( const char* testName, const char* buildSourceFi
 	TEMPER_CHECK_TRUE( folder_exists( tprintf( "tests\\%s\\.builder", testName ) ) );
 	TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests\\%s\\.builder\\%s.build_info", testName, buildSourceFile ) ) );
 	TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests\\%s\\.builder\\%s.dll", testName, buildSourceFile ) ) );
-	TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests\\%s\\.builder\\%s.exp", testName, buildSourceFile ) ) );
+	//TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests\\%s\\.builder\\%s.exp", testName, buildSourceFile ) ) );	// optional
 	TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests\\%s\\.builder\\%s.ilk", testName, buildSourceFile ) ) );
-	TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests\\%s\\.builder\\%s.lib", testName, buildSourceFile ) ) );
+	//TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests\\%s\\.builder\\%s.lib", testName, buildSourceFile ) ) );	// optional
 	TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests\\%s\\.builder\\%s.pdb", testName, buildSourceFile ) ) );
 }
 

@@ -14,6 +14,7 @@ Proprietary and confidential.
 #pragma once
 
 #include <vector>
+#include <string>
 
 // If you override set_builder_options() you will need preface the function with the BUILDER_CALLBACK #define.
 // This is because when Builder does its user config build stage it will search your code for the function set_builder_options() and BUILDER_DOING_USER_CONFIG_BUILD will be defined.
@@ -22,7 +23,7 @@ Proprietary and confidential.
 #ifdef BUILDER_DOING_USER_CONFIG_BUILD
 #define BUILDER_CALLBACK	extern "C" __declspec( dllexport )
 #else
-#define BUILDER_CALLBACK	extern "C" __declspec( dllimport )
+#define BUILDER_CALLBACK	static
 #endif
 
 #define VS_GENERATE_BUILD_SOURCE_FILES 1
@@ -80,17 +81,17 @@ struct BuilderOptions {
 
 	// The name of the config that you want to build with.
 	// You need to set this via the command line argument "--config=name" where "name" is the name of your config.
-	// If you do not set this then it will just be null.
-	const char*					config;
+	// If you do not set this then it will just be empty.
+	std::string					config;
 
 	// The folder you want the binary to be put into.
 	// If the folder does not exist, then Builder will create it for you.
 	// This will be relative to the source file you are building.
-	const char*					binary_folder;
+	std::string					binary_folder;
 
 	// The name that the built binary is going to have.
 	// This will be placed inside binary_folder, if you set that.
-	const char*					binary_name;
+	std::string					binary_name;
 };
 
 struct VisualStudioConfig {

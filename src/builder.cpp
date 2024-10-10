@@ -369,7 +369,7 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 			const char* sourceFileTrimmed = context->options.source_files[sourceFileIndex];
 			sourceFileTrimmed = strrchr( sourceFileTrimmed, '\\' ) + 1;
 
-			const char* outArg = tprintf( "%s\\%s.o", context->options.binary_folder, sourceFileTrimmed );
+			const char* outArg = tprintf( "%s\\%s.o", context->options.binary_folder.c_str(), sourceFileTrimmed );
 
 			array_add( &args, "-o" );
 			array_add( &args, outArg );
@@ -515,9 +515,9 @@ static buildContext_t CreateBuildContext() {
 	context.options.optimization_level = OPTIMIZATION_LEVEL_O0;
 	context.options.remove_symbols = false;
 	context.options.remove_file_extension = false;
-	context.options.config = NULL;
-	context.options.binary_folder = NULL;
-	context.options.binary_name = NULL;
+	//context.options.config = NULL;
+	//context.options.binary_folder = NULL;
+	//context.options.binary_name = NULL;
 	context.flags = 0;
 
 	return context;
@@ -910,9 +910,12 @@ int main( int argc, char** argv ) {
 		userBuildConfigContext.options.source_files.push_back( inputFile );
 		userBuildConfigContext.options.defines.push_back( "BUILDER_DOING_USER_CONFIG_BUILD" );
 
-		userBuildConfigContext.fullBinaryName = tprintf( "%s\\%s", userBuildConfigContext.options.binary_folder, userBuildConfigContext.options.binary_name );
+		userBuildConfigContext.options.ignore_warnings.push_back( "-Wno-missing-prototypes" );
+		userBuildConfigContext.options.ignore_warnings.push_back( "-Wno-unused-parameter" );
 
-		folder_create_if_it_doesnt_exist( userBuildConfigContext.options.binary_folder );
+		userBuildConfigContext.fullBinaryName = tprintf( "%s\\%s", userBuildConfigContext.options.binary_folder.c_str(), userBuildConfigContext.options.binary_name.c_str() );
+
+		folder_create_if_it_doesnt_exist( userBuildConfigContext.options.binary_folder.c_str() );
 
 		exitCode = BuildDynamicLibrary( &userBuildConfigContext );
 
@@ -921,7 +924,7 @@ int main( int argc, char** argv ) {
 			return 1;
 		}
 
-		library = library_load( tprintf( "%s\\%s", userBuildConfigContext.options.binary_folder, userBuildConfigContext.options.binary_name ) );
+		library = library_load( tprintf( "%s\\%s", userBuildConfigContext.options.binary_folder.c_str(), userBuildConfigContext.options.binary_name.c_str() ) );
 
 		callback = cast( setOptionsCallback_t ) library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME );
 		setVisualStudioOptionsFunc_t setVisualStudioOptionsFunc = cast( setVisualStudioOptionsFunc_t ) library_get_proc_address( library, SET_VISUAL_STUDIO_OPTIONS_FUNC_NAME );
@@ -948,7 +951,13 @@ int main( int argc, char** argv ) {
 			callback( &context.options );
 
 			For ( u64, includeIndex, 0, context.options.additional_includes.size() ) {
-				context.options.additional_includes[includeIndex] = tprintf( "%s\\%s", buildFilePathAbsolute, context.options.additional_includes[includeIndex] );
+				const char* additionalInclude = context.options.additional_includes[includeIndex];
+
+				if ( paths_is_path_absolute( additionalInclude ) ) {
+					context.options.additional_includes[includeIndex] = additionalInclude;
+				} else {
+					context.options.additional_includes[includeIndex] = tprintf( "%s\\%s", buildFilePathAbsolute, additionalInclude );
+				}
 			}
 
 			For ( u64, libPathIndex, 0, context.options.additional_lib_paths.size() ) {
@@ -1116,17 +1125,17 @@ int main( int argc, char** argv ) {
 		}
 	}
 
-	if ( context.options.binary_folder ) {
-		context.options.binary_folder = tprintf( "%s\\%s", buildFilePathAbsolute, context.options.binary_folder );
+	if ( !context.options.binary_folder.empty() ) {
+		context.options.binary_folder = tprintf( "%s\\%s", buildFilePathAbsolute, context.options.binary_folder.c_str() );
 	} else {
 		context.options.binary_folder = buildFilePathAbsolute;
 	}
 
-	folder_create_if_it_doesnt_exist( context.options.binary_folder );
+	folder_create_if_it_doesnt_exist( context.options.binary_folder.c_str() );
 
 	// user didnt override the binary name via the callback
 	// so give them a binary name based off the first source file
-	if ( context.options.binary_name == NULL ) {
+	if ( context.options.binary_name.empty() ) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcast-qual"
 		char* firstSourceFileWithoutExtension = cast( char* ) mem_temp_alloc( ( firstSourceFileLength + 1 ) * sizeof( char ) );
@@ -1139,7 +1148,7 @@ int main( int argc, char** argv ) {
 #pragma clang diagnostic pop
 	}
 
-	context.fullBinaryName = tprintf( "%s\\%s", context.options.binary_folder, context.options.binary_name );
+	context.fullBinaryName = tprintf( "%s\\%s", context.options.binary_folder.c_str(), context.options.binary_name.c_str() );
 
 	if ( !context.options.remove_file_extension ) {
 		context.fullBinaryName = tprintf( "%s.%s", context.fullBinaryName, GetFileExtensionFromBinaryType( context.options.binary_type ) );
@@ -1383,7 +1392,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 					CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<PlatformToolset>v143</PlatformToolset>" ) );
 
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<OutDir>%s</OutDir>", config->output_directory ) ) );
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<IntDir>%s</IntDir>", tprintf( "%s\\intermediate", config->options.binary_folder ) ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<IntDir>%s</IntDir>", tprintf( "%s\\intermediate", config->options.binary_folder.c_str() ) ) ) );
 					CHECK_WRITE( file_write_line( &vcxproj,			"\t</PropertyGroup>" ) );
 				}
 			}
@@ -1443,7 +1452,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 					CHECK_WRITE( file_write( &vcxproj, "</LibraryPath>\n" ) );
 
 					// output path
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeOutput>%s</NMakeOutput>", config->options.binary_folder ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeOutput>%s</NMakeOutput>", config->options.binary_folder.c_str() ) ) );
 
 #if VS_GENERATE_BUILD_SOURCE_FILES
 					const char* buildSourceFile = tprintf( "%s\\build_%s.%s.cpp", inputFilePath, project->name, platform );
@@ -1453,7 +1462,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeBuildCommandLine>%s\\builder.exe %s %s%s</NMakeBuildCommandLine>", paths_get_app_path(), buildSourceFile, ARG_CONFIG, config->name ) ) );
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeReBuildCommandLine>%s\\builder.exe %s %s%s</NMakeReBuildCommandLine>", paths_get_app_path(), buildSourceFile, ARG_CONFIG, config->name ) ) );
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeCleanCommandLine>%s\\builder.exe --nuke %s</NMakeCleanCommandLine>", paths_get_app_path(), config->options.binary_folder ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeCleanCommandLine>%s\\builder.exe --nuke %s</NMakeCleanCommandLine>", paths_get_app_path(), config->options.binary_folder.c_str() ) ) );
 
 					// preprocessor definitions
 					CHECK_WRITE( file_write( &vcxproj, "\t\t<NMakePreprocessorDefinitions>" ) );
@@ -1533,7 +1542,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 						CHECK_WRITE( file_write_line( &vcxproj,			 "\t\t<DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>" ) );	// TODO(DM): do want to include the other debugger types?
 						CHECK_WRITE( file_write_line( &vcxproj,			 "\t\t<LocalDebuggerDebuggerType>Auto</LocalDebuggerDebuggerType>" ) );
 						CHECK_WRITE( file_write_line( &vcxproj,			 "\t\t<LocalDebuggerAttach>false</LocalDebuggerAttach>" ) );
-						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<LocalDebuggerCommand>%s\\%s</LocalDebuggerCommand>", config->output_directory, config->options.binary_name ) ) );
+						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<LocalDebuggerCommand>%s\\%s</LocalDebuggerCommand>", config->output_directory, config->options.binary_name.c_str() ) ) );
 						CHECK_WRITE( file_write_line( &vcxproj,			 "\t\t<LocalDebuggerWorkingDirectory>$(SolutionDir)</LocalDebuggerWorkingDirectory>" ) );
 
 						// if debugger arguments were specified, put those in
@@ -1736,12 +1745,12 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 						CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\toptions->remove_file_extension = %s;\n", config->options.remove_file_extension ? "true" : "false" ) ) );
 					}
 
-					if ( config->options.binary_folder != NULL ) {
-						CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\toptions->binary_folder = \"%s\";\n", config->options.binary_folder ) ) );
+					if ( config->options.binary_folder.empty() == false ) {
+						CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\toptions->binary_folder = \"%s\";\n", config->options.binary_folder.c_str() ) ) );
 					}
 
-					if ( config->options.binary_name != NULL ) {
-						CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\toptions->binary_name = \"%s\";\n", config->options.binary_name ) ) );
+					if ( config->options.binary_name.empty() == false ) {
+						CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\toptions->binary_name = \"%s\";\n", config->options.binary_name.c_str() ) ) );
 					}
 
 					CHECK_WRITE( file_write( &buildSourceFile, "\t}\n" ) );

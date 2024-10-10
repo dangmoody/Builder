@@ -1,20 +1,28 @@
-#include "../../../builder.h"
+#include <builder.h>
 
-#include <core/array.inl>
-#include <core/file.h>
+// this is just for the sake of the example
+// your own codebase probably has its own implementation of this
+#ifdef _WIN64
+#include <Windows.h>
+static void copy_file( const char* from, const char* to ) {
+	CopyFileA( from, to, FALSE );
+}
+#else
+#error TODO(DGM): 11/10/2024: fill me in!
+#endif
 
 BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	options->binary_folder = "bin";
 	options->binary_name = "test_dynamic_library_program";
 
-	array_add( &options->source_files, "program.cpp" );
+	options->source_files.push_back( "program.cpp" );
 
-	array_add( &options->additional_includes, "../lib" );
+	options->additional_includes.push_back( "../lib" );
 
-	array_add( &options->additional_lib_paths, "../lib/bin" );
-	array_add( &options->additional_libs, "test_dynamic_lib.lib" );
+	options->additional_lib_paths.push_back( "../lib/bin" );
+	options->additional_libs.push_back( "test_dynamic_lib.lib" );
 }
 
 BUILDER_CALLBACK void on_pre_build( BuilderOptions* options ) {
-	file_copy( "tests\\test_dynamic_lib\\lib\\bin\\test_dynamic_lib.dll", "tests\\test_dynamic_lib\\program\\bin\\test_dynamic_lib.dll" );
+	copy_file( "tests\\test_dynamic_lib\\lib\\bin\\test_dynamic_lib.dll", "tests\\test_dynamic_lib\\program\\bin\\test_dynamic_lib.dll" );
 }

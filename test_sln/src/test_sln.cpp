@@ -1,5 +1,6 @@
-#include "../builder.h"
+#include <builder.h>
 
+// TODO(DM): 10/10/2024: figure out how we give the user a nice way of doing this
 static VisualStudioProject* add_visual_studio_project( VisualStudioSolution* solution ) {
 	solution->projects.push_back( {} );
 

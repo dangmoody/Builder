@@ -13,9 +13,6 @@ Proprietary and confidential.
 
 #pragma once
 
-//#include "src/core/array.h"
-//#include "src/core/string_helpers.h"
-
 #include <vector>
 
 // If you override set_builder_options() you will need preface the function with the BUILDER_CALLBACK #define.

@@ -770,6 +770,10 @@ int main( int argc, char** argv ) {
 		context.options.defines.push_back( "NDEBUG" );
 #endif
 
+		// add the folder that builder lives in as an additional include path
+		// so that people can just include builder.h without having to add the include path manually every time
+		context.options.additional_includes.push_back( paths_get_app_path() );
+
 #ifdef _WIN64
 		context.options.additional_libs.push_back( "user32.lib" );
 		context.options.additional_libs.push_back( "Shlwapi.lib" );
@@ -917,18 +921,11 @@ int main( int argc, char** argv ) {
 		buildContext_t userBuildConfigContext = CreateBuildContext();
 		userBuildConfigContext.options = context.options;
 		userBuildConfigContext.flags = BUILD_CONTEXT_FLAG_SHOW_STDOUT;
-		userBuildConfigContext.fullBinaryName = context.fullBinaryName;
-
-		userBuildConfigContext.options.binary_folder = dotBuilderFolder;
-
-		userBuildConfigContext.options.source_files.push_back( inputFile );
-
-		userBuildConfigContext.options.defines.push_back( "BUILDER_DOING_USER_CONFIG_BUILD" );
-
-		// add builder as an additional include path for the user config build so that we can automatically include core because we know where it is
-		userBuildConfigContext.options.additional_includes.push_back( tprintf( "%s\\src", paths_get_app_path() ) );
 
 		userBuildConfigContext.options.binary_name = tprintf( "%s.dll", paths_remove_path_from_file( firstSourceFile ) );
+		userBuildConfigContext.options.binary_folder = dotBuilderFolder;
+		userBuildConfigContext.options.source_files.push_back( inputFile );
+		userBuildConfigContext.options.defines.push_back( "BUILDER_DOING_USER_CONFIG_BUILD" );
 
 		userBuildConfigContext.fullBinaryName = tprintf( "%s\\%s", userBuildConfigContext.options.binary_folder, userBuildConfigContext.options.binary_name );
 

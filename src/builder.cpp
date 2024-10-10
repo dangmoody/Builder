@@ -764,7 +764,7 @@ int main( int argc, char** argv ) {
 
 		// this is needed because this tells the compiler what to set _ITERATOR_DEBUG_LEVEL to
 		// ABI compatibility will be broken if this is not the same between all binaries
-#if _DEBUG
+#ifdef _DEBUG
 		context.options.defines.push_back( "_DEBUG" );
 #else
 		context.options.defines.push_back( "NDEBUG" );

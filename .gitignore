@@ -9,6 +9,8 @@ clang
 builder.exe
 builder_tests.exe
 
+releases/**/*
+
 #
 # visual studio stuff
 #

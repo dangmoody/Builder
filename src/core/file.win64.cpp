@@ -374,8 +374,9 @@ bool8 file_find_next( File* first_file, FileInfo* out_file_info ) {
 
 	if ( !found ) {
 		// TODO(DM): switch/case this for other errors if we need to account for others
-		if ( GetLastError() != ERROR_NO_MORE_FILES ) {
-			assertf( found, "Failed to get next file from first file: 0x%X.", GetLastError() );
+		DWORD lastError = GetLastError();
+		if ( lastError != ERROR_NO_MORE_FILES && lastError != ERROR_INVALID_HANDLE ) {
+			assertf( found, "Failed to get next file from first file: 0x%X.", lastError );
 		}
 
 		return false;

@@ -82,6 +82,7 @@ const char* paths_remove_file_from_path( const char* path ) {
 
 	char* result = cast( char* ) mem_temp_alloc( ( pathLength + 1 ) * sizeof( char ) );
 	strncpy( result, path, pathLength * sizeof( char ) );
+	result[pathLength] = 0;
 
 	const char* last_slash = strrchr( result, '/' );
 	if ( !last_slash ) last_slash = strrchr( result, '\\' );
@@ -123,6 +124,14 @@ const char* paths_remove_file_extension( const char* filename ) {
 
 	return dot;
 #pragma clang diagnostic pop
+}
+
+bool8 paths_is_path_absolute( const char* path ) {
+	if ( !path || strlen( path ) < 3 ) {
+		return false;
+	}
+
+	return isalpha( path[0] ) && path[1] == ':' && ( path[2] == '\\' || path[2] == '/' );
 }
 
 #endif // _WIN64

@@ -35,7 +35,7 @@ Proprietary and confidential.
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
 	BUILDER_VERSION_MINOR	= 1,
-	BUILDER_VERSION_PATCH	= 0,
+	BUILDER_VERSION_PATCH	= 1,
 };
 
 #define ARG_HELP_SHORT	"-h"
@@ -1274,6 +1274,13 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 		}
 	}
 
+	const char* visualStudioProjectFilesPathAbsolute = NULL;
+	if ( solution->path ) {
+		visualStudioProjectFilesPathAbsolute = tprintf( "%s\\%s", inputFilePath, solution->path );
+	} else {
+		visualStudioProjectFilesPathAbsolute = inputFilePath;
+	}
+
 	Array<const char*> projectGuids;
 	array_resize( &projectGuids, solution->projects.size() );
 
@@ -1332,12 +1339,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 		// .vcxproj
 		{
-			const char* projectPath = NULL;
-			if ( solution->path ) {
-				projectPath = tprintf( "%s\\%s.vcxproj", solution->path, project->name );
-			} else {
-				projectPath = tprintf( "%s.vcxproj", project->name );
-			}
+			const char* projectPath = tprintf( "%s\\%s.vcxproj", visualStudioProjectFilesPathAbsolute, project->name );
 
 			printf( "Generating %s.vcxproj ... ", project->name );
 
@@ -1487,7 +1489,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 					const char* searchPath = project->source_files[fileTypeIndex];
 
 					Array<const char*> files;
-					FindAllFiles( solution->path, searchPath, &files );
+					FindAllFiles( visualStudioProjectFilesPathAbsolute, searchPath, &files );
 
 					For ( u64, fileIndex, 0, files.count ) {
 						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ClCompile Include=\"%s\" />", files[fileIndex] ) ) );
@@ -1510,12 +1512,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 		// .vcxproj.user
 		{
-			const char* projectPath = NULL;
-			if ( solution->path ) {
-				projectPath = tprintf( "%s\\%s.vcxproj.user", solution->path, project->name );
-			} else {
-				projectPath = tprintf( "%s.vcxproj.user", project->name );
-			}
+			const char* projectPath = tprintf( "%s\\%s.vcxproj.user", visualStudioProjectFilesPathAbsolute, project->name );
 
 			printf( "Generating %s.vcxproj.user ... ", project->name );
 
@@ -1566,12 +1563,13 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 	// now generate .sln file
 	{
-		const char* solutionPath = NULL;
+		/*const char* solutionPath = NULL;
 		if ( solution->path ) {
-			solutionPath = tprintf( "%s\\%s.sln", solution->path, solution->name );
+			solutionPath = tprintf( "%s\\%s\\%s.sln", inputFilePath, solution->path, solution->name );
 		} else {
-			solutionPath = tprintf( "%s.sln", solution->name );
-		}
+			solutionPath = tprintf( "%s\\%s.sln", inputFilePath, solution->name );
+		}*/
+		const char* solutionPath = tprintf( "%s\\%s.sln", visualStudioProjectFilesPathAbsolute, solution->name );
 
 		printf( "Generating %s.sln ... ", solution->name );
 
@@ -1672,9 +1670,6 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 				CHECK_WRITE( file_write( &buildSourceFile, "#include \"../../builder.h\"\n" ) );
 				CHECK_WRITE( file_write( &buildSourceFile, "\n" ) );
 
-				CHECK_WRITE( file_write( &buildSourceFile, "#include <core/array.inl>\n" ) );
-				CHECK_WRITE( file_write( &buildSourceFile, "\n" ) );
-
 				if ( project->configs.size() > 1 ) {
 					CHECK_WRITE( file_write( &buildSourceFile, "#include <string.h> // strcmp\n\n" ) );
 				}
@@ -1684,11 +1679,11 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 				For ( u64, configIndex, 0, project->configs.size() ) {
 					VisualStudioConfig* config = &project->configs[configIndex];
 
-					CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\tif ( strcmp( options->config, \"%s\" ) == 0 ) {\n", config->name ) ) );
+					CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\tif ( options->config == \"%s\" ) {\n", config->name ) ) );
 
 					if ( config->options.source_files.size() > 0 ) {
 						For ( u64, sourceFileIndex, 0, config->options.source_files.size() ) {
-							CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\tarray_add( &options->source_files, \"%s\" );\n", config->options.source_files[sourceFileIndex] ) ) );
+							CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\toptions->source_files.push_back( \"%s\" );\n", config->options.source_files[sourceFileIndex] ) ) );
 						}
 
 						CHECK_WRITE( file_write( &buildSourceFile, "\n" ) );
@@ -1696,7 +1691,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 					if ( config->options.defines.size() > 0 ) {
 						For ( u64, defineIndex, 0, config->options.defines.size() ) {
-							CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\tarray_add( &options->defines, \"%s\" );\n", config->options.defines[defineIndex] ) ) );
+							CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\toptions->defines.push_back( \"%s\" );\n", config->options.defines[defineIndex] ) ) );
 						}
 
 						CHECK_WRITE( file_write( &buildSourceFile, "\n" ) );
@@ -1704,7 +1699,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 					if ( config->options.additional_includes.size() > 0 ) {
 						For ( u64, includeIndex, 0, config->options.additional_includes.size() ) {
-							CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\tarray_add( &options->additional_includes, \"%s\" );\n", config->options.additional_includes[includeIndex] ) ) );
+							CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\toptions->additional_includes.push_back( \"%s\" );\n", config->options.additional_includes[includeIndex] ) ) );
 						}
 
 						CHECK_WRITE( file_write( &buildSourceFile, "\n" ) );
@@ -1712,7 +1707,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 					if ( config->options.additional_lib_paths.size() > 0 ) {
 						For ( u64, libPathIndex, 0, config->options.additional_lib_paths.size() ) {
-							CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\tarray_add( &options->additional_lib_paths, \"%s\" );\n", config->options.additional_lib_paths[libPathIndex] ) ) );
+							CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\toptions->additional_lib_paths.push_back( \"%s\" );\n", config->options.additional_lib_paths[libPathIndex] ) ) );
 						}
 
 						CHECK_WRITE( file_write( &buildSourceFile, "\n" ) );
@@ -1720,7 +1715,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 					if ( config->options.additional_libs.size() > 0 ) {
 						For ( u64, libIndex, 0, config->options.additional_libs.size() ) {
-							CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\tarray_add( &options->additional_libs, \"%s\" );\n", config->options.additional_libs[libIndex] ) ) );
+							CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\toptions->additional_libs.push_back( \"%s\" );\n", config->options.additional_libs[libIndex] ) ) );
 						}
 
 						CHECK_WRITE( file_write( &buildSourceFile, "\n" ) );

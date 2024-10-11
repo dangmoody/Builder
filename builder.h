@@ -138,7 +138,6 @@ struct VisualStudioSolution {
 	const char*							name;
 
 	// The folder where the solution (and it's projects) are going to live.
-	// This is relative to the source file that calls set_visual_studio_options().
-	// TODO(DM): 10/09/2024: make it actually do that
+	// This is relative to the source file that fills in the entry point set_visual_studio_options.
 	const char*							path;
 };

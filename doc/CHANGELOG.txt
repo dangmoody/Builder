@@ -1,14 +1,23 @@
-v0.1.0, 10/10/2024:
+v0.1.1, 12/10/2024:
+
+* Fixed a bunch of things that were broken for generating Visual Studio project files after removing our dependency to Core.
+* VisualStudioSolution::path is now relative to the source file that implements set_visual_studio_options, as the documentation says.
+
+----------------------------------------------------------------
+
+v0.1.0, 11/10/2024:
 
 * Add set_builder_options( BuilderOptions* ), which lets you customize your builds how you want via C++.
 * Add --nuke command line argument that will delete all the contents of a folder, followed by the folder itself.
 * Add --config=<config> command line argument which lets you specify your own configs.
 	* BuilderOptions::config gets set to this, so you can use it to configure your builds based off config.
-* Add on_pre_build( BuilderOptions* ) and on_post_build( BuilderOptions* ), which do what you'd expect.
-* Add Visual Studio Solution/Project generation.
+* Add on_pre_build( BuilderOptions* ) and on_post_build( BuilderOptions* ), which run just before and just after your build, respectively.
+* Add Visual Studio Solution and Project generation.
 	* This is done by using the entry point set_visual_studio_options( VisualStudioOptions* ).
 * Expose all optimisation levels that Clang provides via BuilderOptions, instead of just a boolean toggling them on/off.
 * Detect if a specific version of Clang is installed.  If it's not, then download and install it automatically.
+	* This doesn't override any pre-existing version of Clang, nor does this set any environment variables.
 * Set default output path to the same folder as the source file you are building.
-* Remove Clang-specific syntax from defines, includes, library_paths, and libraries in BuilderOptions.
-	* Can't remove it from the ignored warnings list just yet.  That list needs to be moved into a Clang-specific set of options.
+* Set default binary name to the same as the source file except the file ends with .exe instead of .cpp.
+* Remove Clang-specific syntax from defines, additional_includes, additional_lib_paths, and additional_libs in BuilderOptions.
+	* Can't remove it from the ignore_warnings just yet.  That list probably needs to be moved into a Clang-specific set of options.

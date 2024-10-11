@@ -13,10 +13,9 @@ static VisualStudioConfig* add_visual_studio_config( VisualStudioProject* projec
 	return &project->configs[project->configs.size() - 1];
 }
 
-BUILDER_CALLBACK void set_visual_studio_options( VisualStudioSolution* solution );
 BUILDER_CALLBACK void set_visual_studio_options( VisualStudioSolution* solution ) {
 	solution->name = "test-sln";
-	solution->path = "test_sln";
+	solution->path = "..";
 	solution->platforms.push_back( "win64" );
 
 	// project

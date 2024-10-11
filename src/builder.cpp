@@ -894,13 +894,9 @@ int main( int argc, char** argv ) {
 	// see if they have set_builder_options() overridden
 	// if they do, then build a DLL first and call that function to set some more build options
 	{
-		typedef void ( *setOptionsCallback_t )( BuilderOptions* options );
+		typedef void ( *setBuilderOptionsFunc_t )( BuilderOptions* options );
 		typedef void ( *setVisualStudioOptionsFunc_t )( VisualStudioSolution* solution );
 
-		setOptionsCallback_t callback = NULL;
-
-		// TODO(DM): 09/08/2024: why does memcpy not work for buildContext_t?
-		// is it because buildContext_t contains a BuilderOptions member, which contains Array<T> which is technically not POD?
 		buildContext_t userBuildConfigContext = CreateBuildContext();
 		userBuildConfigContext.options = context.options;
 		userBuildConfigContext.flags = BUILD_CONTEXT_FLAG_SHOW_STDOUT;
@@ -926,9 +922,8 @@ int main( int argc, char** argv ) {
 
 		library = library_load( tprintf( "%s\\%s", userBuildConfigContext.options.binary_folder.c_str(), userBuildConfigContext.options.binary_name.c_str() ) );
 
-		callback = cast( setOptionsCallback_t ) library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME );
+		// generate visual studio solution now if requested
 		setVisualStudioOptionsFunc_t setVisualStudioOptionsFunc = cast( setVisualStudioOptionsFunc_t ) library_get_proc_address( library, SET_VISUAL_STUDIO_OPTIONS_FUNC_NAME );
-
 		if ( setVisualStudioOptionsFunc ) {
 			VisualStudioSolution solution;
 			setVisualStudioOptionsFunc( &solution );
@@ -947,6 +942,8 @@ int main( int argc, char** argv ) {
 			return 0;
 		}
 
+		// now get the user-specified options
+		setBuilderOptionsFunc_t callback = cast( setBuilderOptionsFunc_t ) library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME );
 		if ( callback ) {
 			callback( &context.options );
 

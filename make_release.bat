@@ -19,6 +19,7 @@ if not exist %temp_folder% (
 
 robocopy .\\    %temp_folder% builder.exe
 robocopy .\\    %temp_folder% builder.h
+robocopy .\\    %temp_folder% README.md
 robocopy .\\doc %temp_folder% CHANGELOG.txt
 
 .\\7zip\\7za.exe a -tzip releases\\builder_%version%.zip %temp_folder%
@@ -36,5 +37,5 @@ echo make_release.bat ^<version^>
 echo.
 echo Arguments:
 echo     ^<version^> (required):
-echo         The version of the release that you are making (for example: 1.2.3 - in this example: 1 would be the major version, 2 would be the minor version, and 3 would be the patch version)
+echo         The version of the release that you are making (example: v1.2.3 - 1 would be the major version, 2 would be the minor version, and 3 would be the patch version)
 goto :EOF

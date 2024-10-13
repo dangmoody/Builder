@@ -1,5 +1,14 @@
+v0.1.2, 13/10/2024:
+
+* If no input file is specified, Builder will now tell you that you can pass -h as a command line arg to get help on how to use Builder.
+* 
+
+----------------------------------------------------------------
+
 v0.1.1, 12/10/2024:
 
+* Builder will no longer crash if it can't resolve a source file to include in the build and will instead show you an error saying it can't resolve the source file(s) and exit.
+* Fixed another ABI incompatibility issue between Builder and the user config DLL that caused a crash when trying to write to any of the std::vectors.
 * Fixed a bunch of things that were broken for generating Visual Studio project files after removing our dependency to Core.
 * VisualStudioSolution::path is now relative to the source file that implements set_visual_studio_options, as the documentation says.
 

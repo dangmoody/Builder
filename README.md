@@ -37,7 +37,7 @@ Instead of compiling your program like this:
 clang -std=c++20 -g -o my-program.exe -DIS_AWESOME=1 game.cpp ...
 ```
 
-Or whatever you were doing before, you instead now do it like this:
+Or suffering through the Visual Studio project settings or whatever you were doing before, you instead now do it like this:
 
 ```cpp
 // build.cpp
@@ -65,6 +65,16 @@ builder build.cpp
 If you don't write `set_builder_options` then Builder can still build your program, it will just use the defaults:
 * The program name will be the name of the source file you specified, except it will end with `.exe` instead of `.cpp`.
 * The program will be put in the same folder as the source file.
+
+### Configs
+
+Configs are a totally optional part of building with Builder.  You don't have to use them if you don't want to.
+
+```cpp
+builder build.cpp --config=debug
+```
+
+The name of the config can be whatever you want it to be.  `BuilderOptions::config` will be set to the config that you pass in via the command line, which you can then use inside `set_builder_options` to configure your build by config.
 
 See `BuilderOptions` inside `builder.h` for a full list of options, what they do, and how Builder uses them.
 
@@ -116,3 +126,5 @@ BUILDER_CALLBACK void set_visual_studio_options( VisualStudioSolution* solution 
 	configRelease->options.defines.push_back( "NDEBUG" );
 }
 ```
+
+All projects that get generated are Makefile projects, where the build commands pass the `--config` argument from Visual Studio.

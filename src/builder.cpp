@@ -122,7 +122,7 @@ static s32 ShowUsage( const s32 exitCode ) {
 		"Builder.exe\n"
 		"\n"
 		"USAGE:\n"
-		"    Builder.exe <source files> --<config>\n"
+		"    Builder.exe <source files>\n"
 		"\n"
 		"Arguments:\n"
 		"    " ARG_HELP_SHORT "|" ARG_HELP_LONG " (optional):\n"
@@ -734,11 +734,12 @@ int main( int argc, char** argv ) {
 		error( "Unrecognised argument \"%s\".\n", arg );
 	}
 
-	//typedef void ( *initCoreCallback_t )( CoreContext* coreContext );
-
 	// validate cmd line args
 	if ( inputFile == NULL ) {
-		error( "You haven't told me what source files I need to build.  I need one.\n" );
+		error(
+			"You haven't told me what source files I need to build.  I need one.\n"
+			"Use " ARG_HELP_SHORT " if you need help.\n"
+		);
 
 		return 1;
 	}
@@ -747,24 +748,24 @@ int main( int argc, char** argv ) {
 	{
 		context.options.defines.push_back( "_CRT_SECURE_NO_WARNINGS" );
 
-		// this is needed because this tells the compiler what to set _ITERATOR_DEBUG_LEVEL to
-		// ABI compatibility will be broken if this is not the same between all binaries
-#ifdef _DEBUG
-		context.options.defines.push_back( "_DEBUG" );
-#else
-		context.options.defines.push_back( "NDEBUG" );
-#endif
-
 		// add the folder that builder lives in as an additional include path
 		// so that people can just include builder.h without having to add the include path manually every time
 		context.options.additional_includes.push_back( paths_get_app_path() );
 
-#ifdef _WIN64
+#if defined( _WIN64 )
 		context.options.additional_libs.push_back( "user32.lib" );
-		context.options.additional_libs.push_back( "Shlwapi.lib" );
+
+		// MSVCRT is needed for ABI compatibility between builder and the user config DLL
+#if defined( _DEBUG )
 		context.options.additional_libs.push_back( "msvcrtd.lib" );
-		context.options.additional_libs.push_back( "DbgHelp.lib" );
-#endif // _WIN64
+#elif defined( NDEBUG )
+		context.options.additional_libs.push_back( "msvcrt.lib" );
+#endif
+
+		// TODO(DM): 12/10/2024: are these debug only? are they even needed?
+		//context.options.additional_libs.push_back( "Shlwapi.lib" );
+		//context.options.additional_libs.push_back( "DbgHelp.lib" );
+#endif // defined( _WIN64 )
 
 		context.options.ignore_warnings.push_back( "-Wno-newline-eof" );
 		context.options.ignore_warnings.push_back( "-Wno-pointer-integer-compare" );
@@ -908,6 +909,16 @@ int main( int argc, char** argv ) {
 		userBuildConfigContext.options.source_files.push_back( inputFile );
 		userBuildConfigContext.options.defines.push_back( "BUILDER_DOING_USER_CONFIG_BUILD" );
 
+		// this is needed because this tells the compiler what to set _ITERATOR_DEBUG_LEVEL to
+		// ABI compatibility will be broken if this is not the same between all binaries
+#if defined( _DEBUG )
+		userBuildConfigContext.options.defines.push_back( "_DEBUG" );
+		userBuildConfigContext.options.optimization_level = OPTIMIZATION_LEVEL_O0;
+#elif defined( NDEBUG )
+		userBuildConfigContext.options.defines.push_back( "NDEBUG" );
+		userBuildConfigContext.options.optimization_level = OPTIMIZATION_LEVEL_O3;
+#endif
+
 		userBuildConfigContext.options.ignore_warnings.push_back( "-Wno-missing-prototypes" );	// otherwise the user has to forward declare functions like set_builder_options and thats annoying
 		userBuildConfigContext.options.ignore_warnings.push_back( "-Wno-unused-parameter" );	// user can call set_pre_build (for example) and not actually touch the BuilderOptions parm
 
@@ -983,7 +994,10 @@ int main( int argc, char** argv ) {
 			FileInfo fileInfo;
 			File firstFile = file_find_first( tprintf( "%s\\%s", buildFilePathAbsolute, sourceFile ), &fileInfo );
 
-			assertf( firstFile.ptr != INVALID_HANDLE_VALUE, "Something went really wrong.." );
+			if ( firstFile.ptr == INVALID_HANDLE_VALUE ) {
+				error( "Source file \"%s\" can't be found.  Is it correct?\n", sourceFile );
+				return 1;
+			}
 
 			do {
 				if ( string_equals( sourceFile, "." ) || string_equals( sourceFile, ".." ) ) {
@@ -1563,12 +1577,6 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 	// now generate .sln file
 	{
-		/*const char* solutionPath = NULL;
-		if ( solution->path ) {
-			solutionPath = tprintf( "%s\\%s\\%s.sln", inputFilePath, solution->path, solution->name );
-		} else {
-			solutionPath = tprintf( "%s\\%s.sln", inputFilePath, solution->name );
-		}*/
 		const char* solutionPath = tprintf( "%s\\%s.sln", visualStudioProjectFilesPathAbsolute, solution->name );
 
 		printf( "Generating %s.sln ... ", solution->name );

@@ -6,10 +6,11 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LocalDebuggerCommand>$(SolutionDir)builder.exe</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>test_sln\\src\\test_sln.cpp</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>../builder_bug_reports/assteroids/build_assteroids.cpp</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LocalDebuggerCommand>$(SolutionDir)builder.exe</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <LocalDebuggerCommandArguments>../builder_bug_reports/assteroids/build_assteroids.cpp</LocalDebuggerCommandArguments>
   </PropertyGroup>
 </Project>

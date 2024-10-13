@@ -1,7 +1,6 @@
 v0.1.2, 13/10/2024:
 
 * If no input file is specified, Builder will now tell you that you can pass -h as a command line arg to get help on how to use Builder.
-* 
 
 ----------------------------------------------------------------
 

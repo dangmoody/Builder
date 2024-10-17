@@ -30,9 +30,7 @@ BUILDER_CALLBACK void set_visual_studio_options( VisualStudioSolution* solution 
 	// project configs
 	VisualStudioConfig* configDebug = add_visual_studio_config( project );
 	configDebug->name = "debug";
-#if !VS_GENERATE_BUILD_SOURCE_FILES
 	configDebug->build_source_file = "src/main.cpp";
-#endif
 	configDebug->output_directory = "bin/debug";
 	configDebug->options = options;
 	configDebug->options.binary_folder = "../bin/debug";
@@ -41,9 +39,7 @@ BUILDER_CALLBACK void set_visual_studio_options( VisualStudioSolution* solution 
 
 	VisualStudioConfig* configRelease = add_visual_studio_config( project );
 	configRelease->name = "release";
-#if !VS_GENERATE_BUILD_SOURCE_FILES
 	configRelease->build_source_file = "src/main.cpp";
-#endif
 	configRelease->output_directory = "bin/release";
 	configRelease->options = options;
 	configRelease->options.binary_folder = "../bin/release";

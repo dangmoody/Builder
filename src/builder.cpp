@@ -956,9 +956,9 @@ int main( int argc, char** argv ) {
 		}
 
 		// now get the user-specified options
-		setBuilderOptionsFunc_t callback = cast( setBuilderOptionsFunc_t ) library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME );
-		if ( callback ) {
-			callback( &context.options );
+		setBuilderOptionsFunc_t setBuilderOptionsFunc = cast( setBuilderOptionsFunc_t ) library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME );
+		if ( setBuilderOptionsFunc ) {
+			setBuilderOptionsFunc( &context.options );
 
 			For ( u64, includeIndex, 0, context.options.additional_includes.size() ) {
 				const char* additionalInclude = context.options.additional_includes[includeIndex];
@@ -1262,6 +1262,153 @@ static void FindAllFiles( const char* basePath, const char* searchFilter, Array<
 	} while ( file_find_next( &firstFile, &fileInfo ) );
 }
 
+static void SerializeU64( File* file, const u64 x ) {
+	CHECK_WRITE( file_write( file, &x, sizeof( u64 ) ) );
+}
+
+static void SerializeCStringArray( File* file, const std::vector<const char*>& array, const char* name ) {
+	CHECK_WRITE( file_write( file, tprintf( "%s\n", name ) ) );
+	SerializeU64( file, array.size() );
+
+	For ( u64, i, 0, array.size() ) {
+		CHECK_WRITE( file_write( file, tprintf( "%s\n", array[i] ) ) );
+	}
+}
+
+static void SerializeBuilderOptions( File* file, BuilderOptions* options ) {
+	SerializeCStringArray( file, options->source_files, "source_files" );
+	SerializeCStringArray( file, options->defines, "defines" );
+	SerializeCStringArray( file, options->additional_includes, "additional_includes" );
+	SerializeCStringArray( file, options->additional_lib_paths, "additional_lib_paths" );
+	SerializeCStringArray( file, options->additional_libs, "additional_libs" );
+	SerializeCStringArray( file, options->ignore_warnings, "ignore_warnings" );
+
+	CHECK_WRITE( file_write( file, &options->binary_type, sizeof( BinaryType ) ) );
+	CHECK_WRITE( file_write( file, &options->optimization_level, sizeof( OptimizationLevel ) ) );
+	CHECK_WRITE( file_write( file, &options->remove_symbols, sizeof( bool8 ) ) );
+	CHECK_WRITE( file_write( file, &options->remove_file_extension, sizeof( bool8 ) ) );
+
+	// dont serialize the config
+	// just because the user specifies that at compile time doesnt mean its actually a compile time option!
+
+	CHECK_WRITE( file_write( file, tprintf( "binary_folder: %s\n", options->binary_folder.c_str() ) ) );
+	CHECK_WRITE( file_write( file, tprintf( "binary_name: %s\n", options->binary_name.c_str() ) ) );
+}
+
+struct parser_t {
+	u64		fileLength;
+	char*	bufferStart;
+	char*	bufferPos;
+};
+
+static void Parser_Init( parser_t* parser, const char* filename ) {
+	memset( parser, 0, sizeof( parser_t ) );
+
+	bool8 read = file_read_entire( filename, &parser->bufferStart, &parser->fileLength );
+	assert( read );
+
+	parser->bufferPos = parser->bufferStart;
+}
+
+static void Parser_Shutdown( parser_t* parser ) {
+	file_free_buffer( &parser->bufferStart );
+}
+
+static void Parser_SkipTo( parser_t* parser, const char c ) {
+	while ( *parser->bufferPos != c ) {
+		parser->bufferPos++;
+	}
+}
+
+static void Parser_SkipPast( parser_t* parser, const char c ) {
+	Parser_SkipTo( parser, c );
+	parser->bufferPos++;
+}
+
+static bool8 Parser_ParseBool( parser_t* parser ) {
+	bool8* x = cast( bool8* ) parser->bufferPos;
+
+	parser->bufferPos += sizeof( bool8 );
+
+	return *x;
+}
+
+static s32 Parser_ParseS32( parser_t* parser ) {
+	s32* x = cast( s32* ) parser->bufferPos;
+
+	parser->bufferPos += sizeof( s32 );
+
+	return *x;
+}
+
+static u64 Parser_ParseU64( parser_t* parser ) {
+	u64* x = cast( u64* ) parser->bufferPos;
+
+	parser->bufferPos += sizeof( u64 );
+
+	return *x;
+}
+
+static const char* Parser_ParseLine( parser_t* parser ) {
+	const char* lineEnd = cast( const char* ) memchr( parser->bufferPos, '\n', parser->fileLength );
+	u64 stringLength = cast( u64 ) lineEnd - cast( u64 ) parser->bufferPos;
+
+	char* string = cast( char* ) mem_alloc( ( stringLength + 1 ) * sizeof( char ) );
+	memcpy( string, parser->bufferPos, stringLength * sizeof( char ) );
+	string[stringLength] = 0;
+
+	Parser_SkipPast( parser, '\n' );
+
+	return string;
+}
+
+// TODO(DM): 18/10/2024: remove the concept of "string fields", we can get away with just strings
+static const char* Parser_ParseStringField( parser_t* parser ) {
+	const char* colon = cast( const char* ) memchr( parser->bufferPos, ':', parser->fileLength );
+	u64 colonLength = cast( u64 ) colon - cast( u64 ) parser->bufferPos;
+
+	parser->bufferPos += colonLength;	// skip to the colon
+	parser->bufferPos += 1;				// skip past the colon
+	parser->bufferPos += 1;				// skip past following whitespace
+
+	return Parser_ParseLine( parser );
+}
+
+// TODO(DM): 18/10/2024: rename this to "Parser_ParseCStringArray"
+static std::vector<const char*> Parser_ParseStringFieldArray( parser_t* parser ) {
+	Parser_SkipPast( parser, '\n' );	// skip the name of the array
+
+	u64 arrayCount = Parser_ParseU64( parser );
+	std::vector<const char*> result( arrayCount );
+
+	For ( u64, i, 0, result.size() ) {
+		result[i] = Parser_ParseLine( parser );
+	}
+
+	return result;
+}
+
+static BuilderOptions Parser_ParseBuildOptions( parser_t* parser ) {
+	BuilderOptions options = {};
+
+	options.source_files = Parser_ParseStringFieldArray( parser );
+	options.defines = Parser_ParseStringFieldArray( parser );
+	options.additional_includes = Parser_ParseStringFieldArray( parser );
+	options.additional_lib_paths = Parser_ParseStringFieldArray( parser );
+	options.additional_libs = Parser_ParseStringFieldArray( parser );
+	options.ignore_warnings = Parser_ParseStringFieldArray( parser );
+
+	options.binary_type = cast( BinaryType ) Parser_ParseS32( parser );
+	options.optimization_level = cast( OptimizationLevel ) Parser_ParseS32( parser );
+	options.remove_symbols = Parser_ParseBool( parser );
+	options.remove_file_extension = Parser_ParseBool( parser );
+
+	options.binary_folder = Parser_ParseStringField( parser );
+	options.binary_name = Parser_ParseStringField( parser );
+
+	return options;
+}
+
 static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const char* inputFilePath ) {
 	assert( solution );
 
@@ -1330,12 +1477,12 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 					return false;
 				}
 
-				/*if ( config->build_source_file == NULL ) {
+				if ( config->build_source_file == NULL ) {
 					error( "Build source file for project \"%s\" config \"%s\" was never set.  You need to fill that in.\n", project->name, config->name );
 					return false;
 				}
 
-				if ( config->binary_name == NULL ) {
+				/*if ( config->binary_name == NULL ) {
 					error( "Binary name for project \"%s\" config \"%s\" was never set.  You need to fill that in.\n", project->name, config->name );
 					return false;
 				}
@@ -1469,11 +1616,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 					// output path
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeOutput>%s</NMakeOutput>", config->options.binary_folder.c_str() ) ) );
 
-#if VS_GENERATE_BUILD_SOURCE_FILES
-					const char* buildSourceFile = tprintf( "%s\\build_%s.%s.cpp", inputFilePath, project->name, platform );
-#else
 					const char* buildSourceFile = config->build_source_file;
-#endif
 
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeBuildCommandLine>%s\\builder.exe %s %s%s</NMakeBuildCommandLine>", paths_get_app_path(), buildSourceFile, ARG_CONFIG, config->name ) ) );
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeReBuildCommandLine>%s\\builder.exe %s %s%s</NMakeReBuildCommandLine>", paths_get_app_path(), buildSourceFile, ARG_CONFIG, config->name ) ) );
@@ -1660,113 +1803,93 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 		printf( "Done\n" );
 	}
 
-#if VS_GENERATE_BUILD_SOURCE_FILES
-	// generate build source files for each config/platform combo
+	// generate .build_info file
 	{
+		//File buildInfoFile = file_open_or_create( tprintf( "%s.%s", solution->name, BUILD_INFO_FILE_EXTENSION ) );
+		File buildInfoFile = file_open_or_create( "test.dat" );
+		defer( file_close( &buildInfoFile ) );
+
+		CHECK_WRITE( file_write( &buildInfoFile, tprintf( "solution: %s\n", solution->name ) ) );
+		CHECK_WRITE( file_write( &buildInfoFile, tprintf( "path: %s\n", solution->path ) ) );
+
+		// platforms
+		SerializeCStringArray( &buildInfoFile, solution->platforms, "platforms" );
+
+		// projects
+		CHECK_WRITE( file_write( &buildInfoFile, "projects" ) );
+		SerializeU64( &buildInfoFile, solution->projects.size() );
+
 		For ( u64, projectIndex, 0, solution->projects.size() ) {
 			VisualStudioProject* project = &solution->projects[projectIndex];
 
-			For ( u64, platformIndex, 0, solution->platforms.size() ) {
-				const char* platform = solution->platforms[platformIndex];
+			CHECK_WRITE( file_write( &buildInfoFile, tprintf( "%s\n", project->name ) ) );
 
-				File buildSourceFile = file_open_or_create( tprintf( "%s\\build_%s.%s.cpp", inputFilePath, project->name, platform ) );
-				defer( file_close( &buildSourceFile ) );
+			// source files
+			SerializeCStringArray( &buildInfoFile, project->source_files, "source_files" );
 
-				CHECK_WRITE( file_write( &buildSourceFile, "// This file was generated by Builder as part of your Visual Studio Solution.\n" ) );
-				CHECK_WRITE( file_write( &buildSourceFile, "// If you want to edit this file, you probably want to change your BuilderOptions wherever your hook is to \"" SET_VISUAL_STUDIO_OPTIONS_FUNC_NAME "( VisualStudioSolution* )\" and re-generate the solution.\n" ) );
-				CHECK_WRITE( file_write( &buildSourceFile, "\n" ) );
-				CHECK_WRITE( file_write( &buildSourceFile, "#include \"../../builder.h\"\n" ) );
-				CHECK_WRITE( file_write( &buildSourceFile, "\n" ) );
+			// configs
+			CHECK_WRITE( file_write( &buildInfoFile, "configs" ) );
+			SerializeU64( &buildInfoFile, project->configs.size() );
 
-				if ( project->configs.size() > 1 ) {
-					CHECK_WRITE( file_write( &buildSourceFile, "#include <string.h> // strcmp\n\n" ) );
-				}
+			For ( u64, configIndex, 0, project->configs.size() ) {
+				VisualStudioConfig* config = &project->configs[configIndex];
 
-				CHECK_WRITE( file_write( &buildSourceFile, "BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {\n" ) );
+				CHECK_WRITE( file_write( &buildInfoFile, tprintf( "name: %s\n", config->name ) ) );
+				CHECK_WRITE( file_write( &buildInfoFile, tprintf( "build_source_file: %s\n", config->build_source_file ) ) );
+				CHECK_WRITE( file_write( &buildInfoFile, tprintf( "output_directory: %s\n", config->output_directory ) ) );
 
-				For ( u64, configIndex, 0, project->configs.size() ) {
-					VisualStudioConfig* config = &project->configs[configIndex];
+				// dont serialize debugger arguments
+				// changing those doesnt mean we need to rebuild
 
-					CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\tif ( options->config == \"%s\" ) {\n", config->name ) ) );
-
-					if ( config->options.source_files.size() > 0 ) {
-						For ( u64, sourceFileIndex, 0, config->options.source_files.size() ) {
-							CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\toptions->source_files.push_back( \"%s\" );\n", config->options.source_files[sourceFileIndex] ) ) );
-						}
-
-						CHECK_WRITE( file_write( &buildSourceFile, "\n" ) );
-					}
-
-					if ( config->options.defines.size() > 0 ) {
-						For ( u64, defineIndex, 0, config->options.defines.size() ) {
-							CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\toptions->defines.push_back( \"%s\" );\n", config->options.defines[defineIndex] ) ) );
-						}
-
-						CHECK_WRITE( file_write( &buildSourceFile, "\n" ) );
-					}
-
-					if ( config->options.additional_includes.size() > 0 ) {
-						For ( u64, includeIndex, 0, config->options.additional_includes.size() ) {
-							CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\toptions->additional_includes.push_back( \"%s\" );\n", config->options.additional_includes[includeIndex] ) ) );
-						}
-
-						CHECK_WRITE( file_write( &buildSourceFile, "\n" ) );
-					}
-
-					if ( config->options.additional_lib_paths.size() > 0 ) {
-						For ( u64, libPathIndex, 0, config->options.additional_lib_paths.size() ) {
-							CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\toptions->additional_lib_paths.push_back( \"%s\" );\n", config->options.additional_lib_paths[libPathIndex] ) ) );
-						}
-
-						CHECK_WRITE( file_write( &buildSourceFile, "\n" ) );
-					}
-
-					if ( config->options.additional_libs.size() > 0 ) {
-						For ( u64, libIndex, 0, config->options.additional_libs.size() ) {
-							CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\toptions->additional_libs.push_back( \"%s\" );\n", config->options.additional_libs[libIndex] ) ) );
-						}
-
-						CHECK_WRITE( file_write( &buildSourceFile, "\n" ) );
-					}
-
-					CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\toptions->binary_type = %s;\n", BinaryTypeToString( config->options.binary_type ) ) ) );
-
-					//CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\toptions->optimization_level = %s;\n", OptimizationLevelToString( config->options.optimization_level ) ) ) );
-					switch ( config->options.optimization_level ) {
-						case OPTIMIZATION_LEVEL_O0: CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\toptions->optimization_level = OPTIMIZATION_LEVEL_O0;\n" ) ) ); break;
-						case OPTIMIZATION_LEVEL_O1: CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\toptions->optimization_level = OPTIMIZATION_LEVEL_O1;\n" ) ) ); break;
-						case OPTIMIZATION_LEVEL_O2: CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\toptions->optimization_level = OPTIMIZATION_LEVEL_O2;\n" ) ) ); break;
-						case OPTIMIZATION_LEVEL_O3: CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\toptions->optimization_level = OPTIMIZATION_LEVEL_O3;\n" ) ) ); break;
-					}
-
-					if ( config->options.remove_symbols ) {
-						CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\toptions->remove_symbols = %s;\n", config->options.remove_symbols ? "true" : "false" ) ) );
-					}
-
-					if ( config->options.remove_file_extension ) {
-						CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\toptions->remove_file_extension = %s;\n", config->options.remove_file_extension ? "true" : "false" ) ) );
-					}
-
-					if ( config->options.binary_folder.empty() == false ) {
-						CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\toptions->binary_folder = \"%s\";\n", config->options.binary_folder.c_str() ) ) );
-					}
-
-					if ( config->options.binary_name.empty() == false ) {
-						CHECK_WRITE( file_write( &buildSourceFile, tprintf( "\t\toptions->binary_name = \"%s\";\n", config->options.binary_name.c_str() ) ) );
-					}
-
-					CHECK_WRITE( file_write( &buildSourceFile, "\t}\n" ) );
-
-					if ( configIndex != project->configs.size() - 1 ) {
-						CHECK_WRITE( file_write( &buildSourceFile, "\n" ) );
-					}
-				}
-
-				CHECK_WRITE( file_write( &buildSourceFile, "}\n" ) );
+				SerializeBuilderOptions( &buildInfoFile, &config->options );
 			}
 		}
 	}
-#endif // VS_GENERATE_BUILD_SOURCE_FILES
+
+	// test deserialize file
+	{
+		VisualStudioSolution parsedSolution = {};
+
+		// parse it
+		{
+			parser_t parser = {};
+			Parser_Init( &parser, "test.dat" );
+			defer( Parser_Shutdown( &parser ) );
+
+			parsedSolution.name = Parser_ParseStringField( &parser );
+			parsedSolution.path = Parser_ParseStringField( &parser );
+
+			parsedSolution.platforms = Parser_ParseStringFieldArray( &parser );
+
+			parser.bufferPos += strlen( "projects" );
+
+			u64 numProjects = Parser_ParseU64( &parser );
+			parsedSolution.projects = std::vector<VisualStudioProject>( numProjects );
+
+			For ( u64, projectIndex, 0, parsedSolution.projects.size() ) {
+				VisualStudioProject* project = &parsedSolution.projects[projectIndex];
+
+				project->name = Parser_ParseLine( &parser );
+
+				project->source_files = Parser_ParseStringFieldArray( &parser );
+
+				parser.bufferPos += strlen( "configs" );
+
+				u64 numConfigs = Parser_ParseU64( &parser );
+				project->configs = std::vector<VisualStudioConfig>( numConfigs );
+
+				For ( u64, i, 0, project->configs.size() ) {
+					VisualStudioConfig* config = &project->configs[i];
+
+					config->name = Parser_ParseStringField( &parser );
+					config->build_source_file = Parser_ParseStringField( &parser );
+					config->output_directory = Parser_ParseStringField( &parser );
+
+					config->options = Parser_ParseBuildOptions( &parser );
+				}
+			}
+		}
+	}
 
 	return true;
 }

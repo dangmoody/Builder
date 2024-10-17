@@ -1,6 +1,7 @@
-v0.1.2, 13/10/2024:
+v0.2.0, <INSERT RELEASE DATE HERE>:
 
 * If no input file is specified, Builder will now tell you that you can pass -h as a command line arg to get help on how to use Builder.
+* Instead of .build_info only containing all source files used in the build (and all the header files we can find), we now serialize out all members of BuilderOptions and, if it exists, the visual studio solution/projects you generated.
 
 ----------------------------------------------------------------
 

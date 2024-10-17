@@ -102,11 +102,9 @@ struct VisualStudioConfig {
 	// The name of the config.
 	const char*					name;
 
-#if !VS_GENERATE_BUILD_SOURCE_FILES
 	// The file that you want Builder to build.
 	// This is relative to the Visual Studio project.
 	const char*					build_source_file;
-#endif
 
 	// TODO(DM): 06/10/2024: this shouldnt exist
 	// we should figure this out by taking the binary_folder from the build options and making it relative to the solution instead

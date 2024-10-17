@@ -2,13 +2,9 @@
 
 by Dan Moody.
 
------
-
 ## What is Builder?
 
 Builder is a build tool that lets you configure the compilation of your program by writing C++ code.
-
------
 
 ## Motivation
 
@@ -20,14 +16,10 @@ Why don't we just configure our builds in the same language we write our program
 
 With Builder you can build your program from the same language you write your program with, given a single C++ source file containing some code that configures your build.  This is a much more intuitive way of configuring builds and it's a wonder no-one has come up with this sooner.
 
------
-
 ## Installation
 
 1. Download the latest release.
 2. Extract the contents of the archive to anywhere on your computer that you like.
-
------
 
 ## Usage
 
@@ -82,8 +74,6 @@ Builder also has other entry points:
 * `on_pre_build( BuilderOptions* )` - This gets run just before your program actually gets compiled.
 * `on_post_build( BuilderOptions* )` - This gets run just after your program actually gets compiled.
 * `set_visual_studio_options( VisualStudioSolution* )` - Generates a Visual Studio solution (see below).
-
------
 
 ## Visual Studio
 

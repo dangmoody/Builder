@@ -1364,6 +1364,8 @@ int main( int argc, char** argv ) {
 	const char* inputConfig = NULL;
 	u64 inputConfigNameHash = 0;
 
+	// TODO(DM): 23/10/2024: feel like we shouldnt need these
+	// I think this is just hiding the fact that we dont use builder.exes or the input files CWD when we need to
 	bool8 doingBuildFromSourceFile = false;
 	bool8 doingBuildFromBuildInfo = false;
 
@@ -1513,7 +1515,7 @@ int main( int argc, char** argv ) {
 	}
 
 	if ( doingBuildFromBuildInfo && !foundBuildInfo ) {
-		fatal_error( "SOMETHING DONE GONE WRONG WITH VISUAL STUDIO BUILD.\n" );
+		fatal_error( "SOMETHING DONE GONE WRONG WITH VISUAL STUDIO BUILD.\n" );	// TODO(DM): write a proper error msg
 		return 1;
 	}
 
@@ -1795,7 +1797,7 @@ int main( int argc, char** argv ) {
 		For ( u64, sourceFileIndex, 0, context.options.source_files.size() ) {
 			const char* sourceFile = context.options.source_files[sourceFileIndex];
 
-			// DM!!!	when building with a .build_info file the file Paths here are wrong
+			// DM!!!	when building with a .build_info file the file paths here are wrong
 			// 			go fix them
 
 			const char* fileSearchPath = NULL;

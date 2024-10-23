@@ -34,8 +34,8 @@ Proprietary and confidential.
 
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
-	BUILDER_VERSION_MINOR	= 1,
-	BUILDER_VERSION_PATCH	= 2,
+	BUILDER_VERSION_MINOR	= 2,
+	BUILDER_VERSION_PATCH	= 0,
 };
 
 #define ARG_HELP_SHORT	"-h"
@@ -45,11 +45,17 @@ enum {
 
 #define CLANG_VERSION	"18.1.8"
 
-#define BUILD_INFO_FILE_EXTENSION			"build_info"
+#define BUILD_INFO_FILE_EXTENSION			".build_info"
 #define SET_BUILDER_OPTIONS_FUNC_NAME		"set_builder_options"
 #define PRE_BUILD_FUNC_NAME					"on_pre_build"
 #define POST_BUILD_FUNC_NAME				"on_post_build"
 #define SET_VISUAL_STUDIO_OPTIONS_FUNC_NAME	"set_visual_studio_options"
+
+#define CHECK_WRITE( func ) \
+	do { \
+		bool8 written = (func); \
+		assertf( written, "Failed to write a visual studio project/solution file..\n" ); \
+	} while ( 0 )
 
 enum buildContextFlagBits_t {
 	BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS	= bit( 0 ),
@@ -65,6 +71,11 @@ struct buildContext_t {
 	buildContextFlags_t		flags;
 
 	const char*				fullBinaryName;
+};
+
+struct buildInfoFile_t {
+	u64						lastWriteTime;
+	char*					filename;
 };
 
 static u64 maxull( const u64 x, const u64 y ) {
@@ -122,22 +133,22 @@ static s32 ShowUsage( const s32 exitCode ) {
 		"Builder.exe\n"
 		"\n"
 		"USAGE:\n"
-		"    Builder.exe <source files>\n"
+		"    Builder.exe <file>\n"
 		"\n"
 		"Arguments:\n"
 		"    " ARG_HELP_SHORT "|" ARG_HELP_LONG " (optional):\n"
 		"        Shows this help and then exits.\n"
 		"\n"
-		"    <source files> (required):\n"
-		"        The source file(s) you want to build with.  Need at least one.\n"
+		"    <file> (required):\n"
+		"        The source file you want to build with.  There can only be one.\n"
 		"        File name MUST end with either \".c\" or \".cpp\".\n"
-		"\n"
-		"    " ARG_NUKE " <folder> (optional):\n"
-		"        Deletes every file in <folder> and all subfolders.  Used for when you need to clean and rebuild.\n"
 		"\n"
 		"    " ARG_CONFIG "<config> (optional):\n"
 		"        Sets the config to whatever you specify.  The config value can be whatever you want.\n"
 		"        If you set this then you must also override " SET_BUILDER_OPTIONS_FUNC_NAME " in order to make use of it in your build.\n"
+		"\n"
+		"    " ARG_NUKE " <folder> (optional):\n"
+		"        Deletes every file in <folder> and all subfolders.  Used for when you need to clean and rebuild.\n"
 		"\n"
 	);
 
@@ -216,7 +227,10 @@ static s32 BuildEXE( buildContext_t* context ) {
 	}
 
 	// must come before ignored warnings
-	array_add( &args, "-Werror" );
+	if ( context->options.warnings_as_errors ) {
+		array_add( &args, "-Werror" );
+	}
+
 	array_add( &args, "-Weverything" );
 	array_add( &args, "-Wall" );
 	array_add( &args, "-Wextra" );
@@ -296,7 +310,10 @@ static s32 BuildDynamicLibrary( buildContext_t* context ) {
 	}
 
 	// must come before ignored warnings
-	array_add( &args, "-Werror" );
+	if ( context->options.warnings_as_errors ) {
+		array_add( &args, "-Werror" );
+	}
+
 	array_add( &args, "-Weverything" );
 	array_add( &args, "-Wall" );
 	array_add( &args, "-Wextra" );
@@ -389,7 +406,10 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 		}
 
 		// must come before ignored warnings
-		array_add( &args, "-Werror" );
+		if ( context->options.warnings_as_errors ) {
+			array_add( &args, "-Werror" );
+		}
+
 		array_add( &args, "-Weverything" );
 		array_add( &args, "-Wall" );
 		array_add( &args, "-Wextra" );
@@ -508,11 +528,10 @@ static const char* TryFindFile( const char* filename, const char* folder ) {
 	return NULL;
 }
 
-static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const char* inputFilePath );
-
 static buildContext_t CreateBuildContext() {
 	buildContext_t context = {};
 
+	// TODO(DM): 23/10/2024: I smell mess here, clean this up
 	context.options.binary_type = BINARY_TYPE_EXE;
 	context.options.optimization_level = OPTIMIZATION_LEVEL_O0;
 	context.options.remove_symbols = false;
@@ -525,710 +544,9 @@ static buildContext_t CreateBuildContext() {
 	return context;
 }
 
-int main( int argc, char** argv ) {
-	float64 buildStart = time_ms();
-	defer(
-		float64 buildEnd = time_ms();
-		printf( "Build finished: %f ms\n\n", buildEnd - buildStart );
-	);
-
-	core_init( MEM_KILOBYTES( 1 ), MEM_MEGABYTES( 64 ) );
-	defer( core_shutdown() );
-
-	set_command_line_args( argc, argv );
-
-	printf( "Builder v%d.%d.%d\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
-
-	buildContext_t context = CreateBuildContext();
-	context.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS | BUILD_CONTEXT_FLAG_SHOW_STDOUT;
-
-	// check if we need to perform first time setup
-	{
-		bool8 doFirstTimeSetup = false;
-
-		// on exit set the CWD back to what we had before
-		char oldCWD[MAX_PATH] = {};
-		GetCurrentDirectory( MAX_PATH, oldCWD );
-		defer( SetCurrentDirectory( oldCWD ) );
-
-		// set CWD to whereever builder lives for first time setup
-		SetCurrentDirectory( paths_get_app_path() );
-
-		{
-			const char* clangAbsolutePath = tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() );
-
-			FileInfo fileInfo;
-			File file = file_find_first( clangAbsolutePath, &fileInfo );
-
-			// if we cant find our copy of clang then we definitely need to run first time setup
-			if ( file.ptr == INVALID_HANDLE_VALUE ) {
-				doFirstTimeSetup = true;
-			} else {
-				// otherwise if we have clang but the version doesnt match, then we still need to re-download and re-install it
-				bool8 correctClangVersion = false;
-
-				Array<const char*> args;
-				array_add( &args, clangAbsolutePath );
-				array_add( &args, "-v" );
-
-				Process* clangVersionCheck = process_create( &args, NULL );
-				defer( process_destroy( clangVersionCheck ) );
-
-				// this string is at the very start of "clang -v"
-				const char* clangVersionString = tprintf( "clang version %s", CLANG_VERSION );
-
-				char buffer[1024];
-				while ( process_read_stdout( clangVersionCheck, buffer, 1024 ) ) {
-					if ( string_contains( buffer, clangVersionString ) ) {
-						correctClangVersion = true;
-						break;
-					}
-				}
-
-				s32 exitCode = process_join( &clangVersionCheck );
-				assertf( exitCode == 0, "Something went terribly wrong..\n" );
-
-				if ( !correctClangVersion ) {
-					warning( "Required Clang version not found.  I will need to re-download and re-install Clang.\n" );
-					doFirstTimeSetup = true;
-				}
-			}
-		}
-
-		if ( doFirstTimeSetup ) {
-			printf( "Performing first time setup...\n" );
-
-			const char* clangInstallerFilename = tprintf( "LLVM-%s-win64.exe", CLANG_VERSION );
-
-			folder_create_if_it_doesnt_exist( ".\\temp" );
-
-			// download clang
-			{
-				printf( "Downloading Clang (please wait) ...\n" );
-
-				Array<const char*> args;
-				array_reserve( &args, 4 );
-				array_add( &args, "curl" );
-				array_add( &args, "-o" );
-				array_add( &args, "temp\\clang_installer.exe" );
-				array_add( &args, "-L" );
-				array_add( &args, tprintf( "https://github.com/llvm/llvm-project/releases/download/llvmorg-%s/%s", CLANG_VERSION, clangInstallerFilename ) );
-
-				s32 exitCode = RunProc( &args, NULL, false, true );
-
-				if ( exitCode == 0 ) {
-					printf( "Done.\n" );
-				} else {
-					error( "Failed to download Clang.  The CURL HTTP request failed.\n" );
-					return 1;
-				}
-			}
-
-			// install clang
-			{
-				printf( "Installing Clang (please wait) ... " );
-
-				const char* clangInstallFolder = "clang";
-
-				folder_create_if_it_doesnt_exist( clangInstallFolder );
-
-				// set clang installer command line arguments
-				// taken from: https://discourse.llvm.org/t/using-clang-windows-installer-from-command-line/49698/2 which references https://nsis.sourceforge.io/Docs/Chapter3.html#installerusagecommon
-				Array<const char*> args;
-				array_reserve( &args, 4 );
-				array_add( &args, ".\\temp\\clang_installer.exe" );
-				array_add( &args, "/S" );		// install in silent mode
-				array_add( &args, tprintf( "/D=%s\\%s", paths_get_app_path(), clangInstallFolder ) );	// set the install directory, absolute paths only
-
-				Array<const char*> envVars;
-				array_add( &envVars, "__compat_layer=RunAsInvoker" );	// this tricks the subprocess into thinking we are running with elevation
-
-				s32 exitCode = RunProc( &args, &envVars );
-
-				if ( exitCode == 0 ) {
-					printf( "Done.\n" );
-				} else {
-					error( "Failed to install Clang.\n" );
-					return 1;
-				}
-			}
-
-			// clean up temp files
-			{
-				printf( "Cleaning up ... " );
-
-				NukeFolder( "temp", true );
-				folder_delete( "temp" );
-			}
-
-			doFirstTimeSetup = false;
-		}
-	}
-
-	const char* inputFile = NULL;
-	const char* visualStudioConfigSourceFile = NULL;
-
-	for ( s32 argIndex = 1; argIndex < argc; argIndex++ ) {
-		const char* arg = argv[argIndex];
-		const u64 argLen = strlen( arg );
-
-		if ( string_equals( arg, ARG_NUKE ) ) {
-			if ( argIndex == argc - 1 ) {
-				error( "You passed in " ARG_NUKE " but you never told me what folder you want me to nuke.  I need to know!" );
-				return 1;
-			}
-
-			const char* folderToNuke = argv[argIndex + 1];
-
-			printf( "Nuking \"%s\"\n", folderToNuke );
-
-			float64 startTime = time_ms();
-
-			NukeFolder( folderToNuke, true );
-
-			float64 endTime = time_ms();
-
-			printf( "Done.  %f ms\n", endTime - startTime );
-
-			return 0;
-		}
-
-		if ( string_equals( arg, ARG_HELP_SHORT ) || string_equals( arg, ARG_HELP_LONG ) ) {
-			return ShowUsage( 0 );
-		}
-
-		if ( string_starts_with( arg, ARG_CONFIG ) ) {
-			const char* equals = strchr( arg, '=' );
-
-			if ( !equals ) {
-				error( "I detected that you want to set a config, but you never gave me the equals (=) immediately after it.  You need to do that.\n" );
-
-				return ShowUsage( 1 );
-			}
-
-			const char* configName = equals + 1;
-
-			if ( strlen( configName ) < 1 ) {
-				error( "You specified the start of the config arg, but you never actually gave me a name for the config.  I need that.\n" );
-
-				return ShowUsage( 1 );
-			}
-
-			context.options.config = configName;
-
-			continue;
-		}
-
-		if ( string_ends_with( arg, ".c" ) || string_ends_with( arg, ".cpp" ) ) {
-			if ( inputFile != NULL ) {
-				error( "You've already specified a file for me to build.  If you want me to build more than one file, specify it via %s().\n", SET_BUILDER_OPTIONS_FUNC_NAME );
-				return 1;
-			}
-
-			inputFile = arg;
-
-			continue;
-		}
-
-		// unrecognised arg, show error
-		error( "Unrecognised argument \"%s\".\n", arg );
-	}
-
-	// validate cmd line args
-	if ( inputFile == NULL ) {
-		error(
-			"You haven't told me what source files I need to build.  I need one.\n"
-			"Use " ARG_HELP_SHORT " if you need help.\n"
-		);
-
-		return 1;
-	}
-
-	// set all the additional compiler options that we know we need
-	{
-		context.options.defines.push_back( "_CRT_SECURE_NO_WARNINGS" );
-
-		// add the folder that builder lives in as an additional include path
-		// so that people can just include builder.h without having to add the include path manually every time
-		context.options.additional_includes.push_back( paths_get_app_path() );
-
-#if defined( _WIN64 )
-		context.options.additional_libs.push_back( "user32.lib" );
-
-		// MSVCRT is needed for ABI compatibility between builder and the user config DLL
-#if defined( _DEBUG )
-		context.options.additional_libs.push_back( "msvcrtd.lib" );
-#elif defined( NDEBUG )
-		context.options.additional_libs.push_back( "msvcrt.lib" );
-#endif
-
-		// TODO(DM): 12/10/2024: are these debug only? are they even needed?
-		//context.options.additional_libs.push_back( "Shlwapi.lib" );
-		//context.options.additional_libs.push_back( "DbgHelp.lib" );
-#endif // defined( _WIN64 )
-
-		context.options.ignore_warnings.push_back( "-Wno-newline-eof" );
-		context.options.ignore_warnings.push_back( "-Wno-pointer-integer-compare" );
-		context.options.ignore_warnings.push_back( "-Wno-declaration-after-statement" );
-		context.options.ignore_warnings.push_back( "-Wno-gnu-zero-variadic-macro-arguments" );
-		context.options.ignore_warnings.push_back( "-Wno-cast-align" );
-		context.options.ignore_warnings.push_back( "-Wno-bad-function-cast" );
-		context.options.ignore_warnings.push_back( "-Wno-format-nonliteral" );
-		context.options.ignore_warnings.push_back( "-Wno-missing-braces" );
-		context.options.ignore_warnings.push_back( "-Wno-switch-enum" );
-		context.options.ignore_warnings.push_back( "-Wno-covered-switch-default" );
-		context.options.ignore_warnings.push_back( "-Wno-double-promotion" );
-		context.options.ignore_warnings.push_back( "-Wno-cast-qual" );
-		context.options.ignore_warnings.push_back( "-Wno-unused-variable" );
-		context.options.ignore_warnings.push_back( "-Wno-unused-function" );
-		context.options.ignore_warnings.push_back( "-Wno-empty-translation-unit" );
-		context.options.ignore_warnings.push_back( "-Wno-zero-as-null-pointer-constant" );
-		context.options.ignore_warnings.push_back( "-Wno-c++98-compat-pedantic" );
-		context.options.ignore_warnings.push_back( "-Wno-unused-macros" );
-		context.options.ignore_warnings.push_back( "-Wno-unsafe-buffer-usage" );		// LLVM 17.0.1
-		context.options.ignore_warnings.push_back( "-Wno-reorder-init-list" );			// C++: "designated initializers must be in order"
-		context.options.ignore_warnings.push_back( "-Wno-old-style-cast" );				// C++: "C-style casts are banned"
-		context.options.ignore_warnings.push_back( "-Wno-global-constructors" );		// C++: "declaration requires a global destructor"
-		context.options.ignore_warnings.push_back( "-Wno-exit-time-destructors" );		// C++: "declaration requires an exit-time destructor" (same as the above, basically)
-		context.options.ignore_warnings.push_back( "-Wno-missing-field-initializers" );	// LLVM 18.1.8
-	}
-
-	s32 exitCode = 0;
-
-	const char* firstSourceFile = inputFile;
-	u64 firstSourceFileLength = strlen( firstSourceFile );
-
-	// the default binary folder is the same folder as the source file
-	const char* buildFilePathAbsolute = paths_remove_file_from_path( paths_get_absolute_path( firstSourceFile ) );
-	const char* firstSourceFileNoPath = paths_remove_path_from_file( firstSourceFile );
-
-	const char* dotBuilderFolder = tprintf( "%s\\.builder", buildFilePathAbsolute );
-
-	// if none of the source files have changed since we last checked then do not even try to rebuild
-	{
-		bool8 rebuild = false;
-
-		const char* buildInfoFilename = tprintf( "%s\\%s.%s", dotBuilderFolder, firstSourceFileNoPath, BUILD_INFO_FILE_EXTENSION );
-
-		File buildInfoFile = file_open( buildInfoFilename );
-
-		// if we cant find a .build_info file then assume we never built this binary before
-		if ( buildInfoFile.ptr == NULL ) {
-			printf( "Can't open %s.  Rebuilding binary...\n", buildInfoFilename );
-			rebuild = true;
-		} else {
-			// otherwise we have one, so get the build times out of it and check them against what we had before
-			defer( file_close( &buildInfoFile ) );
-
-			char* fileBuffer = NULL;
-			u64 fileBufferLength = 0;
-			bool8 read = file_read_entire( buildInfoFilename, &fileBuffer, &fileBufferLength );
-
-			if ( read ) {
-				defer( file_free_buffer( &fileBuffer ) );
-
-				u32 sourceFileIndex = 0;
-
-				// parse the .build_info file
-				// for each source file, get the filename and the last write time
-				u64 offset = 0;
-				while ( offset < fileBufferLength ) {
-					const char* lineStart = &fileBuffer[offset];
-					const char* colon = strstr( lineStart, ": " );
-					const char* lineEnd = strstr( lineStart, "\r\n" );
-					if ( !lineEnd ) lineEnd = strstr( lineStart, "\n" );
-
-					u64 filenameLength = cast( u64 ) colon - cast( u64 ) lineStart;
-					filenameLength++;
-
-					colon += 2;
-
-					u64 timestampLength = cast( u64 ) lineEnd - cast( u64 ) colon;
-					timestampLength++;
-
-					char* filename = cast( char* ) mem_temp_alloc( filenameLength * sizeof( char ) );
-					char* timestampString = cast( char* ) mem_temp_alloc( timestampLength * sizeof( char ) );
-
-					strncpy( filename, lineStart, filenameLength );
-					filename[filenameLength - 1] = 0;
-
-					strncpy( timestampString, colon, timestampLength );
-					timestampString[timestampLength - 1] = 0;
-
-					u64 lastWriteTime = cast( u64 ) atoll( timestampString );
-
-					FileInfo sourceFileInfo;
-					File sourceFile = file_find_first( filename, &sourceFileInfo );
-
-					assert( sourceFile.ptr != INVALID_HANDLE_VALUE );
-
-					if ( lastWriteTime != sourceFileInfo.last_write_time ) {
-						rebuild = true;
-						break;
-					}
-
-					sourceFileIndex++;
-
-					u64 lineLength = cast( u64 ) ( lineEnd + 1 ) - cast( u64 ) lineStart;
-					offset += lineLength;
-				}
-			} else {
-				error( "Found %s but failed to read it.  Rebuilding binary...\n", buildInfoFilename );
-				rebuild = true;
-			}
-		}
-
-		if ( !rebuild ) {
-			printf( "Skipping build for %s.\n", buildInfoFilename );
-			return 0;
-		}
-	}
-
-	Library library;
-	defer( if ( library.ptr ) library_unload( &library ) );
-
-	typedef void ( *preBuildFunc_t )( BuilderOptions* options );
-	typedef void ( *postBuildFunc_t )( BuilderOptions* options );
-
-	preBuildFunc_t preBuildFunc = NULL;
-	postBuildFunc_t postBuildFunc = NULL;
-
-	// build config step
-	// see if they have set_builder_options() overridden
-	// if they do, then build a DLL first and call that function to set some more build options
-	{
-		typedef void ( *setBuilderOptionsFunc_t )( BuilderOptions* options );
-		typedef void ( *setVisualStudioOptionsFunc_t )( VisualStudioSolution* solution );
-
-		buildContext_t userBuildConfigContext = CreateBuildContext();
-		userBuildConfigContext.options = context.options;
-		userBuildConfigContext.flags = BUILD_CONTEXT_FLAG_SHOW_STDOUT;
-
-		userBuildConfigContext.options.binary_name = tprintf( "%s.dll", paths_remove_path_from_file( firstSourceFile ) );
-		userBuildConfigContext.options.binary_folder = dotBuilderFolder;
-		userBuildConfigContext.options.source_files.push_back( inputFile );
-		userBuildConfigContext.options.defines.push_back( "BUILDER_DOING_USER_CONFIG_BUILD" );
-
-		// this is needed because this tells the compiler what to set _ITERATOR_DEBUG_LEVEL to
-		// ABI compatibility will be broken if this is not the same between all binaries
-#if defined( _DEBUG )
-		userBuildConfigContext.options.defines.push_back( "_DEBUG" );
-		userBuildConfigContext.options.optimization_level = OPTIMIZATION_LEVEL_O0;
-#elif defined( NDEBUG )
-		userBuildConfigContext.options.defines.push_back( "NDEBUG" );
-		userBuildConfigContext.options.optimization_level = OPTIMIZATION_LEVEL_O3;
-#endif
-
-		userBuildConfigContext.options.ignore_warnings.push_back( "-Wno-missing-prototypes" );	// otherwise the user has to forward declare functions like set_builder_options and thats annoying
-		userBuildConfigContext.options.ignore_warnings.push_back( "-Wno-unused-parameter" );	// user can call set_pre_build (for example) and not actually touch the BuilderOptions parm
-
-		userBuildConfigContext.fullBinaryName = tprintf( "%s\\%s", userBuildConfigContext.options.binary_folder.c_str(), userBuildConfigContext.options.binary_name.c_str() );
-
-		folder_create_if_it_doesnt_exist( userBuildConfigContext.options.binary_folder.c_str() );
-
-		exitCode = BuildDynamicLibrary( &userBuildConfigContext );
-
-		if ( exitCode != 0 ) {
-			error( "Pre-build failed!\n" );
-			return 1;
-		}
-
-		library = library_load( tprintf( "%s\\%s", userBuildConfigContext.options.binary_folder.c_str(), userBuildConfigContext.options.binary_name.c_str() ) );
-
-		// generate visual studio solution now if requested
-		setVisualStudioOptionsFunc_t setVisualStudioOptionsFunc = cast( setVisualStudioOptionsFunc_t ) library_get_proc_address( library, SET_VISUAL_STUDIO_OPTIONS_FUNC_NAME );
-		if ( setVisualStudioOptionsFunc ) {
-			VisualStudioSolution solution;
-			setVisualStudioOptionsFunc( &solution );
-
-			printf( "Generating Visual Studio Solution\n" );
-
-			bool8 generated = GenerateVisualStudioSolution( &solution, buildFilePathAbsolute );
-
-			if ( !generated ) {
-				error( "Failed to generate Visual Studio solution.\n" );	// TODO(DM): better error message
-				return 1;
-			}
-
-			printf( "Done\n" );
-
-			return 0;
-		}
-
-		// now get the user-specified options
-		setBuilderOptionsFunc_t setBuilderOptionsFunc = cast( setBuilderOptionsFunc_t ) library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME );
-		if ( setBuilderOptionsFunc ) {
-			setBuilderOptionsFunc( &context.options );
-
-			For ( u64, includeIndex, 0, context.options.additional_includes.size() ) {
-				const char* additionalInclude = context.options.additional_includes[includeIndex];
-
-				if ( paths_is_path_absolute( additionalInclude ) ) {
-					context.options.additional_includes[includeIndex] = additionalInclude;
-				} else {
-					context.options.additional_includes[includeIndex] = tprintf( "%s\\%s", buildFilePathAbsolute, additionalInclude );
-				}
-			}
-
-			For ( u64, libPathIndex, 0, context.options.additional_lib_paths.size() ) {
-				context.options.additional_lib_paths[libPathIndex] = tprintf( "%s\\%s", buildFilePathAbsolute, context.options.additional_lib_paths[libPathIndex] );
-			}
-		}
-
-		preBuildFunc = cast( preBuildFunc_t ) library_get_proc_address( library, PRE_BUILD_FUNC_NAME );
-		postBuildFunc = cast( postBuildFunc_t ) library_get_proc_address( library, POST_BUILD_FUNC_NAME );
-	}
-
-	// get all the "compilation units" that we are actually going to give to the compiler
-	// if no source files were added in set_builder_options() then assume we want to build the same file as the one specified via the command line
-	if ( context.options.source_files.size() == 0 ) {
-		context.options.source_files.push_back( inputFile );
-	} else {
-		// otherwise the user told us to build other source files, so go find and build those instead
-		// keep this as a std::vector because this gets fed back into BuilderOptions::source_files
-		std::vector<const char*> finalSourceFilesToBuild;
-
-		For ( u64, sourceFileIndex, 0, context.options.source_files.size() ) {
-			const char* sourceFile = context.options.source_files[sourceFileIndex];
-
-			FileInfo fileInfo;
-			File firstFile = file_find_first( tprintf( "%s\\%s", buildFilePathAbsolute, sourceFile ), &fileInfo );
-
-			if ( firstFile.ptr == INVALID_HANDLE_VALUE ) {
-				error( "Source file \"%s\" can't be found.  Is it correct?\n", sourceFile );
-				return 1;
-			}
-
-			do {
-				if ( string_equals( sourceFile, "." ) || string_equals( sourceFile, ".." ) ) {
-					continue;
-				}
-
-				const char* foundSourceFile = NULL;
-
-				if ( PathHasSlash( sourceFile ) ) {
-					const char* localPath = paths_remove_file_from_path( sourceFile );
-
-					foundSourceFile = tprintf( "%s\\%s\\%s", buildFilePathAbsolute, localPath, fileInfo.filename );
-				} else {
-					foundSourceFile = tprintf( "%s\\%s", buildFilePathAbsolute, fileInfo.filename );
-				}
-
-				finalSourceFilesToBuild.push_back( foundSourceFile );
-			} while ( file_find_next( &firstFile, &fileInfo ) );
-		}
-
-		context.options.source_files = finalSourceFilesToBuild;
-	}
-
-	// recursively resolve all includes found in each source file
-	Array<const char*> buildInfoFiles;
-	{
-		array_add_range( &buildInfoFiles, context.options.source_files.data(), context.options.source_files.size() );
-
-		// for each file, open it and get every include inside it
-		// then go through _those_ included files
-		For ( u64, sourceFileIndex, 0, buildInfoFiles.count ) {
-			const char* sourceFile = buildInfoFiles[sourceFileIndex];
-
-			const char* sourceFilePath = paths_remove_file_from_path( sourceFile );
-			const char* sourceFileNoPath = paths_remove_path_from_file( sourceFile );
-
-			char* fileBuffer = NULL;
-			u64 fileLength = 0;
-			bool8 read = file_read_entire( sourceFile, &fileBuffer, &fileLength );
-
-			if ( !read ) {
-				//error( "Failed to read %s.  Can't resolve includes for this file.\n", buildInfoFiles[sourceFileIndex] );
-				//return EXIT_FAILURE;
-				continue;
-			}
-
-			defer( file_free_buffer( &fileBuffer ) );
-
-			For ( u64, fileOffset, 0, fileLength ) {
-				if ( string_starts_with( fileBuffer + fileOffset, "#include" ) ) {
-					fileOffset += strlen( "#include" );
-
-					while ( fileBuffer[fileOffset] == ' ' ) {
-						fileOffset++;
-					}
-
-					if ( fileBuffer[fileOffset] == '"' ) {
-						// "local" include, so scan from where we are
-						const char* includeStart = fileBuffer + fileOffset;
-						includeStart++;
-
-						const char* includeEnd = strchr( includeStart, '"' );
-
-						u64 filenameLength = cast( u64 ) includeEnd - cast( u64 ) includeStart;
-						filenameLength++;
-
-						char* filename = cast( char* ) mem_temp_alloc( filenameLength * sizeof( char ) );
-						strncpy( filename, includeStart, filenameLength * sizeof( char ) );
-						filename[filenameLength - 1] = 0;
-
-						filename = tprintf( "%s\\%s", sourceFilePath, filename );
-
-						bool8 found = false;
-						For ( u64, fileIndex, 0, buildInfoFiles.count ) {
-							if ( string_equals( buildInfoFiles[fileIndex], filename ) ) {
-								found = true;
-								break;
-							}
-						}
-
-						if ( !found ) {
-							array_add( &buildInfoFiles, filename );
-						}
-					} else if ( fileBuffer[fileOffset] == '<' ) {
-						// "external" include, so scan all the external include folders that we know about
-						const char* includeStart = fileBuffer + fileOffset;
-						includeStart++;
-
-						const char* includeEnd = strchr( includeStart, '>' );
-
-						u64 filenameLength = cast( u64 ) includeEnd - cast( u64 ) includeStart;
-						filenameLength++;
-
-						char* filename = cast( char* ) mem_temp_alloc( filenameLength * sizeof( char ) );
-						strncpy( filename, includeStart, filenameLength * sizeof( char ) );
-						filename[filenameLength - 1] = 0;
-
-						const char* fullFilename = NULL;
-
-						For ( u64, includePathIndex, 0, context.options.additional_includes.size() ) {
-							const char* includePath = context.options.additional_includes[includePathIndex];
-
-							fullFilename = TryFindFile( filename, includePath );
-
-							if ( fullFilename != NULL ) {
-								break;
-							}
-						}
-
-						if ( fullFilename ) {
-							bool8 found = false;
-							For ( u64, fileIndex, 0, buildInfoFiles.count ) {
-								if ( string_equals( buildInfoFiles[fileIndex], fullFilename ) ) {
-									found = true;
-									break;
-								}
-							}
-
-							if ( !found ) {
-								array_add( &buildInfoFiles, fullFilename );
-							}
-						}
-						/*else {
-							error( "Failed to find external include \"%s\" from any of the additional include directories.\n" );
-						}*/
-					}
-				}
-
-				const char* lineEnd = strchr( fileBuffer + fileOffset, '\n' );
-				if ( !lineEnd ) lineEnd = strstr( fileBuffer + fileOffset, "\r\n" );
-				if ( !lineEnd ) lineEnd = fileBuffer + fileOffset;
-
-				u64 fileLineLength = cast( u64 ) lineEnd - cast( u64 ) ( fileBuffer + fileOffset );
-				fileLineLength = maxull( fileLineLength, 1ULL );	// TODO(DM): this line is hiding a bug in the parser - find the bug
-
-				fileOffset += fileLineLength;
-			}
-		}
-	}
-
-	if ( !context.options.binary_folder.empty() ) {
-		context.options.binary_folder = tprintf( "%s\\%s", buildFilePathAbsolute, context.options.binary_folder.c_str() );
-	} else {
-		context.options.binary_folder = buildFilePathAbsolute;
-	}
-
-	folder_create_if_it_doesnt_exist( context.options.binary_folder.c_str() );
-
-	// user didnt override the binary name via the callback
-	// so give them a binary name based off the first source file
-	if ( context.options.binary_name.empty() ) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wcast-qual"
-		char* firstSourceFileWithoutExtension = cast( char* ) mem_temp_alloc( ( firstSourceFileLength + 1 ) * sizeof( char ) );
-		strncpy( firstSourceFileWithoutExtension, firstSourceFile, firstSourceFileLength * sizeof( char ) );
-		firstSourceFileWithoutExtension[firstSourceFileLength] = 0;
-
-		firstSourceFileWithoutExtension = cast( char* ) paths_remove_file_extension( paths_remove_path_from_file( firstSourceFileWithoutExtension ) );
-
-		context.options.binary_name = firstSourceFileWithoutExtension;
-#pragma clang diagnostic pop
-	}
-
-	context.fullBinaryName = tprintf( "%s\\%s", context.options.binary_folder.c_str(), context.options.binary_name.c_str() );
-
-	if ( !context.options.remove_file_extension ) {
-		context.fullBinaryName = tprintf( "%s.%s", context.fullBinaryName, GetFileExtensionFromBinaryType( context.options.binary_type ) );
-	}
-
-	if ( preBuildFunc ) {
-		preBuildFunc( &context.options );
-	}
-
-	// now do the actual build
-	switch ( context.options.binary_type ) {
-		case BINARY_TYPE_EXE:
-			exitCode = BuildEXE( &context );
-			break;
-
-		case BINARY_TYPE_DYNAMIC_LIBRARY:
-			exitCode = BuildDynamicLibrary( &context );
-			break;
-
-		case BINARY_TYPE_STATIC_LIBRARY:
-			exitCode = BuildStaticLibrary( &context );
-			break;
-	}
-
-	if ( postBuildFunc ) {
-		postBuildFunc( &context.options );
-	}
-
-	// if the build was successful, write the .build_info file now
-	// get the timestamp of when each source file was last written to
-	if ( exitCode == 0 ) {
-		const char* buildInfoFilename = tprintf( "%s\\%s.%s", dotBuilderFolder, firstSourceFileNoPath, BUILD_INFO_FILE_EXTENSION );
-
-		File buildInfoFile = file_open_or_create( buildInfoFilename );
-		defer( file_close( &buildInfoFile ) );
-
-		For ( u32, i, 0, buildInfoFiles.count ) {
-			const char* sourceFilename = buildInfoFiles[i];
-
-			FileInfo sourceFileInfo;
-			File sourceFile = file_find_first( sourceFilename, &sourceFileInfo );
-
-			const char* sourceFileWriteTime = tprintf( "%s: %llu\n", sourceFilename, sourceFileInfo.last_write_time );
-			bool8 written = file_write( &buildInfoFile, sourceFileWriteTime, strlen( sourceFileWriteTime ) );
-
-			if ( !written ) {
-				error( "Failed to write last write time for source file \"%s\".  Builder will trigger a rebuild of \"%s\" next time you want to build it even if a source file has not changed.\n", sourceFilename, context.fullBinaryName );
-				exitCode = 1;
-			}
-		}
-	} else {
-		error( "Build failed.\n" );
-		exitCode = 1;
-	}
-
-	return exitCode;
-}
-
 // project type guids are pre-determined by visual studio
 // C++ is the only language that builder knows/cares about
 #define VISUAL_STUDIO_CPP_PROJECT_TYPE_GUID "8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942"
-
-#define CHECK_WRITE( func ) \
-	do { \
-		bool8 written = (func); \
-		assertf( written, "Failed to write a visual studio project/solution file..\n" ); \
-	} while ( 0 )
 
 // data layout comes from: https://learn.microsoft.com/en-us/windows/win32/api/guiddef/ns-guiddef-guid
 static const char* CreateVisualStudioGuid() {
@@ -1275,24 +593,34 @@ static void SerializeCStringArray( File* file, const std::vector<const char*>& a
 	}
 }
 
-static void SerializeBuilderOptions( File* file, BuilderOptions* options ) {
-	SerializeCStringArray( file, options->source_files, "source_files" );
-	SerializeCStringArray( file, options->defines, "defines" );
-	SerializeCStringArray( file, options->additional_includes, "additional_includes" );
-	SerializeCStringArray( file, options->additional_lib_paths, "additional_lib_paths" );
-	SerializeCStringArray( file, options->additional_libs, "additional_libs" );
-	SerializeCStringArray( file, options->ignore_warnings, "ignore_warnings" );
+static void SerializeBuilderOptions( File* file, const std::vector<BuilderOptions>& builderOptions ) {
+	SerializeU64( file, builderOptions.size() );
 
-	CHECK_WRITE( file_write( file, &options->binary_type, sizeof( BinaryType ) ) );
-	CHECK_WRITE( file_write( file, &options->optimization_level, sizeof( OptimizationLevel ) ) );
-	CHECK_WRITE( file_write( file, &options->remove_symbols, sizeof( bool8 ) ) );
-	CHECK_WRITE( file_write( file, &options->remove_file_extension, sizeof( bool8 ) ) );
+	For ( u64, builderOptionsIndex, 0, builderOptions.size() ) {
+		const BuilderOptions* options = &builderOptions[builderOptionsIndex];
 
-	// dont serialize the config
-	// just because the user specifies that at compile time doesnt mean its actually a compile time option!
+		CHECK_WRITE( file_write( file, tprintf( "config: %s\n", options->config.c_str() ) ) );
 
-	CHECK_WRITE( file_write( file, tprintf( "binary_folder: %s\n", options->binary_folder.c_str() ) ) );
-	CHECK_WRITE( file_write( file, tprintf( "binary_name: %s\n", options->binary_name.c_str() ) ) );
+		u64 configNameHash = hash_string( options->config.c_str(), 0 );
+		SerializeU64( file, configNameHash );
+
+		SerializeCStringArray( file, options->source_files, "source_files" );
+		SerializeCStringArray( file, options->defines, "defines" );
+		SerializeCStringArray( file, options->additional_includes, "additional_includes" );
+		SerializeCStringArray( file, options->additional_lib_paths, "additional_lib_paths" );
+		SerializeCStringArray( file, options->additional_libs, "additional_libs" );
+		SerializeCStringArray( file, options->ignore_warnings, "ignore_warnings" );
+
+		CHECK_WRITE( file_write( file, tprintf( "binary_name: %s\n", options->binary_name.c_str() ) ) );
+		CHECK_WRITE( file_write( file, tprintf( "binary_folder: %s\n", options->binary_folder.c_str() ) ) );
+
+		CHECK_WRITE( file_write( file, &options->binary_type, sizeof( BinaryType ) ) );
+		CHECK_WRITE( file_write( file, &options->optimization_level, sizeof( OptimizationLevel ) ) );
+		CHECK_WRITE( file_write( file, &options->remove_symbols, sizeof( bool8 ) ) );
+		CHECK_WRITE( file_write( file, &options->remove_file_extension, sizeof( bool8 ) ) );
+
+		CHECK_WRITE( file_write( file, "\n" ) );
+	}
 }
 
 struct parser_t {
@@ -1301,13 +629,14 @@ struct parser_t {
 	char*	bufferPos;
 };
 
-static void Parser_Init( parser_t* parser, const char* filename ) {
+static bool8 Parser_Init( parser_t* parser, const char* filename ) {
 	memset( parser, 0, sizeof( parser_t ) );
 
 	bool8 read = file_read_entire( filename, &parser->bufferStart, &parser->fileLength );
-	assert( read );
 
 	parser->bufferPos = parser->bufferStart;
+
+	return read;
 }
 
 static void Parser_Shutdown( parser_t* parser ) {
@@ -1349,7 +678,7 @@ static u64 Parser_ParseU64( parser_t* parser ) {
 	return *x;
 }
 
-static const char* Parser_ParseLine( parser_t* parser ) {
+static char* Parser_ParseLine( parser_t* parser ) {
 	const char* lineEnd = cast( const char* ) memchr( parser->bufferPos, '\n', parser->fileLength );
 	u64 stringLength = cast( u64 ) lineEnd - cast( u64 ) parser->bufferPos;
 
@@ -1362,20 +691,33 @@ static const char* Parser_ParseLine( parser_t* parser ) {
 	return string;
 }
 
-// TODO(DM): 18/10/2024: remove the concept of "string fields", we can get away with just strings
-static const char* Parser_ParseStringField( parser_t* parser ) {
+// a "string field" is just a key value pair and is laid out like this:
+//
+//	key: value
+//
+// where "key" and "value" are both strings
+static void Parser_ParseStringField( parser_t* parser, char** outKey, std::string* outValue ) {
 	const char* colon = cast( const char* ) memchr( parser->bufferPos, ':', parser->fileLength );
-	u64 colonLength = cast( u64 ) colon - cast( u64 ) parser->bufferPos;
+	u64 keyLength = cast( u64 ) colon - cast( u64 ) parser->bufferPos;
 
-	parser->bufferPos += colonLength;	// skip to the colon
-	parser->bufferPos += 1;				// skip past the colon
-	parser->bufferPos += 1;				// skip past following whitespace
+	if ( outKey ) {
+		*outKey = cast( char* ) mem_alloc( ( keyLength + 1 ) * sizeof( char ) );
+		memcpy( *outKey, parser->bufferPos, keyLength * sizeof( char ) );
+		*outKey[keyLength] = 0;
+	}
 
-	return Parser_ParseLine( parser );
+	parser->bufferPos += keyLength;	// skip to the colon
+	parser->bufferPos += 1;			// skip past the colon
+	parser->bufferPos += 1;			// skip past following whitespace
+
+	char* value = Parser_ParseLine( parser );
+
+	if ( outValue ) {
+		*outValue = value;
+	}
 }
 
-// TODO(DM): 18/10/2024: rename this to "Parser_ParseCStringArray"
-static std::vector<const char*> Parser_ParseStringFieldArray( parser_t* parser ) {
+static std::vector<const char*> Parser_ParseCStringArray( parser_t* parser ) {
 	Parser_SkipPast( parser, '\n' );	// skip the name of the array
 
 	u64 arrayCount = Parser_ParseU64( parser );
@@ -1391,22 +733,58 @@ static std::vector<const char*> Parser_ParseStringFieldArray( parser_t* parser )
 static BuilderOptions Parser_ParseBuildOptions( parser_t* parser ) {
 	BuilderOptions options = {};
 
-	options.source_files = Parser_ParseStringFieldArray( parser );
-	options.defines = Parser_ParseStringFieldArray( parser );
-	options.additional_includes = Parser_ParseStringFieldArray( parser );
-	options.additional_lib_paths = Parser_ParseStringFieldArray( parser );
-	options.additional_libs = Parser_ParseStringFieldArray( parser );
-	options.ignore_warnings = Parser_ParseStringFieldArray( parser );
+	Parser_ParseStringField( parser, NULL, &options.config );
+
+	Parser_ParseU64( parser );	// name hash, skip
+
+	options.source_files = Parser_ParseCStringArray( parser );
+	options.defines = Parser_ParseCStringArray( parser );
+	options.additional_includes = Parser_ParseCStringArray( parser );
+	options.additional_lib_paths = Parser_ParseCStringArray( parser );
+	options.additional_libs = Parser_ParseCStringArray( parser );
+	options.ignore_warnings = Parser_ParseCStringArray( parser );
+
+	Parser_ParseStringField( parser, NULL, &options.binary_name );
+	Parser_ParseStringField( parser, NULL, &options.binary_folder );
 
 	options.binary_type = cast( BinaryType ) Parser_ParseS32( parser );
 	options.optimization_level = cast( OptimizationLevel ) Parser_ParseS32( parser );
 	options.remove_symbols = Parser_ParseBool( parser );
 	options.remove_file_extension = Parser_ParseBool( parser );
 
-	options.binary_folder = Parser_ParseStringField( parser );
-	options.binary_name = Parser_ParseStringField( parser );
-
 	return options;
+}
+
+static void Parser_ParseBuildInfo( const char* buildInfoFilename, std::vector<BuilderOptions>& outBuilderOptions, std::vector<buildInfoFile_t>& outBuildInfoSourceFiles ) {
+	parser_t parser = {};
+	bool8 read = Parser_Init( &parser, buildInfoFilename );
+
+	if ( !read ) {
+		return;
+	}
+
+	defer( Parser_Shutdown( &parser ) );
+
+	u64 totalNumConfigs = Parser_ParseU64( &parser );
+	outBuilderOptions.resize( totalNumConfigs );
+	For ( u64, configIndex, 0, outBuilderOptions.size() ) {
+		outBuilderOptions[configIndex] = Parser_ParseBuildOptions( &parser );
+
+		Parser_SkipPast( &parser, '\n' );
+	}
+
+	parser.bufferPos += strlen( "tracked_source_files" );
+	u64 numSourceFiles = Parser_ParseU64( &parser );
+	outBuildInfoSourceFiles.resize( numSourceFiles );
+	For ( u64, sourceFileIndex, 0, outBuildInfoSourceFiles.size() ) {
+		buildInfoFile_t* buildInfoFile = &outBuildInfoSourceFiles[sourceFileIndex];
+
+		std::string timestampString;
+
+		Parser_ParseStringField( &parser, &buildInfoFile->filename, &timestampString );
+
+		buildInfoFile->lastWriteTime = cast( u64 ) atoll( timestampString.c_str() );
+	}
 }
 
 static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const char* inputFilePath ) {
@@ -1477,10 +855,10 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 					return false;
 				}
 
-				if ( config->build_source_file == NULL ) {
-					error( "Build source file for project \"%s\" config \"%s\" was never set.  You need to fill that in.\n", project->name, config->name );
-					return false;
-				}
+				//if ( config->build_source_file == NULL ) {
+				//	error( "Build source file for project \"%s\" config \"%s\" was never set.  You need to fill that in.\n", project->name, config->name );
+				//	return false;
+				//}
 
 				/*if ( config->binary_name == NULL ) {
 					error( "Binary name for project \"%s\" config \"%s\" was never set.  You need to fill that in.\n", project->name, config->name );
@@ -1616,10 +994,12 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 					// output path
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeOutput>%s</NMakeOutput>", config->options.binary_folder.c_str() ) ) );
 
-					const char* buildSourceFile = config->build_source_file;
+					const char* buildInfoFilename = tprintf( ".builder\\%s%s", solution->name, BUILD_INFO_FILE_EXTENSION );
+					const char* fullConfigName = tprintf( "%s.%s.%s", project->name, platform, config->name );
 
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeBuildCommandLine>%s\\builder.exe %s %s%s</NMakeBuildCommandLine>", paths_get_app_path(), buildSourceFile, ARG_CONFIG, config->name ) ) );
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeReBuildCommandLine>%s\\builder.exe %s %s%s</NMakeReBuildCommandLine>", paths_get_app_path(), buildSourceFile, ARG_CONFIG, config->name ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeBuildCommandLine>%s\\builder.exe %s %s%s</NMakeBuildCommandLine>", paths_get_app_path(), buildInfoFilename, ARG_CONFIG, fullConfigName ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeReBuildCommandLine>%s\\builder.exe %s %s%s</NMakeReBuildCommandLine>", paths_get_app_path(), buildInfoFilename, ARG_CONFIG, fullConfigName ) ) );
+
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeCleanCommandLine>%s\\builder.exe --nuke %s</NMakeCleanCommandLine>", paths_get_app_path(), config->options.binary_folder.c_str() ) ) );
 
 					// preprocessor definitions
@@ -1805,186 +1185,863 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 	// generate .build_info file
 	{
-		//File buildInfoFile = file_open_or_create( tprintf( "%s.%s", solution->name, BUILD_INFO_FILE_EXTENSION ) );
-		File buildInfoFile = file_open_or_create( "test.dat" );
-		defer( file_close( &buildInfoFile ) );
+		const char* buildInfoFilename = tprintf( "%s\\.builder\\%s%s", inputFilePath, solution->name, BUILD_INFO_FILE_EXTENSION );
 
-		CHECK_WRITE( file_write( &buildInfoFile, tprintf( "solution: %s\n", solution->name ) ) );
-		CHECK_WRITE( file_write( &buildInfoFile, tprintf( "path: %s\n", solution->path ) ) );
+		std::vector<BuilderOptions> allBuilderOptions;
+		For( u64, platformIndex, 0, solution->platforms.size() ) {
+			const char* platform = solution->platforms[platformIndex];
 
-		// platforms
-		SerializeCStringArray( &buildInfoFile, solution->platforms, "platforms" );
+			For( u64, projectIndex, 0, solution->projects.size() ) {
+				VisualStudioProject* project = &solution->projects[projectIndex];
 
-		// projects
-		CHECK_WRITE( file_write( &buildInfoFile, "projects" ) );
-		SerializeU64( &buildInfoFile, solution->projects.size() );
+				For( u64, configIndex, 0, project->configs.size() ) {
+					VisualStudioConfig* config = &project->configs[configIndex];
 
-		For ( u64, projectIndex, 0, solution->projects.size() ) {
-			VisualStudioProject* project = &solution->projects[projectIndex];
+					// TODO(DM): 23/10/2024: I'm still not sure if this is the right answer yet
+					// but it means that we can serialize ONLY the BuilderOptions without having to also serialize visual studio project/solution information
+					config->options.config = tprintf( "%s.%s.%s", project->name, platform, config->name );
 
-			CHECK_WRITE( file_write( &buildInfoFile, tprintf( "%s\n", project->name ) ) );
-
-			// source files
-			SerializeCStringArray( &buildInfoFile, project->source_files, "source_files" );
-
-			// configs
-			CHECK_WRITE( file_write( &buildInfoFile, "configs" ) );
-			SerializeU64( &buildInfoFile, project->configs.size() );
-
-			For ( u64, configIndex, 0, project->configs.size() ) {
-				VisualStudioConfig* config = &project->configs[configIndex];
-
-				CHECK_WRITE( file_write( &buildInfoFile, tprintf( "name: %s\n", config->name ) ) );
-				CHECK_WRITE( file_write( &buildInfoFile, tprintf( "build_source_file: %s\n", config->build_source_file ) ) );
-				CHECK_WRITE( file_write( &buildInfoFile, tprintf( "output_directory: %s\n", config->output_directory ) ) );
-
-				// dont serialize debugger arguments
-				// changing those doesnt mean we need to rebuild
-
-				SerializeBuilderOptions( &buildInfoFile, &config->options );
-			}
-		}
-	}
-
-	// test deserialize file
-	{
-		VisualStudioSolution parsedSolution = {};
-
-		// parse it
-		{
-			parser_t parser = {};
-			Parser_Init( &parser, "test.dat" );
-			defer( Parser_Shutdown( &parser ) );
-
-			parsedSolution.name = Parser_ParseStringField( &parser );
-			parsedSolution.path = Parser_ParseStringField( &parser );
-
-			parsedSolution.platforms = Parser_ParseStringFieldArray( &parser );
-
-			parser.bufferPos += strlen( "projects" );
-
-			u64 numProjects = Parser_ParseU64( &parser );
-			parsedSolution.projects = std::vector<VisualStudioProject>( numProjects );
-
-			For ( u64, projectIndex, 0, parsedSolution.projects.size() ) {
-				VisualStudioProject* project = &parsedSolution.projects[projectIndex];
-
-				project->name = Parser_ParseLine( &parser );
-
-				project->source_files = Parser_ParseStringFieldArray( &parser );
-
-				parser.bufferPos += strlen( "configs" );
-
-				u64 numConfigs = Parser_ParseU64( &parser );
-				project->configs = std::vector<VisualStudioConfig>( numConfigs );
-
-				For ( u64, i, 0, project->configs.size() ) {
-					VisualStudioConfig* config = &project->configs[i];
-
-					config->name = Parser_ParseStringField( &parser );
-					config->build_source_file = Parser_ParseStringField( &parser );
-					config->output_directory = Parser_ParseStringField( &parser );
-
-					config->options = Parser_ParseBuildOptions( &parser );
+					allBuilderOptions.push_back( config->options );
 				}
 			}
 		}
+
+		File buildInfoFile = file_open_or_create( buildInfoFilename );
+		defer( file_close( &buildInfoFile ) );
+
+		SerializeBuilderOptions( &buildInfoFile, allBuilderOptions );
+
+		file_write( &buildInfoFile, "tracked_source_files" );
+		SerializeU64( &buildInfoFile, 0 );
 	}
 
 	return true;
 }
 
-//static bool8 GenerateVisualStudioProject( VisualStudioProject* project )
-//{
-//	assert( project );
-//
-//	File vcxproj = file_open_or_create( tprintf( "%s.vcxproj",project->name ) );
-//	defer( file_close( &vcxproj ) );
-//
-//	if ( vcxproj.ptr == nullptr )
-//	{
-//		return false;
-//	}
-//
-//	file_write_line( &vcxproj,					"<?xml version=\"1.0\" encoding=\"utf-8\"?>" );
-//
-//	file_write_line( &vcxproj,					"<Project DefaultTargets=\"Build\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">" );
-//
-//	file_write_line( &vcxproj,					"  <ItemGroup Label=\"ProjectConfigurations\">" );
-//	For ( u64, i, 0, project->configs.count ) {
-//		// TODO: Alternative targets
-//		file_write_line( &vcxproj, tprintf(		"    <ProjectConfiguration Include=\"%s\"\">"				, project->configs[i] ) );
-//		file_write_line( &vcxproj, tprintf(		"      <Configuration>%s</Configuration>"					, project->configs[i] ) );
-//		file_write_line( &vcxproj,				"      <Platform>x64</Platform>"																  );
-//		file_write_line( &vcxproj,				"    </ProjectConfiguration>"																	  );
-//	}
-//	file_write_line( &vcxproj,					"  </ItemGroup>" );
-//
-//	file_write_line( &vcxproj,					"  <PropertyGroup Label=\"Globals\">" 						);
-//	file_write_line( &vcxproj, tprintf(			"    <ProjectGuid> %u </ProjectGuid>" 						, hash_string(project->project_name , 59049 ) ) );
-//	file_write_line( &vcxproj,					"    <Keyword>Win32Proj</Keyword>" 							);
-//	file_write_line( &vcxproj, tprintf(			"    <RootNamespace> %s </RootNamespace>" 					, project->project_name ) );
-//	file_write_line( &vcxproj,					"  </PropertyGroup>"						 				);
-//
-//	file_write_line( &vcxproj,					"  <ItemGroup>"												);
-//	For ( u64, i, 0, project->source_files.count ) {
-//		// TODO: deep recursive file search for ccp, h, c, hpp, inl files
-//		file_write_line( &vcxproj, tprintf(		"    <ClCompile Include=\"%s\" />"							, project->source_files[i]				) );
-//	}
-//	file_write_line( &vcxproj,					"  </ItemGroup>"											);
-//
-//	file_write_line( &vcxproj,					"  <PropertyGroup Condition=\"'$(VisualStudioVersion)' == '16.0'\">" 				);
-//	file_write_line( &vcxproj,					"      <PlatformToolset>v142</PlatformToolset> <!-- VS 2019 -->" 					);
-//	file_write_line( &vcxproj,					"  </PropertyGroup>" 																);
-//	file_write_line( &vcxproj,					"  <PropertyGroup Condition=\"'$(VisualStudioVersion)' == '17.0'\">" 				);
-//	file_write_line( &vcxproj,					"      <PlatformToolset>v143</PlatformToolset> <!-- VS 2022 -->" 					);
-//	file_write_line( &vcxproj,					"  </PropertyGroup>" 																);
-//
-//	file_write_line( &vcxproj, 					"</Project>"																		);
-//
-//	//This bit is a bit of guff- I got GPT to write it for me and it only really works for debug and release, Win32 && x64. Need a first pass though.
-//	For ( u64, platform_idx, 0, project->platforms.count )
-//	{
-//		const char* platform = project->platforms[platform_idx]; // Example: "x64", "Win32"
-//
-//		For ( u64, config_idx, 0, project->configs.count )
-//		{
-//			const char* config = project->configs[config_idx]; // Example: "Debug", "Release"
-//
-//			file_write_line( &vcxproj, tprintf( "  <PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='%s|%s'\">", config, platform ) );
-//			
-//			// Note(TOM): this assumes two things: 
-//			//			A) you use vis studio generation ONLY to point to a build script; NOT the actual source files. This is because otherwise you need to get source per config 
-//			//					which would be tricky since they are conditionally defined in build options. NOTE: the source files in this options is NOT appropiate, 
-//			//					since it's the superset of all the files needed for SLN visibility, not the ones that should actually get compiled (eg linux files visible despite building windows)
-//			//			B) there's only one cpp involved in your build script. TODO(TOM): make an array. This assumption doesn't need to stick
-//			file_write_line( &vcxproj, tprintf( "    <NMakeBuildCommandLine>builder.exe %s %s</NMakeBuildCommandLine>", project->build_script_path, config ) );
-//
-//			//NOTE(TOM): OUTPUT: This is tricky. I think it's needed for the debugger. The output location is defined in the build script and could be different per config.
-//			//					That means duplicating logic between the two. That's gnarly. 
-//			//					Perhaps there could be an intermediate set build location at config/platform/build.exe we could use for VS debugging, and then copy that file to user's custom location
-//			file_write_line( &vcxproj, tprintf( "    <NMakeOutput>??? This is difficult cos it's so dependent on the build logic/NMakeOutput>", config ) );
-//			file_write_line( &vcxproj, tprintf( "    <NMakeBuildCommandLine>builder.exe %s %s</NMakeBuildCommandLine>", project->build_script_path, config ) );
-//			
-//			// NOTE(TOM): "Standard" preprocessor defns. Ternaries aren't appropiate for configs that aren't debug or release but I wanted SOMETHING working
-//			const char* win32_definition = string_equals( platform, "Win32" ) ? "WIN32;"  : "";
-//			const char* debug_definition = string_equals( config,   "Debug" ) ? "_DEBUG;" : "NDEBUG;";
-//
-//			// Write the preprocessor definitions
-//			file_write_line(
-//				&vcxproj,
-//				tprintf(
-//					"    <NMakePreprocessorDefinitions>%s%s$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>",
-//					win32_definition,    // WIN32 definition if the platform is Win32
-//					debug_definition     // _DEBUG for Debug, NDEBUG for Release
-//				)
-//			);
-//
-//			file_write_line( &vcxproj, "  </PropertyGroup>" );
-//		}
-//	}
-//
-//	file_write_line( &vcxproj,					"</Project>\n" );
-//
-//	return true;
-//}
+int main( int argc, char** argv ) {
+	float64 buildStart = time_ms();
+	defer(
+		float64 buildEnd = time_ms();
+		printf( "Build finished: %f ms\n\n", buildEnd - buildStart );
+	);
+
+	core_init( MEM_KILOBYTES( 1 ), MEM_MEGABYTES( 64 ) );
+	defer( core_shutdown() );
+
+	// TODO(DM): 23/10/2024: we dont use this?
+	set_command_line_args( argc, argv );
+
+	printf( "Builder v%d.%d.%d\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+
+	buildContext_t context = CreateBuildContext();
+	context.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS | BUILD_CONTEXT_FLAG_SHOW_STDOUT;
+
+	// check if we need to perform first time setup
+	{
+		bool8 doFirstTimeSetup = false;
+
+		// on exit set the CWD back to what we had before
+		char oldCWD[MAX_PATH] = {};
+		GetCurrentDirectory( MAX_PATH, oldCWD );
+		defer( SetCurrentDirectory( oldCWD ) );
+
+		// set CWD to whereever builder lives for first time setup
+		SetCurrentDirectory( paths_get_app_path() );
+
+		{
+			const char* clangAbsolutePath = tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() );
+
+			FileInfo fileInfo;
+			File file = file_find_first( clangAbsolutePath, &fileInfo );
+
+			// if we cant find our copy of clang then we definitely need to run first time setup
+			if ( file.ptr == INVALID_HANDLE_VALUE ) {
+				doFirstTimeSetup = true;
+			} else {
+				// otherwise if we have clang but the version doesnt match, then we still need to re-download and re-install it
+				bool8 correctClangVersion = false;
+
+				Array<const char*> args;
+				array_add( &args, clangAbsolutePath );
+				array_add( &args, "-v" );
+
+				Process* clangVersionCheck = process_create( &args, NULL );
+				defer( process_destroy( clangVersionCheck ) );
+
+				// this string is at the very start of "clang -v"
+				const char* clangVersionString = tprintf( "clang version %s", CLANG_VERSION );
+
+				char buffer[1024];
+				while ( process_read_stdout( clangVersionCheck, buffer, 1024 ) ) {
+					if ( string_contains( buffer, clangVersionString ) ) {
+						correctClangVersion = true;
+						break;
+					}
+				}
+
+				s32 exitCode = process_join( &clangVersionCheck );
+				assertf( exitCode == 0, "Something went terribly wrong..\n" );
+
+				if ( !correctClangVersion ) {
+					warning( "Required Clang version not found.  I will need to re-download and re-install Clang.\n" );
+					doFirstTimeSetup = true;
+				}
+			}
+		}
+
+		if ( doFirstTimeSetup ) {
+			printf( "Performing first time setup...\n" );
+
+			const char* clangInstallerFilename = tprintf( "LLVM-%s-win64.exe", CLANG_VERSION );
+
+			folder_create_if_it_doesnt_exist( ".\\temp" );
+
+			// download clang
+			{
+				printf( "Downloading Clang (please wait) ...\n" );
+
+				Array<const char*> args;
+				array_reserve( &args, 4 );
+				array_add( &args, "curl" );
+				array_add( &args, "-o" );
+				array_add( &args, "temp\\clang_installer.exe" );
+				array_add( &args, "-L" );
+				array_add( &args, tprintf( "https://github.com/llvm/llvm-project/releases/download/llvmorg-%s/%s", CLANG_VERSION, clangInstallerFilename ) );
+
+				s32 exitCode = RunProc( &args, NULL, false, true );
+
+				if ( exitCode == 0 ) {
+					printf( "Done.\n" );
+				} else {
+					error( "Failed to download Clang.  The CURL HTTP request failed.\n" );
+					return 1;
+				}
+			}
+
+			// install clang
+			{
+				printf( "Installing Clang (please wait) ... " );
+
+				const char* clangInstallFolder = "clang";
+
+				folder_create_if_it_doesnt_exist( clangInstallFolder );
+
+				// set clang installer command line arguments
+				// taken from: https://discourse.llvm.org/t/using-clang-windows-installer-from-command-line/49698/2 which references https://nsis.sourceforge.io/Docs/Chapter3.html#installerusagecommon
+				Array<const char*> args;
+				array_reserve( &args, 4 );
+				array_add( &args, ".\\temp\\clang_installer.exe" );
+				array_add( &args, "/S" );		// install in silent mode
+				array_add( &args, tprintf( "/D=%s\\%s", paths_get_app_path(), clangInstallFolder ) );	// set the install directory, absolute paths only
+
+				Array<const char*> envVars;
+				array_add( &envVars, "__compat_layer=RunAsInvoker" );	// this tricks the subprocess into thinking we are running with elevation
+
+				s32 exitCode = RunProc( &args, &envVars );
+
+				if ( exitCode == 0 ) {
+					printf( "Done.\n" );
+				} else {
+					error( "Failed to install Clang.\n" );
+					return 1;
+				}
+			}
+
+			// clean up temp files
+			{
+				printf( "Cleaning up ... " );
+
+				NukeFolder( "temp", true );
+				folder_delete( "temp" );
+			}
+
+			doFirstTimeSetup = false;
+		}
+	}
+
+	const char* inputFile = NULL;
+
+	const char* inputConfig = NULL;
+	u64 inputConfigNameHash = 0;
+
+	bool8 doingBuildFromSourceFile = false;
+	bool8 doingBuildFromBuildInfo = false;
+
+	for ( s32 argIndex = 1; argIndex < argc; argIndex++ ) {
+		const char* arg = argv[argIndex];
+		const u64 argLen = strlen( arg );
+
+		if ( string_equals( arg, ARG_HELP_SHORT ) || string_equals( arg, ARG_HELP_LONG ) ) {
+			return ShowUsage( 0 );
+		}
+
+		if ( string_ends_with( arg, ".c" ) || string_ends_with( arg, ".cpp" ) ) {
+			if ( inputFile != NULL ) {
+				error( "You've already specified a file for me to build.  If you want me to build more than one source file, specify it via %s().\n", SET_BUILDER_OPTIONS_FUNC_NAME );
+				return 1;
+			}
+
+			inputFile = arg;
+			doingBuildFromSourceFile = true;
+
+			continue;
+		}
+
+		if ( string_ends_with( arg, BUILD_INFO_FILE_EXTENSION ) ) {
+			if ( inputFile != NULL ) {
+				error( "You've already specified a file for me to build.  If you want me to build more than one source file, specify it via %s().\n", SET_BUILDER_OPTIONS_FUNC_NAME );
+				return 1;
+			}
+
+			inputFile = arg;
+			doingBuildFromBuildInfo = true;
+
+			continue;
+		}
+
+		if ( string_starts_with( arg, ARG_CONFIG ) ) {
+			const char* equals = strchr( arg, '=' );
+
+			if ( !equals ) {
+				error( "I detected that you want to set a config, but you never gave me the equals (=) immediately after it.  You need to do that.\n" );
+
+				return ShowUsage( 1 );
+			}
+
+			const char* configName = equals + 1;
+
+			if ( strlen( configName ) < 1 ) {
+				error( "You specified the start of the config arg, but you never actually gave me a name for the config.  I need that.\n" );
+
+				return ShowUsage( 1 );
+			}
+
+			inputConfig = configName;
+			inputConfigNameHash = hash_string( inputConfig, 0 );
+
+			continue;
+		}
+
+		if ( string_equals( arg, ARG_NUKE ) ) {
+			if ( argIndex == argc - 1 ) {
+				error( "You passed in " ARG_NUKE " but you never told me what folder you want me to nuke.  I need to know!" );
+				return 1;
+			}
+
+			const char* folderToNuke = argv[argIndex + 1];
+
+			printf( "Nuking \"%s\"\n", folderToNuke );
+
+			float64 startTime = time_ms();
+
+			NukeFolder( folderToNuke, true );
+
+			float64 endTime = time_ms();
+
+			printf( "Done.  %f ms\n", endTime - startTime );
+
+			return 0;
+		}
+
+		// unrecognised arg, show error
+		error( "Unrecognised argument \"%s\".\n", arg );
+		return 1;
+	}
+
+	// validate input file
+	if ( inputFile == NULL ) {
+		error(
+			"You haven't told me what source files I need to build.  I need one.\n"
+			"Use " ARG_HELP_SHORT " if you need help.\n"
+		);
+
+		return 1;
+	} else {
+		// DM!!! re-do this error message
+		if ( !doingBuildFromSourceFile && !doingBuildFromBuildInfo ) {
+			error(
+				"You specified \"%s\" as the input file, but I don't recognize that type of file.\n"
+				"The file you give me must be either a \".cpp\" or a \"%s\" file.  Give me one of those instead.\n"
+				, inputFile, BUILD_INFO_FILE_EXTENSION
+			);
+
+			return 1;
+		}
+	}
+
+	u64 inputFileLength = strlen( inputFile );
+
+	// the default binary folder is the same folder as the source file
+	const char* inputFilePath = paths_remove_file_from_path( inputFile );
+	const char* inputFilePathAbsolute = paths_remove_file_from_path( paths_get_absolute_path( inputFile ) );
+	const char* inputFileNoPath = paths_remove_path_from_file( inputFile );
+
+	const char* dotBuilderFolder = NULL;
+	const char* buildInfoFilename = NULL;
+
+	if ( doingBuildFromBuildInfo ) {
+		dotBuilderFolder = inputFilePath;
+		buildInfoFilename = inputFile;
+	} else {
+		dotBuilderFolder = tprintf( "%s\\.builder", inputFilePathAbsolute );
+		buildInfoFilename = tprintf( "%s\\%s%s", dotBuilderFolder, inputFileNoPath, BUILD_INFO_FILE_EXTENSION );
+	}
+
+	/*const char* dotBuilderFolder = inputFilePathAbsolute;
+	if ( doingBuildFromSourceFile ) {
+		dotBuilderFolder = tprintf( "%s\\.builder", inputFilePathAbsolute );
+	}
+
+	const char* buildInfoFilename = tprintf( "%s\\%s%s", dotBuilderFolder, inputFileNoPath, BUILD_INFO_FILE_EXTENSION );*/
+
+	bool8 foundBuildInfo = false;
+
+	std::vector<BuilderOptions> parsedBuilderOptions;
+	std::vector<buildInfoFile_t> buildInfoSourceFiles;
+	Parser_ParseBuildInfo( buildInfoFilename, parsedBuilderOptions, buildInfoSourceFiles );
+
+	For ( u64, builderOptionsIndex, 0, parsedBuilderOptions.size() ) {
+		BuilderOptions* foundBuilderOptions = &parsedBuilderOptions[builderOptionsIndex];
+
+		u64 foundConfigHash = hash_string( foundBuilderOptions->config.c_str(), 0 );
+
+		if ( inputConfigNameHash == foundConfigHash ) {
+			context.options = *foundBuilderOptions;
+			foundBuildInfo = true;
+			break;
+		}
+	}
+
+	if ( doingBuildFromBuildInfo && !foundBuildInfo ) {
+		fatal_error( "SOMETHING DONE GONE WRONG WITH VISUAL STUDIO BUILD.\n" );
+		return 1;
+	}
+
+	// figure out if we need to even rebuild
+	// get all the code files from the .build_info file
+	// if none of the code files have changed since we last checked then do not even try to rebuild
+	{
+		bool8 rebuild = false;
+
+		File buildInfoFile = file_open( buildInfoFilename );
+
+		// if we cant find a .build_info file then assume we never built this binary before
+		if ( buildInfoFile.ptr == NULL ) {
+			printf( "Can't open %s.  Rebuilding binary...\n", buildInfoFilename );
+			rebuild = true;
+		} else {
+			// otherwise we have one, so get the build times out of it and check them against what we had before
+			defer( file_close( &buildInfoFile ) );
+
+#if 0
+			char* fileBuffer = NULL;
+			u64 fileBufferLength = 0;
+			bool8 read = file_read_entire( buildInfoFilename, &fileBuffer, &fileBufferLength );
+
+			if ( read ) {
+				defer( file_free_buffer( &fileBuffer ) );
+
+				u32 sourceFileIndex = 0;
+
+				// parse the .build_info file
+				// for each source file, get the filename and the last write time
+				u64 offset = 0;
+				while ( offset < fileBufferLength ) {
+					const char* lineStart = &fileBuffer[offset];
+					const char* colon = strstr( lineStart, ": " );
+					const char* lineEnd = strstr( lineStart, "\r\n" );
+					if ( !lineEnd ) lineEnd = strstr( lineStart, "\n" );
+
+					u64 filenameLength = cast( u64 ) colon - cast( u64 ) lineStart;
+					filenameLength++;
+
+					colon += 2;
+
+					u64 timestampLength = cast( u64 ) lineEnd - cast( u64 ) colon;
+					timestampLength++;
+
+					char* filename = cast( char* ) mem_temp_alloc( filenameLength * sizeof( char ) );
+					strncpy( filename, lineStart, filenameLength );
+					filename[filenameLength - 1] = 0;
+
+					char* timestampString = cast( char* ) mem_temp_alloc( timestampLength * sizeof( char ) );
+					strncpy( timestampString, colon, timestampLength );
+					timestampString[timestampLength - 1] = 0;
+
+					u64 lastWriteTime = cast( u64 ) atoll( timestampString );
+
+					FileInfo sourceFileInfo;
+					File sourceFile = file_find_first( filename, &sourceFileInfo );
+
+					assert( sourceFile.ptr != INVALID_HANDLE_VALUE );
+
+					if ( lastWriteTime != sourceFileInfo.last_write_time ) {
+						rebuild = true;
+						break;
+					}
+
+					sourceFileIndex++;
+
+					u64 lineLength = cast( u64 ) ( lineEnd + 1 ) - cast( u64 ) lineStart;
+					offset += lineLength;
+				}
+			} else {
+				error( "Found %s but failed to read it.  Rebuilding binary...\n", buildInfoFilename );
+				rebuild = true;
+			}
+#else
+			if ( buildInfoSourceFiles.empty() ) {
+				rebuild = true;
+			} else {
+				For ( u64, fileIndex, 0, buildInfoSourceFiles.size() ) {
+					buildInfoFile_t* sourceFileInBuildInfo = &buildInfoSourceFiles[fileIndex];
+
+					FileInfo fileInfo;
+					File file = file_find_first( sourceFileInBuildInfo->filename, &fileInfo );
+
+					if ( sourceFileInBuildInfo->lastWriteTime != fileInfo.last_write_time ) {
+						rebuild = true;
+						break;
+					}
+				}
+			}
+#endif
+		}
+
+		if ( !rebuild ) {
+			printf( "Skipping build for %s.\n", buildInfoFilename );
+			return 0;
+		}
+	}
+
+	// set default compiler options that we know we need
+	// get all BuilderOptions from the .build_info
+	if ( !foundBuildInfo ) {
+		if ( inputConfig ) {
+			context.options.config = inputConfig;
+		}
+
+		//context.options.defines.push_back( "_CRT_SECURE_NO_WARNINGS" );
+
+		// add the folder that builder lives in as an additional include path
+		// so that people can just include builder.h without having to add the include path manually every time
+		context.options.additional_includes.push_back( paths_get_app_path() );
+
+#if defined( _WIN64 )
+		context.options.additional_libs.push_back( "user32.lib" );
+
+		// MSVCRT is needed for ABI compatibility between builder and the user config DLL
+#if defined( _DEBUG )
+		context.options.additional_libs.push_back( "msvcrtd.lib" );
+#elif defined( NDEBUG )
+		context.options.additional_libs.push_back( "msvcrt.lib" );
+#endif
+
+		// TODO(DM): 12/10/2024: are these debug only? are they even needed?
+		//context.options.additional_libs.push_back( "Shlwapi.lib" );
+		//context.options.additional_libs.push_back( "DbgHelp.lib" );
+#endif // defined( _WIN64 )
+
+		context.options.ignore_warnings.push_back( "-Wno-newline-eof" );
+		context.options.ignore_warnings.push_back( "-Wno-pointer-integer-compare" );
+		context.options.ignore_warnings.push_back( "-Wno-declaration-after-statement" );
+		context.options.ignore_warnings.push_back( "-Wno-gnu-zero-variadic-macro-arguments" );
+		context.options.ignore_warnings.push_back( "-Wno-cast-align" );
+		context.options.ignore_warnings.push_back( "-Wno-bad-function-cast" );
+		context.options.ignore_warnings.push_back( "-Wno-format-nonliteral" );
+		context.options.ignore_warnings.push_back( "-Wno-missing-braces" );
+		context.options.ignore_warnings.push_back( "-Wno-switch-enum" );
+		context.options.ignore_warnings.push_back( "-Wno-covered-switch-default" );
+		context.options.ignore_warnings.push_back( "-Wno-double-promotion" );
+		context.options.ignore_warnings.push_back( "-Wno-cast-qual" );
+		context.options.ignore_warnings.push_back( "-Wno-unused-variable" );
+		context.options.ignore_warnings.push_back( "-Wno-unused-function" );
+		context.options.ignore_warnings.push_back( "-Wno-empty-translation-unit" );
+		context.options.ignore_warnings.push_back( "-Wno-zero-as-null-pointer-constant" );
+		context.options.ignore_warnings.push_back( "-Wno-c++98-compat-pedantic" );
+		context.options.ignore_warnings.push_back( "-Wno-unused-macros" );
+		context.options.ignore_warnings.push_back( "-Wno-unsafe-buffer-usage" );		// LLVM 17.0.1
+		context.options.ignore_warnings.push_back( "-Wno-reorder-init-list" );			// C++: "designated initializers must be in order"
+		context.options.ignore_warnings.push_back( "-Wno-old-style-cast" );				// C++: "C-style casts are banned"
+		context.options.ignore_warnings.push_back( "-Wno-global-constructors" );		// C++: "declaration requires a global destructor"
+		context.options.ignore_warnings.push_back( "-Wno-exit-time-destructors" );		// C++: "declaration requires an exit-time destructor" (same as the above, basically)
+		context.options.ignore_warnings.push_back( "-Wno-missing-field-initializers" );	// LLVM 18.1.8
+	}
+
+	s32 exitCode = 0;
+
+	Library library;
+	defer( if ( library.ptr ) library_unload( &library ) );
+
+	typedef void ( *preBuildFunc_t )( BuilderOptions* options );
+	typedef void ( *postBuildFunc_t )( BuilderOptions* options );
+
+	preBuildFunc_t preBuildFunc = NULL;
+	postBuildFunc_t postBuildFunc = NULL;
+
+	// build config step
+	// see if they have set_builder_options() overridden
+	// if they do, then build a DLL first and call that function to set some more build options
+	{
+		typedef void ( *setBuilderOptionsFunc_t )( BuilderOptions* options );
+		typedef void ( *setVisualStudioOptionsFunc_t )( VisualStudioSolution* solution );
+
+		buildContext_t userBuildConfigContext = CreateBuildContext();
+		userBuildConfigContext.flags = BUILD_CONTEXT_FLAG_SHOW_STDOUT;
+		userBuildConfigContext.options = context.options;
+
+		if ( doingBuildFromSourceFile ) {
+			userBuildConfigContext.options.source_files.push_back( inputFile );
+		}
+
+		userBuildConfigContext.options.binary_name = tprintf( "%s.dll", paths_remove_path_from_file( inputFile ) );
+		userBuildConfigContext.options.binary_folder = dotBuilderFolder;
+		userBuildConfigContext.options.defines.push_back( "BUILDER_DOING_USER_CONFIG_BUILD" );
+
+		// this is needed because this tells the compiler what to set _ITERATOR_DEBUG_LEVEL to
+		// ABI compatibility will be broken if this is not the same between all binaries
+#if defined( _DEBUG )
+		userBuildConfigContext.options.defines.push_back( "_DEBUG" );
+		userBuildConfigContext.options.optimization_level = OPTIMIZATION_LEVEL_O0;
+#elif defined( NDEBUG )
+		userBuildConfigContext.options.defines.push_back( "NDEBUG" );
+		userBuildConfigContext.options.optimization_level = OPTIMIZATION_LEVEL_O3;
+#endif
+
+		userBuildConfigContext.options.ignore_warnings.push_back( "-Wno-missing-prototypes" );	// otherwise the user has to forward declare functions like set_builder_options and thats annoying
+		userBuildConfigContext.options.ignore_warnings.push_back( "-Wno-unused-parameter" );	// user can call set_pre_build (for example) and not actually touch the BuilderOptions parm
+
+		userBuildConfigContext.fullBinaryName = tprintf( "%s\\%s", userBuildConfigContext.options.binary_folder.c_str(), userBuildConfigContext.options.binary_name.c_str() );
+
+		folder_create_if_it_doesnt_exist( userBuildConfigContext.options.binary_folder.c_str() );
+
+		exitCode = BuildDynamicLibrary( &userBuildConfigContext );
+
+		if ( exitCode != 0 ) {
+			error( "Pre-build failed!\n" );
+			return 1;
+		}
+
+		library = library_load( tprintf( "%s\\%s", userBuildConfigContext.options.binary_folder.c_str(), userBuildConfigContext.options.binary_name.c_str() ) );
+
+		// generate visual studio solution now if requested
+		setVisualStudioOptionsFunc_t setVisualStudioOptionsFunc = cast( setVisualStudioOptionsFunc_t ) library_get_proc_address( library, SET_VISUAL_STUDIO_OPTIONS_FUNC_NAME );
+		if ( setVisualStudioOptionsFunc ) {
+			VisualStudioSolution solution;
+			setVisualStudioOptionsFunc( &solution );
+
+			For ( u64, projectIndex, 0, solution.projects.size() ) {
+				VisualStudioProject* project = &solution.projects[projectIndex];
+
+				For ( u64, configIndex, 0, project->configs.size() ) {
+					VisualStudioConfig* config = &project->configs[configIndex];
+
+					// all the source files will be relative to the .builder folder, which lives whereever the visual studio solution generation source file lives
+					// therefore the source files will need to be relative to one folder up from .build_info file
+					// so update all the user-specified source file paths to reflect that
+					For ( u64, sourceFileIndex, 0, config->options.source_files.size() ) {
+						config->options.source_files[sourceFileIndex] = tprintf( "%s\\..\\%s", inputFilePath, config->options.source_files[sourceFileIndex] );
+					}
+				}
+			}
+
+			printf( "Generating Visual Studio Solution\n" );
+
+			bool8 generated = GenerateVisualStudioSolution( &solution, inputFilePathAbsolute );
+
+			if ( !generated ) {
+				error( "Failed to generate Visual Studio solution.\n" );	// TODO(DM): better error message
+				return 1;
+			}
+
+			printf( "Done\n" );
+
+			return 0;
+		}
+
+		// now get the user-specified options
+		setBuilderOptionsFunc_t setBuilderOptionsFunc = cast( setBuilderOptionsFunc_t ) library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME );
+		if ( setBuilderOptionsFunc ) {
+			setBuilderOptionsFunc( &context.options );
+
+			For ( u64, includeIndex, 0, context.options.additional_includes.size() ) {
+				const char* additionalInclude = context.options.additional_includes[includeIndex];
+
+				if ( paths_is_path_absolute( additionalInclude ) ) {
+					context.options.additional_includes[includeIndex] = additionalInclude;
+				} else {
+					context.options.additional_includes[includeIndex] = tprintf( "%s\\%s", inputFilePathAbsolute, additionalInclude );
+				}
+			}
+
+			For ( u64, libPathIndex, 0, context.options.additional_lib_paths.size() ) {
+				context.options.additional_lib_paths[libPathIndex] = tprintf( "%s\\%s", inputFilePathAbsolute, context.options.additional_lib_paths[libPathIndex] );
+			}
+		}
+
+		preBuildFunc = cast( preBuildFunc_t ) library_get_proc_address( library, PRE_BUILD_FUNC_NAME );
+		postBuildFunc = cast( postBuildFunc_t ) library_get_proc_address( library, POST_BUILD_FUNC_NAME );
+	}
+
+	// get all the "compilation units" that we are actually going to give to the compiler
+	// if no source files were added in set_builder_options() then assume we want to build the same file as the one specified via the command line
+	if ( context.options.source_files.size() == 0 ) {
+		context.options.source_files.push_back( inputFile );
+	} else {
+		// otherwise the user told us to build other source files, so go find and build those instead
+		// keep this as a std::vector because this gets fed back into BuilderOptions::source_files
+		std::vector<const char*> finalSourceFilesToBuild;
+
+		For ( u64, sourceFileIndex, 0, context.options.source_files.size() ) {
+			const char* sourceFile = context.options.source_files[sourceFileIndex];
+
+			// DM!!!	when building with a .build_info file the file Paths here are wrong
+			// 			go fix them
+
+			const char* fileSearchPath = NULL;
+			if ( doingBuildFromBuildInfo ) {
+				fileSearchPath = sourceFile;
+			} else {
+				fileSearchPath = tprintf( "%s\\%s", inputFilePathAbsolute, sourceFile );
+			}
+
+			FileInfo fileInfo;
+			File firstFile = file_find_first( fileSearchPath, &fileInfo );
+
+			if ( firstFile.ptr == INVALID_HANDLE_VALUE ) {
+				error( "Source file \"%s\" can't be found.  Is it correct?\n", sourceFile );
+				return 1;
+			}
+
+			do {
+				if ( string_equals( sourceFile, "." ) || string_equals( sourceFile, ".." ) ) {
+					continue;
+				}
+
+				const char* foundSourceFile = NULL;
+
+				if ( PathHasSlash( sourceFile ) ) {
+					const char* localPath = paths_remove_file_from_path( sourceFile );
+
+					//foundSourceFile = tprintf( "%s\\%s\\%s", inputFilePathAbsolute, localPath, fileInfo.filename );
+					foundSourceFile = tprintf( "%s\\%s", localPath, fileInfo.filename );
+				} else {
+					foundSourceFile = tprintf( "%s\\%s", inputFilePathAbsolute, fileInfo.filename );
+				}
+
+				finalSourceFilesToBuild.push_back( foundSourceFile );
+			} while ( file_find_next( &firstFile, &fileInfo ) );
+		}
+
+		context.options.source_files = finalSourceFilesToBuild;
+	}
+
+
+
+	// DM!!!	this broke at some point during the refactor!
+	//			go fix it!
+
+	// recursively resolve all includes found in each source file
+	Array<const char*> buildInfoFiles;
+	{
+		array_add_range( &buildInfoFiles, context.options.source_files.data(), context.options.source_files.size() );
+
+		// for each file, open it and get every include inside it
+		// then go through _those_ included files
+		For ( u64, sourceFileIndex, 0, buildInfoFiles.count ) {
+			const char* sourceFile = buildInfoFiles[sourceFileIndex];
+
+			const char* sourceFilePath = paths_remove_file_from_path( sourceFile );
+			const char* sourceFileNoPath = paths_remove_path_from_file( sourceFile );
+
+			char* fileBuffer = NULL;
+			u64 fileLength = 0;
+			bool8 read = file_read_entire( sourceFile, &fileBuffer, &fileLength );
+
+			if ( !read ) {
+				//error( "Failed to read %s.  Can't resolve includes for this file.\n", buildInfoFiles[sourceFileIndex] );
+				//return EXIT_FAILURE;
+				continue;
+			}
+
+			defer( file_free_buffer( &fileBuffer ) );
+
+			For ( u64, fileOffset, 0, fileLength ) {
+				if ( string_starts_with( fileBuffer + fileOffset, "#include" ) ) {
+					fileOffset += strlen( "#include" );
+
+					while ( fileBuffer[fileOffset] == ' ' ) {
+						fileOffset++;
+					}
+
+					if ( fileBuffer[fileOffset] == '"' ) {
+						// "local" include, so scan from where we are
+						const char* includeStart = fileBuffer + fileOffset;
+						includeStart++;
+
+						const char* includeEnd = strchr( includeStart, '"' );
+
+						u64 filenameLength = cast( u64 ) includeEnd - cast( u64 ) includeStart;
+						filenameLength++;
+
+						char* filename = cast( char* ) mem_temp_alloc( filenameLength * sizeof( char ) );
+						strncpy( filename, includeStart, filenameLength * sizeof( char ) );
+						filename[filenameLength - 1] = 0;
+
+						filename = tprintf( "%s\\%s", sourceFilePath, filename );
+
+						bool8 found = false;
+						For ( u64, fileIndex, 0, buildInfoFiles.count ) {
+							if ( string_equals( buildInfoFiles[fileIndex], filename ) ) {
+								found = true;
+								break;
+							}
+						}
+
+						if ( !found ) {
+							array_add( &buildInfoFiles, filename );
+						}
+					} else if ( fileBuffer[fileOffset] == '<' ) {
+						// "external" include, so scan all the external include folders that we know about
+						const char* includeStart = fileBuffer + fileOffset;
+						includeStart++;
+
+						const char* includeEnd = strchr( includeStart, '>' );
+
+						u64 filenameLength = cast( u64 ) includeEnd - cast( u64 ) includeStart;
+						filenameLength++;
+
+						char* filename = cast( char* ) mem_temp_alloc( filenameLength * sizeof( char ) );
+						strncpy( filename, includeStart, filenameLength * sizeof( char ) );
+						filename[filenameLength - 1] = 0;
+
+						const char* fullFilename = NULL;
+
+						For ( u64, includePathIndex, 0, context.options.additional_includes.size() ) {
+							const char* includePath = context.options.additional_includes[includePathIndex];
+
+							fullFilename = TryFindFile( filename, includePath );
+
+							if ( fullFilename != NULL ) {
+								break;
+							}
+						}
+
+						if ( fullFilename ) {
+							bool8 found = false;
+							For ( u64, fileIndex, 0, buildInfoFiles.count ) {
+								if ( string_equals( buildInfoFiles[fileIndex], fullFilename ) ) {
+									found = true;
+									break;
+								}
+							}
+
+							if ( !found ) {
+								array_add( &buildInfoFiles, fullFilename );
+							}
+						}
+						/*else {
+							error( "Failed to find external include \"%s\" from any of the additional include directories.\n" );
+						}*/
+					}
+				}
+
+				const char* lineEnd = strchr( fileBuffer + fileOffset, '\n' );
+				if ( !lineEnd ) lineEnd = strstr( fileBuffer + fileOffset, "\r\n" );
+				if ( !lineEnd ) lineEnd = fileBuffer + fileOffset;
+
+				u64 fileLineLength = cast( u64 ) lineEnd - cast( u64 ) ( fileBuffer + fileOffset );
+				fileLineLength = maxull( fileLineLength, 1ULL );	// TODO(DM): this line is hiding a bug in the parser - find the bug
+
+				fileOffset += fileLineLength;
+			}
+		}
+	}
+
+	if ( !context.options.binary_folder.empty() ) {
+		context.options.binary_folder = tprintf( "%s\\%s", inputFilePathAbsolute, context.options.binary_folder.c_str() );
+	} else {
+		context.options.binary_folder = inputFilePathAbsolute;
+	}
+
+	if ( !folder_create_if_it_doesnt_exist( context.options.binary_folder.c_str() ) ) {
+		fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".\n", SET_BUILDER_OPTIONS_FUNC_NAME, context.options.binary_folder.c_str() );
+		return 1;
+	}
+
+	// user didnt override the binary name via the callback
+	// so give them a binary name based off the first source file
+	if ( context.options.binary_name.empty() ) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-qual"
+		char* inputFileWithoutExtension = cast( char* ) mem_temp_alloc( ( inputFileLength + 1 ) * sizeof( char ) );
+		strncpy( inputFileWithoutExtension, inputFile, inputFileLength * sizeof( char ) );
+		inputFileWithoutExtension[inputFileLength] = 0;
+
+		inputFileWithoutExtension = cast( char* ) paths_remove_file_extension( paths_remove_path_from_file( inputFileWithoutExtension ) );
+
+		context.options.binary_name = inputFileWithoutExtension;
+#pragma clang diagnostic pop
+	}
+
+	context.fullBinaryName = tprintf( "%s\\%s", context.options.binary_folder.c_str(), context.options.binary_name.c_str() );
+
+	if ( !context.options.remove_file_extension ) {
+		context.fullBinaryName = tprintf( "%s.%s", context.fullBinaryName, GetFileExtensionFromBinaryType( context.options.binary_type ) );
+	}
+
+	// now we have everything we need
+	// build the actual program that the user wants to build
+	{
+		if ( preBuildFunc ) {
+			preBuildFunc( &context.options );
+		}
+
+		// now do the actual build
+		switch ( context.options.binary_type ) {
+			case BINARY_TYPE_EXE:
+				exitCode = BuildEXE( &context );
+				break;
+
+			case BINARY_TYPE_DYNAMIC_LIBRARY:
+				exitCode = BuildDynamicLibrary( &context );
+				break;
+
+			case BINARY_TYPE_STATIC_LIBRARY:
+				exitCode = BuildStaticLibrary( &context );
+				break;
+		}
+
+		if ( postBuildFunc ) {
+			postBuildFunc( &context.options );
+		}
+
+		// if the build was successful, write the new .build_info file now
+		if ( exitCode == 0 ) {
+			File buildInfoFile = file_open( buildInfoFilename );
+			defer( file_close( &buildInfoFile ) );
+
+			// serialize all the builder options
+			SerializeBuilderOptions( &buildInfoFile, parsedBuilderOptions );
+
+			// write the timestamp of when each source file was last written to
+			file_write( &buildInfoFile, "tracked_source_files" );
+			SerializeU64( &buildInfoFile, buildInfoFiles.count );
+
+			For ( u32, i, 0, buildInfoFiles.count ) {
+				const char* sourceFilename = buildInfoFiles[i];
+
+				FileInfo sourceFileInfo;
+				File sourceFile = file_find_first( sourceFilename, &sourceFileInfo );
+
+				CHECK_WRITE( file_write( &buildInfoFile, tprintf( "%s\n", sourceFilename ) ) );
+				CHECK_WRITE( file_write( &buildInfoFile, &sourceFileInfo.last_write_time, sizeof( sourceFileInfo.last_write_time ) ) );
+			}
+		} else {
+			error( "Build failed.\n" );
+			exitCode = 1;
+		}
+	}
+
+	return exitCode;
+}

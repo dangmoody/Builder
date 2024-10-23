@@ -64,6 +64,20 @@ struct BuilderOptions {
 	// Uses the Clang syntax (E.G.: -Wno-newline-eof).
 	std::vector<const char*>	ignore_warnings;
 
+	// The name that the built binary is going to have.
+	// This will be placed inside binary_folder, if you set that.
+	std::string					binary_name;
+
+	// The folder you want the binary to be put into.
+	// If the folder does not exist, then Builder will create it for you.
+	// This will be relative to the source file you are building.
+	std::string					binary_folder;
+
+	// The name of the config that you want to build with.
+	// You need to set this via the command line argument "--config=name" where "name" is the name of your config.
+	// If you do not set this then it will just be empty.
+	std::string					config;
+
 	// What kind of binary do you want to build?
 	// Defaults to EXE.
 	BinaryType					binary_type;
@@ -79,19 +93,8 @@ struct BuilderOptions {
 	// Do you want to remove the file extension from the name of the binary?
 	bool						remove_file_extension;
 
-	// The name of the config that you want to build with.
-	// You need to set this via the command line argument "--config=name" where "name" is the name of your config.
-	// If you do not set this then it will just be empty.
-	std::string					config;
-
-	// The folder you want the binary to be put into.
-	// If the folder does not exist, then Builder will create it for you.
-	// This will be relative to the source file you are building.
-	std::string					binary_folder;
-
-	// The name that the built binary is going to have.
-	// This will be placed inside binary_folder, if you set that.
-	std::string					binary_name;
+	// Do you want warnings to count as errors?
+	bool						warnings_as_errors;
 };
 
 struct VisualStudioConfig {
@@ -104,7 +107,7 @@ struct VisualStudioConfig {
 
 	// The file that you want Builder to build.
 	// This is relative to the Visual Studio project.
-	const char*					build_source_file;
+	//const char*					build_source_file;
 
 	// TODO(DM): 06/10/2024: this shouldnt exist
 	// we should figure this out by taking the binary_folder from the build options and making it relative to the solution instead
@@ -139,3 +142,15 @@ struct VisualStudioSolution {
 	// This is relative to the source file that fills in the entry point set_visual_studio_options.
 	const char*							path;
 };
+
+inline VisualStudioProject* add_visual_studio_project( VisualStudioSolution* solution ) {
+	solution->projects.push_back( {} );
+
+	return &solution->projects[solution->projects.size() - 1];
+}
+
+inline VisualStudioConfig* add_visual_studio_config( VisualStudioProject* project ) {
+	project->configs.push_back( {} );
+
+	return &project->configs[project->configs.size() - 1];
+}

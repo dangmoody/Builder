@@ -14,7 +14,7 @@ It's easy to see why tools like CMake have appeal on the surface.  Using C++ com
 
 Why don't we just configure our builds in the same language we write our programs in? It's so much more intuitive, there's a lot less friction, and you don't have to learn another language.  Enter Builder.
 
-With Builder you can build your program from the same language you write your program with, given a single C++ source file containing some code that configures your build.  This is a much more intuitive way of configuring builds and it's a wonder no-one has come up with this sooner.
+With Builder you can build your program from the same language you write your program with, given a single C++ source file containing some code that configures your build.  This is a much more intuitive way of programmers configuring builds.
 
 ## Installation
 
@@ -52,7 +52,7 @@ And then at a command line, do this:
 builder build.cpp
 ```
 
-**Builder is not a compiler.**  Builder will just call Clang under the hood.  Builder just figures out what to tell Clang to do based on your build source file that you specify.
+**NOTE: BUILDER IS NOT A COMPILER.**  Builder will just call Clang under the hood.  Builder just figures out what to tell Clang to do based on your build source file that you specify.
 
 If you don't write `set_builder_options` then Builder can still build your program, it will just use the defaults:
 * The program name will be the name of the source file you specified, except it will end with `.exe` instead of `.cpp`.
@@ -60,26 +60,28 @@ If you don't write `set_builder_options` then Builder can still build your progr
 
 ### Configs
 
-Configs are a totally optional part of building with Builder.  You don't have to use them if you don't want to.
+Configs are a completely optional part of building with Builder.  You don't have to use them if you don't want to.
 
 ```cpp
 builder build.cpp --config=debug
 ```
 
-The name of the config can be whatever you want it to be.  `BuilderOptions::config` will be set to the config that you pass in via the command line, which you can then use inside `set_builder_options` to configure your build by config.
+The name of the config can be whatever you want it to be.  `BuilderOptions::config` will be set to the config that you pass in from the command line, so you can then use inside `set_builder_options` to configure your build by config.
 
 See `BuilderOptions` inside `builder.h` for a full list of options, what they do, and how Builder uses them.
 
 Builder also has other entry points:
-* `on_pre_build( BuilderOptions* )` - This gets run just before your program actually gets compiled.
-* `on_post_build( BuilderOptions* )` - This gets run just after your program actually gets compiled.
+* `on_pre_build()` - This gets run just before your program actually gets compiled.
+* `on_post_build()` - This gets run just after your program actually gets compiled.
 * `set_visual_studio_options( VisualStudioSolution* )` - Generates a Visual Studio solution (see below).
 
 ## Visual Studio
 
-Builder supports generating a Visual Studio solution, but this time you must use the entry point `set_visual_studio_options( VisualStudioSolution* )`.
+Builder also supports generating Visual Studio solutions.
 
-Example usage:
+### Generating a Visual Studio Solution
+
+You must use an entry point called `set_visual_studio_options( VisualStudioSolution* )`:
 
 ```cpp
 // build.cpp
@@ -117,4 +119,4 @@ BUILDER_CALLBACK void set_visual_studio_options( VisualStudioSolution* solution 
 }
 ```
 
-All projects that get generated are Makefile projects, where the build commands pass the `--config` argument from Visual Studio.
+Every project that Builder generates is a Makefile project.  Therefore, changes that you make to any of the project properties in Visual Studio will not actually do anything.  If you want to change your project properties you must re-generate your Visual Studio solution.

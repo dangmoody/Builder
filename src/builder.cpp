@@ -1716,6 +1716,8 @@ int main( int argc, char** argv ) {
 			// we are generating a visual studio solution
 			// so we do not want to do a code build
 			rebuild = false;
+
+			printf( "Done.\n" );
 		}
 
 		// now get the user-specified options

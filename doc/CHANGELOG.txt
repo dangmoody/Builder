@@ -1,4 +1,4 @@
-v0.2.0, 25/10/2024:
+v0.2.0, 26/10/2024:
 
 * .build_info files have been massively refactored:
 	* .build_info files are now binary files.
@@ -7,6 +7,7 @@ v0.2.0, 25/10/2024:
 	* When generating a Visual Studio solution, a .build_info file will now get generated (this should've been happening before, but it wasn't).
 	* The default values of BuilderOptions are now correctly serialized into the .build_info file that gets generated when you generate a Visual Studio solution.
 * Added BuilderOptions::warnings_as_errors.
+* Added helper functions add_visual_studio_project( VisualStudioSolution* ) and add_visual_studio_config( VisualStudioProject* ) inside builder.h to help with generating Visual Studio solutions.
 * Added -v and --verbose command line arguments, which output more things.
 	* This will be useful for helping diagnose problems, mostly.
 	* This doesn't output a whole lot extra right now, but that will change in future.
@@ -15,6 +16,8 @@ v0.2.0, 25/10/2024:
 * Better, more helpful information is displayed when you use the help command line argument.
 * Intermediate files no longer contain the file extension of the input file in the output binary file name when the input file is a C++ code file.
 * Make things clearer in the README.
+* Removed VisualStudioConfig::build_source_file.
+	* We don't generate a separate source file every time we generate a Visual Studio project config anymore because we can now use the build info that gets generated with the solution instead, so this became redundant.
 * on_pre_build() and on_post_build() no longer have BuilderOptions* as a parameter, since it's not known how likely people are to need access to BuilderOptions in those functions, currently.
 	* This is the only time I see a change like this happening.  I should have thought longer about how users are going to use these entry points, what they were going to use them for, and what data they actually needed.
 	* If it turns out that users actually need BuilderOptions here then I'll put it back, but I want to know for certain that they need it before I do that.

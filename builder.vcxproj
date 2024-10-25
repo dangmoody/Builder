@@ -90,6 +90,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\builder.cpp" />
+    <ClCompile Include="test_sln\src\generate_solution.cpp" />
     <ClCompile Include="test_sln\src\main.cpp" />
     <ClCompile Include="test_sln\src\test_sln.cpp" />
   </ItemGroup>

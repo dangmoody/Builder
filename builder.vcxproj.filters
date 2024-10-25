@@ -18,16 +18,13 @@
     <ClCompile Include="src\builder.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="test_sln\main.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="test_sln\test_sln.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="test_sln\src\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="test_sln\src\test_sln.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="test_sln\src\generate_solution.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

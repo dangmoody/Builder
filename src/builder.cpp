@@ -528,22 +528,6 @@ static const char* TryFindFile( const char* filename, const char* folder ) {
 	return NULL;
 }
 
-static buildContext_t CreateBuildContext() {
-	buildContext_t context = {};
-
-	// TODO(DM): 23/10/2024: I smell mess here, clean this up
-	context.options.binary_type = BINARY_TYPE_EXE;
-	context.options.optimization_level = OPTIMIZATION_LEVEL_O0;
-	context.options.remove_symbols = false;
-	context.options.remove_file_extension = false;
-	//context.options.config = NULL;
-	//context.options.binary_folder = NULL;
-	//context.options.binary_name = NULL;
-	context.flags = 0;
-
-	return context;
-}
-
 // project type guids are pre-determined by visual studio
 // C++ is the only language that builder knows/cares about
 #define VISUAL_STUDIO_CPP_PROJECT_TYPE_GUID "8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942"
@@ -1230,7 +1214,7 @@ int main( int argc, char** argv ) {
 
 	printf( "Builder v%d.%d.%d\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
-	buildContext_t context = CreateBuildContext();
+	buildContext_t context = {};
 	context.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS | BUILD_CONTEXT_FLAG_SHOW_STDOUT;
 
 	// check if we need to perform first time setup
@@ -1629,7 +1613,7 @@ int main( int argc, char** argv ) {
 		typedef void ( *setBuilderOptionsFunc_t )( BuilderOptions* options );
 		typedef void ( *setVisualStudioOptionsFunc_t )( VisualStudioSolution* solution );
 
-		buildContext_t userBuildConfigContext = CreateBuildContext();
+		buildContext_t userBuildConfigContext = {};
 		userBuildConfigContext.flags = BUILD_CONTEXT_FLAG_SHOW_STDOUT;
 		userBuildConfigContext.options = context.options;
 

@@ -1,4 +1,4 @@
-v0.2.0, <INSERT RELEASE DATE HERE>:
+v0.2.0, 25/10/2024:
 
 * .build_info files have been massively refactored:
 	* .build_info files are now binary files.
@@ -17,6 +17,7 @@ v0.2.0, <INSERT RELEASE DATE HERE>:
 * Make things clearer in the README.
 * on_pre_build() and on_post_build() no longer have BuilderOptions* as a parameter, since it's not known how likely people are to need access to BuilderOptions in those functions, currently.
 	* This is the only time I see a change like this happening.  I should have thought longer about how users are going to use these entry points, what they were going to use them for, and what data they actually needed.
+	* If it turns out that users actually need BuilderOptions here then I'll put it back, but I want to know for certain that they need it before I do that.
 
 ----------------------------------------------------------------
 

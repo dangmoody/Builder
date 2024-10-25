@@ -1533,63 +1533,6 @@ int main( int argc, char** argv ) {
 			// otherwise we have one, so get the build times out of it and check them against what we had before
 			defer( file_close( &buildInfoFile ) );
 
-#if 0
-			char* fileBuffer = NULL;
-			u64 fileBufferLength = 0;
-			bool8 read = file_read_entire( buildInfoFilename, &fileBuffer, &fileBufferLength );
-
-			if ( read ) {
-				defer( file_free_buffer( &fileBuffer ) );
-
-				u32 sourceFileIndex = 0;
-
-				// parse the .build_info file
-				// for each source file, get the filename and the last write time
-				u64 offset = 0;
-				while ( offset < fileBufferLength ) {
-					const char* lineStart = &fileBuffer[offset];
-					const char* colon = strstr( lineStart, ": " );
-					const char* lineEnd = strstr( lineStart, "\r\n" );
-					if ( !lineEnd ) lineEnd = strstr( lineStart, "\n" );
-
-					u64 filenameLength = cast( u64 ) colon - cast( u64 ) lineStart;
-					filenameLength++;
-
-					colon += 2;
-
-					u64 timestampLength = cast( u64 ) lineEnd - cast( u64 ) colon;
-					timestampLength++;
-
-					char* filename = cast( char* ) mem_temp_alloc( filenameLength * sizeof( char ) );
-					strncpy( filename, lineStart, filenameLength );
-					filename[filenameLength - 1] = 0;
-
-					char* timestampString = cast( char* ) mem_temp_alloc( timestampLength * sizeof( char ) );
-					strncpy( timestampString, colon, timestampLength );
-					timestampString[timestampLength - 1] = 0;
-
-					u64 lastWriteTime = cast( u64 ) atoll( timestampString );
-
-					FileInfo sourceFileInfo;
-					File sourceFile = file_find_first( filename, &sourceFileInfo );
-
-					assert( sourceFile.ptr != INVALID_HANDLE_VALUE );
-
-					if ( lastWriteTime != sourceFileInfo.last_write_time ) {
-						rebuild = true;
-						break;
-					}
-
-					sourceFileIndex++;
-
-					u64 lineLength = cast( u64 ) ( lineEnd + 1 ) - cast( u64 ) lineStart;
-					offset += lineLength;
-				}
-			} else {
-				error( "Found %s but failed to read it.  Rebuilding binary...\n", buildInfoFilename );
-				rebuild = true;
-			}
-#else
 			// you typically have no source files in the .build_info if you generated a visual studio solution for the first time, for instance
 			if ( buildInfoSourceFiles.empty() ) {
 				rebuild = true;
@@ -1606,7 +1549,6 @@ int main( int argc, char** argv ) {
 					}
 				}
 			}
-#endif
 		}
 
 		if ( !rebuild ) {
@@ -1758,10 +1700,6 @@ int main( int argc, char** argv ) {
 			// we are generating a visual studio solution
 			// so we do not want to do a code build
 			rebuild = false;
-
-			//printf( "Done\n" );
-
-			//return 0;
 		}
 
 		// now get the user-specified options

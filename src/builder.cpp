@@ -1637,7 +1637,7 @@ int main( int argc, char** argv ) {
 			userBuildConfigContext.options.source_files.push_back( inputFile );
 		}
 
-		userBuildConfigContext.options.binary_name = tprintf( "%s.dll", paths_remove_path_from_file( inputFile ) );
+		userBuildConfigContext.options.binary_name = tprintf( "%s.dll", paths_remove_path_from_file( paths_remove_file_extension( inputFile ) ) );
 		userBuildConfigContext.options.binary_folder = dotBuilderFolder;
 		userBuildConfigContext.options.defines.push_back( "BUILDER_DOING_USER_CONFIG_BUILD" );
 

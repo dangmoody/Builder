@@ -779,6 +779,62 @@ static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, std::vector<B
 	return true;
 }
 
+static BuilderOptions GetDefaultBuilderOptions( const char* inputConfig ) {
+	BuilderOptions defaultBuilderOptions = {};
+
+	if ( inputConfig ) {
+		defaultBuilderOptions.config = inputConfig;
+	}
+
+	//defaultBuilderOptions.defines.push_back( "_CRT_SECURE_NO_WARNINGS" );
+
+	// add the folder that builder lives in as an additional include path
+	// so that people can just include builder.h without having to add the include path manually every time
+	defaultBuilderOptions.additional_includes.push_back( paths_get_app_path() );
+
+#if defined( _WIN64 )
+	defaultBuilderOptions.additional_libs.push_back( "user32.lib" );
+
+	// MSVCRT is needed for ABI compatibility between builder and the user config DLL
+#if defined( _DEBUG )
+	defaultBuilderOptions.additional_libs.push_back( "msvcrtd.lib" );
+#elif defined( NDEBUG )
+	defaultBuilderOptions.additional_libs.push_back( "msvcrt.lib" );
+#endif
+
+	// TODO(DM): 12/10/2024: are these debug only? are they even needed?
+	//defaultBuilderOptions.additional_libs.push_back( "Shlwapi.lib" );
+	//defaultBuilderOptions.additional_libs.push_back( "DbgHelp.lib" );
+#endif // defined( _WIN64 )
+
+	defaultBuilderOptions.ignore_warnings.push_back( "-Wno-newline-eof" );
+	defaultBuilderOptions.ignore_warnings.push_back( "-Wno-pointer-integer-compare" );
+	defaultBuilderOptions.ignore_warnings.push_back( "-Wno-declaration-after-statement" );
+	defaultBuilderOptions.ignore_warnings.push_back( "-Wno-gnu-zero-variadic-macro-arguments" );
+	defaultBuilderOptions.ignore_warnings.push_back( "-Wno-cast-align" );
+	defaultBuilderOptions.ignore_warnings.push_back( "-Wno-bad-function-cast" );
+	defaultBuilderOptions.ignore_warnings.push_back( "-Wno-format-nonliteral" );
+	defaultBuilderOptions.ignore_warnings.push_back( "-Wno-missing-braces" );
+	defaultBuilderOptions.ignore_warnings.push_back( "-Wno-switch-enum" );
+	defaultBuilderOptions.ignore_warnings.push_back( "-Wno-covered-switch-default" );
+	defaultBuilderOptions.ignore_warnings.push_back( "-Wno-double-promotion" );
+	defaultBuilderOptions.ignore_warnings.push_back( "-Wno-cast-qual" );
+	defaultBuilderOptions.ignore_warnings.push_back( "-Wno-unused-variable" );
+	defaultBuilderOptions.ignore_warnings.push_back( "-Wno-unused-function" );
+	defaultBuilderOptions.ignore_warnings.push_back( "-Wno-empty-translation-unit" );
+	defaultBuilderOptions.ignore_warnings.push_back( "-Wno-zero-as-null-pointer-constant" );
+	defaultBuilderOptions.ignore_warnings.push_back( "-Wno-c++98-compat-pedantic" );
+	defaultBuilderOptions.ignore_warnings.push_back( "-Wno-unused-macros" );
+	defaultBuilderOptions.ignore_warnings.push_back( "-Wno-unsafe-buffer-usage" );		// LLVM 17.0.1
+	defaultBuilderOptions.ignore_warnings.push_back( "-Wno-reorder-init-list" );			// C++: "designated initializers must be in order"
+	defaultBuilderOptions.ignore_warnings.push_back( "-Wno-old-style-cast" );				// C++: "C-style casts are banned"
+	defaultBuilderOptions.ignore_warnings.push_back( "-Wno-global-constructors" );		// C++: "declaration requires a global destructor"
+	defaultBuilderOptions.ignore_warnings.push_back( "-Wno-exit-time-destructors" );		// C++: "declaration requires an exit-time destructor" (same as the above, basically)
+	defaultBuilderOptions.ignore_warnings.push_back( "-Wno-missing-field-initializers" );	// LLVM 18.1.8
+
+	return defaultBuilderOptions;
+}
+
 static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const char* inputFilePath ) {
 	assert( solution );
 
@@ -1177,6 +1233,8 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 	// generate .build_info file
 	{
+		BuilderOptions defaultBuilderOptions = GetDefaultBuilderOptions( NULL );
+
 		const char* buildInfoFilename = tprintf( "%s\\.builder\\%s%s", inputFilePath, solution->name, BUILD_INFO_FILE_EXTENSION );
 
 		std::vector<BuilderOptions> allBuilderOptions;
@@ -1192,6 +1250,17 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 					// TODO(DM): 23/10/2024: I'm still not sure if this is the right answer yet
 					// but it means that we can serialize ONLY the BuilderOptions without having to also serialize visual studio project/solution information
 					config->options.config = tprintf( "%s.%s.%s", project->name, platform, config->name );
+
+					// TODO(DM): 25/10/2024: this whole thing feels like a massive hack
+					// users dont get the default BuilderOptions because they have to create their own ones inside set_visual_studio_options
+					// so here we have to "merge" the defaults into what they specified
+					// the user should have the defaults by default so that they can see what they have from the beginning
+					// being transparent with the user is good, mkay?
+					{
+						config->options.additional_includes.insert( config->options.additional_includes.end(), defaultBuilderOptions.additional_includes.begin(), defaultBuilderOptions.additional_includes.end() );
+						config->options.additional_libs.insert( config->options.additional_libs.end(), defaultBuilderOptions.additional_libs.begin(), defaultBuilderOptions.additional_libs.end() );
+						config->options.ignore_warnings.insert( config->options.ignore_warnings.end(), defaultBuilderOptions.ignore_warnings.begin(), defaultBuilderOptions.ignore_warnings.end() );
+					}
 
 					allBuilderOptions.push_back( config->options );
 				}
@@ -1537,55 +1606,7 @@ int main( int argc, char** argv ) {
 	// set default compiler options that we know we need
 	// get all BuilderOptions from the .build_info
 	if ( !foundBuildInfo ) {
-		if ( inputConfig ) {
-			context.options.config = inputConfig;
-		}
-
-		//context.options.defines.push_back( "_CRT_SECURE_NO_WARNINGS" );
-
-		// add the folder that builder lives in as an additional include path
-		// so that people can just include builder.h without having to add the include path manually every time
-		context.options.additional_includes.push_back( paths_get_app_path() );
-
-#if defined( _WIN64 )
-		context.options.additional_libs.push_back( "user32.lib" );
-
-		// MSVCRT is needed for ABI compatibility between builder and the user config DLL
-#if defined( _DEBUG )
-		context.options.additional_libs.push_back( "msvcrtd.lib" );
-#elif defined( NDEBUG )
-		context.options.additional_libs.push_back( "msvcrt.lib" );
-#endif
-
-		// TODO(DM): 12/10/2024: are these debug only? are they even needed?
-		//context.options.additional_libs.push_back( "Shlwapi.lib" );
-		//context.options.additional_libs.push_back( "DbgHelp.lib" );
-#endif // defined( _WIN64 )
-
-		context.options.ignore_warnings.push_back( "-Wno-newline-eof" );
-		context.options.ignore_warnings.push_back( "-Wno-pointer-integer-compare" );
-		context.options.ignore_warnings.push_back( "-Wno-declaration-after-statement" );
-		context.options.ignore_warnings.push_back( "-Wno-gnu-zero-variadic-macro-arguments" );
-		context.options.ignore_warnings.push_back( "-Wno-cast-align" );
-		context.options.ignore_warnings.push_back( "-Wno-bad-function-cast" );
-		context.options.ignore_warnings.push_back( "-Wno-format-nonliteral" );
-		context.options.ignore_warnings.push_back( "-Wno-missing-braces" );
-		context.options.ignore_warnings.push_back( "-Wno-switch-enum" );
-		context.options.ignore_warnings.push_back( "-Wno-covered-switch-default" );
-		context.options.ignore_warnings.push_back( "-Wno-double-promotion" );
-		context.options.ignore_warnings.push_back( "-Wno-cast-qual" );
-		context.options.ignore_warnings.push_back( "-Wno-unused-variable" );
-		context.options.ignore_warnings.push_back( "-Wno-unused-function" );
-		context.options.ignore_warnings.push_back( "-Wno-empty-translation-unit" );
-		context.options.ignore_warnings.push_back( "-Wno-zero-as-null-pointer-constant" );
-		context.options.ignore_warnings.push_back( "-Wno-c++98-compat-pedantic" );
-		context.options.ignore_warnings.push_back( "-Wno-unused-macros" );
-		context.options.ignore_warnings.push_back( "-Wno-unsafe-buffer-usage" );		// LLVM 17.0.1
-		context.options.ignore_warnings.push_back( "-Wno-reorder-init-list" );			// C++: "designated initializers must be in order"
-		context.options.ignore_warnings.push_back( "-Wno-old-style-cast" );				// C++: "C-style casts are banned"
-		context.options.ignore_warnings.push_back( "-Wno-global-constructors" );		// C++: "declaration requires a global destructor"
-		context.options.ignore_warnings.push_back( "-Wno-exit-time-destructors" );		// C++: "declaration requires an exit-time destructor" (same as the above, basically)
-		context.options.ignore_warnings.push_back( "-Wno-missing-field-initializers" );	// LLVM 18.1.8
+		context.options = GetDefaultBuilderOptions( inputConfig );
 	}
 
 	s32 exitCode = 0;
@@ -1715,9 +1736,6 @@ int main( int argc, char** argv ) {
 		For ( u64, sourceFileIndex, 0, context.options.source_files.size() ) {
 			const char* sourceFile = context.options.source_files[sourceFileIndex];
 
-			// DM!!!	when building with a .build_info file the file paths here are wrong
-			// 			go fix them
-
 			const char* fileSearchPath = NULL;
 			if ( doingBuildFromBuildInfo ) {
 				fileSearchPath = sourceFile;
@@ -1755,11 +1773,6 @@ int main( int argc, char** argv ) {
 
 		context.options.source_files = finalSourceFilesToBuild;
 	}
-
-
-
-	// DM!!!	this broke at some point during the refactor!
-	//			go fix it!
 
 	// recursively resolve all includes found in each source file
 	Array<const char*> buildInfoFiles;

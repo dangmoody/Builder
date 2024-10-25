@@ -779,11 +779,8 @@ static void Parser_ParseBuildInfo( const char* buildInfoFilename, std::vector<Bu
 	For ( u64, sourceFileIndex, 0, outBuildInfoSourceFiles.size() ) {
 		buildInfoFile_t* buildInfoFile = &outBuildInfoSourceFiles[sourceFileIndex];
 
-		std::string timestampString;
-
-		Parser_ParseStringField( &parser, &buildInfoFile->filename, &timestampString );
-
-		buildInfoFile->lastWriteTime = cast( u64 ) atoll( timestampString.c_str() );
+		buildInfoFile->filename = Parser_ParseLine( &parser );
+		buildInfoFile->lastWriteTime = Parser_ParseU64( &parser );
 	}
 }
 
@@ -1188,13 +1185,13 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 		const char* buildInfoFilename = tprintf( "%s\\.builder\\%s%s", inputFilePath, solution->name, BUILD_INFO_FILE_EXTENSION );
 
 		std::vector<BuilderOptions> allBuilderOptions;
-		For( u64, platformIndex, 0, solution->platforms.size() ) {
+		For ( u64, platformIndex, 0, solution->platforms.size() ) {
 			const char* platform = solution->platforms[platformIndex];
 
-			For( u64, projectIndex, 0, solution->projects.size() ) {
+			For ( u64, projectIndex, 0, solution->projects.size() ) {
 				VisualStudioProject* project = &solution->projects[projectIndex];
 
-				For( u64, configIndex, 0, project->configs.size() ) {
+				For ( u64, configIndex, 0, project->configs.size() ) {
 					VisualStudioConfig* config = &project->configs[configIndex];
 
 					// TODO(DM): 23/10/2024: I'm still not sure if this is the right answer yet
@@ -1477,6 +1474,7 @@ int main( int argc, char** argv ) {
 	const char* inputFilePath = paths_remove_file_from_path( inputFile );
 	const char* inputFilePathAbsolute = paths_remove_file_from_path( paths_get_absolute_path( inputFile ) );
 	const char* inputFileNoPath = paths_remove_path_from_file( inputFile );
+	const char* inputFileNoPathOrExtension = paths_remove_file_extension( inputFileNoPath );
 
 	const char* dotBuilderFolder = NULL;
 	const char* buildInfoFilename = NULL;
@@ -1486,7 +1484,7 @@ int main( int argc, char** argv ) {
 		buildInfoFilename = inputFile;
 	} else {
 		dotBuilderFolder = tprintf( "%s\\.builder", inputFilePathAbsolute );
-		buildInfoFilename = tprintf( "%s\\%s%s", dotBuilderFolder, inputFileNoPath, BUILD_INFO_FILE_EXTENSION );
+		buildInfoFilename = tprintf( "%s\\%s%s", dotBuilderFolder, inputFileNoPathOrExtension, BUILD_INFO_FILE_EXTENSION );
 	}
 
 	/*const char* dotBuilderFolder = inputFilePathAbsolute;
@@ -1519,12 +1517,12 @@ int main( int argc, char** argv ) {
 		return 1;
 	}
 
+	bool8 rebuild = false;
+
 	// figure out if we need to even rebuild
 	// get all the code files from the .build_info file
 	// if none of the code files have changed since we last checked then do not even try to rebuild
 	{
-		bool8 rebuild = false;
-
 		File buildInfoFile = file_open( buildInfoFilename );
 
 		// if we cant find a .build_info file then assume we never built this binary before
@@ -1592,6 +1590,7 @@ int main( int argc, char** argv ) {
 				rebuild = true;
 			}
 #else
+			// you typically have no source files in the .build_info if you generated a visual studio solution for the first time, for instance
 			if ( buildInfoSourceFiles.empty() ) {
 				rebuild = true;
 			} else {
@@ -1756,9 +1755,13 @@ int main( int argc, char** argv ) {
 				return 1;
 			}
 
-			printf( "Done\n" );
+			// we are generating a visual studio solution
+			// so we do not want to do a code build
+			rebuild = false;
 
-			return 0;
+			//printf( "Done\n" );
+
+			//return 0;
 		}
 
 		// now get the user-specified options
@@ -1994,7 +1997,7 @@ int main( int argc, char** argv ) {
 
 	// now we have everything we need
 	// build the actual program that the user wants to build
-	{
+	if ( rebuild ) {
 		if ( preBuildFunc ) {
 			preBuildFunc( &context.options );
 		}
@@ -2017,32 +2020,32 @@ int main( int argc, char** argv ) {
 		if ( postBuildFunc ) {
 			postBuildFunc( &context.options );
 		}
+	}
 
-		// if the build was successful, write the new .build_info file now
-		if ( exitCode == 0 ) {
-			File buildInfoFile = file_open( buildInfoFilename );
-			defer( file_close( &buildInfoFile ) );
+	// if the build was successful, write the new .build_info file now
+	if ( exitCode == 0 ) {
+		File buildInfoFile = file_open_or_create( buildInfoFilename );
+		defer( file_close( &buildInfoFile ) );
 
-			// serialize all the builder options
-			SerializeBuilderOptions( &buildInfoFile, parsedBuilderOptions );
+		// serialize all the builder options
+		SerializeBuilderOptions( &buildInfoFile, parsedBuilderOptions );
 
-			// write the timestamp of when each source file was last written to
-			file_write( &buildInfoFile, "tracked_source_files" );
-			SerializeU64( &buildInfoFile, buildInfoFiles.count );
+		// write the timestamp of when each source file was last written to
+		file_write( &buildInfoFile, "tracked_source_files" );
+		SerializeU64( &buildInfoFile, buildInfoFiles.count );
 
-			For ( u32, i, 0, buildInfoFiles.count ) {
-				const char* sourceFilename = buildInfoFiles[i];
+		For ( u32, i, 0, buildInfoFiles.count ) {
+			const char* sourceFilename = buildInfoFiles[i];
 
-				FileInfo sourceFileInfo;
-				File sourceFile = file_find_first( sourceFilename, &sourceFileInfo );
+			FileInfo sourceFileInfo;
+			File sourceFile = file_find_first( sourceFilename, &sourceFileInfo );
 
-				CHECK_WRITE( file_write( &buildInfoFile, tprintf( "%s\n", sourceFilename ) ) );
-				CHECK_WRITE( file_write( &buildInfoFile, &sourceFileInfo.last_write_time, sizeof( sourceFileInfo.last_write_time ) ) );
-			}
-		} else {
-			error( "Build failed.\n" );
-			exitCode = 1;
+			CHECK_WRITE( file_write( &buildInfoFile, tprintf( "%s\n", sourceFilename ) ) );
+			CHECK_WRITE( file_write( &buildInfoFile, &sourceFileInfo.last_write_time, sizeof( sourceFileInfo.last_write_time ) ) );
 		}
+	} else {
+		error( "Build failed.\n" );
+		exitCode = 1;
 	}
 
 	return exitCode;

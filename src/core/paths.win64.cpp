@@ -111,19 +111,19 @@ const char* paths_remove_path_from_file( const char* path ) {
 }
 
 const char* paths_remove_file_extension( const char* filename ) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wcast-qual"
 	const char* dot = strrchr( filename, '.' );
 
-	if ( dot ) {
-		u64 offset = cast( u64 ) dot - cast( u64 ) filename;
-		( cast( char* ) filename )[offset] = 0;
+	if ( !dot ) {
+		return filename;
 	}
 
-	dot = filename;
+	u64 resultLength = cast( u64 ) dot - cast( u64 ) filename;
 
-	return dot;
-#pragma clang diagnostic pop
+	char* result = cast( char* ) mem_temp_alloc( ( resultLength + 1 ) * sizeof( char ) );
+	strncpy( result, filename, resultLength * sizeof( char ) );
+	result[resultLength] = 0;
+
+	return result;
 }
 
 bool8 paths_is_path_absolute( const char* path ) {

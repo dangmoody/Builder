@@ -1779,8 +1779,16 @@ int main( int argc, char** argv ) {
 				if ( PathHasSlash( sourceFile ) ) {
 					const char* localPath = paths_remove_file_from_path( sourceFile );
 
-					//foundSourceFile = tprintf( "%s\\%s\\%s", inputFilePathAbsolute, localPath, fileInfo.filename );
-					foundSourceFile = tprintf( "%s\\%s", localPath, fileInfo.filename );
+					// TODO(DM): 25/10/2024: this is messy and needs tidying up
+					if ( string_equals( localPath, sourceFile ) ) {
+						foundSourceFile = tprintf( "%s\\%s", localPath, fileInfo.filename );
+					} else {
+						if ( doingBuildFromSourceFile ) {
+							foundSourceFile = tprintf( "%s\\%s\\%s", inputFilePathAbsolute, localPath, fileInfo.filename );
+						} else {
+							foundSourceFile = tprintf( "%s\\%s", localPath, fileInfo.filename );
+						}
+					}
 				} else {
 					foundSourceFile = tprintf( "%s\\%s", inputFilePathAbsolute, fileInfo.filename );
 				}
@@ -1917,7 +1925,6 @@ int main( int argc, char** argv ) {
 		} else {
 			context.options.binary_folder = tprintf( "%s\\..\\%s", inputFilePathAbsolute, context.options.binary_folder.c_str() );
 		}
-		
 	} else {
 		context.options.binary_folder = inputFilePathAbsolute;
 	}

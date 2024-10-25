@@ -1,14 +1,19 @@
 v0.2.0, <INSERT RELEASE DATE HERE>:
 
-* If no input file is specified, Builder will now tell you that you can pass -h as a command line arg to get help on how to use Builder.
 * .build_info files have been massively refactored:
 	* .build_info files are now binary files.
 	* Instead of .build_info only containing all source files used in the build (and all the header files we can find) we now serialize all members of BuilderOptions and, if it exists, the visual studio solution/projects you generated.
 	* As a result of these changes, all .build_info files were made with an older version of Builder will no longer work.
-* Make things clearer in the README.
+	* When generating a Visual Studio solution, a .build_info file will now get generated (this should've been happening before, but it wasn't).
+	* The default values of BuilderOptions are now correctly serialized into the .build_info file that gets generated when you generate a Visual Studio solution.
+* If no input file is specified, Builder will now tell you that you can pass -h as a command line arg to get help on how to use Builder.
 * Added BuilderOptions::warnings_as_errors.
+* Make things clearer in the README.
 * Builder will now fatal error if it can't create the binary folder that you specify inside set_builder_options().
 * Better, more helpful information is displayed when you use the help command line argument.
+* Intermediate files no longer contain the file extension of the input file in the output binary file name when the input file is a C++ code file.
+* on_pre_build() and on_post_build() no longer have BuilderOptions* as a parameter, since it's not known how likely people are to need access to BuilderOptions in those functions, currently.
+	* This is the only time I see a change like this happening.  I should have thought longer about how users are going to use these entry points, what they were going to use them for, and what data they actually needed.
 
 ----------------------------------------------------------------
 

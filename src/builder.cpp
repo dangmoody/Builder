@@ -1614,8 +1614,8 @@ int main( int argc, char** argv ) {
 	Library library;
 	defer( if ( library.ptr ) library_unload( &library ) );
 
-	typedef void ( *preBuildFunc_t )( BuilderOptions* options );
-	typedef void ( *postBuildFunc_t )( BuilderOptions* options );
+	typedef void ( *preBuildFunc_t )();
+	typedef void ( *postBuildFunc_t )();
 
 	preBuildFunc_t preBuildFunc = NULL;
 	postBuildFunc_t postBuildFunc = NULL;
@@ -1932,7 +1932,7 @@ int main( int argc, char** argv ) {
 	// build the actual program that the user wants to build
 	if ( rebuild ) {
 		if ( preBuildFunc ) {
-			preBuildFunc( &context.options );
+			preBuildFunc();
 		}
 
 		// now do the actual build
@@ -1951,7 +1951,7 @@ int main( int argc, char** argv ) {
 		}
 
 		if ( postBuildFunc ) {
-			postBuildFunc( &context.options );
+			postBuildFunc();
 		}
 	}
 

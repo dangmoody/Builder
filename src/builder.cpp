@@ -739,33 +739,44 @@ static BuilderOptions Parser_ParseBuildOptions( parser_t* parser ) {
 	return options;
 }
 
-static void Parser_ParseBuildInfo( const char* buildInfoFilename, std::vector<BuilderOptions>& outBuilderOptions, std::vector<buildInfoFile_t>& outBuildInfoSourceFiles ) {
+static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, std::vector<BuilderOptions>& outBuilderOptions, std::vector<buildInfoFile_t>& outBuildInfoSourceFiles ) {
 	parser_t parser = {};
 	bool8 read = Parser_Init( &parser, buildInfoFilename );
 
 	if ( !read ) {
-		return;
+		return false;
 	}
 
 	defer( Parser_Shutdown( &parser ) );
 
-	u64 totalNumConfigs = Parser_ParseU64( &parser );
-	outBuilderOptions.resize( totalNumConfigs );
-	For ( u64, configIndex, 0, outBuilderOptions.size() ) {
-		outBuilderOptions[configIndex] = Parser_ParseBuildOptions( &parser );
+	// parse all BuilderOptions
+	{
+		u64 totalNumConfigs = Parser_ParseU64( &parser );
+		outBuilderOptions.resize( totalNumConfigs );
 
-		Parser_SkipPast( &parser, '\n' );
+		For ( u64, configIndex, 0, outBuilderOptions.size() ) {
+			outBuilderOptions[configIndex] = Parser_ParseBuildOptions( &parser );
+
+			Parser_SkipPast( &parser, '\n' );
+		}
 	}
 
-	parser.bufferPos += strlen( "tracked_source_files" );
-	u64 numSourceFiles = Parser_ParseU64( &parser );
-	outBuildInfoSourceFiles.resize( numSourceFiles );
-	For ( u64, sourceFileIndex, 0, outBuildInfoSourceFiles.size() ) {
-		buildInfoFile_t* buildInfoFile = &outBuildInfoSourceFiles[sourceFileIndex];
+	// parse all tracked source files
+	{
+		parser.bufferPos += strlen( "tracked_source_files" );
 
-		buildInfoFile->filename = Parser_ParseLine( &parser );
-		buildInfoFile->lastWriteTime = Parser_ParseU64( &parser );
+		u64 numSourceFiles = Parser_ParseU64( &parser );
+		outBuildInfoSourceFiles.resize( numSourceFiles );
+
+		For ( u64, sourceFileIndex, 0, outBuildInfoSourceFiles.size() ) {
+			buildInfoFile_t* buildInfoFile = &outBuildInfoSourceFiles[sourceFileIndex];
+
+			buildInfoFile->filename = Parser_ParseLine( &parser );
+			buildInfoFile->lastWriteTime = Parser_ParseU64( &parser );
+		}
 	}
+
+	return true;
 }
 
 static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const char* inputFilePath ) {
@@ -1439,17 +1450,6 @@ int main( int argc, char** argv ) {
 		);
 
 		return 1;
-	} else {
-		// DM!!! re-do this error message
-		if ( !doingBuildFromSourceFile && !doingBuildFromBuildInfo ) {
-			error(
-				"You specified \"%s\" as the input file, but I don't recognize that type of file.\n"
-				"The file you give me must be either a \".cpp\" or a \"%s\" file.  Give me one of those instead.\n"
-				, inputFile, BUILD_INFO_FILE_EXTENSION
-			);
-
-			return 1;
-		}
 	}
 
 	u64 inputFileLength = strlen( inputFile );
@@ -1471,18 +1471,16 @@ int main( int argc, char** argv ) {
 		buildInfoFilename = tprintf( "%s\\%s%s", dotBuilderFolder, inputFileNoPathOrExtension, BUILD_INFO_FILE_EXTENSION );
 	}
 
-	/*const char* dotBuilderFolder = inputFilePathAbsolute;
-	if ( doingBuildFromSourceFile ) {
-		dotBuilderFolder = tprintf( "%s\\.builder", inputFilePathAbsolute );
-	}
-
-	const char* buildInfoFilename = tprintf( "%s\\%s%s", dotBuilderFolder, inputFileNoPath, BUILD_INFO_FILE_EXTENSION );*/
-
 	bool8 foundBuildInfo = false;
 
 	std::vector<BuilderOptions> parsedBuilderOptions;
 	std::vector<buildInfoFile_t> buildInfoSourceFiles;
-	Parser_ParseBuildInfo( buildInfoFilename, parsedBuilderOptions, buildInfoSourceFiles );
+	bool8 readBuildInfo = Parser_ParseBuildInfo( buildInfoFilename, parsedBuilderOptions, buildInfoSourceFiles );
+
+	if ( doingBuildFromBuildInfo && !readBuildInfo ) {
+		fatal_error( "Can't find \"%s\".  Does this file exist? Did you type it in correctly?\n", buildInfoFilename );
+		return 1;
+	}
 
 	For ( u64, builderOptionsIndex, 0, parsedBuilderOptions.size() ) {
 		BuilderOptions* foundBuilderOptions = &parsedBuilderOptions[builderOptionsIndex];
@@ -1496,11 +1494,6 @@ int main( int argc, char** argv ) {
 		}
 	}
 
-	if ( doingBuildFromBuildInfo && !foundBuildInfo ) {
-		fatal_error( "SOMETHING DONE GONE WRONG WITH VISUAL STUDIO BUILD.\n" );	// TODO(DM): write a proper error msg
-		return 1;
-	}
-
 	bool8 rebuild = false;
 
 	// figure out if we need to even rebuild
@@ -1511,7 +1504,7 @@ int main( int argc, char** argv ) {
 
 		// if we cant find a .build_info file then assume we never built this binary before
 		if ( buildInfoFile.ptr == NULL ) {
-			printf( "Can't open %s.  Rebuilding binary...\n", buildInfoFilename );
+			//printf( "Can't open %s.  Rebuilding binary...\n", buildInfoFilename );
 			rebuild = true;
 		} else {
 			// otherwise we have one, so get the build times out of it and check them against what we had before

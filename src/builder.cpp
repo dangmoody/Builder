@@ -1892,7 +1892,12 @@ int main( int argc, char** argv ) {
 	}
 
 	if ( !context.options.binary_folder.empty() ) {
-		context.options.binary_folder = tprintf( "%s\\%s", inputFilePathAbsolute, context.options.binary_folder.c_str() );
+		if ( doingBuildFromSourceFile ) {
+			context.options.binary_folder = tprintf( "%s\\%s", inputFilePathAbsolute, context.options.binary_folder.c_str() );
+		} else {
+			context.options.binary_folder = tprintf( "%s\\..\\%s", inputFilePathAbsolute, context.options.binary_folder.c_str() );
+		}
+		
 	} else {
 		context.options.binary_folder = inputFilePathAbsolute;
 	}

@@ -38,10 +38,12 @@ enum {
 	BUILDER_VERSION_PATCH	= 0,
 };
 
-#define ARG_HELP_SHORT	"-h"
-#define ARG_HELP_LONG	"--help"
-#define ARG_NUKE		"--nuke"
-#define ARG_CONFIG		"--config="
+#define ARG_HELP_SHORT		"-h"
+#define ARG_HELP_LONG		"--help"
+#define ARG_VERBOSE_SHORT	"-v"
+#define ARG_VERBOSE_LONG	"--verbose"
+#define ARG_NUKE			"--nuke"
+#define ARG_CONFIG			"--config="
 
 #define CLANG_VERSION	"18.1.8"
 
@@ -138,6 +140,9 @@ static s32 ShowUsage( const s32 exitCode ) {
 		"Arguments:\n"
 		"    " ARG_HELP_SHORT "|" ARG_HELP_LONG " (optional):\n"
 		"        Shows this help and then exits.\n"
+		"\n"
+		"    " ARG_VERBOSE_SHORT "|" ARG_VERBOSE_LONG " (optional):\n"
+		"        Enables verbose logging, so more detailed information gets output when doing a build.\n"
 		"\n"
 		"    <file> (required):\n"
 		"        The file you want to build with.  There can only be one.\n"
@@ -1425,6 +1430,8 @@ int main( int argc, char** argv ) {
 	const char* inputConfig = NULL;
 	u64 inputConfigNameHash = 0;
 
+	bool8 verbose = false;
+
 	// TODO(DM): 23/10/2024: feel like we shouldnt need these
 	// I think this is just hiding the fact that we dont use builder.exes or the input files CWD when we need to
 	bool8 doingBuildFromSourceFile = false;
@@ -1436,6 +1443,11 @@ int main( int argc, char** argv ) {
 
 		if ( string_equals( arg, ARG_HELP_SHORT ) || string_equals( arg, ARG_HELP_LONG ) ) {
 			return ShowUsage( 0 );
+		}
+
+		if ( string_equals( arg, ARG_VERBOSE_SHORT ) || string_equals( arg, ARG_HELP_LONG ) ) {
+			verbose = true;
+			continue;
 		}
 
 		if ( string_ends_with( arg, ".c" ) || string_ends_with( arg, ".cpp" ) ) {
@@ -1515,7 +1527,7 @@ int main( int argc, char** argv ) {
 	if ( inputFile == NULL ) {
 		error(
 			"You haven't told me what source files I need to build.  I need one.\n"
-			"Use " ARG_HELP_SHORT " if you need help.\n"
+			"Use " ARG_HELP_SHORT " or " ARG_HELP_LONG " if you need help.\n"
 		);
 
 		return 1;
@@ -1573,7 +1585,9 @@ int main( int argc, char** argv ) {
 
 		// if we cant find a .build_info file then assume we never built this binary before
 		if ( buildInfoFile.ptr == NULL ) {
-			//printf( "Can't open %s.  Rebuilding binary...\n", buildInfoFilename );
+			if ( verbose ) {
+				printf( "Can't open %s.  Rebuilding binary...\n", buildInfoFilename );
+			}
 			rebuild = true;
 		} else {
 			// otherwise we have one, so get the build times out of it and check them against what we had before
@@ -1628,8 +1642,12 @@ int main( int argc, char** argv ) {
 		typedef void ( *setVisualStudioOptionsFunc_t )( VisualStudioSolution* solution );
 
 		buildContext_t userBuildConfigContext = {};
-		userBuildConfigContext.flags = BUILD_CONTEXT_FLAG_SHOW_STDOUT;
 		userBuildConfigContext.options = context.options;
+		userBuildConfigContext.flags = BUILD_CONTEXT_FLAG_SHOW_STDOUT;
+
+		if ( verbose ) {
+			userBuildConfigContext.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS;
+		}
 
 		if ( doingBuildFromSourceFile ) {
 			userBuildConfigContext.options.source_files.push_back( inputFile );
@@ -1792,8 +1810,9 @@ int main( int argc, char** argv ) {
 			bool8 read = file_read_entire( sourceFile, &fileBuffer, &fileLength );
 
 			if ( !read ) {
-				//error( "Failed to read %s.  Can't resolve includes for this file.\n", buildInfoFiles[sourceFileIndex] );
-				//return EXIT_FAILURE;
+				if ( verbose ) {
+					printf( "Tried to read the file \"%s\", but I couldn't.  Therefore I can't resolve includes for this file.\n", buildInfoFiles[sourceFileIndex] );
+				}
 				continue;
 			}
 
@@ -1872,10 +1891,11 @@ int main( int argc, char** argv ) {
 							if ( !found ) {
 								array_add( &buildInfoFiles, fullFilename );
 							}
+						} else {
+							if ( verbose ) {
+								printf( "Tried to find external include \"%s\" from any of the additional include directories, but couldn't.  This file won't be tracked in the %s file.\n", filename, BUILD_INFO_FILE_EXTENSION );
+							}
 						}
-						/*else {
-							error( "Failed to find external include \"%s\" from any of the additional include directories.\n" );
-						}*/
 					}
 				}
 

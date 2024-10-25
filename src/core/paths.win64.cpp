@@ -78,21 +78,18 @@ const char* paths_get_absolute_path( const char* file ) {
 }
 
 const char* paths_remove_file_from_path( const char* path ) {
-	u64 pathLength = strlen( path );
+	const char* last_slash = strrchr( path, '/' );
+	if ( !last_slash ) last_slash = strrchr( path, '\\' );
 
-	char* result = cast( char* ) mem_temp_alloc( ( pathLength + 1 ) * sizeof( char ) );
-	strncpy( result, path, pathLength * sizeof( char ) );
-	result[pathLength] = 0;
-
-	const char* last_slash = strrchr( result, '/' );
-	if ( !last_slash ) last_slash = strrchr( result, '\\' );
-
-	if ( last_slash ) {
-		u64 offset = cast( u64 ) last_slash - cast( u64 ) result;
-		result[offset] = 0;
-	} else {
+	if ( !last_slash ) {
 		return path;
 	}
+
+	u64 path_length = cast( u64 ) last_slash - cast( u64 ) path;
+
+	char* result = cast( char* ) mem_temp_alloc( ( path_length + 1 ) * sizeof( char ) );
+	strncpy( result, path, path_length * sizeof( char ) );
+	result[path_length] = 0;
 
 	return result;
 }
@@ -117,11 +114,11 @@ const char* paths_remove_file_extension( const char* filename ) {
 		return filename;
 	}
 
-	u64 resultLength = cast( u64 ) dot - cast( u64 ) filename;
+	u64 result_length = cast( u64 ) dot - cast( u64 ) filename;
 
-	char* result = cast( char* ) mem_temp_alloc( ( resultLength + 1 ) * sizeof( char ) );
-	strncpy( result, filename, resultLength * sizeof( char ) );
-	result[resultLength] = 0;
+	char* result = cast( char* ) mem_temp_alloc( ( result_length + 1 ) * sizeof( char ) );
+	strncpy( result, filename, result_length * sizeof( char ) );
+	result[result_length] = 0;
 
 	return result;
 }

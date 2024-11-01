@@ -1,33 +1,41 @@
 #include <builder.h>
 
-BUILDER_CALLBACK void set_visual_studio_options( VisualStudioSolution* solution ) {
-	solution->name = "test-sln";
-	solution->path = "..";
-	solution->platforms.push_back( "win64" );
+BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
+	BuildConfig debug = {
+		.name = "debug",
+		.source_files = { "src/main.cpp" },
+		.binary_name = "test",
+		.binary_folder = "../bin/debug",
+		.optimization_level = OPTIMIZATION_LEVEL_O0,
+		.defines = { "_DEBUG" },
+	};
 
-	// project
-	VisualStudioProject* project = add_visual_studio_project( solution );
-	project->name = "test-project";
-	project->source_files.push_back( "src/*.cpp" );
+	BuildConfig release = {
+		.name = "release",
+		.source_files = { "src/main.cpp" },
+		.binary_name = "test",
+		.binary_folder = "../bin/release",
+		.optimization_level = OPTIMIZATION_LEVEL_O3,
+		.defines = { "NDEBUG" },
+	};
 
-	BuilderOptions options = {};
-	options.source_files.push_back( "src/main.cpp" );
-	options.binary_name = "test";
+	// if you know youre only building with visual studio then you could optionally comment out these two lines
+	options->configs.push_back( debug );
+	options->configs.push_back( release );
 
-	// project configs
-	VisualStudioConfig* configDebug = add_visual_studio_config( project );
-	configDebug->name = "debug";
-	configDebug->output_directory = "bin/debug";
-	configDebug->options = options;
-	configDebug->options.binary_folder = "../bin/debug";
-	configDebug->options.optimization_level = OPTIMIZATION_LEVEL_O0;
-	configDebug->options.defines.push_back( "_DEBUG" );
-
-	VisualStudioConfig* configRelease = add_visual_studio_config( project );
-	configRelease->name = "release";
-	configRelease->output_directory = "bin/release";
-	configRelease->options = options;
-	configRelease->options.binary_folder = "../bin/release";
-	configRelease->options.optimization_level = OPTIMIZATION_LEVEL_O3;
-	configRelease->options.defines.push_back( "NDEBUG" );
+	// if you know you dont wanna build with visual studio then either set the bool to false or just dont write this part
+	options->generate_solution = true;
+	options->solution.name = "test-sln";
+	options->solution.path = "..";
+	options->solution.platforms = { "win64" };
+	options->solution.projects = {
+		{
+			.name = "test-project",
+			.source_files = { "src/*.cpp" },
+			.configs = {
+				{ debug,   { /* debugger arguments */ }, "bin/debug"   },
+				{ release, { /* debugger arguments */ }, "bin/release" },
+			}
+		}
+	};
 }

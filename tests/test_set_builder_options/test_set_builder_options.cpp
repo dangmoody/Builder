@@ -5,16 +5,24 @@
 #include <stdio.h>
 
 BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
-	options->binary_name = "kenneth";
-	options->binary_folder = std::string( "bin\\" + options->config );
+	BuildConfig debug = {
+		.name = "debug",
+		.binary_name = "kenneth",
+		.binary_folder = "bin\\debug",
+		.remove_symbols = false,
+		.optimization_level = OPTIMIZATION_LEVEL_O0,
+	};
 
-	if ( options->config == "debug" ) {
-		options->remove_symbols = false;
-		options->optimization_level = OPTIMIZATION_LEVEL_O0;
-	} else if ( options->config == "release" ) {
-		options->remove_symbols = true;
-		options->optimization_level = OPTIMIZATION_LEVEL_O3;
-	}
+	BuildConfig release = {
+		.name = "release",
+		.binary_name = "kenneth",
+		.binary_folder = "bin\\release",
+		.remove_symbols = true,
+		.optimization_level = OPTIMIZATION_LEVEL_O3,
+	};
+
+	options->configs.push_back( debug );
+	options->configs.push_back( release );
 }
 
 int main() {

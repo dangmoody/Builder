@@ -5,10 +5,13 @@
 #include <stdio.h>
 
 BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
-	options->binary_folder = "bin";
-	options->binary_name = "test_static_lib";
+	BuildConfig config = {
+		.binary_folder	= "bin",
+		.binary_name	= "test_static_lib",
+		.binary_type	= BINARY_TYPE_STATIC_LIBRARY,
+	};
 
-	options->binary_type = BINARY_TYPE_STATIC_LIBRARY;
+	options->configs.push_back( config );
 }
 
 void SayHello() {

@@ -1,12 +1,13 @@
 #include <builder.h>
 
 BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
-	options->binary_folder = "bin";
-	options->binary_name = "test_dynamic_lib";
+	BuildConfig config = {
+		.binary_folder	= "bin",
+		.binary_name	= "test_dynamic_lib",
+		.binary_type	= BINARY_TYPE_DYNAMIC_LIBRARY,
+		.source_files	= { "lib.cpp" },
+		.defines		= { "DYNAMIC_LIBRARY_EXPORTS" },
+	};
 
-	options->binary_type = BINARY_TYPE_DYNAMIC_LIBRARY;
-
-	options->source_files.push_back( "lib.cpp" );
-
-	options->defines.push_back( "DYNAMIC_LIBRARY_EXPORTS" );
+	options->configs.push_back( config );
 }

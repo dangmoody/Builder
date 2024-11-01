@@ -1,8 +1,24 @@
+v0.3.0, <RELEASE DATE HERE>:
+
+* All the members of BuilderOptions have been moved to a new struct called "BuildConfig".
+	* This is because BuilderOptions refers to more than just compiling code now.
+	* See builder.h for what BuilderOptions now contains, but you'll see that things have been made much simpler.
+* The entry point set_visual_studio_options() no longer exists.  Instead, all Visual Studio solution generation code must now be written inside set_builder_options().
+	* If you want to generate a solution now, set BuilderOptions::generate_solution to true, and fill out all the members of BuilderOptions::solution like you were doing before.
+	* This is much better because you don't need to duplicate half the code that was inside set_builder_options() to begin with, and you can just use the BuildConfigs that you had already written to generate your Visual Studio solutions and projects.
+	* As a result of this, the functions add_visual_studio_project() and add_visual_studio_config() were removed because they're not needed.
+* Renamed BuilderOptions::config to BuildConfig::name.
+* BuildConfig::name no longer gets set via the --config command line argument.
+	* Instead, Builder will check the config set via the command line and check it against the names of all the BuildConfigs you added to BuilderOptions::configs.  If Builder matches one of the names of the configs to the command line input, then it will use that one when compiling.  Otherwise it will throw an error saying it can't find this config with this name.  They MUST match exactly (case sensitive).
+	* With this change, all of the members inside BuildConfig can now be set by you and there no more special rules for which members you can and can't write to.  This makes things much simpler.
+
+----------------------------------------------------------------
+
 v0.2.0, 26/10/2024:
 
 * .build_info files have been massively refactored:
 	* .build_info files are now binary files.
-	* Instead of .build_info only containing all source files used in the build (and all the header files we can find) we now serialize all members of BuilderOptions and, if it exists, the visual studio solution/projects you generated.
+	* Instead of .build_info only containing all source files used in the build (and all the header files we can find) we now serialize all members of BuilderOptions and, if it exists, the Visual Studio solution/projects you generated.
 	* As a result of these changes, all .build_info files were made with an older version of Builder will no longer work.
 	* When generating a Visual Studio solution, a .build_info file will now get generated (this should've been happening before, but it wasn't).
 	* The default values of BuilderOptions are now correctly serialized into the .build_info file that gets generated when you generate a Visual Studio solution.

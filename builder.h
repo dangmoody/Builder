@@ -39,7 +39,7 @@ enum OptimizationLevel {
 	OPTIMIZATION_LEVEL_O3,
 };
 
-struct BuilderOptions {
+struct BuildConfig {
 	// The source files that you want to build.
 	// Any files/paths you add to this will be made relative to the .cpp file you passed in via the command line.
 	// Supports paths and wildcards.
@@ -74,7 +74,7 @@ struct BuilderOptions {
 	// The name of the config that you want to build with.
 	// You need to set this via the command line argument "--config=name" where "name" is the name of your config.
 	// If you do not set this then it will just be empty.
-	std::string					config;
+	std::string					name;
 
 	// What kind of binary do you want to build?
 	// Defaults to EXE.
@@ -96,12 +96,9 @@ struct BuilderOptions {
 };
 
 struct VisualStudioConfig {
-	BuilderOptions				options;
+	BuildConfig					options;
 
 	std::vector<const char*>	debugger_arguments;
-
-	// The name of the config.
-	const char*					name;
 
 	// TODO(DM): 06/10/2024: this shouldnt exist
 	// we should figure this out by taking the binary_folder from the build options and making it relative to the solution instead
@@ -137,14 +134,17 @@ struct VisualStudioSolution {
 	const char*							path;
 };
 
-inline VisualStudioProject* add_visual_studio_project( VisualStudioSolution* solution ) {
-	solution->projects.push_back( {} );
+struct BuilderOptions {
+	// All the possible configs that you could build with.
+	// Pass the one you actually want to build with via the --config= command line argument.
+	// If you want use Visual Studio only, then don't fill this out.
+	std::vector<BuildConfig>	configs;
 
-	return &solution->projects[solution->projects.size() - 1];
-}
+	// If you don't use Visual Studio then ignore this.
+	VisualStudioSolution		solution;
 
-inline VisualStudioConfig* add_visual_studio_config( VisualStudioProject* project ) {
-	project->configs.push_back( {} );
-
-	return &project->configs[project->configs.size() - 1];
-}
+	// Do you want to generate a Visual Studio solution?
+	// If this is true, a code build will NOT happen.
+	// If you don't use Visual Studio then ignore this.
+	bool						generate_solution;
+};

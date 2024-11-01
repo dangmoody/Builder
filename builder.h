@@ -68,12 +68,16 @@ struct BuildConfig {
 
 	// The folder you want the binary to be put into.
 	// If the folder does not exist, then Builder will create it for you.
-	// This will be relative to the source file you are building.
+	// This path is relative to the source file you are building.
 	std::string					binary_folder;
 
-	// The name of the config that you want to build with.
-	// You need to set this via the command line argument "--config=name" where "name" is the name of your config.
-	// If you do not set this then it will just be empty.
+	// The name of the config.
+	// If you have multiple BuildConfigs (E.G. one for debug and one for release) you need to set this for each config.
+	// Then when you build, you'll tell Builder which config to use by using the command line argument:
+	//
+	//	builder.exe --config=name
+	//
+	// Where 'name' is whatever you set this to.
 	std::string					name;
 
 	// What kind of binary do you want to build?
@@ -81,11 +85,9 @@ struct BuildConfig {
 	BinaryType					binary_type;
 
 	// What level of optimization do you want in your binary?
-	// Having optimization disabled helps when debugging, but you definitely want optimizations enabled when you build your retail/shipping binary.
 	OptimizationLevel			optimization_level;
 
 	// Do you want to remove symbols from your binary?
-	// You will probably want symbols for debugging, but then not have these in your retail/shipping binary.
 	bool						remove_symbols;
 
 	// Do you want to remove the file extension from the name of the binary?
@@ -144,7 +146,7 @@ struct BuilderOptions {
 	VisualStudioSolution		solution;
 
 	// Do you want to generate a Visual Studio solution?
-	// If this is true, a code build will NOT happen.
+	// If this is set to true, then a code build will NOT happen.
 	// If you don't use Visual Studio then ignore this.
 	bool						generate_solution;
 };

@@ -785,8 +785,6 @@ static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, std::vector<B
 }
 
 static void BuildConfig_AddDefaults( BuildConfig* outConfig ) {
-	//outConfig->defines.push_back( "_CRT_SECURE_NO_WARNINGS" );
-
 	// add the folder that builder lives in as an additional include path
 	// so that people can just include builder.h without having to add the include path manually every time
 	outConfig->additional_includes.push_back( paths_get_app_path() );
@@ -800,10 +798,6 @@ static void BuildConfig_AddDefaults( BuildConfig* outConfig ) {
 #elif defined( NDEBUG )
 	outConfig->additional_libs.push_back( "msvcrt.lib" );
 #endif
-
-	// TODO(DM): 12/10/2024: are these debug only? are they even needed?
-	//outConfig->additional_libs.push_back( "Shlwapi.lib" );
-	//outConfig->additional_libs.push_back( "DbgHelp.lib" );
 #endif // defined( _WIN64 )
 
 	outConfig->ignore_warnings.push_back( "-Wno-newline-eof" );
@@ -1612,12 +1606,6 @@ int main( int argc, char** argv ) {
 			return 0;
 		}
 	}
-
-	// set default compiler options that we know we need
-	// get all BuilderOptions from the .build_info
-	//if ( !foundBuildInfo ) {
-	//	context.config = GetDefaultBuildConfig( inputConfigName );
-	//}
 
 	s32 exitCode = 0;
 

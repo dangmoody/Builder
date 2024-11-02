@@ -102,19 +102,19 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 builder build.cpp --config=debug
 ```
 
-The name of the config can be whatever you want it to be.  `BuilderOptions::config` will be set to the config that you pass in from the command line, so you can then use inside `set_builder_options` to configure your build by config.
+The name of your config in code and the name of the config you pass via the command line MUST match exactly (case sensitive).
 
-See `BuilderOptions` inside `builder.h` for a full list of options, what they do, and how Builder uses them.
+See the `BuildConfig` struct inside `builder.h` for a full list of all the things that you can configure in your build.
 
 Builder also has other entry points:
-* `on_pre_build()` - This gets run just before your program actually gets compiled.
-* `on_post_build()` - This gets run just after your program actually gets compiled.
+* `on_pre_build()` - This gets run just before your program gets compiled.
+* `on_post_build()` - This gets run just after your program gets compiled.
 
 ## Visual Studio
 
 Builder also supports generating Visual Studio solutions.  You still fill out your `BuildConfig`s like before, but you also need to do two additional things:
 
-1. Set `BuilderOptions::generate_solution` to true.
+1. Set `BuilderOptions::generate_solution` to `true`.
 2. Fill out `BuilderOptions::solution`.
 
 Code example:

@@ -143,7 +143,7 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 		.defines			= { "NDEBUG" },
 	};
 
-	// If you know youre only building with Visual Studio, then you could optionally comment out these two lines.
+	// If you know you're only building with Visual Studio, then you could optionally comment out these two lines.
 	options->configs.push_back( debug );
 	options->configs.push_back( release );
 

@@ -38,10 +38,10 @@ Or suffering through the Visual Studio project settings or whatever you were doi
 
 BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	BuildConfig config = {
-		.binary_name	= "my-program",
-		.binary_folder	= "bin/win64",
-		.source_files	= { "src/*.cpp" },
-		.defines		= { "IS_AWESOME=1" },
+		.binary_name = "my-program",
+		.binary_folder = "bin/win64",
+		.source_files = { "src/*.cpp" },
+		.defines = { "IS_AWESOME=1" },
 	};
 
 	options.configs.push_back( config );
@@ -126,21 +126,21 @@ Code example:
 
 BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	BuildConfig debug = {
-		.name				= "debug",
-		.source_files		= { "src/main.cpp" },
-		.binary_name		= "test",
-		.binary_folder		= "../bin/debug",
-		.optimization_level	= OPTIMIZATION_LEVEL_O0,
-		.defines			= { "_DEBUG" },
+		.name = "debug",
+		.source_files = { "src/main.cpp" },
+		.binary_name = "test",
+		.binary_folder = "../bin/debug",
+		.optimization_level = OPTIMIZATION_LEVEL_O0,
+		.defines = { "_DEBUG" },
 	};
 
 	BuildConfig release = {
-		.name				= "release",
-		.source_files		= { "src/main.cpp" },
-		.binary_name		= "test",
-		.binary_folder		= "../bin/release",
-		.optimization_level	= OPTIMIZATION_LEVEL_O3,
-		.defines			= { "NDEBUG" },
+		.name = "release",
+		.source_files = { "src/main.cpp" },
+		.binary_name = "test",
+		.binary_folder = "../bin/release",
+		.optimization_level = OPTIMIZATION_LEVEL_O3,
+		.defines = { "NDEBUG" },
 	};
 
 	// If you know you're only building with Visual Studio, then you could optionally comment out these two lines.

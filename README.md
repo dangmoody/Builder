@@ -37,12 +37,14 @@ Or suffering through the Visual Studio project settings or whatever you were doi
 #include <builder.h> // builder will automatically resolve this include for you
 
 BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
-	options->binary_name = "my-program"; // file extension is appended automatically for you
-	options->binary_folder = "bin/win64";
+	BuildConfig config = {
+		.binary_name	= "my-program",
+		.binary_folder	= "bin/win64",
+		.source_files	= { "src/*.cpp" },
+		.defines		= { "IS_AWESOME=1" },
+	};
 
-	options->source_files.push_back( "src/*.cpp" ); // can also be individual files
-
-	options->defines.push_back( "IS_AWESOME=1" );
+	options.configs.push_back( config );
 }
 ```
 
@@ -52,6 +54,8 @@ And then at a command line, do this:
 builder build.cpp
 ```
 
+Builder will now build your program.
+
 **NOTE: BUILDER IS NOT A COMPILER.**  Builder will just call Clang under the hood.  Builder just figures out what to tell Clang to do based on your build source file that you specify.
 
 If you don't write `set_builder_options` then Builder can still build your program, it will just use the defaults:
@@ -60,9 +64,41 @@ If you don't write `set_builder_options` then Builder can still build your progr
 
 ### Configs
 
-Configs are a completely optional part of building with Builder.  You don't have to use them if you don't want to.
+Builder supports building different "configs" in the way you may know them from Visual Studio.  A config is name that's applied to a series of build settings.
+
+To specify a config in Builder you have to do two things:
+
+1. When writing your `BuildConfig`, set the `name` member to the name of your config.
+2. When you run `builder.exe`, pass in the command line argument `--config=<config name here>`
+
+Example usage:
 
 ```cpp
+// build.cpp
+
+BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
+	BuildConfig debug = {
+		.name = "debug",	// If you wanted to use this config, you'd pass --config=debug in the command line.
+		.binary_name = "kenneth",
+		.binary_folder = "bin\\debug",
+		.remove_symbols = false,
+		.optimization_level = OPTIMIZATION_LEVEL_O0,
+	};
+
+	BuildConfig release = {
+		.name = "release",	// If you wanted to use this config, you'd pass --config=release in the command line.
+		.binary_name = "kenneth",
+		.binary_folder = "bin\\release",
+		.remove_symbols = true,
+		.optimization_level = OPTIMIZATION_LEVEL_O3,
+	};
+
+	options->configs.push_back( debug );
+	options->configs.push_back( release );
+}
+```
+
+```
 builder build.cpp --config=debug
 ```
 
@@ -73,50 +109,62 @@ See `BuilderOptions` inside `builder.h` for a full list of options, what they do
 Builder also has other entry points:
 * `on_pre_build()` - This gets run just before your program actually gets compiled.
 * `on_post_build()` - This gets run just after your program actually gets compiled.
-* `set_visual_studio_options( VisualStudioSolution* )` - Generates a Visual Studio solution (see below).
 
 ## Visual Studio
 
-Builder also supports generating Visual Studio solutions.
+Builder also supports generating Visual Studio solutions.  You still fill out your `BuildConfig`s like before, but you also need to do two additional things:
 
-### Generating a Visual Studio Solution
+1. Set `BuilderOptions::generate_solution` to true.
+2. Fill out `BuilderOptions::solution`.
 
-You must use an entry point called `set_visual_studio_options( VisualStudioSolution* )`:
+Code example:
 
 ```cpp
 // build.cpp
 
-#include <builder.h> // builder will automatically resolve this include for you
+#include <builder.h>
 
-BUILDER_CALLBACK void set_visual_studio_options( VisualStudioSolution* solution ) {
-	solution->name = "my-program";
-	solution->path = "../visual_studio";
-	solution->platforms.push_back( "win64" );
+BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
+	BuildConfig debug = {
+		.name				= "debug",
+		.source_files		= { "src/main.cpp" },
+		.binary_name		= "test",
+		.binary_folder		= "../bin/debug",
+		.optimization_level	= OPTIMIZATION_LEVEL_O0,
+		.defines			= { "_DEBUG" },
+	};
 
-	// project
-	VisualStudioProject* project = add_visual_studio_project( solution );
-	project->name = "my-program";
-	project->source_files.push_back( "*.cpp" );
+	BuildConfig release = {
+		.name				= "release",
+		.source_files		= { "src/main.cpp" },
+		.binary_name		= "test",
+		.binary_folder		= "../bin/release",
+		.optimization_level	= OPTIMIZATION_LEVEL_O3,
+		.defines			= { "NDEBUG" },
+	};
 
-	// project configs
-	VisualStudioConfig* configDebug = add_visual_studio_config( project );
-	configDebug->name = "debug";
-	configDebug->output_directory = "bin/debug";
-	configDebug->options.source_files.push_back( "main.cpp" );
-	configDebug->options.binary_name = "test";
-	configDebug->options.binary_folder = "../bin/debug";
-	configDebug->options.optimization_level = OPTIMIZATION_LEVEL_O0;
-	configDebug->options.defines.push_back( "_DEBUG" );
+	// If you know youre only building with Visual Studio, then you could optionally comment out these two lines.
+	options->configs.push_back( debug );
+	options->configs.push_back( release );
 
-	VisualStudioConfig* configRelease = add_visual_studio_config( project );
-	configRelease->name = "release";
-	configRelease->output_directory = "bin/release";
-	configRelease->options.source_files.push_back( "main.cpp" );
-	configRelease->options.binary_name = "test";
-	configRelease->options.binary_folder = "../bin/release";
-	configRelease->options.optimization_level = OPTIMIZATION_LEVEL_O3;
-	configRelease->options.defines.push_back( "NDEBUG" );
+	// When this bool is true, Builder will always generate a Visual Studio solution, and it won't do a build.
+	// So if, suddenly, you decide you want to do a build without using Visual Studio, just set this to false and then pass this file to Builder.
+	options->generate_solution = true;
+
+	options->solution.name = "test-sln";
+	options->solution.path = "..";
+	options->solution.platforms = { "win64" };
+	options->solution.projects = {
+		{
+			.name = "test-project",
+			.source_files = { "src/*.cpp" },
+			.configs = {
+				{ debug,   { /* debugger arguments */ }, "bin/debug"   },
+				{ release, { /* debugger arguments */ }, "bin/release" },
+			}
+		}
+	};
 }
 ```
 
-Every project that Builder generates is a Makefile project.  Therefore, changes that you make to any of the project properties in Visual Studio will not actually do anything.  If you want to change your project properties you must re-generate your Visual Studio solution.
+Every project that Builder generates is a Makefile project.  Therefore, changes that you make to any of the project properties in Visual Studio will not actually do anything (this is a Visual Studio problem).  If you want to change your project properties you must re-generate your Visual Studio solution.

@@ -1,4 +1,4 @@
-v0.3.0, <RELEASE DATE HERE>:
+v0.3.0, 02/11/2024:
 
 * All the members of BuilderOptions have been moved to a new struct called "BuildConfig".
 	* This is because BuilderOptions refers to more than just compiling code now.

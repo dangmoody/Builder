@@ -81,6 +81,9 @@
     <ClCompile Include="test_dynamic_lib\lib\build.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="test_dynamic_lib\build.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="test_multiple_source_files\src\marco_polo.h">

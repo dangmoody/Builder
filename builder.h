@@ -40,6 +40,8 @@ enum OptimizationLevel {
 };
 
 struct BuildConfig {
+	std::vector<BuildConfig>	depends_on;
+
 	// The source files that you want to build.
 	// Any files/paths you add to this will be made relative to the .cpp file you passed in via the command line.
 	// Supports paths and wildcards.
@@ -150,3 +152,23 @@ struct BuilderOptions {
 	// If you don't use Visual Studio then ignore this.
 	bool						generate_solution;
 };
+
+static void add_build_config( BuilderOptions* options, BuildConfig* config ) {
+	for ( size_t i = 0; i < config->depends_on.size(); i++ ) {
+		BuildConfig* dependency = &config->depends_on[i];
+
+		add_build_config( options, dependency );
+	}
+
+	bool duplicate = false;
+	for ( size_t i = 0; i < config->depends_on.size(); i++ ) {
+		if ( &options->configs[i] == config ) {
+			duplicate = true;
+			break;
+		}
+	}
+
+	if ( !duplicate ) {
+		options->configs.push_back( *config );
+	}
+}

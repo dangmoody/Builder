@@ -67,6 +67,7 @@
     <NMakeOutput>builder_tests.exe</NMakeOutput>
     <NMakeReBuildCommandLine>..\\build_tests.bat debug</NMakeReBuildCommandLine>
     <NMakePreprocessorDefinitions>_DEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+    <NMakeIncludeSearchPath>..\\;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <NMakeBuildCommandLine>build_tests.bat</NMakeBuildCommandLine>
@@ -93,6 +94,7 @@
     <ClCompile Include="test_basic\test_basic.cpp" />
     <ClCompile Include="test_cases\test_basic\test_basic.cpp" />
     <ClCompile Include="test_cases\test_set_builder_options\test_set_builder_options.cpp" />
+    <ClCompile Include="test_dynamic_lib\build.cpp" />
     <ClCompile Include="test_dynamic_lib\lib\build.cpp" />
     <ClCompile Include="test_dynamic_lib\lib\lib.cpp" />
     <ClCompile Include="test_dynamic_lib\program\build.cpp" />

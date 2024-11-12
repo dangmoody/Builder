@@ -34,7 +34,7 @@ Proprietary and confidential.
 
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
-	BUILDER_VERSION_MINOR	= 2,
+	BUILDER_VERSION_MINOR	= 4,
 	BUILDER_VERSION_PATCH	= 0,
 };
 
@@ -1618,6 +1618,8 @@ int main( int argc, char** argv ) {
 	preBuildFunc_t preBuildFunc = NULL;
 	postBuildFunc_t postBuildFunc = NULL;
 
+	BuilderOptions options = {};
+
 	// build config step
 	// see if they have set_builder_options() overridden
 	// if they do, then build a DLL first and call that function to set some more build options
@@ -1670,7 +1672,6 @@ int main( int argc, char** argv ) {
 		// now get the user-specified options
 		setBuilderOptionsFunc_t setBuilderOptionsFunc = cast( setBuilderOptionsFunc_t ) library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME );
 		if ( setBuilderOptionsFunc ) {
-			BuilderOptions options = {};
 			setBuilderOptionsFunc( &options );
 
 			// if the user wants to generate a visual studio solution then do that now
@@ -1705,315 +1706,330 @@ int main( int argc, char** argv ) {
 
 				printf( "Done.\n" );
 			}
-
-			// if only one build config was set then the user wants us to use that one
-			// dont bother checking for config names or anything like that
-			if ( options.configs.size() == 1 ) {
-				context.config = options.configs[0];
-			} else {
-				// if theres more than one config you need to tell me which one you want by name
-				if ( inputConfigName ) {
-					bool8 foundConfig = false;
-					For ( u64, configIndex, 0, options.configs.size() ) {
-						if ( hash_string( options.configs[configIndex].name.c_str(), 0 ) == inputConfigNameHash ) {
-							context.config = options.configs[configIndex];
-							foundConfig = true;
-							break;
-						}
-					}
-
-					if ( !foundConfig ) {
-						error( "You passed the config name \"%s\" via the command line, but I never found a config with that name inside %s.  Make sure they match.\n", inputConfigName, SET_BUILDER_OPTIONS_FUNC_NAME );
-						return 1;
-					}
-				}
-			}
-
-			BuildConfig_AddDefaults( &context.config );
-
-			For ( u64, includeIndex, 0, context.config.additional_includes.size() ) {
-				const char* additionalInclude = context.config.additional_includes[includeIndex];
-
-				if ( paths_is_path_absolute( additionalInclude ) ) {
-					context.config.additional_includes[includeIndex] = additionalInclude;
-				} else {
-					context.config.additional_includes[includeIndex] = tprintf( "%s\\%s", inputFilePathAbsolute, additionalInclude );
-				}
-			}
-
-			For ( u64, libPathIndex, 0, context.config.additional_lib_paths.size() ) {
-				context.config.additional_lib_paths[libPathIndex] = tprintf( "%s\\%s", inputFilePathAbsolute, context.config.additional_lib_paths[libPathIndex] );
-			}
 		}
 
 		preBuildFunc = cast( preBuildFunc_t ) library_get_proc_address( library, PRE_BUILD_FUNC_NAME );
 		postBuildFunc = cast( postBuildFunc_t ) library_get_proc_address( library, POST_BUILD_FUNC_NAME );
 	}
 
-	// get all the "compilation units" that we are actually going to give to the compiler
-	// if no source files were added in set_builder_options() then assume we want to build the same file as the one specified via the command line
-	if ( context.config.source_files.size() == 0 ) {
-		context.config.source_files.push_back( inputFile );
-	} else {
-		// otherwise the user told us to build other source files, so go find and build those instead
-		// keep this as a std::vector because this gets fed back into BuilderOptions::source_files
-		std::vector<const char*> finalSourceFilesToBuild;
+	//// if only one build config was set then the user wants us to use that one
+	//// dont bother checking for config names or anything like that
+	//if ( options.configs.size() == 1 ) {
+	//	context.config = options.configs[0];
+	//} else {
+	//	// if theres more than one config you need to tell me which one you want by name
+	//	if ( inputConfigName ) {
+	//		bool8 foundConfig = false;
+	//		For( u64, configIndex, 0, options.configs.size() ) {
+	//			if ( hash_string( options.configs[configIndex].name.c_str(), 0 ) == inputConfigNameHash ) {
+	//				context.config = options.configs[configIndex];
+	//				foundConfig = true;
+	//				break;
+	//			}
+	//		}
 
-		For ( u64, sourceFileIndex, 0, context.config.source_files.size() ) {
-			const char* sourceFile = context.config.source_files[sourceFileIndex];
+	//		if ( !foundConfig ) {
+	//			error( "You passed the config name \"%s\" via the command line, but I never found a config with that name inside %s.  Make sure they match.\n", inputConfigName, SET_BUILDER_OPTIONS_FUNC_NAME );
+	//			return 1;
+	//		}
+	//	}
+	//}
 
-			const char* fileSearchPath = NULL;
-			if ( doingBuildFromBuildInfo ) {
-				fileSearchPath = sourceFile;
+	if ( preBuildFunc ) {
+		preBuildFunc();
+	}
+
+	For ( u64, configToBuildIndex, 0, options.configs.size() ) {
+		BuildConfig* config = &options.configs[configToBuildIndex];
+		BuildConfig_AddDefaults( config );
+
+		context.config = *config;
+
+		{
+			printf( "\nBuilding \"%s\"", context.config.binary_name.c_str() );
+
+			if ( !context.config.name.empty() ) {
+				printf( ", config \"%s\"", context.config.name.c_str() );
+			}
+
+			printf( "\n" );
+		}
+
+		For ( u64, includeIndex, 0, context.config.additional_includes.size() ) {
+			const char* additionalInclude = context.config.additional_includes[includeIndex];
+
+			if ( paths_is_path_absolute( additionalInclude ) ) {
+				context.config.additional_includes[includeIndex] = additionalInclude;
 			} else {
-				fileSearchPath = tprintf( "%s\\%s", inputFilePathAbsolute, sourceFile );
+				context.config.additional_includes[includeIndex] = tprintf( "%s\\%s", inputFilePathAbsolute, additionalInclude );
+			}
+		}
+
+		For ( u64, libPathIndex, 0, context.config.additional_lib_paths.size() ) {
+			context.config.additional_lib_paths[libPathIndex] = tprintf( "%s\\%s", inputFilePathAbsolute, context.config.additional_lib_paths[libPathIndex] );
+		}
+
+		// get all the "compilation units" that we are actually going to give to the compiler
+		// if no source files were added in set_builder_options() then assume we want to build the same file as the one specified via the command line
+		if ( context.config.source_files.size() == 0 ) {
+			context.config.source_files.push_back( inputFile );
+		} else {
+			// otherwise the user told us to build other source files, so go find and build those instead
+			// keep this as a std::vector because this gets fed back into BuilderOptions::source_files
+			std::vector<const char*> finalSourceFilesToBuild;
+
+			For ( u64, sourceFileIndex, 0, context.config.source_files.size() ) {
+				const char* sourceFile = context.config.source_files[sourceFileIndex];
+
+				const char* fileSearchPath = NULL;
+				if ( doingBuildFromBuildInfo ) {
+					fileSearchPath = sourceFile;
+				} else {
+					fileSearchPath = tprintf( "%s\\%s", inputFilePathAbsolute, sourceFile );
+				}
+
+				FileInfo fileInfo;
+				File firstFile = file_find_first( fileSearchPath, &fileInfo );
+
+				if ( firstFile.ptr == INVALID_HANDLE_VALUE ) {
+					error( "Source file \"%s\" can't be found.  Is it correct?\n", sourceFile );
+					return 1;
+				}
+
+				do {
+					if ( string_equals( sourceFile, "." ) || string_equals( sourceFile, ".." ) ) {
+						continue;
+					}
+
+					const char* foundSourceFile = NULL;
+
+					if ( PathHasSlash( sourceFile ) ) {
+						const char* localPath = paths_remove_file_from_path( sourceFile );
+
+						// TODO(DM): 25/10/2024: this is messy and needs tidying up
+						if ( string_equals( localPath, sourceFile ) ) {
+							foundSourceFile = tprintf( "%s\\%s", localPath, fileInfo.filename );
+						} else {
+							if ( doingBuildFromSourceFile ) {
+								foundSourceFile = tprintf( "%s\\%s\\%s", inputFilePathAbsolute, localPath, fileInfo.filename );
+							} else {
+								foundSourceFile = tprintf( "%s\\%s", localPath, fileInfo.filename );
+							}
+						}
+					} else {
+						foundSourceFile = tprintf( "%s\\%s", inputFilePathAbsolute, fileInfo.filename );
+					}
+
+					finalSourceFilesToBuild.push_back( foundSourceFile );
+				} while ( file_find_next( &firstFile, &fileInfo ) );
 			}
 
-			FileInfo fileInfo;
-			File firstFile = file_find_first( fileSearchPath, &fileInfo );
+			context.config.source_files = finalSourceFilesToBuild;
+		}
 
-			if ( firstFile.ptr == INVALID_HANDLE_VALUE ) {
-				error( "Source file \"%s\" can't be found.  Is it correct?\n", sourceFile );
-				return 1;
-			}
+		// recursively resolve all includes found in each source file
+		Array<const char*> buildInfoFiles;
+		{
+			array_add_range( &buildInfoFiles, context.config.source_files.data(), context.config.source_files.size() );
 
-			do {
-				if ( string_equals( sourceFile, "." ) || string_equals( sourceFile, ".." ) ) {
+			// for each file, open it and get every include inside it
+			// then go through _those_ included files
+			For ( u64, sourceFileIndex, 0, buildInfoFiles.count ) {
+				const char* sourceFile = buildInfoFiles[sourceFileIndex];
+
+				const char* sourceFilePath = paths_remove_file_from_path( sourceFile );
+				const char* sourceFileNoPath = paths_remove_path_from_file( sourceFile );
+
+				char* fileBuffer = NULL;
+				u64 fileLength = 0;
+				bool8 read = file_read_entire( sourceFile, &fileBuffer, &fileLength );
+
+				if ( !read ) {
+					if ( verbose ) {
+						printf( "Tried to read the file \"%s\", but I couldn't.  Therefore I can't resolve includes for this file.\n", buildInfoFiles[sourceFileIndex] );
+					}
 					continue;
 				}
 
-				const char* foundSourceFile = NULL;
+				defer( file_free_buffer( &fileBuffer ) );
 
-				if ( PathHasSlash( sourceFile ) ) {
-					const char* localPath = paths_remove_file_from_path( sourceFile );
+				For ( u64, fileOffset, 0, fileLength ) {
+					if ( string_starts_with( fileBuffer + fileOffset, "#include" ) ) {
+						fileOffset += strlen( "#include" );
 
-					// TODO(DM): 25/10/2024: this is messy and needs tidying up
-					if ( string_equals( localPath, sourceFile ) ) {
-						foundSourceFile = tprintf( "%s\\%s", localPath, fileInfo.filename );
-					} else {
-						if ( doingBuildFromSourceFile ) {
-							foundSourceFile = tprintf( "%s\\%s\\%s", inputFilePathAbsolute, localPath, fileInfo.filename );
-						} else {
-							foundSourceFile = tprintf( "%s\\%s", localPath, fileInfo.filename );
-						}
-					}
-				} else {
-					foundSourceFile = tprintf( "%s\\%s", inputFilePathAbsolute, fileInfo.filename );
-				}
-
-				finalSourceFilesToBuild.push_back( foundSourceFile );
-			} while ( file_find_next( &firstFile, &fileInfo ) );
-		}
-
-		context.config.source_files = finalSourceFilesToBuild;
-	}
-
-	// recursively resolve all includes found in each source file
-	Array<const char*> buildInfoFiles;
-	{
-		array_add_range( &buildInfoFiles, context.config.source_files.data(), context.config.source_files.size() );
-
-		// for each file, open it and get every include inside it
-		// then go through _those_ included files
-		For ( u64, sourceFileIndex, 0, buildInfoFiles.count ) {
-			const char* sourceFile = buildInfoFiles[sourceFileIndex];
-
-			const char* sourceFilePath = paths_remove_file_from_path( sourceFile );
-			const char* sourceFileNoPath = paths_remove_path_from_file( sourceFile );
-
-			char* fileBuffer = NULL;
-			u64 fileLength = 0;
-			bool8 read = file_read_entire( sourceFile, &fileBuffer, &fileLength );
-
-			if ( !read ) {
-				if ( verbose ) {
-					printf( "Tried to read the file \"%s\", but I couldn't.  Therefore I can't resolve includes for this file.\n", buildInfoFiles[sourceFileIndex] );
-				}
-				continue;
-			}
-
-			defer( file_free_buffer( &fileBuffer ) );
-
-			For ( u64, fileOffset, 0, fileLength ) {
-				if ( string_starts_with( fileBuffer + fileOffset, "#include" ) ) {
-					fileOffset += strlen( "#include" );
-
-					while ( fileBuffer[fileOffset] == ' ' ) {
-						fileOffset++;
-					}
-
-					if ( fileBuffer[fileOffset] == '"' ) {
-						// "local" include, so scan from where we are
-						const char* includeStart = fileBuffer + fileOffset;
-						includeStart++;
-
-						const char* includeEnd = strchr( includeStart, '"' );
-
-						u64 filenameLength = cast( u64 ) includeEnd - cast( u64 ) includeStart;
-						filenameLength++;
-
-						char* filename = cast( char* ) mem_temp_alloc( filenameLength * sizeof( char ) );
-						strncpy( filename, includeStart, filenameLength * sizeof( char ) );
-						filename[filenameLength - 1] = 0;
-
-						filename = tprintf( "%s\\%s", sourceFilePath, filename );
-
-						bool8 found = false;
-						For ( u64, fileIndex, 0, buildInfoFiles.count ) {
-							if ( string_equals( buildInfoFiles[fileIndex], filename ) ) {
-								found = true;
-								break;
-							}
+						while ( fileBuffer[fileOffset] == ' ' ) {
+							fileOffset++;
 						}
 
-						if ( !found ) {
-							array_add( &buildInfoFiles, filename );
-						}
-					} else if ( fileBuffer[fileOffset] == '<' ) {
-						// "external" include, so scan all the external include folders that we know about
-						const char* includeStart = fileBuffer + fileOffset;
-						includeStart++;
+						if ( fileBuffer[fileOffset] == '"' ) {
+							// "local" include, so scan from where we are
+							const char* includeStart = fileBuffer + fileOffset;
+							includeStart++;
 
-						const char* includeEnd = strchr( includeStart, '>' );
+							const char* includeEnd = strchr( includeStart, '"' );
 
-						u64 filenameLength = cast( u64 ) includeEnd - cast( u64 ) includeStart;
-						filenameLength++;
+							u64 filenameLength = cast( u64 ) includeEnd - cast( u64 ) includeStart;
+							filenameLength++;
 
-						char* filename = cast( char* ) mem_temp_alloc( filenameLength * sizeof( char ) );
-						strncpy( filename, includeStart, filenameLength * sizeof( char ) );
-						filename[filenameLength - 1] = 0;
+							char* filename = cast( char* ) mem_temp_alloc( filenameLength * sizeof( char ) );
+							strncpy( filename, includeStart, filenameLength * sizeof( char ) );
+							filename[filenameLength - 1] = 0;
 
-						const char* fullFilename = NULL;
+							filename = tprintf( "%s\\%s", sourceFilePath, filename );
 
-						For ( u64, includePathIndex, 0, context.config.additional_includes.size() ) {
-							const char* includePath = context.config.additional_includes[includePathIndex];
-
-							fullFilename = TryFindFile( filename, includePath );
-
-							if ( fullFilename != NULL ) {
-								break;
-							}
-						}
-
-						if ( fullFilename ) {
 							bool8 found = false;
-							For ( u64, fileIndex, 0, buildInfoFiles.count ) {
-								if ( string_equals( buildInfoFiles[fileIndex], fullFilename ) ) {
+							For( u64, fileIndex, 0, buildInfoFiles.count ) {
+								if ( string_equals( buildInfoFiles[fileIndex], filename ) ) {
 									found = true;
 									break;
 								}
 							}
 
 							if ( !found ) {
-								array_add( &buildInfoFiles, fullFilename );
+								array_add( &buildInfoFiles, filename );
 							}
-						} else {
-							if ( verbose ) {
-								printf( "Tried to find external include \"%s\" from any of the additional include directories, but couldn't.  This file won't be tracked in the %s file.\n", filename, BUILD_INFO_FILE_EXTENSION );
+						} else if ( fileBuffer[fileOffset] == '<' ) {
+							// "external" include, so scan all the external include folders that we know about
+							const char* includeStart = fileBuffer + fileOffset;
+							includeStart++;
+
+							const char* includeEnd = strchr( includeStart, '>' );
+
+							u64 filenameLength = cast( u64 ) includeEnd - cast( u64 ) includeStart;
+							filenameLength++;
+
+							char* filename = cast( char* ) mem_temp_alloc( filenameLength * sizeof( char ) );
+							strncpy( filename, includeStart, filenameLength * sizeof( char ) );
+							filename[filenameLength - 1] = 0;
+
+							const char* fullFilename = NULL;
+
+							For( u64, includePathIndex, 0, context.config.additional_includes.size() ) {
+								const char* includePath = context.config.additional_includes[includePathIndex];
+
+								fullFilename = TryFindFile( filename, includePath );
+
+								if ( fullFilename != NULL ) {
+									break;
+								}
+							}
+
+							if ( fullFilename ) {
+								bool8 found = false;
+								For( u64, fileIndex, 0, buildInfoFiles.count ) {
+									if ( string_equals( buildInfoFiles[fileIndex], fullFilename ) ) {
+										found = true;
+										break;
+									}
+								}
+
+								if ( !found ) {
+									array_add( &buildInfoFiles, fullFilename );
+								}
+							} else {
+								if ( verbose ) {
+									printf( "Tried to find external include \"%s\" from any of the additional include directories, but couldn't.  This file won't be tracked in the %s file.\n", filename, BUILD_INFO_FILE_EXTENSION );
+								}
 							}
 						}
 					}
+
+					const char* lineEnd = strchr( fileBuffer + fileOffset, '\n' );
+					if ( !lineEnd ) lineEnd = strstr( fileBuffer + fileOffset, "\r\n" );
+					if ( !lineEnd ) lineEnd = fileBuffer + fileOffset;
+
+					u64 fileLineLength = cast( u64 ) lineEnd - cast( u64 ) ( fileBuffer + fileOffset );
+					fileLineLength = maxull( fileLineLength, 1ULL );	// TODO(DM): this line is hiding a bug in the parser - find the bug
+
+					fileOffset += fileLineLength;
 				}
-
-				const char* lineEnd = strchr( fileBuffer + fileOffset, '\n' );
-				if ( !lineEnd ) lineEnd = strstr( fileBuffer + fileOffset, "\r\n" );
-				if ( !lineEnd ) lineEnd = fileBuffer + fileOffset;
-
-				u64 fileLineLength = cast( u64 ) lineEnd - cast( u64 ) ( fileBuffer + fileOffset );
-				fileLineLength = maxull( fileLineLength, 1ULL );	// TODO(DM): this line is hiding a bug in the parser - find the bug
-
-				fileOffset += fileLineLength;
 			}
 		}
-	}
 
-	if ( !context.config.binary_folder.empty() ) {
-		if ( doingBuildFromSourceFile ) {
-			context.config.binary_folder = tprintf( "%s\\%s", inputFilePathAbsolute, context.config.binary_folder.c_str() );
+		if ( !context.config.binary_folder.empty() ) {
+			if ( doingBuildFromSourceFile ) {
+				context.config.binary_folder = tprintf( "%s\\%s", inputFilePathAbsolute, context.config.binary_folder.c_str() );
+			} else {
+				context.config.binary_folder = tprintf( "%s\\..\\%s", inputFilePathAbsolute, context.config.binary_folder.c_str() );
+			}
 		} else {
-			context.config.binary_folder = tprintf( "%s\\..\\%s", inputFilePathAbsolute, context.config.binary_folder.c_str() );
+			context.config.binary_folder = inputFilePathAbsolute;
 		}
-	} else {
-		context.config.binary_folder = inputFilePathAbsolute;
-	}
 
-	if ( !folder_create_if_it_doesnt_exist( context.config.binary_folder.c_str() ) ) {
-		fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".\n", SET_BUILDER_OPTIONS_FUNC_NAME, context.config.binary_folder.c_str() );
-		return 1;
-	}
+		if ( !folder_create_if_it_doesnt_exist( context.config.binary_folder.c_str() ) ) {
+			fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".\n", SET_BUILDER_OPTIONS_FUNC_NAME, context.config.binary_folder.c_str() );
+			return 1;
+		}
 
-	// user didnt override the binary name via the callback
-	// so give them a binary name based off the first source file
-	if ( context.config.binary_name.empty() ) {
+		// user didnt override the binary name via the callback
+		// so give them a binary name based off the first source file
+		if ( context.config.binary_name.empty() ) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcast-qual"
-		char* inputFileWithoutExtension = cast( char* ) mem_temp_alloc( ( inputFileLength + 1 ) * sizeof( char ) );
-		strncpy( inputFileWithoutExtension, inputFile, inputFileLength * sizeof( char ) );
-		inputFileWithoutExtension[inputFileLength] = 0;
+			char* inputFileWithoutExtension = cast( char* ) mem_temp_alloc( ( inputFileLength + 1 ) * sizeof( char ) );
+			strncpy( inputFileWithoutExtension, inputFile, inputFileLength * sizeof( char ) );
+			inputFileWithoutExtension[inputFileLength] = 0;
 
-		inputFileWithoutExtension = cast( char* ) paths_remove_file_extension( paths_remove_path_from_file( inputFileWithoutExtension ) );
+			inputFileWithoutExtension = cast( char* ) paths_remove_file_extension( paths_remove_path_from_file( inputFileWithoutExtension ) );
 
-		context.config.binary_name = inputFileWithoutExtension;
+			context.config.binary_name = inputFileWithoutExtension;
 #pragma clang diagnostic pop
+		}
+
+		context.fullBinaryName = tprintf( "%s\\%s", context.config.binary_folder.c_str(), context.config.binary_name.c_str() );
+
+		if ( !config->remove_file_extension ) {
+			context.fullBinaryName = tprintf( "%s.%s", context.fullBinaryName, GetFileExtensionFromBinaryType( config->binary_type ) );
+		}
+
+		// now we have everything we need
+		// build the actual program that the user wants to build
+		if ( rebuild ) {
+			// now do the actual build
+			switch ( config->binary_type ) {
+				case BINARY_TYPE_EXE:
+					exitCode = BuildEXE( &context );
+					break;
+
+				case BINARY_TYPE_DYNAMIC_LIBRARY:
+					exitCode = BuildDynamicLibrary( &context );
+					break;
+
+				case BINARY_TYPE_STATIC_LIBRARY:
+					exitCode = BuildStaticLibrary( &context );
+					break;
+			}
+		}
+
+		// if the build was successful, write the new .build_info file now
+		if ( exitCode == 0 ) {
+			File buildInfoFile = file_open_or_create( buildInfoFilename );
+			defer( file_close( &buildInfoFile ) );
+
+			// serialize all the builder options
+			SerializeBuildConfigs( &buildInfoFile, parsedBuildConfigs );
+
+			// write the timestamp of when each source file was last written to
+			file_write( &buildInfoFile, "tracked_source_files" );
+			SerializeU64( &buildInfoFile, buildInfoFiles.count );
+
+			For ( u32, i, 0, buildInfoFiles.count ) {
+				const char* sourceFilename = buildInfoFiles[i];
+
+				FileInfo sourceFileInfo;
+				File sourceFile = file_find_first( sourceFilename, &sourceFileInfo );
+
+				CHECK_WRITE( file_write( &buildInfoFile, tprintf( "%s\n", sourceFilename ) ) );
+				CHECK_WRITE( file_write( &buildInfoFile, &sourceFileInfo.last_write_time, sizeof( sourceFileInfo.last_write_time ) ) );
+			}
+		} else {
+			error( "Build failed.\n" );
+			exitCode = 1;
+		}
 	}
 
-	context.fullBinaryName = tprintf( "%s\\%s", context.config.binary_folder.c_str(), context.config.binary_name.c_str() );
-
-	if ( !context.config.remove_file_extension ) {
-		context.fullBinaryName = tprintf( "%s.%s", context.fullBinaryName, GetFileExtensionFromBinaryType( context.config.binary_type ) );
-	}
-
-	// now we have everything we need
-	// build the actual program that the user wants to build
-	if ( rebuild ) {
-		if ( preBuildFunc ) {
-			preBuildFunc();
-		}
-
-		// now do the actual build
-		switch ( context.config.binary_type ) {
-			case BINARY_TYPE_EXE:
-				exitCode = BuildEXE( &context );
-				break;
-
-			case BINARY_TYPE_DYNAMIC_LIBRARY:
-				exitCode = BuildDynamicLibrary( &context );
-				break;
-
-			case BINARY_TYPE_STATIC_LIBRARY:
-				exitCode = BuildStaticLibrary( &context );
-				break;
-		}
-
-		if ( postBuildFunc ) {
-			postBuildFunc();
-		}
-	}
-
-	// if the build was successful, write the new .build_info file now
-	if ( exitCode == 0 ) {
-		File buildInfoFile = file_open_or_create( buildInfoFilename );
-		defer( file_close( &buildInfoFile ) );
-
-		// serialize all the builder options
-		SerializeBuildConfigs( &buildInfoFile, parsedBuildConfigs );
-
-		// write the timestamp of when each source file was last written to
-		file_write( &buildInfoFile, "tracked_source_files" );
-		SerializeU64( &buildInfoFile, buildInfoFiles.count );
-
-		For ( u32, i, 0, buildInfoFiles.count ) {
-			const char* sourceFilename = buildInfoFiles[i];
-
-			FileInfo sourceFileInfo;
-			File sourceFile = file_find_first( sourceFilename, &sourceFileInfo );
-
-			CHECK_WRITE( file_write( &buildInfoFile, tprintf( "%s\n", sourceFilename ) ) );
-			CHECK_WRITE( file_write( &buildInfoFile, &sourceFileInfo.last_write_time, sizeof( sourceFileInfo.last_write_time ) ) );
-		}
-	} else {
-		error( "Build failed.\n" );
-		exitCode = 1;
+	if ( postBuildFunc ) {
+		postBuildFunc();
 	}
 
 	return exitCode;

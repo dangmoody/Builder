@@ -100,6 +100,8 @@ struct BuildConfig {
 };
 
 struct VisualStudioConfig {
+	const char*					name;
+
 	BuildConfig					options;
 
 	std::vector<const char*>	debugger_arguments;
@@ -153,22 +155,24 @@ struct BuilderOptions {
 	bool						generate_solution;
 };
 
-static void add_build_config( BuilderOptions* options, BuildConfig* config ) {
-	for ( size_t i = 0; i < config->depends_on.size(); i++ ) {
-		BuildConfig* dependency = &config->depends_on[i];
-
-		add_build_config( options, dependency );
-	}
-
+static void add_build_config_unique( BuildConfig* config, std::vector<BuildConfig>& outConfigs ) {
 	bool duplicate = false;
-	for ( size_t i = 0; i < config->depends_on.size(); i++ ) {
-		if ( &options->configs[i] == config ) {
+	for ( size_t i = 0; i < outConfigs.size(); i++ ) {
+		if ( memcmp( &outConfigs[i], config, sizeof( BuildConfig ) ) == 0 ) {
 			duplicate = true;
 			break;
 		}
 	}
 
 	if ( !duplicate ) {
-		options->configs.push_back( *config );
+		outConfigs.push_back( *config );
 	}
+}
+
+static void add_build_config( BuilderOptions* options, BuildConfig* config ) {
+	for ( size_t i = 0; i < config->depends_on.size(); i++ ) {
+		add_build_config( options, &config->depends_on[i] );
+	}
+
+	add_build_config_unique( config, options->configs );
 }

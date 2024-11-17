@@ -1,27 +1,52 @@
 #include <builder.h>
 
 BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
-	BuildConfig debug = {
-		.name = "debug",
-		.source_files = { "src/main.cpp" },
-		.binary_name = "test",
-		.binary_folder = "../bin/debug",
-		.optimization_level = OPTIMIZATION_LEVEL_O0,
-		.defines = { "_DEBUG" },
+	BuildConfig library_debug = {
+		.name				= "library-debug",
+		.source_files		= { "library/main.cpp" },
+		.binary_name		= "the-library",
+		.binary_folder		= "../bin/debug/library",
+		.optimization_level	= OPTIMIZATION_LEVEL_O0,
+		.defines			= { "LIBRARY_EXPORTS", "_DEBUG" },
 	};
 
-	BuildConfig release = {
-		.name = "release",
-		.source_files = { "src/main.cpp" },
-		.binary_name = "test",
-		.binary_folder = "../bin/release",
-		.optimization_level = OPTIMIZATION_LEVEL_O3,
-		.defines = { "NDEBUG" },
+	BuildConfig library_release = {
+		.name				= "library-release",
+		.source_files		= { "library/main.cpp" },
+		.binary_name		= "the-library",
+		.binary_folder		= "../bin/release/library",
+		.optimization_level	= OPTIMIZATION_LEVEL_O3,
+		.defines			= { "LIBRARY_EXPORTS", "NDEBUG" },
 	};
 
-	// if you know youre only building with visual studio then you could optionally comment out these two lines
-	options->configs.push_back( debug );
-	options->configs.push_back( release );
+	BuildConfig app_debug = {
+		.depends_on				= { library_debug },
+		.name					= "app-debug",
+		.source_files			= { "app/main.cpp" },
+		.binary_name			= "the-app",
+		.binary_folder			= "../bin/debug/app",
+		.optimization_level		= OPTIMIZATION_LEVEL_O0,
+		.defines				= { "_DEBUG" },
+		.additional_includes	= { "library" },
+		.additional_lib_paths	= { "../bin/debug/library" },
+		.additional_libs		= { "the-library.lib" },
+	};
+
+	BuildConfig app_release = {
+		.depends_on				= { library_release },
+		.name					= "app-release",
+		.source_files			= { "app/main.cpp" },
+		.binary_name			= "the-app",
+		.binary_folder			= "../bin/release/app",
+		.optimization_level		= OPTIMIZATION_LEVEL_O3,
+		.defines				= { "NDEBUG" },
+		.additional_includes	= { "library" },
+		.additional_lib_paths	= { "../bin/release/library" },
+		.additional_libs		= { "the-library.lib" },
+	};
+
+	add_build_config( options, &app_debug );
+	add_build_config( options, &app_release );
 
 	// if you know you dont wanna build with visual studio then either set the bool to false or just dont write this part
 	options->generate_solution = true;
@@ -30,11 +55,20 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	options->solution.platforms = { "win64" };
 	options->solution.projects = {
 		{
-			.name = "test-project",
-			.source_files = { "src/*.cpp" },
+			.name = "the-library",
+			.source_files = { "src/library/*.cpp" },
 			.configs = {
-				{ debug,   { /* debugger arguments */ }, "bin/debug"   },
-				{ release, { /* debugger arguments */ }, "bin/release" },
+				{ "debug",   library_debug,   { /* debugger arguments */ }, "bin/debug/library"   },
+				{ "release", library_release, { /* debugger arguments */ }, "bin/release/library" },
+			}
+		},
+
+		{
+			.name = "app",
+			.source_files = { "src/app/*.cpp" },
+			.configs = {
+				{ "debug",   app_debug,   { /* debugger arguments */ }, "bin/debug/app"   },
+				{ "release", app_release, { /* debugger arguments */ }, "bin/release/app" },
 			}
 		}
 	};

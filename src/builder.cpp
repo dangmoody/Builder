@@ -859,10 +859,10 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 		visualStudioProjectFilesPathAbsolute = inputFilePath;
 	}
 
+	// give each project a guid
 	Array<const char*> projectGuids;
 	array_resize( &projectGuids, solution->projects.size() );
 
-	// give each project a guid
 	For ( u64, i, 0, projectGuids.count ) {
 		projectGuids[i] = CreateVisualStudioGuid();
 	}
@@ -1034,7 +1034,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeOutput>%s</NMakeOutput>", config->options.binary_folder.c_str() ) ) );
 
 					const char* buildInfoFilename = tprintf( ".builder\\%s%s", solution->name, BUILD_INFO_FILE_EXTENSION );
-					const char* fullConfigName = tprintf( "%s.%s.%s", project->name, platform, config->options.name.c_str() );
+					const char* fullConfigName = tprintf( "%s.%s", config->options.name.c_str(), platform );
 
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeBuildCommandLine>%s\\builder.exe %s %s%s</NMakeBuildCommandLine>", paths_get_app_path(), buildInfoFilename, ARG_CONFIG, fullConfigName ) ) );
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeReBuildCommandLine>%s\\builder.exe %s %s%s</NMakeReBuildCommandLine>", paths_get_app_path(), buildInfoFilename, ARG_CONFIG, fullConfigName ) ) );
@@ -1224,8 +1224,6 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 	// generate .build_info file
 	{
-		//BuilderOptions defaultBuilderOptions = GetDefaultBuilderOptions( NULL );
-		//BuildConfig defaultBuildConfig = GetDefaultBuildConfig( NULL );
 		BuildConfig defaultBuildConfig;
 		BuildConfig_AddDefaults( &defaultBuildConfig );
 
@@ -1244,7 +1242,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 					// TODO(DM): 23/10/2024: I'm still not sure if this is the right answer yet
 					// but it means that we can serialize ONLY the BuilderOptions without having to also serialize visual studio project/solution information
-					config->options.name = tprintf( "%s.%s.%s", project->name, platform, config->options.name.c_str() );
+					config->options.name = tprintf( "%s.%s", config->options.name.c_str(), platform );
 
 					// TODO(DM): 25/10/2024: this whole thing feels like a massive hack
 					// users dont get the default BuilderOptions because they have to create their own ones inside set_visual_studio_options
@@ -1272,6 +1270,14 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 	}
 
 	return true;
+}
+
+static void AddBuildConfigAndDependencies( BuildConfig* config, std::vector<BuildConfig>& outConfigs ) {
+	For ( size_t, i, 0, config->depends_on.size() ) {
+		AddBuildConfigAndDependencies( &config->depends_on[i], outConfigs );
+	}
+
+	add_build_config_unique( config, outConfigs );
 }
 
 int main( int argc, char** argv ) {
@@ -1542,7 +1548,7 @@ int main( int argc, char** argv ) {
 		buildInfoFilename = tprintf( "%s\\%s%s", dotBuilderFolder, inputFileNoPathOrExtension, BUILD_INFO_FILE_EXTENSION );
 	}
 
-	bool8 foundBuildInfo = false;
+	//bool8 foundBuildInfo = false;
 
 	std::vector<BuildConfig> parsedBuildConfigs;
 	std::vector<buildInfoFile_t> buildInfoSourceFiles;
@@ -1553,7 +1559,7 @@ int main( int argc, char** argv ) {
 		return 1;
 	}
 
-	For ( u64, builderOptionsIndex, 0, parsedBuildConfigs.size() ) {
+	/*For ( u64, builderOptionsIndex, 0, parsedBuildConfigs.size() ) {
 		BuildConfig* foundBuildConfig = &parsedBuildConfigs[builderOptionsIndex];
 
 		u64 foundConfigHash = hash_string( foundBuildConfig->name.c_str(), 0 );
@@ -1563,7 +1569,7 @@ int main( int argc, char** argv ) {
 			foundBuildInfo = true;
 			break;
 		}
-	}
+	}*/
 
 	bool8 rebuild = false;
 
@@ -1676,6 +1682,19 @@ int main( int argc, char** argv ) {
 
 			// if the user wants to generate a visual studio solution then do that now
 			if ( options.generate_solution ) {
+				// make sure BuilderOptions::configs and configs from visual studio match
+				// we will need this list later for validation
+				options.configs.clear();
+				For ( u64, projectIndex, 0, options.solution.projects.size() ) {
+					VisualStudioProject* project = &options.solution.projects[projectIndex];
+
+					For ( u64, configIndex, 0, project->configs.size() ) {
+						VisualStudioConfig* config = &project->configs[configIndex];
+
+						options.configs.push_back( config->options );
+					}
+				}
+
 				For ( u64, projectIndex, 0, options.solution.projects.size() ) {
 					VisualStudioProject* project = &options.solution.projects[projectIndex];
 
@@ -1686,7 +1705,7 @@ int main( int argc, char** argv ) {
 						// therefore the source files will need to be relative to one folder up from .build_info file
 						// so update all the user-specified source file paths to reflect that
 						For ( u64, sourceFileIndex, 0, config->options.source_files.size() ) {
-							config->options.source_files[sourceFileIndex] = tprintf( "%s\\..\\%s", inputFilePath, config->options.source_files[sourceFileIndex] );
+							config->options.source_files[sourceFileIndex] = tprintf( "%s\\.builder\\..\\%s", inputFilePath, config->options.source_files[sourceFileIndex] );
 						}
 					}
 				}
@@ -1700,11 +1719,9 @@ int main( int argc, char** argv ) {
 					return 1;
 				}
 
-				// we are generating a visual studio solution
-				// so we do not want to do a code build
-				rebuild = false;
-
 				printf( "Done.\n" );
+
+				return 0;
 			}
 		}
 
@@ -1712,28 +1729,53 @@ int main( int argc, char** argv ) {
 		postBuildFunc = cast( postBuildFunc_t ) library_get_proc_address( library, POST_BUILD_FUNC_NAME );
 	}
 
-	//// if only one build config was set then the user wants us to use that one
-	//// dont bother checking for config names or anything like that
-	//if ( options.configs.size() == 1 ) {
-	//	context.config = options.configs[0];
-	//} else {
-	//	// if theres more than one config you need to tell me which one you want by name
-	//	if ( inputConfigName ) {
-	//		bool8 foundConfig = false;
-	//		For( u64, configIndex, 0, options.configs.size() ) {
-	//			if ( hash_string( options.configs[configIndex].name.c_str(), 0 ) == inputConfigNameHash ) {
-	//				context.config = options.configs[configIndex];
-	//				foundConfig = true;
-	//				break;
-	//			}
-	//		}
+	// none of the configs can have the same name
+	// TODO(DM): 14/11/2024: can we do better than o(n^2) here?
+	For ( size_t, configIndexA, 0, options.configs.size() ) {
+		const char* configNameA = options.configs[configIndexA].name.c_str();
+		u64 configNameHashA = hash_string( configNameA, 0 );
 
-	//		if ( !foundConfig ) {
-	//			error( "You passed the config name \"%s\" via the command line, but I never found a config with that name inside %s.  Make sure they match.\n", inputConfigName, SET_BUILDER_OPTIONS_FUNC_NAME );
-	//			return 1;
-	//		}
-	//	}
-	//}
+		For ( size_t, configIndexB, 0, options.configs.size() ) {
+			if ( configIndexA == configIndexB ) {
+				continue;
+			}
+
+			u64 configNameHashB = hash_string( options.configs[configIndexB].name.c_str(), 0 );
+
+			if ( configNameHashA == configNameHashB ) {
+				error( "I found multiple configs with the name \"%s\".  All config names MUST be unique, otherwise I don't know which specific config you want me to build.\n", configNameA );
+				return 1;
+			}
+		}
+	}
+
+	std::vector<BuildConfig> configsToBuild;
+
+	// of all the configs that the user filled out inside set_builder_options
+	// find the one the user asked for in the command line
+	if ( inputConfigName ) {
+		bool8 foundConfig = false;
+		For ( u64, configIndex, 0, options.configs.size() ) {
+			BuildConfig* config = &options.configs[configIndex];
+
+			if ( hash_string( config->name.c_str(), 0 ) == inputConfigNameHash ) {
+				for ( size_t i = 0; i < config->depends_on.size(); i++ ) {
+					AddBuildConfigAndDependencies( &config->depends_on[i], configsToBuild );
+				}
+
+				add_build_config_unique( config, configsToBuild );
+
+				foundConfig = true;
+
+				break;
+			}
+		}
+
+		if ( !foundConfig ) {
+			error( "You passed the config name \"%s\" via the command line, but I never found a config with that name inside %s.  Make sure they match.\n", inputConfigName, SET_BUILDER_OPTIONS_FUNC_NAME );
+			return 1;
+		}
+	}
 
 	if ( preBuildFunc ) {
 		preBuildFunc();
@@ -1982,10 +2024,8 @@ int main( int argc, char** argv ) {
 			context.fullBinaryName = tprintf( "%s.%s", context.fullBinaryName, GetFileExtensionFromBinaryType( config->binary_type ) );
 		}
 
-		// now we have everything we need
-		// build the actual program that the user wants to build
+		// now do the actual build
 		if ( rebuild ) {
-			// now do the actual build
 			switch ( config->binary_type ) {
 				case BINARY_TYPE_EXE:
 					exitCode = BuildEXE( &context );

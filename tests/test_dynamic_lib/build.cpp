@@ -8,7 +8,7 @@ static void copy_file( const char* from, const char* to ) {
 	CopyFileA( from, to, FALSE );
 }
 #else
-#error TODO(DGM): 11/10/2024: fill me in!
+#error Platform not recognised.
 #endif
 
 BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {

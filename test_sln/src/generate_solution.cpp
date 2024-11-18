@@ -3,18 +3,20 @@
 BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	BuildConfig library_debug = {
 		.name				= "library-debug",
-		.source_files		= { "library/main.cpp" },
+		.source_files		= { "library/library.cpp" },
 		.binary_name		= "the-library",
 		.binary_folder		= "../bin/debug/library",
+		.binary_type		= BINARY_TYPE_DYNAMIC_LIBRARY,
 		.optimization_level	= OPTIMIZATION_LEVEL_O0,
 		.defines			= { "LIBRARY_EXPORTS", "_DEBUG" },
 	};
 
 	BuildConfig library_release = {
 		.name				= "library-release",
-		.source_files		= { "library/main.cpp" },
+		.source_files		= { "library/library.cpp" },
 		.binary_name		= "the-library",
 		.binary_folder		= "../bin/release/library",
+		.binary_type		= BINARY_TYPE_DYNAMIC_LIBRARY,
 		.optimization_level	= OPTIMIZATION_LEVEL_O3,
 		.defines			= { "LIBRARY_EXPORTS", "NDEBUG" },
 	};

@@ -889,8 +889,13 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 			For ( u64, configIndex, 0, project->configs.size() ) {
 				VisualStudioConfig* config = &project->configs[configIndex];
 
-				if ( config->options.name.empty() ) {
+				if ( config->name == NULL ) {
 					error( "There is a config for project \"%s\" that doesn't have a name here.  You need to fill that in.\n", project->name );
+					return false;
+				}
+
+				if ( config->options.name.empty() ) {
+					error( "There is a config for project \"%s\" that doesn't have a name set in it's BuildConfig.  You need to fill that in.\n", project->name );
 					return false;
 				}
 
@@ -937,8 +942,8 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 						const char* platform = solution->platforms[platformIndex];
 
 						// TODO: Alternative targets
-						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ProjectConfiguration Include=\"%s|%s\">", config->options.name.c_str(), platform ) ) );
-						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Configuration>%s</Configuration>", config->options.name.c_str() ) ) );
+						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ProjectConfiguration Include=\"%s|%s\">", config->name, platform ) ) );
+						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Configuration>%s</Configuration>", config->name ) ) );
 						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Platform>%s</Platform>", platform ) ) );
 						CHECK_WRITE( file_write_line( &vcxproj,			"\t\t</ProjectConfiguration>" ) );
 					}
@@ -965,7 +970,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 				For ( u64, platformIndex, 0, solution->platforms.size() ) {
 					const char* platform = solution->platforms[platformIndex];
 
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\" Label=\"Configuration\">", config->options.name.c_str(), platform ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\" Label=\"Configuration\">", config->name, platform ) ) );
 					CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<ConfigurationType>Makefile</ConfigurationType>" ) );
 					CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<UseDebugLibraries>false</UseDebugLibraries>" ) );
 					CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<PlatformToolset>v143</PlatformToolset>" ) );
@@ -989,7 +994,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 				For ( u64, platformIndex, 0, solution->platforms.size() ) {
 					const char* platform = solution->platforms[platformIndex];
 
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<ImportGroup Label=\"PropertySheets\" Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">", config->options.name.c_str(), platform ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<ImportGroup Label=\"PropertySheets\" Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">", config->name, platform ) ) );
 					CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<Import Project=\"$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props\" Condition=\"exists(\'$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props\')\" Label=\"LocalAppDataPlatform\" />" ) );
 					CHECK_WRITE( file_write_line( &vcxproj,			"\t</ImportGroup>" ) );
 				}
@@ -1012,7 +1017,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 				For ( u64, platformIndex, 0, solution->platforms.size() ) {
 					const char* platform = solution->platforms[platformIndex];
 
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">", config->options.name.c_str(), platform ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">", config->name, platform ) ) );
 
 					// external include paths
 					CHECK_WRITE( file_write( &vcxproj, "\t\t<ExternalIncludePath>" ) );
@@ -1033,7 +1038,8 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 					// output path
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeOutput>%s</NMakeOutput>", config->options.binary_folder.c_str() ) ) );
 
-					const char* buildInfoFilename = tprintf( ".builder\\%s%s", solution->name, BUILD_INFO_FILE_EXTENSION );
+					// TODO(DM): 18/11/2024: dont use abs path here
+					const char* buildInfoFilename = tprintf( "%s\\.builder\\%s%s", inputFilePath, solution->name, BUILD_INFO_FILE_EXTENSION );
 					const char* fullConfigName = tprintf( "%s.%s", config->options.name.c_str(), platform );
 
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeBuildCommandLine>%s\\builder.exe %s %s%s</NMakeBuildCommandLine>", paths_get_app_path(), buildInfoFilename, ARG_CONFIG, fullConfigName ) ) );
@@ -1110,7 +1116,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 					For ( u64, platformIndex, 0, solution->platforms.size() ) {
 						const char* platform = solution->platforms[platformIndex];
 
-						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">", config->options.name.c_str(), platform ) ) );
+						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">", config->name, platform ) ) );
 						CHECK_WRITE( file_write_line( &vcxproj,			 "\t\t<DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>" ) );	// TODO(DM): do want to include the other debugger types?
 						CHECK_WRITE( file_write_line( &vcxproj,			 "\t\t<LocalDebuggerDebuggerType>Auto</LocalDebuggerDebuggerType>" ) );
 						CHECK_WRITE( file_write_line( &vcxproj,			 "\t\t<LocalDebuggerAttach>false</LocalDebuggerAttach>" ) );
@@ -1177,7 +1183,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 					For ( u64, platformIndex, 0, solution->platforms.size() ) {
 						const char* platform = solution->platforms[platformIndex];
 
-						CHECK_WRITE( file_write_line( &sln, tprintf( "\t\t%s|%s = %s|%s", config->options.name.c_str(), platform, config->options.name.c_str(), platform ) ) );
+						CHECK_WRITE( file_write_line( &sln, tprintf( "\t\t%s|%s = %s|%s", config->name, platform, config->name, platform ) ) );
 					}
 				}
 			}
@@ -1196,8 +1202,8 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 						// TODO: the first config and platform in this line are actually the ones that the PROJECT has, not the SOLUTION
 						// but we dont use those, and we should
-						CHECK_WRITE( file_write_line( &sln, tprintf( "\t\t{%s}.%s|%s.ActiveCfg = %s|%s", projectGuids[projectIndex], config->options.name.c_str(), platform, config->options.name.c_str(), platform ) ) );
-						CHECK_WRITE( file_write_line( &sln, tprintf( "\t\t{%s}.%s|%s.Build.0 = %s|%s", projectGuids[projectIndex], config->options.name.c_str(), platform, config->options.name.c_str(), platform ) ) );
+						CHECK_WRITE( file_write_line( &sln, tprintf( "\t\t{%s}.%s|%s.ActiveCfg = %s|%s", projectGuids[projectIndex], config->name, platform, config->name, platform ) ) );
+						CHECK_WRITE( file_write_line( &sln, tprintf( "\t\t{%s}.%s|%s.Build.0 = %s|%s", projectGuids[projectIndex], config->name, platform, config->name, platform ) ) );
 					}
 				}
 			}
@@ -1548,28 +1554,20 @@ int main( int argc, char** argv ) {
 		buildInfoFilename = tprintf( "%s\\%s%s", dotBuilderFolder, inputFileNoPathOrExtension, BUILD_INFO_FILE_EXTENSION );
 	}
 
-	//bool8 foundBuildInfo = false;
+	BuilderOptions options = {};
 
 	std::vector<BuildConfig> parsedBuildConfigs;
 	std::vector<buildInfoFile_t> buildInfoSourceFiles;
 	bool8 readBuildInfo = Parser_ParseBuildInfo( buildInfoFilename, parsedBuildConfigs, buildInfoSourceFiles );
 
-	if ( doingBuildFromBuildInfo && !readBuildInfo ) {
-		fatal_error( "Can't find \"%s\".  Does this file exist? Did you type it in correctly?\n", buildInfoFilename );
-		return 1;
-	}
+	if ( doingBuildFromBuildInfo ) {
+		options.configs = parsedBuildConfigs;
 
-	/*For ( u64, builderOptionsIndex, 0, parsedBuildConfigs.size() ) {
-		BuildConfig* foundBuildConfig = &parsedBuildConfigs[builderOptionsIndex];
-
-		u64 foundConfigHash = hash_string( foundBuildConfig->name.c_str(), 0 );
-
-		if ( inputConfigNameHash == foundConfigHash ) {
-			context.config = *foundBuildConfig;
-			foundBuildInfo = true;
-			break;
+		if ( !readBuildInfo ) {
+			fatal_error( "Can't find \"%s\".  Does this file exist? Did you type it in correctly?\n", buildInfoFilename );
+			return 1;
 		}
-	}*/
+	}
 
 	bool8 rebuild = false;
 
@@ -1623,8 +1621,6 @@ int main( int argc, char** argv ) {
 
 	preBuildFunc_t preBuildFunc = NULL;
 	postBuildFunc_t postBuildFunc = NULL;
-
-	BuilderOptions options = {};
 
 	// build config step
 	// see if they have set_builder_options() overridden
@@ -1759,7 +1755,7 @@ int main( int argc, char** argv ) {
 			BuildConfig* config = &options.configs[configIndex];
 
 			if ( hash_string( config->name.c_str(), 0 ) == inputConfigNameHash ) {
-				for ( size_t i = 0; i < config->depends_on.size(); i++ ) {
+				For ( size_t, i, 0, config->depends_on.size() ) {
 					AddBuildConfigAndDependencies( &config->depends_on[i], configsToBuild );
 				}
 
@@ -1781,8 +1777,8 @@ int main( int argc, char** argv ) {
 		preBuildFunc();
 	}
 
-	For ( u64, configToBuildIndex, 0, options.configs.size() ) {
-		BuildConfig* config = &options.configs[configToBuildIndex];
+	For ( u64, configToBuildIndex, 0, configsToBuild.size() ) {
+		BuildConfig* config = &configsToBuild[configToBuildIndex];
 		BuildConfig_AddDefaults( config );
 
 		context.config = *config;

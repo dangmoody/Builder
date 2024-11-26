@@ -75,9 +75,14 @@ struct buildContext_t {
 	const char*				fullBinaryName;
 };
 
-struct buildInfoFile_t {
+struct trackedSourceFile_t {
 	u64						lastWriteTime;
 	char*					filename;
+};
+
+struct buildInfoConfig_t {
+	BuildConfig							config;
+	std::vector<trackedSourceFile_t>	files;
 };
 
 static u64 maxull( const u64 x, const u64 y ) {
@@ -569,6 +574,127 @@ static void FindAllFiles( const char* basePath, const char* searchFilter, Array<
 	} while ( file_find_next( &firstFile, &fileInfo ) );
 }
 
+static void GetAllIncludedFiles( const BuildConfig* config, Array<const char*>* outBuildInfoFiles ) {
+	array_reset( outBuildInfoFiles );
+
+	array_add_range( outBuildInfoFiles, config->source_files.data(), config->source_files.size() );
+
+	// for each file, open it and get every include inside it
+	// then go through _those_ included files
+	For ( u64, sourceFileIndex, 0, outBuildInfoFiles->count ) {
+		const char* sourceFile = ( *outBuildInfoFiles )[sourceFileIndex];
+
+		const char* sourceFilePath = paths_remove_file_from_path( sourceFile );
+		const char* sourceFileNoPath = paths_remove_path_from_file( sourceFile );
+
+		char* fileBuffer = NULL;
+		u64 fileLength = 0;
+		bool8 read = file_read_entire( sourceFile, &fileBuffer, &fileLength );
+
+		if ( !read ) {
+			//if ( verbose )	// DM!!! put these back!
+			{
+				printf( "Tried to read the file \"%s\", but I couldn't.  Therefore I can't resolve includes for this file.\n", ( *outBuildInfoFiles )[sourceFileIndex] );
+			}
+			continue;
+		}
+
+		defer( file_free_buffer( &fileBuffer ) );
+
+		For ( u64, fileOffset, 0, fileLength ) {
+			if ( string_starts_with( fileBuffer + fileOffset, "#include" ) ) {
+				fileOffset += strlen( "#include" );
+
+				while ( fileBuffer[fileOffset] == ' ' ) {
+					fileOffset++;
+				}
+
+				if ( fileBuffer[fileOffset] == '"' ) {
+					// "local" include, so scan from where we are
+					const char* includeStart = fileBuffer + fileOffset;
+					includeStart++;
+
+					const char* includeEnd = strchr( includeStart, '"' );
+
+					u64 filenameLength = cast( u64 ) includeEnd - cast( u64 ) includeStart;
+					filenameLength++;
+
+					char* filename = cast( char* ) mem_temp_alloc( filenameLength * sizeof( char ) );
+					strncpy( filename, includeStart, filenameLength * sizeof( char ) );
+					filename[filenameLength - 1] = 0;
+
+					filename = tprintf( "%s\\%s", sourceFilePath, filename );
+
+					bool8 found = false;
+					For ( u64, fileIndex, 0, outBuildInfoFiles->count ) {
+						if ( string_equals( ( *outBuildInfoFiles )[fileIndex], filename ) ) {
+							found = true;
+							break;
+						}
+					}
+
+					if ( !found ) {
+						array_add( outBuildInfoFiles, filename );
+					}
+				} else if ( fileBuffer[fileOffset] == '<' ) {
+					// "external" include, so scan all the external include folders that we know about
+					const char* includeStart = fileBuffer + fileOffset;
+					includeStart++;
+
+					const char* includeEnd = strchr( includeStart, '>' );
+
+					u64 filenameLength = cast( u64 ) includeEnd - cast( u64 ) includeStart;
+					filenameLength++;
+
+					char* filename = cast( char* ) mem_temp_alloc( filenameLength * sizeof( char ) );
+					strncpy( filename, includeStart, filenameLength * sizeof( char ) );
+					filename[filenameLength - 1] = 0;
+
+					const char* fullFilename = NULL;
+
+					For ( u64, includePathIndex, 0, config->additional_includes.size() ) {
+						const char* includePath = config->additional_includes[includePathIndex];
+
+						fullFilename = TryFindFile( filename, includePath );
+
+						if ( fullFilename != NULL ) {
+							break;
+						}
+					}
+
+					if ( fullFilename ) {
+						bool8 found = false;
+						For ( u64, fileIndex, 0, outBuildInfoFiles->count ) {
+							if ( string_equals( ( *outBuildInfoFiles )[fileIndex], fullFilename ) ) {
+								found = true;
+								break;
+							}
+						}
+
+						if ( !found ) {
+							array_add( outBuildInfoFiles, fullFilename );
+						}
+					} else {
+						//if ( verbose )	// DM!!! put these back!
+						{
+							printf( "Tried to find external include \"%s\" from any of the additional include directories, but couldn't.  This file won't be tracked in the %s file.\n", filename, BUILD_INFO_FILE_EXTENSION );
+						}
+					}
+				}
+			}
+
+			const char* lineEnd = strchr( fileBuffer + fileOffset, '\n' );
+			if ( !lineEnd ) lineEnd = strstr( fileBuffer + fileOffset, "\r\n" );
+			if ( !lineEnd ) lineEnd = fileBuffer + fileOffset;
+
+			u64 fileLineLength = cast( u64 ) lineEnd - cast( u64 ) ( fileBuffer + fileOffset );
+			fileLineLength = maxull( fileLineLength, 1ULL );	// TODO(DM): this line is hiding a bug in the parser - find the bug
+
+			fileOffset += fileLineLength;
+		}
+	}
+}
+
 static void SerializeU64( File* file, const u64 x ) {
 	CHECK_WRITE( file_write( file, &x, sizeof( u64 ) ) );
 }
@@ -582,7 +708,7 @@ static void SerializeCStringArray( File* file, const std::vector<const char*>& a
 	}
 }
 
-static void SerializeBuildConfigs( File* file, const std::vector<BuildConfig>& configs ) {
+static void SerializeBuildInfo( File* file, const std::vector<BuildConfig>& configs ) {
 	SerializeU64( file, configs.size() );
 
 	For ( u64, builderOptionsIndex, 0, configs.size() ) {
@@ -592,6 +718,16 @@ static void SerializeBuildConfigs( File* file, const std::vector<BuildConfig>& c
 
 		u64 configNameHash = hash_string( config->name.c_str(), 0 );
 		SerializeU64( file, configNameHash );
+
+		// serialize names of all build dependencies
+		{
+			CHECK_WRITE( file_write( file, tprintf( "depends_on\n" ) ) );
+			SerializeU64( file, config->depends_on.size() );
+
+			For ( u64, dependencyIndex, 0, config->depends_on.size() ) {
+				CHECK_WRITE( file_write( file, tprintf( "%s\n", config->depends_on[dependencyIndex].name.c_str() ) ) );
+			}
+		}
 
 		SerializeCStringArray( file, config->source_files, "source_files" );
 		SerializeCStringArray( file, config->defines, "defines" );
@@ -607,6 +743,25 @@ static void SerializeBuildConfigs( File* file, const std::vector<BuildConfig>& c
 		CHECK_WRITE( file_write( file, &config->optimization_level, sizeof( OptimizationLevel ) ) );
 		CHECK_WRITE( file_write( file, &config->remove_symbols, sizeof( bool8 ) ) );
 		CHECK_WRITE( file_write( file, &config->remove_file_extension, sizeof( bool8 ) ) );
+
+		// serialize all included files and their last write time
+		{
+			Array<const char*> buildInfoFiles;
+			GetAllIncludedFiles( config, &buildInfoFiles );
+
+			CHECK_WRITE( file_write( file, "tracked_source_files\n" ) );
+			SerializeU64( file, buildInfoFiles.count );
+
+			For ( u64, buildInfoFileIndex, 0, buildInfoFiles.count ) {
+				const char* buildInfoFilename = buildInfoFiles[buildInfoFileIndex];
+
+				FileInfo fileInfo;
+				File foundFile = file_find_first( buildInfoFilename, &fileInfo );
+
+				CHECK_WRITE( file_write( file, tprintf( "%s\n", buildInfoFilename ) ) );
+				CHECK_WRITE( file_write( file, &fileInfo.last_write_time, sizeof( u64 ) ) );
+			}
+		}
 
 		CHECK_WRITE( file_write( file, "\n" ) );
 	}
@@ -719,32 +874,7 @@ static std::vector<const char*> Parser_ParseCStringArray( parser_t* parser ) {
 	return result;
 }
 
-static BuildConfig Parser_ParseBuildConfig( parser_t* parser ) {
-	BuildConfig config = {};
-
-	Parser_ParseStringField( parser, NULL, &config.name );
-
-	Parser_ParseU64( parser );	// name hash, skip
-
-	config.source_files = Parser_ParseCStringArray( parser );
-	config.defines = Parser_ParseCStringArray( parser );
-	config.additional_includes = Parser_ParseCStringArray( parser );
-	config.additional_lib_paths = Parser_ParseCStringArray( parser );
-	config.additional_libs = Parser_ParseCStringArray( parser );
-	config.ignore_warnings = Parser_ParseCStringArray( parser );
-
-	Parser_ParseStringField( parser, NULL, &config.binary_name );
-	Parser_ParseStringField( parser, NULL, &config.binary_folder );
-
-	config.binary_type = cast( BinaryType ) Parser_ParseS32( parser );
-	config.optimization_level = cast( OptimizationLevel ) Parser_ParseS32( parser );
-	config.remove_symbols = Parser_ParseBool( parser );
-	config.remove_file_extension = Parser_ParseBool( parser );
-
-	return config;
-}
-
-static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, std::vector<BuildConfig>& outConfigs, std::vector<buildInfoFile_t>& outBuildInfoSourceFiles ) {
+static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, std::vector<buildInfoConfig_t>& outConfigs ) {
 	parser_t parser = {};
 	bool8 read = Parser_Init( &parser, buildInfoFilename );
 
@@ -757,27 +887,92 @@ static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, std::vector<B
 	// parse all BuilderOptions
 	{
 		u64 totalNumConfigs = Parser_ParseU64( &parser );
+
 		outConfigs.resize( totalNumConfigs );
 
 		For ( u64, configIndex, 0, outConfigs.size() ) {
-			outConfigs[configIndex] = Parser_ParseBuildConfig( &parser );
+			buildInfoConfig_t* buildInfoConfig = &outConfigs[configIndex];
+
+			// parse the config itself
+			{
+				BuildConfig* config = &buildInfoConfig->config;
+
+				Parser_ParseStringField( &parser, NULL, &config->name );
+				Parser_ParseU64( &parser );	// name hash, skip
+
+				{
+					std::vector<const char*> dependencyNames = Parser_ParseCStringArray( &parser );
+
+					config->depends_on.resize( dependencyNames.size() );
+
+					For ( u64, dependencyIndex, 0, dependencyNames.size() ) {
+						config->depends_on[dependencyIndex].name = dependencyNames[dependencyIndex];
+					}
+				}
+
+				config->source_files = Parser_ParseCStringArray( &parser );
+				config->defines = Parser_ParseCStringArray( &parser );
+				config->additional_includes = Parser_ParseCStringArray( &parser );
+				config->additional_lib_paths = Parser_ParseCStringArray( &parser );
+				config->additional_libs = Parser_ParseCStringArray( &parser );
+				config->ignore_warnings = Parser_ParseCStringArray( &parser );
+
+				Parser_ParseStringField( &parser, NULL, &config->binary_name );
+				Parser_ParseStringField( &parser, NULL, &config->binary_folder );
+
+				config->binary_type = cast( BinaryType ) Parser_ParseS32( &parser );
+				config->optimization_level = cast( OptimizationLevel ) Parser_ParseS32( &parser );
+				config->remove_symbols = Parser_ParseBool( &parser );
+				config->remove_file_extension = Parser_ParseBool( &parser );
+			}
+
+			// parse tracked source files
+			{
+				Parser_SkipPast( &parser, '\n' );
+
+				u64 count = Parser_ParseU64( &parser );
+				buildInfoConfig->files.reserve( count );
+
+				For ( u64, i, 0, count ) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreorder-init-list"
+					trackedSourceFile_t buildInfoFile = {
+						.filename		= Parser_ParseLine( &parser ),
+						.lastWriteTime	= Parser_ParseU64( &parser )
+					};
+#pragma clang diagnostic pop
+
+					buildInfoConfig->files.push_back( buildInfoFile );
+				}
+			}
 
 			Parser_SkipPast( &parser, '\n' );
 		}
 	}
 
-	// parse all tracked source files
-	{
-		parser.bufferPos += strlen( "tracked_source_files" );
+	// reconstruct all build dependencies after we have deserialized them all from the file
+	For ( u64, configIndex, 0, outConfigs.size() ) {
+		BuildConfig* config = &outConfigs[configIndex].config;
 
-		u64 numSourceFiles = Parser_ParseU64( &parser );
-		outBuildInfoSourceFiles.resize( numSourceFiles );
+		For ( u64, dependencyIndex, 0, config->depends_on.size() ) {
+			BuildConfig* dependency = &config->depends_on[dependencyIndex];
 
-		For ( u64, sourceFileIndex, 0, outBuildInfoSourceFiles.size() ) {
-			buildInfoFile_t* buildInfoFile = &outBuildInfoSourceFiles[sourceFileIndex];
+			bool8 found = false;
 
-			buildInfoFile->filename = Parser_ParseLine( &parser );
-			buildInfoFile->lastWriteTime = Parser_ParseU64( &parser );
+			For ( u64, i, 0, outConfigs.size() ) {
+				BuildConfig* otherConfig = &outConfigs[i].config;
+				if ( otherConfig->name == dependency->name ) {
+					config->depends_on[dependencyIndex] = *otherConfig;
+
+					found = true;
+					break;
+				}
+			}
+
+			if ( !found ) {
+				error( "Failed to find the build dependency \"%s\".\n", dependency->name.c_str() );	// TODO(DM): 26/11/2024: better error msg here!
+				return false;
+			}
 		}
 	}
 
@@ -1040,7 +1235,8 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 					// TODO(DM): 18/11/2024: dont use abs path here
 					const char* buildInfoFilename = tprintf( "%s\\.builder\\%s%s", inputFilePath, solution->name, BUILD_INFO_FILE_EXTENSION );
-					const char* fullConfigName = tprintf( "%s.%s", config->options.name.c_str(), platform );
+					//const char* fullConfigName = tprintf( "%s.%s", config->options.name.c_str(), platform );
+					const char* fullConfigName = config->options.name.c_str();
 
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeBuildCommandLine>%s\\builder.exe %s %s%s</NMakeBuildCommandLine>", paths_get_app_path(), buildInfoFilename, ARG_CONFIG, fullConfigName ) ) );
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeReBuildCommandLine>%s\\builder.exe %s %s%s</NMakeReBuildCommandLine>", paths_get_app_path(), buildInfoFilename, ARG_CONFIG, fullConfigName ) ) );
@@ -1248,7 +1444,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 					// TODO(DM): 23/10/2024: I'm still not sure if this is the right answer yet
 					// but it means that we can serialize ONLY the BuilderOptions without having to also serialize visual studio project/solution information
-					config->options.name = tprintf( "%s.%s", config->options.name.c_str(), platform );
+					//config->options.name = tprintf( "%s.%s", config->options.name.c_str(), platform );
 
 					// TODO(DM): 25/10/2024: this whole thing feels like a massive hack
 					// users dont get the default BuilderOptions because they have to create their own ones inside set_visual_studio_options
@@ -1269,10 +1465,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 		File buildInfoFile = file_open_or_create( buildInfoFilename );
 		defer( file_close( &buildInfoFile ) );
 
-		SerializeBuildConfigs( &buildInfoFile, allBuildConfigs );
-
-		file_write( &buildInfoFile, "tracked_source_files" );
-		SerializeU64( &buildInfoFile, 0 );
+		SerializeBuildInfo( &buildInfoFile, allBuildConfigs );
 	}
 
 	return true;
@@ -1556,12 +1749,15 @@ int main( int argc, char** argv ) {
 
 	BuilderOptions options = {};
 
-	std::vector<BuildConfig> parsedBuildConfigs;
-	std::vector<buildInfoFile_t> buildInfoSourceFiles;
-	bool8 readBuildInfo = Parser_ParseBuildInfo( buildInfoFilename, parsedBuildConfigs, buildInfoSourceFiles );
+	std::vector<buildInfoConfig_t> parsedBuildConfigs;
+	bool8 readBuildInfo = Parser_ParseBuildInfo( buildInfoFilename, parsedBuildConfigs );
 
 	if ( doingBuildFromBuildInfo ) {
-		options.configs = parsedBuildConfigs;
+		// TODO(DM): 24/11/2024: this is stupid and slow
+		// need to think of a better way to do this
+		For ( u64, i, 0, parsedBuildConfigs.size() ) {
+			options.configs.push_back( parsedBuildConfigs[i].config );
+		}
 
 		if ( !readBuildInfo ) {
 			fatal_error( "Can't find \"%s\".  Does this file exist? Did you type it in correctly?\n", buildInfoFilename );
@@ -1569,12 +1765,12 @@ int main( int argc, char** argv ) {
 		}
 	}
 
-	bool8 rebuild = false;
+	// DM!!! this entire commented-out section needs to be moved to just after we find the config we want to build with (so just before pre build step?)
 
 	// figure out if we need to even rebuild
 	// get all the code files from the .build_info file
 	// if none of the code files have changed since we last checked then do not even try to rebuild
-	{
+	/*{
 		File buildInfoFile = file_open( buildInfoFilename );
 
 		// if we cant find a .build_info file then assume we never built this binary before
@@ -1592,7 +1788,7 @@ int main( int argc, char** argv ) {
 				rebuild = true;
 			} else {
 				For ( u64, fileIndex, 0, buildInfoSourceFiles.size() ) {
-					buildInfoFile_t* sourceFileInBuildInfo = &buildInfoSourceFiles[fileIndex];
+					trackedSourceFile_t* sourceFileInBuildInfo = &buildInfoSourceFiles[fileIndex];
 
 					FileInfo fileInfo;
 					File file = file_find_first( sourceFileInBuildInfo->filename, &fileInfo );
@@ -1609,7 +1805,7 @@ int main( int argc, char** argv ) {
 			printf( "Skipping build for %s.\n", buildInfoFilename );
 			return 0;
 		}
-	}
+	}*/
 
 	s32 exitCode = 0;
 
@@ -1622,10 +1818,13 @@ int main( int argc, char** argv ) {
 	preBuildFunc_t preBuildFunc = NULL;
 	postBuildFunc_t postBuildFunc = NULL;
 
+	// DM!!!	I think we only need to do this bit if doing a source file build?
+	// 			am I wrong about that?
+
 	// build config step
 	// see if they have set_builder_options() overridden
 	// if they do, then build a DLL first and call that function to set some more build options
-	{
+	if ( doingBuildFromSourceFile ) {
 		typedef void ( *setBuilderOptionsFunc_t )( BuilderOptions* options );
 
 		buildContext_t userBuildConfigContext = {};
@@ -1637,7 +1836,8 @@ int main( int argc, char** argv ) {
 			userBuildConfigContext.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS;
 		}
 
-		if ( doingBuildFromSourceFile ) {
+		//if ( doingBuildFromSourceFile )
+		{
 			userBuildConfigContext.config.source_files.push_back( inputFile );
 		}
 
@@ -1783,11 +1983,44 @@ int main( int argc, char** argv ) {
 
 		context.config = *config;
 
+		bool8 rebuildThisConfig = false;
+
+		// figure out if we need to even rebuild
+		// get all the code files from the .build_info file
+		// if none of the code files have changed since we last checked then do not even try to rebuild
+		{
+			std::vector<trackedSourceFile_t> trackedSourceFiles;
+
+			For ( u64, i, 0, parsedBuildConfigs.size() ) {
+				if ( context.config.name == parsedBuildConfigs[i].config.name ) {
+					trackedSourceFiles = parsedBuildConfigs[i].files;
+					break;
+				}
+			}
+
+			For ( u64, i, 0, trackedSourceFiles.size() ) {
+				trackedSourceFile_t* trackedSourceFile = &trackedSourceFiles[i];
+
+				FileInfo fileInfo = {};
+				File file = file_find_first( trackedSourceFile->filename, &fileInfo );
+
+				if ( fileInfo.last_write_time != trackedSourceFile->lastWriteTime ) {
+					rebuildThisConfig = true;
+					break;
+				}
+			}
+		}
+
 		{
 			printf( "\nBuilding \"%s\"", context.config.binary_name.c_str() );
 
 			if ( !context.config.name.empty() ) {
 				printf( ", config \"%s\"", context.config.name.c_str() );
+			}
+
+			if ( !rebuildThisConfig ) {
+				printf( " (skipped).\n" );
+				continue;
 			}
 
 			printf( "\n" );
@@ -1865,125 +2098,6 @@ int main( int argc, char** argv ) {
 			context.config.source_files = finalSourceFilesToBuild;
 		}
 
-		// recursively resolve all includes found in each source file
-		Array<const char*> buildInfoFiles;
-		{
-			array_add_range( &buildInfoFiles, context.config.source_files.data(), context.config.source_files.size() );
-
-			// for each file, open it and get every include inside it
-			// then go through _those_ included files
-			For ( u64, sourceFileIndex, 0, buildInfoFiles.count ) {
-				const char* sourceFile = buildInfoFiles[sourceFileIndex];
-
-				const char* sourceFilePath = paths_remove_file_from_path( sourceFile );
-				const char* sourceFileNoPath = paths_remove_path_from_file( sourceFile );
-
-				char* fileBuffer = NULL;
-				u64 fileLength = 0;
-				bool8 read = file_read_entire( sourceFile, &fileBuffer, &fileLength );
-
-				if ( !read ) {
-					if ( verbose ) {
-						printf( "Tried to read the file \"%s\", but I couldn't.  Therefore I can't resolve includes for this file.\n", buildInfoFiles[sourceFileIndex] );
-					}
-					continue;
-				}
-
-				defer( file_free_buffer( &fileBuffer ) );
-
-				For ( u64, fileOffset, 0, fileLength ) {
-					if ( string_starts_with( fileBuffer + fileOffset, "#include" ) ) {
-						fileOffset += strlen( "#include" );
-
-						while ( fileBuffer[fileOffset] == ' ' ) {
-							fileOffset++;
-						}
-
-						if ( fileBuffer[fileOffset] == '"' ) {
-							// "local" include, so scan from where we are
-							const char* includeStart = fileBuffer + fileOffset;
-							includeStart++;
-
-							const char* includeEnd = strchr( includeStart, '"' );
-
-							u64 filenameLength = cast( u64 ) includeEnd - cast( u64 ) includeStart;
-							filenameLength++;
-
-							char* filename = cast( char* ) mem_temp_alloc( filenameLength * sizeof( char ) );
-							strncpy( filename, includeStart, filenameLength * sizeof( char ) );
-							filename[filenameLength - 1] = 0;
-
-							filename = tprintf( "%s\\%s", sourceFilePath, filename );
-
-							bool8 found = false;
-							For( u64, fileIndex, 0, buildInfoFiles.count ) {
-								if ( string_equals( buildInfoFiles[fileIndex], filename ) ) {
-									found = true;
-									break;
-								}
-							}
-
-							if ( !found ) {
-								array_add( &buildInfoFiles, filename );
-							}
-						} else if ( fileBuffer[fileOffset] == '<' ) {
-							// "external" include, so scan all the external include folders that we know about
-							const char* includeStart = fileBuffer + fileOffset;
-							includeStart++;
-
-							const char* includeEnd = strchr( includeStart, '>' );
-
-							u64 filenameLength = cast( u64 ) includeEnd - cast( u64 ) includeStart;
-							filenameLength++;
-
-							char* filename = cast( char* ) mem_temp_alloc( filenameLength * sizeof( char ) );
-							strncpy( filename, includeStart, filenameLength * sizeof( char ) );
-							filename[filenameLength - 1] = 0;
-
-							const char* fullFilename = NULL;
-
-							For( u64, includePathIndex, 0, context.config.additional_includes.size() ) {
-								const char* includePath = context.config.additional_includes[includePathIndex];
-
-								fullFilename = TryFindFile( filename, includePath );
-
-								if ( fullFilename != NULL ) {
-									break;
-								}
-							}
-
-							if ( fullFilename ) {
-								bool8 found = false;
-								For( u64, fileIndex, 0, buildInfoFiles.count ) {
-									if ( string_equals( buildInfoFiles[fileIndex], fullFilename ) ) {
-										found = true;
-										break;
-									}
-								}
-
-								if ( !found ) {
-									array_add( &buildInfoFiles, fullFilename );
-								}
-							} else {
-								if ( verbose ) {
-									printf( "Tried to find external include \"%s\" from any of the additional include directories, but couldn't.  This file won't be tracked in the %s file.\n", filename, BUILD_INFO_FILE_EXTENSION );
-								}
-							}
-						}
-					}
-
-					const char* lineEnd = strchr( fileBuffer + fileOffset, '\n' );
-					if ( !lineEnd ) lineEnd = strstr( fileBuffer + fileOffset, "\r\n" );
-					if ( !lineEnd ) lineEnd = fileBuffer + fileOffset;
-
-					u64 fileLineLength = cast( u64 ) lineEnd - cast( u64 ) ( fileBuffer + fileOffset );
-					fileLineLength = maxull( fileLineLength, 1ULL );	// TODO(DM): this line is hiding a bug in the parser - find the bug
-
-					fileOffset += fileLineLength;
-				}
-			}
-		}
-
 		if ( !context.config.binary_folder.empty() ) {
 			if ( doingBuildFromSourceFile ) {
 				context.config.binary_folder = tprintf( "%s\\%s", inputFilePathAbsolute, context.config.binary_folder.c_str() );
@@ -2021,51 +2135,35 @@ int main( int argc, char** argv ) {
 		}
 
 		// now do the actual build
-		if ( rebuild ) {
-			switch ( config->binary_type ) {
-				case BINARY_TYPE_EXE:
-					exitCode = BuildEXE( &context );
-					break;
+		switch ( config->binary_type ) {
+			case BINARY_TYPE_EXE:
+				exitCode = BuildEXE( &context );
+				break;
 
-				case BINARY_TYPE_DYNAMIC_LIBRARY:
-					exitCode = BuildDynamicLibrary( &context );
-					break;
+			case BINARY_TYPE_DYNAMIC_LIBRARY:
+				exitCode = BuildDynamicLibrary( &context );
+				break;
 
-				case BINARY_TYPE_STATIC_LIBRARY:
-					exitCode = BuildStaticLibrary( &context );
-					break;
-			}
-		}
-
-		// if the build was successful, write the new .build_info file now
-		if ( exitCode == 0 ) {
-			File buildInfoFile = file_open_or_create( buildInfoFilename );
-			defer( file_close( &buildInfoFile ) );
-
-			// serialize all the builder options
-			SerializeBuildConfigs( &buildInfoFile, parsedBuildConfigs );
-
-			// write the timestamp of when each source file was last written to
-			file_write( &buildInfoFile, "tracked_source_files" );
-			SerializeU64( &buildInfoFile, buildInfoFiles.count );
-
-			For ( u32, i, 0, buildInfoFiles.count ) {
-				const char* sourceFilename = buildInfoFiles[i];
-
-				FileInfo sourceFileInfo;
-				File sourceFile = file_find_first( sourceFilename, &sourceFileInfo );
-
-				CHECK_WRITE( file_write( &buildInfoFile, tprintf( "%s\n", sourceFilename ) ) );
-				CHECK_WRITE( file_write( &buildInfoFile, &sourceFileInfo.last_write_time, sizeof( sourceFileInfo.last_write_time ) ) );
-			}
-		} else {
-			error( "Build failed.\n" );
-			exitCode = 1;
+			case BINARY_TYPE_STATIC_LIBRARY:
+				exitCode = BuildStaticLibrary( &context );
+				break;
 		}
 	}
 
 	if ( postBuildFunc ) {
 		postBuildFunc();
+	}
+
+	// if the build was successful, write the new .build_info file now
+	if ( exitCode == 0 ) {
+		File buildInfoFile = file_open_or_create( buildInfoFilename );
+		defer( file_close( &buildInfoFile ) );
+
+		// serialize all the builder options
+		SerializeBuildInfo( &buildInfoFile, options.configs );
+	} else {
+		error( "Build failed.\n" );
+		exitCode = 1;
 	}
 
 	return exitCode;

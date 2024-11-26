@@ -481,11 +481,15 @@ static void NukeFolder( const char* folder, const bool8 verbose ) {
 
 			if ( verbose ) printf( "Deleting folder %s\n", fileFullPath );
 
-			folder_delete( fileFullPath );
+			if ( !folder_delete( fileFullPath ) ) {
+				error( "Nuke failed to delete folder \"%s\".\n", fileFullPath );
+			}
 		} else {
 			if ( verbose ) printf( "Deleting file %s\n", fileFullPath );
 
-			file_delete( fileFullPath );
+			if ( !file_delete( fileFullPath ) ) {
+				error( "Nuke failed to delete folder \"%s\".\n", fileFullPath );
+			}
 		}
 	} while ( file_find_next( &file, &fileInfo ) );
 }
@@ -1613,7 +1617,9 @@ int main( int argc, char** argv ) {
 				printf( "Cleaning up ... " );
 
 				NukeFolder( "temp", true );
-				folder_delete( "temp" );
+				if ( !folder_delete( "temp" ) ) {
+					warning( "Failed to fully delete the temp folder after installing Clang.  You are safe to delete this yourself.\n" );
+				}
 			}
 
 			doFirstTimeSetup = false;

@@ -1559,7 +1559,10 @@ int main( int argc, char** argv ) {
 
 			const char* clangInstallerFilename = tprintf( "LLVM-%s-win64.exe", CLANG_VERSION );
 
-			folder_create_if_it_doesnt_exist( ".\\temp" );
+			if ( !folder_create_if_it_doesnt_exist( ".\\temp" ) ) {
+				error( "Failed to create the temp folder that the Clang install uses.  Is it possible you have whacky user permissions?\n" );
+				return 1;
+			}
 
 			// download clang
 			{
@@ -1589,7 +1592,10 @@ int main( int argc, char** argv ) {
 
 				const char* clangInstallFolder = "clang";
 
-				folder_create_if_it_doesnt_exist( clangInstallFolder );
+				if ( !folder_create_if_it_doesnt_exist( clangInstallFolder ) ) {
+					error( "Failed to create the clang install folder \"%s\".  Is it possible you have some whacky user permissions?\n", clangInstallFolder );
+					return 1;
+				}
 
 				// set clang installer command line arguments
 				// taken from: https://discourse.llvm.org/t/using-clang-windows-installer-from-command-line/49698/2 which references https://nsis.sourceforge.io/Docs/Chapter3.html#installerusagecommon
@@ -1866,8 +1872,7 @@ int main( int argc, char** argv ) {
 
 		userBuildConfigContext.fullBinaryName = tprintf( "%s\\%s", userBuildConfigContext.config.binary_folder.c_str(), userBuildConfigContext.config.binary_name.c_str() );
 
-		bool8 created = folder_create_if_it_doesnt_exist( userBuildConfigContext.config.binary_folder.c_str() );
-		if ( !created ) {
+		if ( !folder_create_if_it_doesnt_exist( userBuildConfigContext.config.binary_folder.c_str() ) ) {
 			error( "Failed to create the .builder folder.  Is it possible you have whacky user permissions?\n", userBuildConfigContext.config.binary_folder.c_str() );
 			return 1;
 		}

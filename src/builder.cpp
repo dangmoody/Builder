@@ -1866,7 +1866,11 @@ int main( int argc, char** argv ) {
 
 		userBuildConfigContext.fullBinaryName = tprintf( "%s\\%s", userBuildConfigContext.config.binary_folder.c_str(), userBuildConfigContext.config.binary_name.c_str() );
 
-		folder_create_if_it_doesnt_exist( userBuildConfigContext.config.binary_folder.c_str() );
+		bool8 created = folder_create_if_it_doesnt_exist( userBuildConfigContext.config.binary_folder.c_str() );
+		if ( !created ) {
+			error( "Failed to create the .builder folder.  Is it possible you have whacky user permissions?\n", userBuildConfigContext.config.binary_folder.c_str() );
+			return 1;
+		}
 
 		exitCode = BuildDynamicLibrary( &userBuildConfigContext );
 

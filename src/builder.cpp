@@ -763,7 +763,7 @@ static void SerializeBuildInfo( File* file, const std::vector<BuildConfig>& conf
 				File foundFile = file_find_first( buildInfoFilename, &fileInfo );
 
 				CHECK_WRITE( file_write( file, tprintf( "%s\n", buildInfoFilename ) ) );
-				CHECK_WRITE( file_write( file, &fileInfo.last_write_time, sizeof( u64 ) ) );
+				SerializeU64( file, fileInfo.last_write_time );
 			}
 		}
 

@@ -1777,48 +1777,6 @@ int main( int argc, char** argv ) {
 		}
 	}
 
-	// DM!!! this entire commented-out section needs to be moved to just after we find the config we want to build with (so just before pre build step?)
-
-	// figure out if we need to even rebuild
-	// get all the code files from the .build_info file
-	// if none of the code files have changed since we last checked then do not even try to rebuild
-	/*{
-		File buildInfoFile = file_open( buildInfoFilename );
-
-		// if we cant find a .build_info file then assume we never built this binary before
-		if ( buildInfoFile.ptr == NULL ) {
-			if ( verbose ) {
-				printf( "Can't open %s.  Rebuilding binary...\n", buildInfoFilename );
-			}
-			rebuild = true;
-		} else {
-			// otherwise we have one, so get the build times out of it and check them against what we had before
-			defer( file_close( &buildInfoFile ) );
-
-			// you typically have no source files in the .build_info if you generated a visual studio solution for the first time, for instance
-			if ( buildInfoSourceFiles.empty() ) {
-				rebuild = true;
-			} else {
-				For ( u64, fileIndex, 0, buildInfoSourceFiles.size() ) {
-					trackedSourceFile_t* sourceFileInBuildInfo = &buildInfoSourceFiles[fileIndex];
-
-					FileInfo fileInfo;
-					File file = file_find_first( sourceFileInBuildInfo->filename, &fileInfo );
-
-					if ( sourceFileInBuildInfo->lastWriteTime != fileInfo.last_write_time ) {
-						rebuild = true;
-						break;
-					}
-				}
-			}
-		}
-
-		if ( !rebuild ) {
-			printf( "Skipping build for %s.\n", buildInfoFilename );
-			return 0;
-		}
-	}*/
-
 	s32 exitCode = 0;
 
 	Library library;
@@ -1829,9 +1787,6 @@ int main( int argc, char** argv ) {
 
 	preBuildFunc_t preBuildFunc = NULL;
 	postBuildFunc_t postBuildFunc = NULL;
-
-	// DM!!!	I think we only need to do this bit if doing a source file build?
-	// 			am I wrong about that?
 
 	// build config step
 	// see if they have set_builder_options() overridden

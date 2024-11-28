@@ -40,6 +40,7 @@ enum OptimizationLevel {
 };
 
 struct BuildConfig {
+	// The other BuildConfigs that this build needs to have happened first.
 	std::vector<BuildConfig>	depends_on;
 
 	// The source files that you want to build.
@@ -100,6 +101,9 @@ struct BuildConfig {
 };
 
 struct VisualStudioConfig {
+	// The name of the config as it appears in Visual Studio.
+	// This is different from BuildConfig::name because this one doesn't have to be unique.
+	// You can have lots of VisualStudioConfigs with a name of "Debug", for instance.
 	const char*					name;
 
 	BuildConfig					options;

@@ -1839,52 +1839,52 @@ int main( int argc, char** argv ) {
 	if ( doingBuildFromSourceFile ) {
 		typedef void ( *setBuilderOptionsFunc_t )( BuilderOptions* options );
 
-		buildContext_t userBuildConfigContext = {};
-		BuildConfig_AddDefaults( &userBuildConfigContext.config );
-		//userBuildConfigContext.config = context.config;
-		userBuildConfigContext.flags = BUILD_CONTEXT_FLAG_SHOW_STDOUT;
+		buildContext_t userConfigBuildContext = {};
+		BuildConfig_AddDefaults( &userConfigBuildContext.config );
+		//userConfigBuildContext.config = context.config;
+		userConfigBuildContext.flags = BUILD_CONTEXT_FLAG_SHOW_STDOUT;
 
 		if ( verbose ) {
-			userBuildConfigContext.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS;
+			userConfigBuildContext.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS;
 		}
 
 		//if ( doingBuildFromSourceFile )
 		{
-			userBuildConfigContext.config.source_files.push_back( inputFile );
+			userConfigBuildContext.config.source_files.push_back( inputFile );
 		}
 
-		userBuildConfigContext.config.binary_name = tprintf( "%s.dll", paths_remove_path_from_file( paths_remove_file_extension( inputFile ) ) );
-		userBuildConfigContext.config.binary_folder = dotBuilderFolder;
-		userBuildConfigContext.config.defines.push_back( "BUILDER_DOING_USER_CONFIG_BUILD" );
+		userConfigBuildContext.config.binary_name = tprintf( "%s.dll", paths_remove_path_from_file( paths_remove_file_extension( inputFile ) ) );
+		userConfigBuildContext.config.binary_folder = dotBuilderFolder;
+		userConfigBuildContext.config.defines.push_back( "BUILDER_DOING_USER_CONFIG_BUILD" );
 
 		// this is needed because this tells the compiler what to set _ITERATOR_DEBUG_LEVEL to
 		// ABI compatibility will be broken if this is not the same between all binaries
 #if defined( _DEBUG )
-		userBuildConfigContext.config.defines.push_back( "_DEBUG" );
-		userBuildConfigContext.config.optimization_level = OPTIMIZATION_LEVEL_O0;
+		userConfigBuildContext.config.defines.push_back( "_DEBUG" );
+		userConfigBuildContext.config.optimization_level = OPTIMIZATION_LEVEL_O0;
 #elif defined( NDEBUG )
-		userBuildConfigContext.config.defines.push_back( "NDEBUG" );
-		userBuildConfigContext.config.optimization_level = OPTIMIZATION_LEVEL_O3;
+		userConfigBuildContext.config.defines.push_back( "NDEBUG" );
+		userConfigBuildContext.config.optimization_level = OPTIMIZATION_LEVEL_O3;
 #endif
 
-		userBuildConfigContext.config.ignore_warnings.push_back( "-Wno-missing-prototypes" );	// otherwise the user has to forward declare functions like set_builder_options and thats annoying
-		userBuildConfigContext.config.ignore_warnings.push_back( "-Wno-unused-parameter" );	// user can call set_pre_build (for example) and not actually touch the BuilderOptions parm
+		userConfigBuildContext.config.ignore_warnings.push_back( "-Wno-missing-prototypes" );	// otherwise the user has to forward declare functions like set_builder_options and thats annoying
+		userConfigBuildContext.config.ignore_warnings.push_back( "-Wno-unused-parameter" );	// user can call set_pre_build (for example) and not actually touch the BuilderOptions parm
 
-		userBuildConfigContext.fullBinaryName = tprintf( "%s\\%s", userBuildConfigContext.config.binary_folder.c_str(), userBuildConfigContext.config.binary_name.c_str() );
+		userConfigBuildContext.fullBinaryName = tprintf( "%s\\%s", userConfigBuildContext.config.binary_folder.c_str(), userConfigBuildContext.config.binary_name.c_str() );
 
-		if ( !folder_create_if_it_doesnt_exist( userBuildConfigContext.config.binary_folder.c_str() ) ) {
-			error( "Failed to create the .builder folder.  Is it possible you have whacky user permissions?\n", userBuildConfigContext.config.binary_folder.c_str() );
+		if ( !folder_create_if_it_doesnt_exist( userConfigBuildContext.config.binary_folder.c_str() ) ) {
+			error( "Failed to create the .builder folder.  Is it possible you have whacky user permissions?\n", userConfigBuildContext.config.binary_folder.c_str() );
 			return 1;
 		}
 
-		exitCode = BuildDynamicLibrary( &userBuildConfigContext );
+		exitCode = BuildDynamicLibrary( &userConfigBuildContext );
 
 		if ( exitCode != 0 ) {
 			error( "Pre-build failed!\n" );
 			return 1;
 		}
 
-		library = library_load( tprintf( "%s\\%s", userBuildConfigContext.config.binary_folder.c_str(), userBuildConfigContext.config.binary_name.c_str() ) );
+		library = library_load( tprintf( "%s\\%s", userConfigBuildContext.config.binary_folder.c_str(), userConfigBuildContext.config.binary_name.c_str() ) );
 
 		// now get the user-specified options
 		setBuilderOptionsFunc_t setBuilderOptionsFunc = cast( setBuilderOptionsFunc_t ) library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME );

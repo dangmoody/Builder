@@ -1,3 +1,15 @@
+v0.4.0, 01/12/2024:
+
+* Added BuildConfig::depends_on.
+	* This allows you to specify build dependencies.  Builder will recursively build everything inside BuildConfig::depends_on first.
+	* Because of this, all of your old .build_info files will not work with this version of Builder.  Delete those beforehand.
+* Added VisualStudioConfig::name, which just lets you set the name of the config as it will appear in Visual Studio.
+	* This is because BuildConfig::name MUST be unique, so you then have to tell Visual Studio which of your BuildConfigs are classified as what in the eyes of Visual Studio.
+* Added error logging for all file operations.
+	* Some users have reported errors coming from Builder when it attempts to create the binary folder they specify, for instance, but it works fine on others and the problem isn't obvious yet.  We need more logging.
+
+----------------------------------------------------------------
+
 v0.3.0, 02/11/2024:
 
 * All the members of BuilderOptions have been moved to a new struct called "BuildConfig".

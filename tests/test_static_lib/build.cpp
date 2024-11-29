@@ -1,24 +1,23 @@
 #include <builder.h>
 
 BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
-	BuildConfig library = {
+	BuildConfig static_lib = {
 		.name			= "library",
 		.binary_folder	= "bin",
-		.binary_name	= "test_dynamic_lib",
-		.binary_type	= BINARY_TYPE_DYNAMIC_LIBRARY,
+		.binary_name	= "test_static_lib",
+		.binary_type	= BINARY_TYPE_STATIC_LIBRARY,
 		.source_files	= { "lib/lib.cpp" },
-		.defines		= { "DYNAMIC_LIBRARY_EXPORTS" },
 	};
 
 	BuildConfig program = {
-		.depends_on				= { library },
+		.depends_on				= { static_lib },
 		.name					= "program",
 		.binary_folder			= "bin",
-		.binary_name			= "test_dynamic_library_program",
+		.binary_name			= "test_static_library_program",
 		.source_files			= { "program/program.cpp" },
 		.additional_includes	= { "lib" },
 		.additional_lib_paths	= { "bin" },
-		.additional_libs		= { "test_dynamic_lib.lib" },
+		.additional_libs		= { "test_static_lib.lib" },
 	};
 
 	// only need to add program config

@@ -108,8 +108,8 @@
     <ClCompile Include="test_set_builder_options\test_set_builder_options.cpp" />
     <ClCompile Include="test_static_library\library\lib.cpp" />
     <ClCompile Include="test_static_library\program\program.cpp" />
+    <ClCompile Include="test_static_lib\build.cpp" />
     <ClCompile Include="test_static_lib\lib\lib.cpp" />
-    <ClCompile Include="test_static_lib\program\build.cpp" />
     <ClCompile Include="test_static_lib\program\program.cpp" />
     <ClCompile Include="test_third_party_libraries\build.cpp" />
     <ClCompile Include="test_third_party_libraries\sdl_test.cpp" />

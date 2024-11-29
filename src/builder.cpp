@@ -1962,7 +1962,26 @@ int main( int argc, char** argv ) {
 		}
 	}
 
+	if ( options.configs.size() == 0 ) {
+		// if no configs were manually added then assume we are just doing a default build with no user-specified options
+		BuildConfig config = {
+			.source_files = { inputFile }
+		};
+
+		configsToBuild.push_back( config );
+	} else if ( options.configs.size() == 1 ) {
+		BuildConfig* config = &options.configs[0];
+
+		// if only one config was added then we know we just want that one, no config command line arg is needed
+		For ( size_t, i, 0, config->depends_on.size() ) {
+			AddBuildConfigAndDependencies( &config->depends_on[i], configsToBuild );
+		}
+
+		add_build_config_unique( config, configsToBuild );
+	}
+
 	if ( preBuildFunc ) {
+		printf( "Running pre-build code...\n" );
 		preBuildFunc();
 	}
 
@@ -1972,7 +1991,7 @@ int main( int argc, char** argv ) {
 
 		context.config = *config;
 
-		bool8 rebuildThisConfig = false;
+		bool8 shouldSkipBuild = false;
 
 		// figure out if we need to even rebuild
 		// get all the code files from the .build_info file
@@ -1994,7 +2013,7 @@ int main( int argc, char** argv ) {
 				File file = file_find_first( trackedSourceFile->filename, &fileInfo );
 
 				if ( fileInfo.last_write_time != trackedSourceFile->lastWriteTime ) {
-					rebuildThisConfig = true;
+					shouldSkipBuild = false;
 					break;
 				}
 			}
@@ -2007,7 +2026,7 @@ int main( int argc, char** argv ) {
 				printf( ", config \"%s\"", context.config.name.c_str() );
 			}
 
-			if ( !rebuildThisConfig ) {
+			if ( shouldSkipBuild ) {
 				printf( " (skipped).\n" );
 				continue;
 			}
@@ -2041,11 +2060,18 @@ int main( int argc, char** argv ) {
 			For ( u64, sourceFileIndex, 0, context.config.source_files.size() ) {
 				const char* sourceFile = context.config.source_files[sourceFileIndex];
 
+				bool8 inputFileIsSameAsSourceFile = string_equals( sourceFile, inputFile );
+
 				const char* fileSearchPath = NULL;
 				if ( doingBuildFromBuildInfo ) {
 					fileSearchPath = sourceFile;
 				} else {
-					fileSearchPath = tprintf( "%s\\%s", inputFilePathAbsolute, sourceFile );
+					if ( inputFileIsSameAsSourceFile ) {
+						const char* sourceFileNoPath = paths_remove_path_from_file( sourceFile );
+						fileSearchPath = tprintf( "%s\\%s", inputFilePathAbsolute, sourceFileNoPath );
+					} else {
+						fileSearchPath = tprintf( "%s\\%s", inputFilePathAbsolute, sourceFile );
+					}
 				}
 
 				FileInfo fileInfo;
@@ -2071,7 +2097,11 @@ int main( int argc, char** argv ) {
 							foundSourceFile = tprintf( "%s\\%s", localPath, fileInfo.filename );
 						} else {
 							if ( doingBuildFromSourceFile ) {
-								foundSourceFile = tprintf( "%s\\%s\\%s", inputFilePathAbsolute, localPath, fileInfo.filename );
+								if ( inputFileIsSameAsSourceFile ) {
+									foundSourceFile = tprintf( "%s\\%s", inputFilePathAbsolute, fileInfo.filename );
+								} else {
+									foundSourceFile = tprintf( "%s\\%s\\%s", inputFilePathAbsolute, localPath, fileInfo.filename );
+								}
 							} else {
 								foundSourceFile = tprintf( "%s\\%s", localPath, fileInfo.filename );
 							}
@@ -2141,6 +2171,7 @@ int main( int argc, char** argv ) {
 	}
 
 	if ( postBuildFunc ) {
+		printf( "Running post-build code...\n" );
 		postBuildFunc();
 	}
 

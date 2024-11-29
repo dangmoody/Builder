@@ -85,6 +85,21 @@ struct buildInfoConfig_t {
 	std::vector<trackedSourceFile_t>	files;
 };
 
+#ifdef _WIN64
+typedef DWORD errorCode_t;
+#define ERROR_CODE_FORMAT "0x%X"
+#else
+#error Unrecognised platform!
+#endif
+
+static errorCode_t GetLastErrorCode() {
+#ifdef _WIN64
+	return GetLastError();
+#else
+#error Unrecognised platform!
+#endif
+}
+
 static u64 maxull( const u64 x, const u64 y ) {
 	return ( x < y ) ? x : y;
 }
@@ -1560,7 +1575,8 @@ int main( int argc, char** argv ) {
 			const char* clangInstallerFilename = tprintf( "LLVM-%s-win64.exe", CLANG_VERSION );
 
 			if ( !folder_create_if_it_doesnt_exist( ".\\temp" ) ) {
-				error( "Failed to create the temp folder that the Clang install uses.  Is it possible you have whacky user permissions?\n" );
+				errorCode_t errorCode = GetLastError();
+				error( "Failed to create the temp folder that the Clang install uses.  Is it possible you have whacky user permissions? Error code: " ERROR_CODE_FORMAT "\n", errorCode );
 				return 1;
 			}
 
@@ -1593,7 +1609,8 @@ int main( int argc, char** argv ) {
 				const char* clangInstallFolder = "clang";
 
 				if ( !folder_create_if_it_doesnt_exist( clangInstallFolder ) ) {
-					error( "Failed to create the clang install folder \"%s\".  Is it possible you have some whacky user permissions?\n", clangInstallFolder );
+					errorCode_t errorCode = GetLastErrorCode();
+					error( "Failed to create the clang install folder \"%s\".  Is it possible you have some whacky user permissions? Error code: " ERROR_CODE_FORMAT "\n", clangInstallFolder, errorCode );
 					return 1;
 				}
 
@@ -1624,7 +1641,8 @@ int main( int argc, char** argv ) {
 
 				NukeFolder( "temp", true );
 				if ( !folder_delete( "temp" ) ) {
-					warning( "Failed to fully delete the temp folder after installing Clang.  You are safe to delete this yourself.\n" );
+					errorCode_t errorCode = GetLastErrorCode();
+					warning( "Failed to fully delete the temp folder after installing Clang.  You are safe to delete this yourself.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
 				}
 			}
 
@@ -1828,7 +1846,8 @@ int main( int argc, char** argv ) {
 		userConfigBuildContext.fullBinaryName = tprintf( "%s\\%s", userConfigBuildContext.config.binary_folder.c_str(), userConfigBuildContext.config.binary_name.c_str() );
 
 		if ( !folder_create_if_it_doesnt_exist( userConfigBuildContext.config.binary_folder.c_str() ) ) {
-			error( "Failed to create the .builder folder.  Is it possible you have whacky user permissions?\n", userConfigBuildContext.config.binary_folder.c_str() );
+			errorCode_t errorCode = GetLastErrorCode();
+			error( "Failed to create the .builder folder.  Error code " ERROR_CODE_FORMAT "\n", userConfigBuildContext.config.binary_folder.c_str(), errorCode );
 			return 1;
 		}
 
@@ -2079,7 +2098,8 @@ int main( int argc, char** argv ) {
 		}
 
 		if ( !folder_create_if_it_doesnt_exist( context.config.binary_folder.c_str() ) ) {
-			fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".\n", SET_BUILDER_OPTIONS_FUNC_NAME, context.config.binary_folder.c_str() );
+			errorCode_t errorCode = GetLastErrorCode();
+			fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".  Error code: " ERROR_CODE_FORMAT "\n", SET_BUILDER_OPTIONS_FUNC_NAME, context.config.binary_folder.c_str(), errorCode );
 			return 1;
 		}
 

@@ -11,6 +11,8 @@ builder_tests.exe
 
 releases/**/*
 
+bug_reports/**/*
+
 #
 # visual studio stuff
 #

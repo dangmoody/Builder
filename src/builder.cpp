@@ -570,12 +570,12 @@ static const char* CreateVisualStudioGuid() {
 	return tprintf( "%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X", guid.Data1, guid.Data2, guid.Data3, guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3], guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7] );
 }
 
-static void FindAllFilesInFolder_r( const char* folder, const char* fileExtension, const bool8 recursive, Array<const char*>* outFiles ) {
+static void FindAllFilesInFolder_r( const char* basePath, const char* folder, const char* fileExtension, const bool8 recursive, Array<const char*>* outFiles ) {
 	const char* fullSearchPath = NULL;
 	if ( string_ends_with( folder, "\\" ) || string_ends_with( folder, "/" ) ) {
-		fullSearchPath = tprintf( "%s*", folder );
+		fullSearchPath = tprintf( "%s\\%s*", basePath, folder );
 	} else {
-		fullSearchPath = tprintf( "%s\\*", folder );
+		fullSearchPath = tprintf( "%s\\%s\\*", basePath, folder );
 	}
 
 	FileInfo fileInfo;
@@ -593,7 +593,7 @@ static void FindAllFilesInFolder_r( const char* folder, const char* fileExtensio
 
 		if ( fileInfo.is_directory && recursive ) {
 			const char* subfolder = tprintf( "%s\\%s", folder, fileInfo.filename );
-			FindAllFilesInFolder_r( subfolder, fileExtension, recursive, outFiles );
+			FindAllFilesInFolder_r( basePath, subfolder, fileExtension, recursive, outFiles );
 		}
 
 		if ( string_ends_with( fileInfo.filename, fileExtension ) ) {
@@ -1343,15 +1343,14 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 			// this is typically done via a filter (E.G: src/*.cpp)
 			{
 				For ( u64, folderIndex, 0, project->code_folders.size() ) {
-					// DM!!! this is an absolute path! because inputFilePath is absolute!
-					const char* folder = tprintf( "%s\\%s", inputFilePath, project->code_folders[folderIndex] );
+					const char* folder = project->code_folders[folderIndex];
 
 					For ( u64, fileExtensionIndex, 0, project->file_extensions.size() ) {
 						const char* fileExtension = project->file_extensions[fileExtensionIndex];
 
 						if ( string_ends_with( fileExtension, "cpp" ) ) {
 							Array<const char*> files;
-							FindAllFilesInFolder_r( folder, fileExtension, true, &files );
+							FindAllFilesInFolder_r( inputFilePath, folder, fileExtension, true, &files );
 
 							if ( files.count > 0 ) {
 								CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
@@ -1364,7 +1363,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 							}
 						} else if ( string_ends_with( fileExtension, "h" ) ) {
 							Array<const char*> files;
-							FindAllFilesInFolder_r( folder, fileExtension, true, &files );
+							FindAllFilesInFolder_r( inputFilePath, folder, fileExtension, true, &files );
 
 							if ( files.count > 0 ) {
 								CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
@@ -1377,7 +1376,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 							}
 						} else {
 							Array<const char*> files;
-							FindAllFilesInFolder_r( folder, fileExtension, true, &files );
+							FindAllFilesInFolder_r( inputFilePath, folder, fileExtension, true, &files );
 
 							if ( files.count > 0 ) {
 								CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
@@ -1492,12 +1491,12 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 				const char* fileExtension = project->file_extensions[fileExtensionIndex];
 
 				For ( u64, folderIndex, 0, project->code_folders.size() ) {
-					const char* folder = tprintf( "%s\\%s", inputFilePath, project->code_folders[folderIndex] );
+					const char* folder = project->code_folders[folderIndex];
 
 					CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
 
 					Array<const char*> files;
-					FindAllFilesInFolder_r( folder, fileExtension, false, &files );
+					FindAllFilesInFolder_r( inputFilePath, folder, fileExtension, false, &files );
 
 					if ( string_equals( fileExtension, "cpp" ) ) {
 						For ( u64, fileIndex, 0, files.count ) {
@@ -1514,29 +1513,29 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 					}
 
 					Array<const char*> subfolders;
-					GetAllSubfolders_r( folder, NULL, &subfolders );
+					GetAllSubfolders_r( inputFilePath, NULL, &subfolders );
 
 					For ( u64, subfolderIndex, 0, subfolders.count ) {
 						const char* subfolder = subfolders[subfolderIndex];
 
 						Array<const char*> filterFiles;
-						FindAllFilesInFolder_r( tprintf( "%s\\%s", folder, subfolder ), fileExtension, false, &filterFiles );
+						FindAllFilesInFolder_r( inputFilePath, subfolder, fileExtension, false, &filterFiles );
 
 						if ( string_equals( fileExtension, "cpp" ) ) {
-							For( u64, fileIndex, 0, filterFiles.count ) {
-								CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ClCompile Include=\"%s\">", filterFiles[fileIndex] ) ) );
+							For ( u64, fileIndex, 0, filterFiles.count ) {
+								CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ClCompile Include=\"%s\\%s\">", folder, filterFiles[fileIndex] ) ) );
 								CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Filter>%s</Filter>", subfolder ) ) );
 								CHECK_WRITE( file_write_line( &vcxproj, "\t\t</ClCompile>" ) );
 							}
 						} else if ( string_equals( fileExtension, "h" ) ) {
-							For( u64, fileIndex, 0, filterFiles.count ) {
-								CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ClInclude Include=\"%s\">", filterFiles[fileIndex] ) ) );
+							For ( u64, fileIndex, 0, filterFiles.count ) {
+								CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ClInclude Include=\"%s\\%s\">", folder, filterFiles[fileIndex] ) ) );
 								CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Filter>%s</Filter>", subfolder ) ) );
 								CHECK_WRITE( file_write_line( &vcxproj, "\t\t</ClInclude>" ) );
 							}
 						} else {
-							For( u64, fileIndex, 0, filterFiles.count ) {
-								CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<None Include=\"%s\">", filterFiles[fileIndex] ) ) );
+							For ( u64, fileIndex, 0, filterFiles.count ) {
+								CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<None Include=\"%s\\%s\">", folder, filterFiles[fileIndex] ) ) );
 								CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Filter>%s</Filter>", subfolder ) ) );
 								CHECK_WRITE( file_write_line( &vcxproj, "\t\t</None>" ) );
 							}
@@ -2090,7 +2089,7 @@ int main( int argc, char** argv ) {
 
 				printf( "Generating Visual Studio Solution\n" );
 
-				bool8 generated = GenerateVisualStudioSolution( &options.solution, inputFilePathAbsolute );
+				bool8 generated = GenerateVisualStudioSolution( &options.solution, inputFilePath );
 
 				if ( !generated ) {
 					error( "Failed to generate Visual Studio solution.\n" );	// TODO(DM): better error message

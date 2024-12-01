@@ -1179,7 +1179,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 					error(
 						"Build config \"%s\" is an executable, but you never specified an output directory when generating the Visual Studio project \"%s\", config \"%s\".\n"
 						"Visual Studio needs this in order to know where to run the executable from when debugging.  You need to set this.\n"
-						, config->options.name, project->name, config->name
+						, config->options.name.c_str(), project->name, config->name
 					);
 					return false;
 				}

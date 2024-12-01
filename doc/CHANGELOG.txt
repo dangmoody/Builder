@@ -7,6 +7,14 @@ v0.4.0, 01/12/2024:
 	* This is because BuildConfig::name MUST be unique, so you then have to tell Visual Studio which of your BuildConfigs are classified as what in the eyes of Visual Studio.
 * Added error logging for all file operations.
 	* Some users have reported errors coming from Builder when it attempts to create the binary folder they specify, for instance, but it works fine on others and the problem isn't obvious yet.  We need more logging.
+* Made some improvements for Visual Studio support:
+	* The user-requested the Visual Studio Solution path is now created for you automatically.
+	* Header files and .inl files are now added to the solution.
+	* Add all files in subfolders, recursively.
+	* Changed the way you tell Builder what files to add to your Visual Studio Solution:
+		* VisualStudioProject::source_files has been replaced for VisualStudioProject::code_folders and VisualStudioProject::file_extensions.
+		* VisualStudioProject::code_folders tells Builder what folders your code lives in (without any search filters).
+		* VisualStudioProject::file_extensions tells Builder what file types you want to include in your project (across any of the folders inside VisualStudioProject::code_folders).
 
 ----------------------------------------------------------------
 

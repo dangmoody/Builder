@@ -42,8 +42,8 @@ void paths_init() {
 
 		GetModuleFileNameA( NULL, app_full_path, MAX_PATH );
 
-		const char* last_slash = strrchr( app_full_path, '/' );
-		if ( !last_slash ) last_slash = strrchr( app_full_path, '\\' );
+		const char* last_slash = strrchr( app_full_path, '\\' );
+		if ( !last_slash ) last_slash = strrchr( app_full_path, '/' );
 		//last_slash++;
 
 		u64 app_base_path_length = cast( u64 ) last_slash - cast( u64 ) app_full_path;
@@ -78,8 +78,14 @@ const char* paths_get_absolute_path( const char* file ) {
 }
 
 const char* paths_remove_file_from_path( const char* path ) {
-	const char* last_slash = strrchr( path, '/' );
-	if ( !last_slash ) last_slash = strrchr( path, '\\' );
+	const char* dot = strrchr( path, '.' );
+
+	if ( !dot ) {
+		return path;
+	}
+
+	const char* last_slash = strrchr( path, '\\' );
+	if ( !last_slash ) last_slash = strrchr( path, '/' );
 
 	if ( !last_slash ) {
 		return path;
@@ -95,8 +101,8 @@ const char* paths_remove_file_from_path( const char* path ) {
 }
 
 const char* paths_remove_path_from_file( const char* path ) {
-	const char* last_slash = strrchr( path, '/' );
-	if ( !last_slash ) last_slash = strrchr( path, '\\' );
+	const char* last_slash = strrchr( path, '\\' );
+	if ( !last_slash ) last_slash = strrchr( path, '/' );
 
 	if ( !last_slash ) {
 		last_slash = path;

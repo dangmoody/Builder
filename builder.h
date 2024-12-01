@@ -122,9 +122,14 @@ struct VisualStudioProject {
 	std::vector<VisualStudioConfig>	configs;
 
 	// These are the source files that will be included in the "Source Files" filter in the project.
-	// This is a separate list to the build options as you likely want the superset of
-	// all files in your Solution, but may conditionally exclude a subset of files based on config/target etc
-	std::vector<const char*>		source_files;
+	// This is a separate list to the build options as you likely want the superset of all files in your Solution, but may conditionally exclude a subset of files based on config/target etc.
+	// This list must NOT contain any search filters.
+	std::vector<const char*>		code_folders;
+
+	// All files that have any of these extensions will be included in your project.
+	// These must NOT start with a dot.  Only the extension is required.
+	// Examples: cpp, h, inl
+	std::vector<const char*>		file_extensions;
 
 	// Visual Studio project name.
 	const char*						name;

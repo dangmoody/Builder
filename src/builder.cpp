@@ -1105,11 +1105,6 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 			return false;
 		}
 
-		/*if ( solution->configs.size() < 1 ) {
-			error( "You must set at least one config when generating a Visual Studio Solution.\n" );
-			return false;
-		}*/
-
 		if ( solution->platforms.size() < 1 ) {
 			error( "You must set at least one platform when generating a Visual Studio Solution.\n" );
 			return false;
@@ -1156,10 +1151,15 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 				return false;
 			}
 
-			/*if ( project->source_files.size() == 0 ) {
-				error( "No source files were set for project \"%s\".  You need at least one source file.\n", project->name );
+			if ( project->code_folders.size() == 0 ) {
+				error( "No code folders were provided for project \"%s\".  You need at least one.\n", project->name );
 				return false;
-			}*/
+			}
+
+			if ( project->file_extensions.size() == 0 ) {
+				error( "No file extensions/file types were provided for project \"%s\".  You need at least one.\n", project->name );
+				return false;
+			}
 
 			// validate each config
 			For ( u64, configIndex, 0, project->configs.size() ) {
@@ -1175,24 +1175,14 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 					return false;
 				}
 
-				//if ( config->build_source_file == NULL ) {
-				//	error( "Build source file for project \"%s\" config \"%s\" was never set.  You need to fill that in.\n", project->name, config->name );
-				//	return false;
-				//}
-
-				/*if ( config->binary_name == NULL ) {
-					error( "Binary name for project \"%s\" config \"%s\" was never set.  You need to fill that in.\n", project->name, config->name );
+				if ( config->options.binary_type == BINARY_TYPE_EXE && config->output_directory == NULL ) {
+					error(
+						"Build config \"%s\" is an executable, but you never specified an output directory when generating the Visual Studio project \"%s\", config \"%s\".\n"
+						"Visual Studio needs this in order to know where to run the executable from when debugging.  You need to set this.\n"
+						, config->options.name, project->name, config->name
+					);
 					return false;
 				}
-
-				if ( config->output_path == NULL ) {
-					error( "Output path for project \"%s\" config \"%s\" was never set.  You need to fill that in.\n", project->name, config->name );
-					return false;
-				}
-
-				if ( config->intermediate_path == NULL ) {
-					config->intermediate_path = config->output_path;
-				}*/
 			}
 		}
 

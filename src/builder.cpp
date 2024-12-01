@@ -648,7 +648,7 @@ static void GetAllSubfolders_r( const char* basePath, const char* folder, Array<
 	} while ( file_find_next( &file, &fileInfo ) );
 }
 
-static void GetAllIncludedFiles( const BuildConfig* config, Array<const char*>* outBuildInfoFiles ) {
+static void GetAllIncludedFiles( const BuildConfig* config, const bool8 verbose, Array<const char*>* outBuildInfoFiles ) {
 	array_reset( outBuildInfoFiles );
 
 	array_add_range( outBuildInfoFiles, config->source_files.data(), config->source_files.size() );
@@ -666,8 +666,7 @@ static void GetAllIncludedFiles( const BuildConfig* config, Array<const char*>* 
 		bool8 read = file_read_entire( sourceFile, &fileBuffer, &fileLength );
 
 		if ( !read ) {
-			//if ( verbose )	// DM!!! put these back!
-			{
+			if ( verbose ) {
 				printf( "Tried to read the file \"%s\", but I couldn't.  Therefore I can't resolve includes for this file.\n", ( *outBuildInfoFiles )[sourceFileIndex] );
 			}
 			continue;
@@ -749,8 +748,7 @@ static void GetAllIncludedFiles( const BuildConfig* config, Array<const char*>* 
 							array_add( outBuildInfoFiles, fullFilename );
 						}
 					} else {
-						//if ( verbose )	// DM!!! put these back!
-						{
+						if ( verbose ) {
 							printf( "Tried to find external include \"%s\" from any of the additional include directories, but couldn't.  This file won't be tracked in the %s file.\n", filename, BUILD_INFO_FILE_EXTENSION );
 						}
 					}
@@ -782,7 +780,7 @@ static void SerializeCStringArray( File* file, const std::vector<const char*>& a
 	}
 }
 
-static void SerializeBuildInfo( File* file, const std::vector<BuildConfig>& configs ) {
+static void SerializeBuildInfo( File* file, const std::vector<BuildConfig>& configs, const bool8 verbose ) {
 	SerializeU64( file, configs.size() );
 
 	For ( u64, builderOptionsIndex, 0, configs.size() ) {
@@ -821,7 +819,7 @@ static void SerializeBuildInfo( File* file, const std::vector<BuildConfig>& conf
 		// serialize all included files and their last write time
 		{
 			Array<const char*> buildInfoFiles;
-			GetAllIncludedFiles( config, &buildInfoFiles );
+			GetAllIncludedFiles( config, verbose, &buildInfoFiles );
 
 			CHECK_WRITE( file_write( file, "tracked_source_files\n" ) );
 			SerializeU64( file, buildInfoFiles.count );
@@ -1095,7 +1093,7 @@ static void BuildConfig_AddDefaults( BuildConfig* outConfig ) {
 	outConfig->ignore_warnings.push_back( "-Wno-missing-field-initializers" );	// LLVM 18.1.8
 }
 
-static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const char* inputFilePath ) {
+static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const char* inputFilePath, const bool8 verbose ) {
 	assert( solution );
 
 	// validate the solution
@@ -1666,7 +1664,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 		File buildInfoFile = file_open_or_create( buildInfoFilename );
 		defer( file_close( &buildInfoFile ) );
 
-		SerializeBuildInfo( &buildInfoFile, allBuildConfigs );
+		SerializeBuildInfo( &buildInfoFile, allBuildConfigs, verbose );
 	}
 
 	return true;
@@ -2079,7 +2077,7 @@ int main( int argc, char** argv ) {
 
 				printf( "Generating Visual Studio Solution\n" );
 
-				bool8 generated = GenerateVisualStudioSolution( &options.solution, inputFilePath );
+				bool8 generated = GenerateVisualStudioSolution( &options.solution, inputFilePath, verbose );
 
 				if ( !generated ) {
 					error( "Failed to generate Visual Studio solution.\n" );	// TODO(DM): better error message
@@ -2363,7 +2361,7 @@ int main( int argc, char** argv ) {
 		defer( file_close( &buildInfoFile ) );
 
 		// serialize all the builder options
-		SerializeBuildInfo( &buildInfoFile, options.configs );
+		SerializeBuildInfo( &buildInfoFile, options.configs, verbose );
 	} else {
 		error( "Build failed.\n" );
 		exitCode = 1;

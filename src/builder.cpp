@@ -52,6 +52,10 @@ enum {
 #define PRE_BUILD_FUNC_NAME					"on_pre_build"
 #define POST_BUILD_FUNC_NAME				"on_post_build"
 
+// project type guids are pre-determined by visual studio
+// C++ is the only language that builder knows/cares about
+#define VISUAL_STUDIO_CPP_PROJECT_TYPE_GUID	"8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942"
+
 #define CHECK_WRITE( func ) \
 	do { \
 		bool8 written = (func); \
@@ -518,7 +522,7 @@ static bool8 PathHasSlash( const char* path ) {
 	return hasSlash;
 }
 
-static const char* TryFindFile( const char* filename, const char* folder ) {
+static const char* TryFindFile_r( const char* filename, const char* folder ) {
 	const char* result = NULL;
 
 	const char* searchPath = tprintf( "%s\\*", folder );
@@ -541,7 +545,7 @@ static const char* TryFindFile( const char* filename, const char* folder ) {
 		}
 
 		if ( fileInfo.is_directory ) {
-			result = TryFindFile( filename, fullFilename );
+			result = TryFindFile_r( filename, fullFilename );
 		}
 
 		if ( result ) {
@@ -555,19 +559,6 @@ static const char* TryFindFile( const char* filename, const char* folder ) {
 	} while ( file_find_next( &firstFile, &fileInfo ) );
 
 	return NULL;
-}
-
-// project type guids are pre-determined by visual studio
-// C++ is the only language that builder knows/cares about
-#define VISUAL_STUDIO_CPP_PROJECT_TYPE_GUID "8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942"
-
-// data layout comes from: https://learn.microsoft.com/en-us/windows/win32/api/guiddef/ns-guiddef-guid
-static const char* CreateVisualStudioGuid() {
-	GUID guid;
-	HRESULT hr = CoCreateGuid( &guid );
-	assert( hr == S_OK );
-
-	return tprintf( "%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X", guid.Data1, guid.Data2, guid.Data3, guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3], guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7] );
 }
 
 static void FindAllFilesInFolder_r( const char* basePath, const char* folder, const char* fileExtension, const bool8 recursive, Array<const char*>* outFiles ) {
@@ -728,7 +719,7 @@ static void GetAllIncludedFiles( const BuildConfig* config, const bool8 verbose,
 					For ( u64, includePathIndex, 0, config->additional_includes.size() ) {
 						const char* includePath = config->additional_includes[includePathIndex];
 
-						fullFilename = TryFindFile( filename, includePath );
+						fullFilename = TryFindFile_r( filename, includePath );
 
 						if ( fullFilename != NULL ) {
 							break;
@@ -1091,6 +1082,15 @@ static void BuildConfig_AddDefaults( BuildConfig* outConfig ) {
 	outConfig->ignore_warnings.push_back( "-Wno-global-constructors" );		// C++: "declaration requires a global destructor"
 	outConfig->ignore_warnings.push_back( "-Wno-exit-time-destructors" );		// C++: "declaration requires an exit-time destructor" (same as the above, basically)
 	outConfig->ignore_warnings.push_back( "-Wno-missing-field-initializers" );	// LLVM 18.1.8
+}
+
+// data layout comes from: https://learn.microsoft.com/en-us/windows/win32/api/guiddef/ns-guiddef-guid
+static const char* CreateVisualStudioGuid() {
+	GUID guid;
+	HRESULT hr = CoCreateGuid( &guid );
+	assert( hr == S_OK );
+
+	return tprintf( "%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X", guid.Data1, guid.Data2, guid.Data3, guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3], guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7] );
 }
 
 static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const char* inputFilePath, const bool8 verbose ) {

@@ -127,8 +127,7 @@ struct VisualStudioProject {
 	std::vector<const char*>		code_folders;
 
 	// All files that have any of these extensions will be included in your project.
-	// These must NOT start with a dot.  Only the extension is required.
-	// Examples: cpp, h, inl
+	// These must NOT start with a dot.  Only the extension is required (Examples: cpp, h, inl).
 	std::vector<const char*>		file_extensions;
 
 	// Visual Studio project name.
@@ -141,10 +140,11 @@ struct VisualStudioSolution {
 	std::vector<const char*>			platforms;
 
 	// The name of the solution.
-	// For the sake of simplicity we keep the name of the Solution in Visual Studio and the Solution's filename the same.	TODO: make it actually do that
+	// For the sake of simplicity we keep the name of the Solution in Visual Studio and the Solution's filename the same.
 	const char*							name;
 
 	// The folder where the solution (and it's projects) are going to live.
+	// If you don't set this then the solution is generated in the same path as the build file.
 	// This is relative to the source file that fills in the entry point set_visual_studio_options.
 	const char*							path;
 };

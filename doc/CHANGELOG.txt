@@ -1,4 +1,4 @@
-v0.4.0, 01/12/2024:
+v0.4.0, 10/12/2024:
 
 * Added BuildConfig::depends_on.
 	* This allows you to specify build dependencies.  Builder will recursively build everything inside BuildConfig::depends_on first.
@@ -15,6 +15,7 @@ v0.4.0, 01/12/2024:
 		* VisualStudioProject::source_files has been replaced for VisualStudioProject::code_folders and VisualStudioProject::file_extensions.
 		* VisualStudioProject::code_folders tells Builder what folders your code lives in (without any search filters).
 		* VisualStudioProject::file_extensions tells Builder what file types you want to include in your project (across any of the folders inside VisualStudioProject::code_folders).
+* Fixed a bug where building via a .build_info file didn't call the on_pre_build() or on_post_build() callbacks.
 
 ----------------------------------------------------------------
 

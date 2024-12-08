@@ -771,7 +771,10 @@ static void SerializeCStringArray( File* file, const std::vector<const char*>& a
 	}
 }
 
-static void SerializeBuildInfo( File* file, const std::vector<BuildConfig>& configs, const bool8 verbose ) {
+static void SerializeBuildInfo( File* file, const std::vector<BuildConfig>& configs, const char* userConfigSourceFilename, const char* userConfigDLLFilename, const bool8 verbose ) {
+	CHECK_WRITE( file_write( file, tprintf( "build_source_file: %s\n", userConfigSourceFilename ) ) );
+	CHECK_WRITE( file_write( file, tprintf( "DLL: %s\n", userConfigDLLFilename ) ) );
+
 	SerializeU64( file, configs.size() );
 
 	For ( u64, builderOptionsIndex, 0, configs.size() ) {
@@ -937,7 +940,13 @@ static std::vector<const char*> Parser_ParseCStringArray( parser_t* parser ) {
 	return result;
 }
 
-static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, std::vector<buildInfoConfig_t>& outConfigs ) {
+struct buildInfoFileData_t {
+	std::vector<buildInfoConfig_t>	configs;
+	std::string						userConfigSourceFilename;
+	std::string						userConfigDLLFilename;
+};
+
+static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, buildInfoFileData_t* outData ) {
 	parser_t parser = {};
 	bool8 read = Parser_Init( &parser, buildInfoFilename );
 
@@ -947,14 +956,17 @@ static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, std::vector<b
 
 	defer( Parser_Shutdown( &parser ) );
 
+	Parser_ParseStringField( &parser, NULL, &outData->userConfigSourceFilename );
+	Parser_ParseStringField( &parser, NULL, &outData->userConfigDLLFilename );
+
 	// parse all BuilderOptions
 	{
 		u64 totalNumConfigs = Parser_ParseU64( &parser );
 
-		outConfigs.resize( totalNumConfigs );
+		outData->configs.resize( totalNumConfigs );
 
-		For ( u64, configIndex, 0, outConfigs.size() ) {
-			buildInfoConfig_t* buildInfoConfig = &outConfigs[configIndex];
+		For ( u64, configIndex, 0, outData->configs.size() ) {
+			buildInfoConfig_t* buildInfoConfig = &outData->configs[configIndex];
 
 			// parse the config itself
 			{
@@ -1014,16 +1026,16 @@ static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, std::vector<b
 	}
 
 	// reconstruct all build dependencies after we have deserialized them all from the file
-	For ( u64, configIndex, 0, outConfigs.size() ) {
-		BuildConfig* config = &outConfigs[configIndex].config;
+	For ( u64, configIndex, 0, outData->configs.size() ) {
+		BuildConfig* config = &outData->configs[configIndex].config;
 
 		For ( u64, dependencyIndex, 0, config->depends_on.size() ) {
 			BuildConfig* dependency = &config->depends_on[dependencyIndex];
 
 			bool8 found = false;
 
-			For ( u64, i, 0, outConfigs.size() ) {
-				BuildConfig* otherConfig = &outConfigs[i].config;
+			For ( u64, i, 0, outData->configs.size() ) {
+				BuildConfig* otherConfig = &outData->configs[i].config;
 				if ( otherConfig->name == dependency->name ) {
 					config->depends_on[dependencyIndex] = *otherConfig;
 
@@ -1046,6 +1058,8 @@ static void BuildConfig_AddDefaults( BuildConfig* outConfig ) {
 	// add the folder that builder lives in as an additional include path
 	// so that people can just include builder.h without having to add the include path manually every time
 	outConfig->additional_includes.push_back( paths_get_app_path() );
+
+	outConfig->additional_includes.push_back( "." );
 
 #if defined( _WIN64 )
 	outConfig->additional_libs.push_back( "user32.lib" );
@@ -1093,7 +1107,7 @@ static const char* CreateVisualStudioGuid() {
 	return tprintf( "%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X", guid.Data1, guid.Data2, guid.Data3, guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3], guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7] );
 }
 
-static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const char* inputFilePath, const bool8 verbose ) {
+static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const char* inputFilePath, const char* userConfigSourceFilename, const char* userConfigBuildDLLFilename, const bool8 verbose ) {
 	assert( solution );
 
 	// validate the solution
@@ -1664,7 +1678,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 		File buildInfoFile = file_open_or_create( buildInfoFilename );
 		defer( file_close( &buildInfoFile ) );
 
-		SerializeBuildInfo( &buildInfoFile, allBuildConfigs, verbose );
+		SerializeBuildInfo( &buildInfoFile, allBuildConfigs, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
 	}
 
 	return true;
@@ -1959,14 +1973,15 @@ int main( int argc, char** argv ) {
 
 	BuilderOptions options = {};
 
-	std::vector<buildInfoConfig_t> parsedBuildConfigs;
-	bool8 readBuildInfo = Parser_ParseBuildInfo( buildInfoFilename, parsedBuildConfigs );
+	//std::vector<buildInfoConfig_t> parsedBuildConfigs;
+	buildInfoFileData_t parsedBuildInfoData = {};
+	bool8 readBuildInfo = Parser_ParseBuildInfo( buildInfoFilename, &parsedBuildInfoData );
 
 	if ( doingBuildFromBuildInfo ) {
 		// TODO(DM): 24/11/2024: this is stupid and slow
 		// need to think of a better way to do this
-		For ( u64, i, 0, parsedBuildConfigs.size() ) {
-			options.configs.push_back( parsedBuildConfigs[i].config );
+		For ( u64, i, 0, parsedBuildInfoData.configs.size() ) {
+			options.configs.push_back( parsedBuildInfoData.configs[i].config );
 		}
 
 		if ( !readBuildInfo ) {
@@ -1977,21 +1992,36 @@ int main( int argc, char** argv ) {
 
 	s32 exitCode = 0;
 
-	Library library;
+	Library library = {};
 	defer( if ( library.ptr ) library_unload( &library ) );
 
+	typedef void ( *setBuilderOptionsFunc_t )( BuilderOptions* options );
 	typedef void ( *preBuildFunc_t )();
 	typedef void ( *postBuildFunc_t )();
 
 	preBuildFunc_t preBuildFunc = NULL;
 	postBuildFunc_t postBuildFunc = NULL;
 
+	const char* userConfigSourceFilename = NULL;
+	const char* userConfigBuildDLLFilename = NULL;
+
+	bool8 doUserConfigBuild = doingBuildFromSourceFile;
+
+	if ( doingBuildFromBuildInfo ) {
+		userConfigSourceFilename = parsedBuildInfoData.userConfigSourceFilename.c_str();
+		userConfigBuildDLLFilename = parsedBuildInfoData.userConfigDLLFilename.c_str();
+
+		library = library_load( userConfigBuildDLLFilename );
+
+		if ( library.ptr == INVALID_HANDLE_VALUE ) {
+			doUserConfigBuild = true;
+		}
+	}
+
 	// build config step
 	// see if they have set_builder_options() overridden
 	// if they do, then build a DLL first and call that function to set some more build options
-	if ( doingBuildFromSourceFile ) {
-		typedef void ( *setBuilderOptionsFunc_t )( BuilderOptions* options );
-
+	if ( doUserConfigBuild ) {
 		buildContext_t userConfigBuildContext = {};
 		BuildConfig_AddDefaults( &userConfigBuildContext.config );
 		//userConfigBuildContext.config = context.config;
@@ -2001,12 +2031,16 @@ int main( int argc, char** argv ) {
 			userConfigBuildContext.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS;
 		}
 
-		//if ( doingBuildFromSourceFile )
-		{
-			userConfigBuildContext.config.source_files.push_back( inputFile );
-		}
+		// DM!!!	"inputFile" here wants to be "buildSourceFile", which comes from the command line either as a source file or as a .build_info
+		//			if a source file, just take the command line input and use that
+		//			if a .build_info file, parse it and take the build_source_file field from it and use that
+		//			go do this next
 
-		userConfigBuildContext.config.binary_name = tprintf( "%s.dll", paths_remove_path_from_file( paths_remove_file_extension( inputFile ) ) );
+		userConfigSourceFilename = doingBuildFromSourceFile ? inputFile : parsedBuildInfoData.userConfigSourceFilename.c_str();
+
+		userConfigBuildContext.config.source_files.push_back( userConfigSourceFilename );
+
+		userConfigBuildContext.config.binary_name = tprintf( "%s.dll", paths_remove_path_from_file( paths_remove_file_extension( userConfigSourceFilename ) ) );
 		userConfigBuildContext.config.binary_folder = dotBuilderFolder;
 		userConfigBuildContext.config.defines.push_back( "BUILDER_DOING_USER_CONFIG_BUILD" );
 
@@ -2021,9 +2055,13 @@ int main( int argc, char** argv ) {
 #endif
 
 		userConfigBuildContext.config.ignore_warnings.push_back( "-Wno-missing-prototypes" );	// otherwise the user has to forward declare functions like set_builder_options and thats annoying
-		userConfigBuildContext.config.ignore_warnings.push_back( "-Wno-unused-parameter" );	// user can call set_pre_build (for example) and not actually touch the BuilderOptions parm
+
+		// DM!!!	do we still need this?
+		//userConfigBuildContext.config.ignore_warnings.push_back( "-Wno-unused-parameter" );		// user can call set_pre_build (for example) and not actually touch the BuilderOptions parm
 
 		userConfigBuildContext.fullBinaryName = tprintf( "%s\\%s", userConfigBuildContext.config.binary_folder.c_str(), userConfigBuildContext.config.binary_name.c_str() );
+
+		userConfigBuildDLLFilename = userConfigBuildContext.fullBinaryName;
 
 		if ( !folder_create_if_it_doesnt_exist( userConfigBuildContext.config.binary_folder.c_str() ) ) {
 			errorCode_t errorCode = GetLastErrorCode();
@@ -2037,61 +2075,68 @@ int main( int argc, char** argv ) {
 			error( "Pre-build failed!\n" );
 			return 1;
 		}
+	}
 
-		library = library_load( tprintf( "%s\\%s", userConfigBuildContext.config.binary_folder.c_str(), userConfigBuildContext.config.binary_name.c_str() ) );
-
-		// now get the user-specified options
-		setBuilderOptionsFunc_t setBuilderOptionsFunc = cast( setBuilderOptionsFunc_t ) library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME );
-		if ( setBuilderOptionsFunc ) {
-			setBuilderOptionsFunc( &options );
-
-			// if the user wants to generate a visual studio solution then do that now
-			if ( options.generate_solution ) {
-				// make sure BuilderOptions::configs and configs from visual studio match
-				// we will need this list later for validation
-				options.configs.clear();
-				For ( u64, projectIndex, 0, options.solution.projects.size() ) {
-					VisualStudioProject* project = &options.solution.projects[projectIndex];
-
-					For ( u64, configIndex, 0, project->configs.size() ) {
-						VisualStudioConfig* config = &project->configs[configIndex];
-
-						options.configs.push_back( config->options );
-					}
-				}
-
-				For ( u64, projectIndex, 0, options.solution.projects.size() ) {
-					VisualStudioProject* project = &options.solution.projects[projectIndex];
-
-					For ( u64, configIndex, 0, project->configs.size() ) {
-						VisualStudioConfig* config = &project->configs[configIndex];
-
-						// all the source files will be relative to the .builder folder, which lives whereever the visual studio solution generation source file lives
-						// therefore the source files will need to be relative to one folder up from .build_info file
-						// so update all the user-specified source file paths to reflect that
-						For ( u64, sourceFileIndex, 0, config->options.source_files.size() ) {
-							config->options.source_files[sourceFileIndex] = tprintf( "%s\\.builder\\..\\%s", inputFilePath, config->options.source_files[sourceFileIndex] );
-						}
-					}
-				}
-
-				printf( "Generating Visual Studio Solution\n" );
-
-				bool8 generated = GenerateVisualStudioSolution( &options.solution, inputFilePath, verbose );
-
-				if ( !generated ) {
-					error( "Failed to generate Visual Studio solution.\n" );	// TODO(DM): better error message
-					return 1;
-				}
-
-				printf( "Done.\n" );
-
-				return 0;
-			}
+	{
+		if ( library.ptr == INVALID_HANDLE_VALUE || library.ptr == NULL ) {
+			library = library_load( userConfigBuildDLLFilename );
+			assert( library.ptr != INVALID_HANDLE_VALUE );
 		}
 
 		preBuildFunc = cast( preBuildFunc_t ) library_get_proc_address( library, PRE_BUILD_FUNC_NAME );
 		postBuildFunc = cast( postBuildFunc_t ) library_get_proc_address( library, POST_BUILD_FUNC_NAME );
+
+		if ( doingBuildFromSourceFile ) {
+			// now get the user-specified options
+			setBuilderOptionsFunc_t setBuilderOptionsFunc = cast( setBuilderOptionsFunc_t ) library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME );
+			if ( setBuilderOptionsFunc ) {
+				setBuilderOptionsFunc( &options );
+
+				// if the user wants to generate a visual studio solution then do that now
+				if ( options.generate_solution && doingBuildFromSourceFile ) {
+					// make sure BuilderOptions::configs and configs from visual studio match
+					// we will need this list later for validation
+					options.configs.clear();
+					For ( u64, projectIndex, 0, options.solution.projects.size() ) {
+						VisualStudioProject* project = &options.solution.projects[projectIndex];
+
+						For ( u64, configIndex, 0, project->configs.size() ) {
+							VisualStudioConfig* config = &project->configs[configIndex];
+
+							options.configs.push_back( config->options );
+						}
+					}
+
+					For ( u64, projectIndex, 0, options.solution.projects.size() ) {
+						VisualStudioProject* project = &options.solution.projects[projectIndex];
+
+						For ( u64, configIndex, 0, project->configs.size() ) {
+							VisualStudioConfig* config = &project->configs[configIndex];
+
+							// all the source files will be relative to the .builder folder, which lives whereever the visual studio solution generation source file lives
+							// therefore the source files will need to be relative to one folder up from .build_info file
+							// so update all the user-specified source file paths to reflect that
+							For ( u64, sourceFileIndex, 0, config->options.source_files.size() ) {
+								config->options.source_files[sourceFileIndex] = tprintf( "%s\\.builder\\..\\%s", inputFilePath, config->options.source_files[sourceFileIndex] );
+							}
+						}
+					}
+
+					printf( "Generating Visual Studio Solution\n" );
+
+					bool8 generated = GenerateVisualStudioSolution( &options.solution, inputFilePath, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
+
+					if ( !generated ) {
+						error( "Failed to generate Visual Studio solution.\n" );	// TODO(DM): better error message
+						return 1;
+					}
+
+					printf( "Done.\n" );
+
+					return 0;
+				}
+			}
+		}
 	}
 
 	// none of the configs can have the same name
@@ -2179,9 +2224,9 @@ int main( int argc, char** argv ) {
 		{
 			std::vector<trackedSourceFile_t> trackedSourceFiles;
 
-			For ( u64, i, 0, parsedBuildConfigs.size() ) {
-				if ( context.config.name == parsedBuildConfigs[i].config.name ) {
-					trackedSourceFiles = parsedBuildConfigs[i].files;
+			For ( u64, i, 0, parsedBuildInfoData.configs.size() ) {
+				if ( context.config.name == parsedBuildInfoData.configs[i].config.name ) {
+					trackedSourceFiles = parsedBuildInfoData.configs[i].files;
 					break;
 				}
 			}
@@ -2191,6 +2236,8 @@ int main( int argc, char** argv ) {
 
 				FileInfo fileInfo = {};
 				File file = file_find_first( trackedSourceFile->filename, &fileInfo );
+
+				// DM!!! files aren't being found here!
 
 				if ( fileInfo.last_write_time != trackedSourceFile->lastWriteTime ) {
 					shouldSkipBuild = false;
@@ -2214,18 +2261,26 @@ int main( int argc, char** argv ) {
 			printf( "\n" );
 		}
 
+		const char* buildSourceFilePath = ( doingBuildFromBuildInfo ) ? paths_remove_file_from_path( parsedBuildInfoData.userConfigSourceFilename.c_str() ) : inputFilePath;
+
 		For ( u64, includeIndex, 0, context.config.additional_includes.size() ) {
 			const char* additionalInclude = context.config.additional_includes[includeIndex];
 
 			if ( paths_is_path_absolute( additionalInclude ) ) {
 				context.config.additional_includes[includeIndex] = additionalInclude;
 			} else {
-				context.config.additional_includes[includeIndex] = tprintf( "%s\\%s", inputFilePathAbsolute, additionalInclude );
+				context.config.additional_includes[includeIndex] = tprintf( "%s\\%s", buildSourceFilePath, additionalInclude );
 			}
 		}
 
 		For ( u64, libPathIndex, 0, context.config.additional_lib_paths.size() ) {
-			context.config.additional_lib_paths[libPathIndex] = tprintf( "%s\\%s", inputFilePathAbsolute, context.config.additional_lib_paths[libPathIndex] );
+			const char* additionalLibPath = context.config.additional_lib_paths[libPathIndex];
+
+			if ( paths_is_path_absolute( additionalLibPath ) ) {
+				context.config.additional_lib_paths[libPathIndex] = additionalLibPath;
+			} else {
+				context.config.additional_lib_paths[libPathIndex] = tprintf( "%s\\%s", buildSourceFilePath, additionalLibPath );
+			}
 		}
 
 		// get all the "compilation units" that we are actually going to give to the compiler
@@ -2361,7 +2416,7 @@ int main( int argc, char** argv ) {
 		defer( file_close( &buildInfoFile ) );
 
 		// serialize all the builder options
-		SerializeBuildInfo( &buildInfoFile, options.configs, verbose );
+		SerializeBuildInfo( &buildInfoFile, options.configs, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
 	} else {
 		error( "Build failed.\n" );
 		exitCode = 1;

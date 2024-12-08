@@ -2263,6 +2263,7 @@ int main( int argc, char** argv ) {
 
 		const char* buildSourceFilePath = ( doingBuildFromBuildInfo ) ? paths_remove_file_from_path( parsedBuildInfoData.userConfigSourceFilename.c_str() ) : inputFilePath;
 
+		// make all non-absolute additional include paths relative to the build source file
 		For ( u64, includeIndex, 0, context.config.additional_includes.size() ) {
 			const char* additionalInclude = context.config.additional_includes[includeIndex];
 
@@ -2273,6 +2274,7 @@ int main( int argc, char** argv ) {
 			}
 		}
 
+		// make all non-absolute additional library paths relative to the build source file
 		For ( u64, libPathIndex, 0, context.config.additional_lib_paths.size() ) {
 			const char* additionalLibPath = context.config.additional_lib_paths[libPathIndex];
 

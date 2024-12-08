@@ -58,7 +58,8 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	options->solution.projects = {
 		{
 			.name = "the-library",
-			.source_files = { "src/library/*.cpp" },
+			.code_folders = { "src/library/" },
+			.file_extensions = { "cpp" },
 			.configs = {
 				{ "debug",   library_debug,   { /* debugger arguments */ }, "bin/debug/library"   },
 				{ "release", library_release, { /* debugger arguments */ }, "bin/release/library" },
@@ -67,7 +68,8 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 
 		{
 			.name = "app",
-			.source_files = { "src/app/*.cpp" },
+			.code_folders = { "src/app/" },
+			.file_extensions = { "cpp" },
 			.configs = {
 				{ "debug",   app_debug,   { /* debugger arguments */ }, "bin/debug/app"   },
 				{ "release", app_release, { /* debugger arguments */ }, "bin/release/app" },

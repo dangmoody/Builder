@@ -19,6 +19,24 @@ Proprietary and confidential.
 #define WIN32_LEAN_AND_MEAN 1
 #include <Windows.h>
 
+static const char* get_last_slash( const char* path ) {
+	const char* last_slash = NULL;
+	const char* last_back_slash = strrchr( path, '\\' );
+	const char* last_forward_slash = strrchr( path, '/' );
+
+	if ( !last_back_slash && !last_forward_slash ) {
+		return path;
+	}
+
+	if ( cast( u64 ) last_back_slash > cast( u64 ) last_forward_slash ) {
+		last_slash = last_back_slash;
+	} else {
+		last_slash = last_forward_slash;
+	}
+
+	return last_slash;
+}
+
 /*
 ================================================================================================
 
@@ -84,12 +102,7 @@ const char* paths_remove_file_from_path( const char* path ) {
 		return path;
 	}
 
-	const char* last_slash = strrchr( path, '\\' );
-	if ( !last_slash ) last_slash = strrchr( path, '/' );
-
-	if ( !last_slash ) {
-		return path;
-	}
+	const char* last_slash = get_last_slash( path );
 
 	u64 path_length = cast( u64 ) last_slash - cast( u64 ) path;
 
@@ -101,8 +114,7 @@ const char* paths_remove_file_from_path( const char* path ) {
 }
 
 const char* paths_remove_path_from_file( const char* path ) {
-	const char* last_slash = strrchr( path, '\\' );
-	if ( !last_slash ) last_slash = strrchr( path, '/' );
+	const char* last_slash = get_last_slash( path );
 
 	if ( !last_slash ) {
 		last_slash = path;

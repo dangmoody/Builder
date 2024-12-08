@@ -16,6 +16,7 @@ v0.4.0, 10/12/2024:
 		* VisualStudioProject::code_folders tells Builder what folders your code lives in (without any search filters).
 		* VisualStudioProject::file_extensions tells Builder what file types you want to include in your project (across any of the folders inside VisualStudioProject::code_folders).
 * Fixed a bug where building via a .build_info file didn't call the on_pre_build() or on_post_build() callbacks.
+* The user config build step will now only happen if doing a build from a C++ file or if the .dll can't be found or loaded when doing a build from a .build_info file.
 
 ----------------------------------------------------------------
 

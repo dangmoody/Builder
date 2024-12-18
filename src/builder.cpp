@@ -1163,8 +1163,10 @@ static const char* CreateVisualStudioGuid() {
 	return tprintf( "%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X", guid.Data1, guid.Data2, guid.Data3, guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3], guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7] );
 }
 
-static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const char* inputFilePath, const char* userConfigSourceFilename, const char* userConfigBuildDLLFilename, const bool8 verbose ) {
+static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const char* inputFilename, const char* userConfigSourceFilename, const char* userConfigBuildDLLFilename, const bool8 verbose ) {
 	assert( solution );
+
+	const char* inputFilePath = paths_remove_file_from_path( inputFilename );
 
 	// TODO(DM): 18/11/2024: dont use abs path here
 	const char* buildInfoFilename = tprintf( "%s\\.builder\\%s%s", inputFilePath, solution->name, BUILD_INFO_FILE_EXTENSION );
@@ -1419,7 +1421,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 					char* pathFromSolutionToCode = cast( char* ) mem_temp_alloc( MAX_PATH * sizeof( char ) );
 					memset( pathFromSolutionToCode, 0, MAX_PATH * sizeof( char ) );
-					PathRelativePathTo( pathFromSolutionToCode, solutionPath, FILE_ATTRIBUTE_NORMAL, tprintf( "%s\\generate_solution.cpp", inputFilePath ), FILE_ATTRIBUTE_DIRECTORY );
+					PathRelativePathTo( pathFromSolutionToCode, solutionPath, FILE_ATTRIBUTE_NORMAL, inputFilename, FILE_ATTRIBUTE_DIRECTORY );
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcast-qual"
@@ -2057,7 +2059,6 @@ int main( int argc, char** argv ) {
 
 	// the default binary folder is the same folder as the source file
 	const char* inputFilePath = paths_remove_file_from_path( inputFile );
-	const char* inputFilePathAbsolute = paths_remove_file_from_path( paths_get_absolute_path( inputFile ) );
 	const char* inputFileNoPath = paths_remove_path_from_file( inputFile );
 	const char* inputFileNoPathOrExtension = paths_remove_file_extension( inputFileNoPath );
 
@@ -2067,8 +2068,10 @@ int main( int argc, char** argv ) {
 	if ( doingBuildFromBuildInfo ) {
 		dotBuilderFolder = inputFilePath;
 		buildInfoFilename = inputFile;
+
+		inputFilePath = tprintf( "%s\\..", inputFilePath );
 	} else {
-		dotBuilderFolder = tprintf( "%s\\.builder", inputFilePathAbsolute );
+		dotBuilderFolder = tprintf( "%s\\.builder", inputFilePath );
 		buildInfoFilename = tprintf( "%s\\%s%s", dotBuilderFolder, inputFileNoPathOrExtension, BUILD_INFO_FILE_EXTENSION );
 	}
 
@@ -2200,7 +2203,7 @@ int main( int argc, char** argv ) {
 
 					printf( "Generating Visual Studio Solution\n" );
 
-					bool8 generated = GenerateVisualStudioSolution( &options.solution, inputFilePath, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
+					bool8 generated = GenerateVisualStudioSolution( &options.solution, inputFile, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
 
 					if ( !generated ) {
 						error( "Failed to generate Visual Studio solution.\n" );	// TODO(DM): better error message
@@ -2343,11 +2346,7 @@ int main( int argc, char** argv ) {
 			if ( paths_is_path_absolute( additionalInclude ) ) {
 				context.config.additional_includes[includeIndex] = additionalInclude;
 			} else {
-				if ( doingBuildFromBuildInfo ) {
-					context.config.additional_includes[includeIndex] = tprintf( "%s\\..\\%s", inputFilePath, additionalInclude );
-				} else {
-					context.config.additional_includes[includeIndex] = tprintf( "%s\\%s", inputFilePath, additionalInclude );
-				}
+				context.config.additional_includes[includeIndex] = tprintf( "%s\\%s", inputFilePath, additionalInclude );
 			}
 		}
 
@@ -2358,11 +2357,7 @@ int main( int argc, char** argv ) {
 			if ( paths_is_path_absolute( additionalLibPath ) ) {
 				context.config.additional_lib_paths[libPathIndex] = additionalLibPath;
 			} else {
-				if ( doingBuildFromBuildInfo ) {
-					context.config.additional_lib_paths[libPathIndex] = tprintf( "%s\\..\\%s", inputFilePath, additionalLibPath );
-				} else {
-					context.config.additional_lib_paths[libPathIndex] = tprintf( "%s\\%s", inputFilePath, additionalLibPath );
-				}
+				context.config.additional_lib_paths[libPathIndex] = tprintf( "%s\\%s", inputFilePath, additionalLibPath );
 			}
 		}
 
@@ -2381,15 +2376,12 @@ int main( int argc, char** argv ) {
 				bool8 inputFileIsSameAsSourceFile = string_equals( sourceFile, inputFile );
 
 				const char* fileSearchPath = NULL;
-				if ( doingBuildFromBuildInfo ) {
-					fileSearchPath = tprintf( "%s\\..\\%s", inputFilePath, sourceFile );
+				if ( inputFileIsSameAsSourceFile ) {
+					const char* sourceFileNoPath = paths_remove_path_from_file( sourceFile );
+
+					fileSearchPath = tprintf( "%s\\%s", inputFilePath, sourceFileNoPath );
 				} else {
-					if ( inputFileIsSameAsSourceFile ) {
-						const char* sourceFileNoPath = paths_remove_path_from_file( sourceFile );
-						fileSearchPath = tprintf( "%s\\%s", inputFilePathAbsolute, sourceFileNoPath );
-					} else {
-						fileSearchPath = tprintf( "%s\\%s", inputFilePathAbsolute, sourceFile );
-					}
+					fileSearchPath = tprintf( "%s\\%s", inputFilePath, sourceFile );
 				}
 
 				FileInfo fileInfo;
@@ -2414,18 +2406,14 @@ int main( int argc, char** argv ) {
 						if ( string_equals( localPath, sourceFile ) ) {
 							foundSourceFile = tprintf( "%s\\%s", localPath, fileInfo.filename );
 						} else {
-							if ( doingBuildFromSourceFile ) {
-								if ( inputFileIsSameAsSourceFile ) {
-									foundSourceFile = tprintf( "%s\\%s", inputFilePathAbsolute, fileInfo.filename );
-								} else {
-									foundSourceFile = tprintf( "%s\\%s\\%s", inputFilePathAbsolute, localPath, fileInfo.filename );
-								}
+							if ( inputFileIsSameAsSourceFile ) {
+								foundSourceFile = tprintf( "%s\\%s", inputFilePath, fileInfo.filename );
 							} else {
-								foundSourceFile = tprintf( "%s\\..\\%s\\%s", inputFilePathAbsolute, localPath, fileInfo.filename );
+								foundSourceFile = tprintf( "%s\\%s\\%s", inputFilePath, localPath, fileInfo.filename );
 							}
 						}
 					} else {
-						foundSourceFile = tprintf( "%s\\%s", inputFilePathAbsolute, fileInfo.filename );
+						foundSourceFile = tprintf( "%s\\%s", inputFilePath, fileInfo.filename );
 					}
 
 					finalSourceFilesToBuild.push_back( foundSourceFile );
@@ -2436,13 +2424,9 @@ int main( int argc, char** argv ) {
 		}
 
 		if ( !context.config.binary_folder.empty() ) {
-			if ( doingBuildFromSourceFile ) {
-				context.config.binary_folder = tprintf( "%s\\%s", inputFilePathAbsolute, context.config.binary_folder.c_str() );
-			} else {
-				context.config.binary_folder = tprintf( "%s\\..\\%s", inputFilePathAbsolute, context.config.binary_folder.c_str() );
-			}
+			context.config.binary_folder = tprintf( "%s\\%s", inputFilePath, context.config.binary_folder.c_str() );
 		} else {
-			context.config.binary_folder = inputFilePathAbsolute;
+			context.config.binary_folder = inputFilePath;
 		}
 
 		if ( !folder_create_if_it_doesnt_exist( context.config.binary_folder.c_str() ) ) {

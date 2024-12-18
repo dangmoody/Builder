@@ -1,4 +1,4 @@
-v0.4.0, 10/12/2024:
+v0.4.0, 18/12/2024:
 
 * Added BuildConfig::depends_on.
 	* This allows you to specify build dependencies.  Builder will recursively build everything inside BuildConfig::depends_on first.
@@ -16,6 +16,9 @@ v0.4.0, 10/12/2024:
 		* VisualStudioProject::code_folders tells Builder what folders your code lives in (without any search filters).
 		* VisualStudioProject::file_extensions tells Builder what file types you want to include in your project (across any of the folders inside VisualStudioProject::code_folders).
 * Fixed a bug where building via a .build_info file didn't call the on_pre_build() or on_post_build() callbacks.
+* Rebuild skipping:
+	* Checking the timestamps of each file we know about seems to have been completely broken at some point.  It's now been fixed.
+	* Add check for if the binary itself exists.  It's possible to delete the binary after a build without touching any of the source files.
 * The user config build step will now only happen if doing a build from a C++ file or if the .dll can't be found or loaded when doing a build from a .build_info file.
 
 ----------------------------------------------------------------

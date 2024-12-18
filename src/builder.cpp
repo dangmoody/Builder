@@ -1234,8 +1234,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 	}
 
 	const char* solutionPath = tprintf( "%s\\%s.sln", visualStudioProjectFilesPathAbsolute, solution->name );
-
-	const char* solutionPath2 = paths_canonicalise_path( solutionPath );
+	solutionPath = paths_canonicalise_path( solutionPath );
 
 	// give each project a guid
 	Array<const char*> projectGuids;
@@ -1420,7 +1419,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 					char* pathFromSolutionToCode = cast( char* ) mem_temp_alloc( MAX_PATH * sizeof( char ) );
 					memset( pathFromSolutionToCode, 0, MAX_PATH * sizeof( char ) );
-					PathRelativePathTo( pathFromSolutionToCode, solutionPath2, FILE_ATTRIBUTE_NORMAL, tprintf( "%s\\generate_solution.cpp", inputFilePath ), FILE_ATTRIBUTE_DIRECTORY );
+					PathRelativePathTo( pathFromSolutionToCode, solutionPath, FILE_ATTRIBUTE_NORMAL, tprintf( "%s\\generate_solution.cpp", inputFilePath ), FILE_ATTRIBUTE_DIRECTORY );
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcast-qual"

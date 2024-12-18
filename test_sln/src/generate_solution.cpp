@@ -53,8 +53,8 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	// if you know you dont wanna build with visual studio then either set the bool to false or just dont write this part
 	options->generate_solution = true;
 	options->solution.name = "test-sln";
-	options->solution.path = "..";
-	options->solution.platforms = { "win64" };
+	options->solution.path = "..\\visual_studio";
+	options->solution.platforms = { "x64" };
 	options->solution.projects = {
 		{
 			.name = "the-library",

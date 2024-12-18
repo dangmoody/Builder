@@ -1054,6 +1054,62 @@ static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, buildInfoFile
 	return true;
 }
 
+static const char* BuildConfig_ToString( const BuildConfig* config ) {
+	StringBuilder builder = {};
+	string_builder_reset( &builder );
+
+	string_builder_appendf( &builder, "%s: {\n", config->name.c_str() );
+
+	auto PrintArray = [&builder]( const char* name, const std::vector<const char*>& array ) {
+		if ( array.size() > 0 ) {
+			string_builder_appendf( &builder, "\t%s: { ", name );
+			For ( u64, i, 0, array.size() ) {
+				string_builder_appendf( &builder, "%s", array[i] );
+
+				if ( i < array.size() - 1 ) {
+					string_builder_appendf( &builder, ", " );
+				}
+			}
+			string_builder_appendf( &builder, " }\n" );
+		}
+	};
+
+	auto PrintField = [&builder]( const char* key, const char* value ) {
+		string_builder_appendf( &builder, "\t%s: %s\n", key, value );
+	};
+
+	if ( config->depends_on.size() > 0 ) {
+		string_builder_appendf( &builder, "\tdepends_on: { " );
+		For ( u64, i, 0, config->depends_on.size() ) {
+			string_builder_appendf( &builder, "%s", config->depends_on[i].name.c_str() );
+
+			if ( i < config->depends_on.size() - 1 ) {
+				string_builder_appendf( &builder, ", " );
+			}
+		}
+		string_builder_appendf( &builder, " }\n" );
+	}
+
+	PrintArray( "source_files", config->source_files );
+	PrintArray( "defines", config->defines );
+	PrintArray( "additional_includes", config->additional_includes );
+	PrintArray( "additional_lib_paths", config->additional_lib_paths );
+	PrintArray( "additional_libs", config->additional_libs );
+	PrintArray( "ignore_warnings", config->ignore_warnings );
+
+	PrintField( "binary_name", config->binary_name.c_str() );
+	PrintField( "binary_folder", config->binary_folder.c_str() );
+	PrintField( "binary_type", BinaryTypeToString( config->binary_type ) );
+	PrintField( "optimization_level", OptimizationLevelToString( config->optimization_level ) );
+	PrintField( "remove_symbols", config->remove_symbols ? "true" : "false" );
+	PrintField( "remove_file_extension", config->remove_file_extension ? "true" : "false" );
+	PrintField( "warnings_as_errors", config->warnings_as_errors ? "true" : "false" );
+
+	string_builder_appendf( &builder, "}\n" );
+
+	return string_builder_to_string( &builder );
+}
+
 static void BuildConfig_AddDefaults( BuildConfig* outConfig ) {
 	// add the folder that builder lives in as an additional include path
 	// so that people can just include builder.h without having to add the include path manually every time
@@ -1110,6 +1166,9 @@ static const char* CreateVisualStudioGuid() {
 static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const char* inputFilePath, const char* userConfigSourceFilename, const char* userConfigBuildDLLFilename, const bool8 verbose ) {
 	assert( solution );
 
+	// TODO(DM): 18/11/2024: dont use abs path here
+	const char* buildInfoFilename = tprintf( "%s\\.builder\\%s%s", inputFilePath, solution->name, BUILD_INFO_FILE_EXTENSION );
+
 	// validate the solution
 	{
 		if ( solution->name == NULL ) {
@@ -1126,6 +1185,45 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 			error( "As well as a Solution, you must also generate at least one Visual Studio Project to go with it.\n" );
 			return false;
 		}
+
+		// validate platforms
+		// turns out visual studio REALLY cares what the names of the platforms are
+		// if you specify "Win32" or "x64" as a platform name then VS is able to generate defaults for your project which include things like Windows SDK directories, and your PATH
+		{
+			bool8 foundDefaultPlatformName = false;
+
+			const char* defaultPlatformNames[] = {
+				"Win32",
+				"x64"
+			};
+
+			For ( u64, platformIndex, 0, solution->platforms.size() ) {
+				const char* platform = solution->platforms[platformIndex];
+
+				For ( u64, defaultPlatformIndex, 0, count_of( defaultPlatformNames ) ) {
+					const char* defaultPlatformName = defaultPlatformNames[defaultPlatformIndex];
+
+					if ( string_equals( platform, defaultPlatformName ) ) {
+						foundDefaultPlatformName = true;
+						break;
+					}
+				}
+			}
+
+			if ( !foundDefaultPlatformName ) {
+				StringBuilder builder = {};
+				string_builder_reset( &builder );
+				string_builder_appendf( &builder, "None of your platform names are any of the Visual Studio recognized defaults:\n" );
+				For ( u64, i, 0, count_of( defaultPlatformNames ) ) {
+					string_builder_appendf( &builder, "\t- %s\n", defaultPlatformNames[i] );
+				}
+				string_builder_appendf( &builder, "Visual Studio relies on those specific names in order to generate fields like \"Executable Path\" properly (for example).\n" );
+				string_builder_appendf( &builder, "Builder will still generate the solution, but know that not setting at least one platform name to any of these defaults will cause certain fields in the property pages of your Visual Studio project to not be correct.\n" );
+				string_builder_appendf( &builder, "You have been warned.\n" );
+
+				warning( string_builder_to_string( &builder ) );
+			}
+		}
 	}
 
 	const char* visualStudioProjectFilesPathAbsolute = NULL;
@@ -1134,6 +1232,10 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 	} else {
 		visualStudioProjectFilesPathAbsolute = inputFilePath;
 	}
+
+	const char* solutionPath = tprintf( "%s\\%s.sln", visualStudioProjectFilesPathAbsolute, solution->name );
+
+	const char* solutionPath2 = paths_canonicalise_path( solutionPath );
 
 	// give each project a guid
 	Array<const char*> projectGuids;
@@ -1316,13 +1418,21 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 					// output path
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeOutput>%s</NMakeOutput>", config->options.binary_folder.c_str() ) ) );
 
-					// TODO(DM): 18/11/2024: dont use abs path here
-					const char* buildInfoFilename = tprintf( "%s\\.builder\\%s%s", inputFilePath, solution->name, BUILD_INFO_FILE_EXTENSION );
-					//const char* fullConfigName = tprintf( "%s.%s", config->options.name.c_str(), platform );
+					char* pathFromSolutionToCode = cast( char* ) mem_temp_alloc( MAX_PATH * sizeof( char ) );
+					memset( pathFromSolutionToCode, 0, MAX_PATH * sizeof( char ) );
+					PathRelativePathTo( pathFromSolutionToCode, solutionPath2, FILE_ATTRIBUTE_NORMAL, tprintf( "%s\\generate_solution.cpp", inputFilePath ), FILE_ATTRIBUTE_DIRECTORY );
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-qual"
+					pathFromSolutionToCode = cast( char* ) paths_remove_file_from_path( pathFromSolutionToCode );
+#pragma clang diagnostic pop
+
+					const char* buildInfoFileRelative = tprintf( "%s\\.builder\\%s%s", pathFromSolutionToCode, solution->name, BUILD_INFO_FILE_EXTENSION );
+
 					const char* fullConfigName = config->options.name.c_str();
 
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeBuildCommandLine>%s\\builder.exe %s %s%s</NMakeBuildCommandLine>", paths_get_app_path(), buildInfoFilename, ARG_CONFIG, fullConfigName ) ) );
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeReBuildCommandLine>%s\\builder.exe %s %s%s</NMakeReBuildCommandLine>", paths_get_app_path(), buildInfoFilename, ARG_CONFIG, fullConfigName ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeBuildCommandLine>%s\\builder.exe %s %s%s</NMakeBuildCommandLine>", paths_get_app_path(), buildInfoFileRelative, ARG_CONFIG, fullConfigName ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeReBuildCommandLine>%s\\builder.exe %s %s%s</NMakeReBuildCommandLine>", paths_get_app_path(), buildInfoFileRelative, ARG_CONFIG, fullConfigName ) ) );
 
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeCleanCommandLine>%s\\builder.exe --nuke %s</NMakeCleanCommandLine>", paths_get_app_path(), config->options.binary_folder.c_str() ) ) );
 
@@ -1554,8 +1664,6 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 	// now generate .sln file
 	{
-		const char* solutionPath = tprintf( "%s\\%s.sln", visualStudioProjectFilesPathAbsolute, solution->name );
-
 		printf( "Generating %s.sln ... ", solution->name );
 
 		File sln = file_open_or_create( solutionPath );
@@ -1641,8 +1749,6 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 	{
 		BuildConfig defaultBuildConfig;
 		BuildConfig_AddDefaults( &defaultBuildConfig );
-
-		const char* buildInfoFilename = tprintf( "%s\\.builder\\%s%s", inputFilePath, solution->name, BUILD_INFO_FILE_EXTENSION );
 
 		std::vector<BuildConfig> allBuildConfigs;
 
@@ -2107,20 +2213,20 @@ int main( int argc, char** argv ) {
 						}
 					}
 
-					For ( u64, projectIndex, 0, options.solution.projects.size() ) {
-						VisualStudioProject* project = &options.solution.projects[projectIndex];
+					//For ( u64, projectIndex, 0, options.solution.projects.size() ) {
+					//	VisualStudioProject* project = &options.solution.projects[projectIndex];
 
-						For ( u64, configIndex, 0, project->configs.size() ) {
-							VisualStudioConfig* config = &project->configs[configIndex];
+					//	For ( u64, configIndex, 0, project->configs.size() ) {
+					//		VisualStudioConfig* config = &project->configs[configIndex];
 
-							// all the source files will be relative to the .builder folder, which lives whereever the visual studio solution generation source file lives
-							// therefore the source files will need to be relative to one folder up from .build_info file
-							// so update all the user-specified source file paths to reflect that
-							For ( u64, sourceFileIndex, 0, config->options.source_files.size() ) {
-								config->options.source_files[sourceFileIndex] = tprintf( "%s\\.builder\\..\\%s", inputFilePath, config->options.source_files[sourceFileIndex] );
-							}
-						}
-					}
+					//		// all the source files will be relative to the .builder folder, which lives whereever the visual studio solution generation source file lives
+					//		// therefore the source files will need to be relative to one folder up from .build_info file
+					//		// so update all the user-specified source file paths to reflect that
+					//		For ( u64, sourceFileIndex, 0, config->options.source_files.size() ) {
+					//			config->options.source_files[sourceFileIndex] = tprintf( "%s\\%s", inputFilePath, config->options.source_files[sourceFileIndex] );
+					//		}
+					//	}
+					//}
 
 					printf( "Generating Visual Studio Solution\n" );
 
@@ -2169,8 +2275,8 @@ int main( int argc, char** argv ) {
 			BuildConfig* config = &options.configs[configIndex];
 
 			if ( hash_string( config->name.c_str(), 0 ) == inputConfigNameHash ) {
-				For ( size_t, i, 0, config->depends_on.size() ) {
-					AddBuildConfigAndDependencies( &config->depends_on[i], configsToBuild );
+				For ( size_t, dependencyIndex, 0, config->depends_on.size() ) {
+					AddBuildConfigAndDependencies( &config->depends_on[dependencyIndex], configsToBuild );
 				}
 
 				add_build_config_unique( config, configsToBuild );
@@ -2198,8 +2304,8 @@ int main( int argc, char** argv ) {
 		BuildConfig* config = &options.configs[0];
 
 		// if only one config was added then we know we just want that one, no config command line arg is needed
-		For ( size_t, i, 0, config->depends_on.size() ) {
-			AddBuildConfigAndDependencies( &config->depends_on[i], configsToBuild );
+		For ( size_t, dependencyIndex, 0, config->depends_on.size() ) {
+			AddBuildConfigAndDependencies( &config->depends_on[dependencyIndex], configsToBuild );
 		}
 
 		add_build_config_unique( config, configsToBuild );
@@ -2212,7 +2318,7 @@ int main( int argc, char** argv ) {
 
 	For ( u64, configToBuildIndex, 0, configsToBuild.size() ) {
 		BuildConfig* config = &configsToBuild[configToBuildIndex];
-		BuildConfig_AddDefaults( config );
+		//BuildConfig_AddDefaults( config );
 
 		context.config = *config;
 
@@ -2261,8 +2367,6 @@ int main( int argc, char** argv ) {
 			printf( "\n" );
 		}
 
-		const char* buildSourceFilePath = ( doingBuildFromBuildInfo ) ? paths_remove_file_from_path( parsedBuildInfoData.userConfigSourceFilename.c_str() ) : inputFilePath;
-
 		// make all non-absolute additional include paths relative to the build source file
 		For ( u64, includeIndex, 0, context.config.additional_includes.size() ) {
 			const char* additionalInclude = context.config.additional_includes[includeIndex];
@@ -2270,7 +2374,11 @@ int main( int argc, char** argv ) {
 			if ( paths_is_path_absolute( additionalInclude ) ) {
 				context.config.additional_includes[includeIndex] = additionalInclude;
 			} else {
-				context.config.additional_includes[includeIndex] = tprintf( "%s\\%s", buildSourceFilePath, additionalInclude );
+				if ( doingBuildFromBuildInfo ) {
+					context.config.additional_includes[includeIndex] = tprintf( "%s\\..\\%s", inputFilePath, additionalInclude );
+				} else {
+					context.config.additional_includes[includeIndex] = tprintf( "%s\\%s", inputFilePath, additionalInclude );
+				}
 			}
 		}
 
@@ -2281,7 +2389,11 @@ int main( int argc, char** argv ) {
 			if ( paths_is_path_absolute( additionalLibPath ) ) {
 				context.config.additional_lib_paths[libPathIndex] = additionalLibPath;
 			} else {
-				context.config.additional_lib_paths[libPathIndex] = tprintf( "%s\\%s", buildSourceFilePath, additionalLibPath );
+				if ( doingBuildFromBuildInfo ) {
+					context.config.additional_lib_paths[libPathIndex] = tprintf( "%s\\..\\%s", inputFilePath, additionalLibPath );
+				} else {
+					context.config.additional_lib_paths[libPathIndex] = tprintf( "%s\\%s", inputFilePath, additionalLibPath );
+				}
 			}
 		}
 
@@ -2301,7 +2413,8 @@ int main( int argc, char** argv ) {
 
 				const char* fileSearchPath = NULL;
 				if ( doingBuildFromBuildInfo ) {
-					fileSearchPath = sourceFile;
+					//fileSearchPath = sourceFile;
+					fileSearchPath = tprintf( "%s\\..\\%s", inputFilePath, sourceFile );
 				} else {
 					if ( inputFileIsSameAsSourceFile ) {
 						const char* sourceFileNoPath = paths_remove_path_from_file( sourceFile );
@@ -2340,7 +2453,7 @@ int main( int argc, char** argv ) {
 									foundSourceFile = tprintf( "%s\\%s\\%s", inputFilePathAbsolute, localPath, fileInfo.filename );
 								}
 							} else {
-								foundSourceFile = tprintf( "%s\\%s", localPath, fileInfo.filename );
+								foundSourceFile = tprintf( "%s\\..\\%s\\%s", inputFilePathAbsolute, localPath, fileInfo.filename );
 							}
 						}
 					} else {

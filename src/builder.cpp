@@ -1228,14 +1228,14 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 		}
 	}
 
-	const char* visualStudioProjectFilesPathAbsolute = NULL;
+	const char* visualStudioProjectFilesPath = NULL;
 	if ( solution->path ) {
-		visualStudioProjectFilesPathAbsolute = tprintf( "%s\\%s", inputFilePath, solution->path );
+		visualStudioProjectFilesPath = tprintf( "%s\\%s", inputFilePath, solution->path );
 	} else {
-		visualStudioProjectFilesPathAbsolute = inputFilePath;
+		visualStudioProjectFilesPath = inputFilePath;
 	}
 
-	const char* solutionPath = tprintf( "%s\\%s.sln", visualStudioProjectFilesPathAbsolute, solution->name );
+	const char* solutionPath = tprintf( "%s\\%s.sln", visualStudioProjectFilesPath, solution->name );
 	solutionPath = paths_canonicalise_path( solutionPath );
 
 	// give each project a guid
@@ -1248,7 +1248,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 	printf( "Generating Projects:\n" );
 
-	if ( !folder_create_if_it_doesnt_exist( visualStudioProjectFilesPathAbsolute ) ) {
+	if ( !folder_create_if_it_doesnt_exist( visualStudioProjectFilesPath ) ) {
 		errorCode_t errorCode = GetLastErrorCode();
 		error( "Failed to create the Visual Studio Solution folder.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
 
@@ -1303,7 +1303,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 		// .vcxproj
 		{
-			const char* projectPath = tprintf( "%s\\%s.vcxproj", visualStudioProjectFilesPathAbsolute, project->name );
+			const char* projectPath = tprintf( "%s\\%s.vcxproj", visualStudioProjectFilesPath, project->name );
 
 			printf( "Generating %s.vcxproj ... ", project->name );
 
@@ -1518,7 +1518,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 		// .vcxproj.user
 		{
-			const char* projectPath = tprintf( "%s\\%s.vcxproj.user", visualStudioProjectFilesPathAbsolute, project->name );
+			const char* projectPath = tprintf( "%s\\%s.vcxproj.user", visualStudioProjectFilesPath, project->name );
 
 			printf( "Generating %s.vcxproj.user ... ", project->name );
 
@@ -1568,7 +1568,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 		// .vcxproj.filter
 		{
-			const char* projectPath = tprintf( "%s\\%s.vcxproj.filters", visualStudioProjectFilesPathAbsolute, project->name );
+			const char* projectPath = tprintf( "%s\\%s.vcxproj.filters", visualStudioProjectFilesPath, project->name );
 
 			File vcxproj = file_open_or_create( projectPath );
 			defer( file_close( &vcxproj ) );

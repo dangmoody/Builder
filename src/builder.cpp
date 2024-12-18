@@ -639,7 +639,7 @@ static void GetAllSubfolders_r( const char* basePath, const char* folder, Array<
 	} while ( file_find_next( &file, &fileInfo ) );
 }
 
-static void GetAllIncludedFiles( const BuildConfig* config, const bool8 verbose, Array<const char*>* outBuildInfoFiles ) {
+static void GetAllIncludedFiles( const BuildConfig* config, const char* inputFilePath, const bool8 verbose, Array<const char*>* outBuildInfoFiles ) {
 	outBuildInfoFiles->reset();
 
 	outBuildInfoFiles->add_range( config->source_files.data(), config->source_files.size() );
@@ -648,13 +648,16 @@ static void GetAllIncludedFiles( const BuildConfig* config, const bool8 verbose,
 	// then go through _those_ included files
 	For ( u64, sourceFileIndex, 0, outBuildInfoFiles->count ) {
 		const char* sourceFile = ( *outBuildInfoFiles )[sourceFileIndex];
+		const char* sourceFileWithInputPath = tprintf( "%s\\%s", inputFilePath, sourceFile );
 
-		const char* sourceFilePath = paths_remove_file_from_path( sourceFile );
-		const char* sourceFileNoPath = paths_remove_path_from_file( sourceFile );
+		( *outBuildInfoFiles )[sourceFileIndex] = sourceFile;
+
+		const char* sourceFilePath = paths_remove_file_from_path( sourceFileWithInputPath );
+		const char* sourceFileNoPath = paths_remove_path_from_file( sourceFileWithInputPath );
 
 		char* fileBuffer = NULL;
 		u64 fileLength = 0;
-		bool8 read = file_read_entire( sourceFile, &fileBuffer, &fileLength );
+		bool8 read = file_read_entire( sourceFileWithInputPath, &fileBuffer, &fileLength );
 
 		if ( !read ) {
 			if ( verbose ) {
@@ -687,7 +690,7 @@ static void GetAllIncludedFiles( const BuildConfig* config, const bool8 verbose,
 					strncpy( filename, includeStart, filenameLength * sizeof( char ) );
 					filename[filenameLength - 1] = 0;
 
-					filename = tprintf( "%s\\%s", sourceFilePath, filename );
+					filename = tprintf( "%s\\%s", paths_remove_file_from_path( sourceFile ), filename );
 
 					bool8 found = false;
 					For ( u64, fileIndex, 0, outBuildInfoFiles->count ) {
@@ -771,7 +774,7 @@ static void SerializeCStringArray( File* file, const std::vector<const char*>& a
 	}
 }
 
-static void SerializeBuildInfo( File* file, const std::vector<BuildConfig>& configs, const char* userConfigSourceFilename, const char* userConfigDLLFilename, const bool8 verbose ) {
+static void SerializeBuildInfo( File* file, const std::vector<BuildConfig>& configs, const char* inputFilePath, const char* userConfigSourceFilename, const char* userConfigDLLFilename, const bool8 verbose ) {
 	CHECK_WRITE( file_write( file, tprintf( "build_source_file: %s\n", userConfigSourceFilename ) ) );
 	CHECK_WRITE( file_write( file, tprintf( "DLL: %s\n", userConfigDLLFilename ) ) );
 
@@ -813,7 +816,7 @@ static void SerializeBuildInfo( File* file, const std::vector<BuildConfig>& conf
 		// serialize all included files and their last write time
 		{
 			Array<const char*> buildInfoFiles;
-			GetAllIncludedFiles( config, verbose, &buildInfoFiles );
+			GetAllIncludedFiles( config, inputFilePath, verbose, &buildInfoFiles );
 
 			CHECK_WRITE( file_write( file, "tracked_source_files\n" ) );
 			SerializeU64( file, buildInfoFiles.count );
@@ -821,8 +824,14 @@ static void SerializeBuildInfo( File* file, const std::vector<BuildConfig>& conf
 			For ( u64, buildInfoFileIndex, 0, buildInfoFiles.count ) {
 				const char* buildInfoFilename = buildInfoFiles[buildInfoFileIndex];
 
+				if ( !paths_is_path_absolute( buildInfoFilename ) ) {
+					buildInfoFilename = tprintf( "%s\\%s", inputFilePath, buildInfoFilename );
+				}
+
 				FileInfo fileInfo;
 				File foundFile = file_find_first( buildInfoFilename, &fileInfo );
+
+				assert( foundFile.ptr != INVALID_HANDLE_VALUE );
 
 				CHECK_WRITE( file_write( file, tprintf( "%s\n", buildInfoFilename ) ) );
 				SerializeU64( file, fileInfo.last_write_time );
@@ -1011,10 +1020,9 @@ static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, buildInfoFile
 				For ( u64, i, 0, count ) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wreorder-init-list"
-					trackedSourceFile_t buildInfoFile = {
-						.filename		= Parser_ParseLine( &parser ),
-						.lastWriteTime	= Parser_ParseU64( &parser )
-					};
+					trackedSourceFile_t buildInfoFile = {};
+					buildInfoFile.filename = Parser_ParseLine( &parser );
+					buildInfoFile.lastWriteTime = Parser_ParseU64( &parser );
 #pragma clang diagnostic pop
 
 					buildInfoConfig->files.push_back( buildInfoFile );
@@ -1781,7 +1789,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 		File buildInfoFile = file_open_or_create( buildInfoFilename );
 		defer( file_close( &buildInfoFile ) );
 
-		SerializeBuildInfo( &buildInfoFile, allBuildConfigs, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
+		SerializeBuildInfo( &buildInfoFile, allBuildConfigs, inputFilePath, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
 	}
 
 	return true;
@@ -2294,32 +2302,79 @@ int main( int argc, char** argv ) {
 
 		context.config = *config;
 
-		bool8 shouldSkipBuild = false;
+		bool8 shouldSkipBuild = true;
 
 		// figure out if we need to even rebuild
-		// get all the code files from the .build_info file
-		// if none of the code files have changed since we last checked then do not even try to rebuild
 		{
-			std::vector<trackedSourceFile_t> trackedSourceFiles;
+			// if the binary doesnt exist, we need to rebuild
+			{
+				if ( !context.config.binary_folder.empty() ) {
+					context.config.binary_folder = tprintf( "%s\\%s", inputFilePath, context.config.binary_folder.c_str() );
+				} else {
+					context.config.binary_folder = inputFilePath;
+				}
 
-			For ( u64, i, 0, parsedBuildInfoData.configs.size() ) {
-				if ( context.config.name == parsedBuildInfoData.configs[i].config.name ) {
-					trackedSourceFiles = parsedBuildInfoData.configs[i].files;
-					break;
+				if ( !folder_create_if_it_doesnt_exist( context.config.binary_folder.c_str() ) ) {
+					errorCode_t errorCode = GetLastErrorCode();
+					fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".  Error code: " ERROR_CODE_FORMAT "\n", SET_BUILDER_OPTIONS_FUNC_NAME, context.config.binary_folder.c_str(), errorCode );
+					return 1;
+				}
+
+				// user didnt override the binary name via the callback
+				// so give them a binary name based off the first source file
+				if ( context.config.binary_name.empty() ) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-qual"
+					char* inputFileWithoutExtension = cast( char* ) mem_temp_alloc( ( inputFileLength + 1 ) * sizeof( char ) );
+					strncpy( inputFileWithoutExtension, inputFile, inputFileLength * sizeof( char ) );
+					inputFileWithoutExtension[inputFileLength] = 0;
+
+					inputFileWithoutExtension = cast( char* ) paths_remove_file_extension( paths_remove_path_from_file( inputFileWithoutExtension ) );
+
+					context.config.binary_name = inputFileWithoutExtension;
+#pragma clang diagnostic pop
+				}
+
+				context.fullBinaryName = tprintf( "%s\\%s", context.config.binary_folder.c_str(), context.config.binary_name.c_str() );
+
+				if ( !config->remove_file_extension ) {
+					context.fullBinaryName = tprintf( "%s.%s", context.fullBinaryName, GetFileExtensionFromBinaryType( config->binary_type ) );
+				}
+
+				{
+					FileInfo fileInfo = {};
+					File file = file_find_first( context.fullBinaryName, &fileInfo );
+
+					if ( file.ptr == INVALID_HANDLE_VALUE ) {
+						shouldSkipBuild = false;
+					}
 				}
 			}
 
-			For ( u64, i, 0, trackedSourceFiles.size() ) {
-				trackedSourceFile_t* trackedSourceFile = &trackedSourceFiles[i];
+			// get all the code files from the .build_info file
+			// if none of the code files have changed since we last checked then do not even try to rebuild
+			{
+				std::vector<trackedSourceFile_t> trackedSourceFiles;
 
-				FileInfo fileInfo = {};
-				File file = file_find_first( trackedSourceFile->filename, &fileInfo );
+				For ( u64, i, 0, parsedBuildInfoData.configs.size() ) {
+					if ( context.config.name == parsedBuildInfoData.configs[i].config.name ) {
+						trackedSourceFiles = parsedBuildInfoData.configs[i].files;
+						break;
+					}
+				}
 
-				// DM!!! files aren't being found here!
+				For ( u64, i, 0, trackedSourceFiles.size() ) {
+					trackedSourceFile_t* trackedSourceFile = &trackedSourceFiles[i];
 
-				if ( fileInfo.last_write_time != trackedSourceFile->lastWriteTime ) {
-					shouldSkipBuild = false;
-					break;
+					FileInfo fileInfo = {};
+					File file = file_find_first( trackedSourceFile->filename, &fileInfo );
+
+					assert( file.ptr != INVALID_HANDLE_VALUE );
+
+					if ( fileInfo.last_write_time != trackedSourceFile->lastWriteTime ) {
+						shouldSkipBuild = false;
+						break;
+					}
 				}
 			}
 		}
@@ -2423,39 +2478,6 @@ int main( int argc, char** argv ) {
 			context.config.source_files = finalSourceFilesToBuild;
 		}
 
-		if ( !context.config.binary_folder.empty() ) {
-			context.config.binary_folder = tprintf( "%s\\%s", inputFilePath, context.config.binary_folder.c_str() );
-		} else {
-			context.config.binary_folder = inputFilePath;
-		}
-
-		if ( !folder_create_if_it_doesnt_exist( context.config.binary_folder.c_str() ) ) {
-			errorCode_t errorCode = GetLastErrorCode();
-			fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".  Error code: " ERROR_CODE_FORMAT "\n", SET_BUILDER_OPTIONS_FUNC_NAME, context.config.binary_folder.c_str(), errorCode );
-			return 1;
-		}
-
-		// user didnt override the binary name via the callback
-		// so give them a binary name based off the first source file
-		if ( context.config.binary_name.empty() ) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wcast-qual"
-			char* inputFileWithoutExtension = cast( char* ) mem_temp_alloc( ( inputFileLength + 1 ) * sizeof( char ) );
-			strncpy( inputFileWithoutExtension, inputFile, inputFileLength * sizeof( char ) );
-			inputFileWithoutExtension[inputFileLength] = 0;
-
-			inputFileWithoutExtension = cast( char* ) paths_remove_file_extension( paths_remove_path_from_file( inputFileWithoutExtension ) );
-
-			context.config.binary_name = inputFileWithoutExtension;
-#pragma clang diagnostic pop
-		}
-
-		context.fullBinaryName = tprintf( "%s\\%s", context.config.binary_folder.c_str(), context.config.binary_name.c_str() );
-
-		if ( !config->remove_file_extension ) {
-			context.fullBinaryName = tprintf( "%s.%s", context.fullBinaryName, GetFileExtensionFromBinaryType( config->binary_type ) );
-		}
-
 		// now do the actual build
 		switch ( config->binary_type ) {
 			case BINARY_TYPE_EXE:
@@ -2483,7 +2505,7 @@ int main( int argc, char** argv ) {
 		defer( file_close( &buildInfoFile ) );
 
 		// serialize all the builder options
-		SerializeBuildInfo( &buildInfoFile, options.configs, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
+		SerializeBuildInfo( &buildInfoFile, options.configs, inputFilePath, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
 	} else {
 		error( "Build failed.\n" );
 		exitCode = 1;

@@ -1760,10 +1760,6 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 				For ( u64, configIndex, 0, project->configs.size() ) {
 					VisualStudioConfig* config = &project->configs[configIndex];
 
-					// TODO(DM): 23/10/2024: I'm still not sure if this is the right answer yet
-					// but it means that we can serialize ONLY the BuilderOptions without having to also serialize visual studio project/solution information
-					//config->options.name = tprintf( "%s.%s", config->options.name.c_str(), platform );
-
 					// TODO(DM): 25/10/2024: this whole thing feels like a massive hack
 					// users dont get the default BuilderOptions because they have to create their own ones inside set_visual_studio_options
 					// so here we have to "merge" the defaults into what they specified
@@ -2078,7 +2074,6 @@ int main( int argc, char** argv ) {
 
 	BuilderOptions options = {};
 
-	//std::vector<buildInfoConfig_t> parsedBuildConfigs;
 	buildInfoFileData_t parsedBuildInfoData = {};
 	bool8 readBuildInfo = Parser_ParseBuildInfo( buildInfoFilename, &parsedBuildInfoData );
 
@@ -2129,7 +2124,6 @@ int main( int argc, char** argv ) {
 	if ( doUserConfigBuild ) {
 		buildContext_t userConfigBuildContext = {};
 		BuildConfig_AddDefaults( &userConfigBuildContext.config );
-		//userConfigBuildContext.config = context.config;
 		userConfigBuildContext.flags = BUILD_CONTEXT_FLAG_SHOW_STDOUT;
 
 		if ( verbose ) {
@@ -2203,21 +2197,6 @@ int main( int argc, char** argv ) {
 							options.configs.push_back( config->options );
 						}
 					}
-
-					//For ( u64, projectIndex, 0, options.solution.projects.size() ) {
-					//	VisualStudioProject* project = &options.solution.projects[projectIndex];
-
-					//	For ( u64, configIndex, 0, project->configs.size() ) {
-					//		VisualStudioConfig* config = &project->configs[configIndex];
-
-					//		// all the source files will be relative to the .builder folder, which lives whereever the visual studio solution generation source file lives
-					//		// therefore the source files will need to be relative to one folder up from .build_info file
-					//		// so update all the user-specified source file paths to reflect that
-					//		For ( u64, sourceFileIndex, 0, config->options.source_files.size() ) {
-					//			config->options.source_files[sourceFileIndex] = tprintf( "%s\\%s", inputFilePath, config->options.source_files[sourceFileIndex] );
-					//		}
-					//	}
-					//}
 
 					printf( "Generating Visual Studio Solution\n" );
 
@@ -2309,7 +2288,6 @@ int main( int argc, char** argv ) {
 
 	For ( u64, configToBuildIndex, 0, configsToBuild.size() ) {
 		BuildConfig* config = &configsToBuild[configToBuildIndex];
-		//BuildConfig_AddDefaults( config );
 
 		context.config = *config;
 
@@ -2404,7 +2382,6 @@ int main( int argc, char** argv ) {
 
 				const char* fileSearchPath = NULL;
 				if ( doingBuildFromBuildInfo ) {
-					//fileSearchPath = sourceFile;
 					fileSearchPath = tprintf( "%s\\..\\%s", inputFilePath, sourceFile );
 				} else {
 					if ( inputFileIsSameAsSourceFile ) {

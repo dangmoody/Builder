@@ -2136,11 +2136,6 @@ int main( int argc, char** argv ) {
 			userConfigBuildContext.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS;
 		}
 
-		// DM!!!	"inputFile" here wants to be "buildSourceFile", which comes from the command line either as a source file or as a .build_info
-		//			if a source file, just take the command line input and use that
-		//			if a .build_info file, parse it and take the build_source_file field from it and use that
-		//			go do this next
-
 		userConfigSourceFilename = doingBuildFromSourceFile ? inputFile : parsedBuildInfoData.userConfigSourceFilename.c_str();
 
 		userConfigBuildContext.config.source_files.push_back( userConfigSourceFilename );
@@ -2160,9 +2155,6 @@ int main( int argc, char** argv ) {
 #endif
 
 		userConfigBuildContext.config.ignore_warnings.push_back( "-Wno-missing-prototypes" );	// otherwise the user has to forward declare functions like set_builder_options and thats annoying
-
-		// DM!!!	do we still need this?
-		//userConfigBuildContext.config.ignore_warnings.push_back( "-Wno-unused-parameter" );		// user can call set_pre_build (for example) and not actually touch the BuilderOptions parm
 
 		userConfigBuildContext.fullBinaryName = tprintf( "%s\\%s", userConfigBuildContext.config.binary_folder.c_str(), userConfigBuildContext.config.binary_name.c_str() );
 

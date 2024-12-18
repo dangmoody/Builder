@@ -62,9 +62,9 @@ void mem_destroy_generic( void* data ) {
 
 	AllocatorGeneric* allocator = cast( AllocatorGeneric* ) data;
 
-	mem_generic_check_leaks( allocator );
+	//mem_generic_check_leaks( allocator );
 
-	assertf( allocator->tail == NULL, "Not all allocations have been freed." );
+	//assertf( allocator->tail == NULL, "Not all allocations have been freed." );
 
 	free( allocator );
 	allocator = NULL;

@@ -36,3 +36,5 @@ const char*	paths_remove_file_extension( const char* filename );
 // On Windows:   Returns true if the path starts with a letter followed by a colon, otherwise returns false.
 // On Mac/Linux: Returns true if the path starts with two backslashes or a single forward slash, otherwise returns false.
 bool8		paths_is_path_absolute( const char* path );
+
+const char*	paths_canonicalise_path( const char* path );

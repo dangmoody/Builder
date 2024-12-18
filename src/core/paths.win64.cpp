@@ -18,6 +18,7 @@ Proprietary and confidential.
 
 #define WIN32_LEAN_AND_MEAN 1
 #include <Windows.h>
+#include <Shlwapi.h>
 
 static const char* get_last_slash( const char* path ) {
 	const char* last_slash = NULL;
@@ -147,6 +148,18 @@ bool8 paths_is_path_absolute( const char* path ) {
 	}
 
 	return isalpha( path[0] ) && path[1] == ':' && ( path[2] == '\\' || path[2] == '/' );
+}
+
+const char* paths_canonicalise_path( const char* path ) {
+	u64 maxPathLength = strlen( path ) * sizeof( char );
+
+	char* result = cast( char* ) mem_temp_alloc( maxPathLength );
+	memset( result, 0, maxPathLength );
+
+	BOOL success = PathCanonicalizeA( result, path );
+	assert( success );
+
+	return result;
 }
 
 #endif // _WIN64

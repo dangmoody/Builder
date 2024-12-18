@@ -55,8 +55,8 @@ TEMPER_TEST( Compile_Basic, TEMPER_FLAG_SHOULD_RUN ) {
 	TEMPER_CHECK_TRUE( FileExists( sourceFile ) );
 
 	Array<const char*> args;
-	array_add( &args, "builder.exe" );
-	array_add( &args, sourceFile );
+	args.add( "builder.exe" );
+	args.add( sourceFile );
 
 	s32 exitCode = RunProc( &args );
 
@@ -77,9 +77,9 @@ TEMPER_TEST_PARAMETRIC( Compile_SetBuilderOptions, TEMPER_FLAG_SHOULD_RUN, const
 	TEMPER_CHECK_TRUE( FileExists( sourceFile ) );
 
 	Array<const char*> args;
-	array_add( &args, "builder.exe" );
-	array_add( &args, sourceFile );
-	array_add( &args, tprintf( "--config=%s", config ) );
+	args.add( "builder.exe" );
+	args.add( sourceFile );
+	args.add( tprintf( "--config=%s", config ) );
 
 	s32 exitCode = RunProc( &args );
 
@@ -110,8 +110,8 @@ TEMPER_TEST( Compile_MultipleSourceFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	TEMPER_CHECK_TRUE( FileExists( buildSourceFile ) );
 
 	Array<const char*> args;
-	array_add( &args, "builder.exe" );
-	array_add( &args, buildSourceFile );
+	args.add( "builder.exe" );
+	args.add( buildSourceFile );
 
 	s32 exitCode = RunProc( &args );
 
@@ -131,8 +131,8 @@ TEMPER_TEST( SetThirdPartyLibrariesViaSetBuilderOptions, TEMPER_FLAG_SHOULD_RUN 
 
 	{
 		Array<const char*> args;
-		array_add( &args, "builder.exe" );
-		array_add( &args, buildSourceFile );
+		args.add( "builder.exe" );
+		args.add( buildSourceFile );
 
 		s32 exitCode = RunProc( &args );
 
@@ -145,7 +145,7 @@ TEMPER_TEST( SetThirdPartyLibrariesViaSetBuilderOptions, TEMPER_FLAG_SHOULD_RUN 
 
 	{
 		Array<const char*> args;
-		array_add( &args, "tests\\test_third_party_libraries\\bin\\sdl_test.exe" );
+		args.add( "tests\\test_third_party_libraries\\bin\\sdl_test.exe" );
 
 		s32 testProgramExitCode = RunProc( &args );
 
@@ -159,9 +159,9 @@ TEMPER_TEST( Compile_StaticLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 		DoBuildInfoPreTest( "tests\\test_static_lib\\.builder\\build.build_info" );
 
 		Array<const char*> args;
-		array_add( &args, "builder.exe" );
-		array_add( &args, "tests\\test_static_lib\\build.cpp" );
-		array_add( &args, "--config=program" );
+		args.add( "builder.exe" );
+		args.add( "tests\\test_static_lib\\build.cpp" );
+		args.add( "--config=program" );
 
 		s32 exitCode = RunProc( &args );
 
@@ -173,7 +173,7 @@ TEMPER_TEST( Compile_StaticLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 	// run the program to make sure everything actually works
 	{
 		Array<const char*> args;
-		array_add( &args, "tests\\test_static_lib\\bin\\test_static_library_program.exe" );
+		args.add( "tests\\test_static_lib\\bin\\test_static_library_program.exe" );
 
 		s32 exitCode = RunProc( &args );
 
@@ -194,9 +194,9 @@ TEMPER_TEST( Compile_DynamicLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 		DoBuildInfoPreTest( "tests\\test_dynamic_lib\\.builder\\build.build_info" );
 
 		Array<const char*> args;
-		array_add( &args, "builder.exe" );
-		array_add( &args, "tests\\test_dynamic_lib\\build.cpp" );
-		array_add( &args, "--config=program" );
+		args.add( "builder.exe" );
+		args.add( "tests\\test_dynamic_lib\\build.cpp" );
+		args.add( "--config=program" );
 
 		s32 exitCode = RunProc( &args );
 
@@ -208,7 +208,7 @@ TEMPER_TEST( Compile_DynamicLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 	// run the program to make sure everything actually works
 	{
 		Array<const char*> args;
-		array_add( &args, "tests\\test_dynamic_lib\\bin\\test_dynamic_library_program.exe" );
+		args.add( "tests\\test_dynamic_lib\\bin\\test_dynamic_library_program.exe" );
 
 		s32 exitCode = RunProc( &args );
 

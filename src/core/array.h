@@ -24,12 +24,11 @@ struct StaticArray {
 				StaticArray();
 				~StaticArray() {}
 
+	void		zero();
+
 	T&			operator[]( const u64 index );
 	const T&	operator[]( const u64 index ) const;
 };
-
-template<class T, u64 N>
-inline void		array_zero( StaticArray<T, N>* array );
 
 
 template<class T>
@@ -43,36 +42,22 @@ struct Array {
 
 				Array( const Array<T>& other );
 
+	void		copy( const Array<T>* src );
+
+	void		add( const T& element );
+
+	void		add_range( const T* ptr, const u64 count );
+
+	void		remove_at( const u64 index );
+
+	void		resize( const u64 count );
+	void		reserve( const u64 count );
+
+	void		reset();
+	void		zero();
+
 	Array<T>&	operator=( const Array<T>& other );
 
 	T&			operator[]( const u64 index );
 	const T&	operator[]( const u64 index ) const;
 };
-
-template<class T>
-inline void		array_copy( Array<T>* dst, const Array<T>* src );
-
-template<class T>
-inline void		array_add( Array<T>* array, const T& element );
-
-// we need special overrides for char* and wchar_t* because C++ template bullshit
-inline void		array_add( Array<const char*>* array, const char* element );
-inline void		array_add( Array<const wchar_t*>* array, const wchar_t* element );
-
-template<class T>
-inline void		array_add_range( Array<T>* arary, const T* ptr, const u64 count );
-
-template<class T>
-inline void		array_remove_at( Array<T>* array, const u64 index );
-
-template<class T>
-inline void		array_resize( Array<T>* array, const u64 count );
-
-template<class T>
-inline void		array_reserve( Array<T>* array, const u64 count );
-
-template<class T>
-inline void		array_reset( Array<T>* array );
-
-template<class T>
-inline void		array_zero( Array<T>* array );

@@ -59,12 +59,12 @@ Process* process_create( Array<const char*>* args, Array<const char*>* environme
 
 	// subprocess.h requires that if we specified an array of environment variables then the array MUST end with 2 x NULLs
 	if ( environment_variables && environment_variables->count != 0 && ( *environment_variables )[environment_variables->count - 1] != NULL ) {
-		array_add( environment_variables, NULL );
+		environment_variables->add( NULL );
 	}
 
 	// subprocess.h requires that the array of args MUST end with a NULL
 	if ( ( *args )[args->count - 1] != NULL ) {
-		array_add( args, NULL );
+		args->add( NULL );
 	}
 
 	int result = subprocess_create_ex( args->data, options, environment_variables ? environment_variables->data : NULL, &process->proc );

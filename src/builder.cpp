@@ -203,7 +203,7 @@ static const char* OptimizationLevelToString( const OptimizationLevel level ) {
 
 static s32 BuildEXE( buildContext_t* context ) {
 	Array<const char*> args;
-	array_reserve( &args,
+	args.reserve(
 		1 +	// clang
 		1 +	// std
 		1 +	// symbols
@@ -219,57 +219,57 @@ static s32 BuildEXE( buildContext_t* context ) {
 		context->config.ignore_warnings.size()
 	);
 
-	array_add( &args, tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() ) );
+	args.add( tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() ) );
 
 	For ( u64, i, 0, context->config.source_files.size() ) {
 		if ( string_ends_with( context->config.source_files[i], ".cpp" ) ) {
-			array_add( &args, "-std=c++20" );
+			args.add( "-std=c++20" );
 			break;
 		}
 	}
 
 	if ( !context->config.remove_symbols ) {
-		array_add( &args, "-g" );
+		args.add( "-g" );
 	}
 
-	array_add( &args, OptimizationLevelToString( context->config.optimization_level ) );
+	args.add( OptimizationLevelToString( context->config.optimization_level ) );
 
-	array_add( &args, "-o" );
-	array_add( &args, context->fullBinaryName );
+	args.add( "-o" );
+	args.add( context->fullBinaryName );
 
-	array_add_range( &args, context->config.source_files.data(), context->config.source_files.size() );
+	args.add_range( context->config.source_files.data(), context->config.source_files.size() );
 
 	For ( u32, i, 0, context->config.defines.size() ) {
-		array_add( &args, tprintf( "-D%s", context->config.defines[i] ) );
+		args.add( tprintf( "-D%s", context->config.defines[i] ) );
 	}
 
 	For ( u32, i, 0, context->config.additional_includes.size() ) {
-		array_add( &args, tprintf( "-I%s", context->config.additional_includes[i] ) );
+		args.add( tprintf( "-I%s", context->config.additional_includes[i] ) );
 	}
 
 	For ( u32, i, 0, context->config.additional_lib_paths.size() ) {
-		array_add( &args, tprintf( "-L%s", context->config.additional_lib_paths[i] ) );
+		args.add( tprintf( "-L%s", context->config.additional_lib_paths[i] ) );
 	}
 
 	For ( u32, i, 0, context->config.additional_libs.size() ) {
-		array_add( &args, tprintf( "-l%s", context->config.additional_libs[i] ) );
+		args.add( tprintf( "-l%s", context->config.additional_libs[i] ) );
 	}
 
 	// must come before ignored warnings
 	if ( context->config.warnings_as_errors ) {
-		array_add( &args, "-Werror" );
+		args.add( "-Werror" );
 	}
 
-	array_add( &args, "-Weverything" );
-	array_add( &args, "-Wall" );
-	array_add( &args, "-Wextra" );
-	array_add( &args, "-Wpedantic" );
+	args.add( "-Weverything" );
+	args.add( "-Wall" );
+	args.add( "-Wextra" );
+	args.add( "-Wpedantic" );
 
 	if ( context->config.ignore_warnings.size() > 0 ) {
-		array_add_range( &args, context->config.ignore_warnings.data(), context->config.ignore_warnings.size() );
+		args.add_range( context->config.ignore_warnings.data(), context->config.ignore_warnings.size() );
 	}
 
-	array_add( &args, NULL );
+	args.add( NULL );
 
 	bool8 showArgs = context->flags & BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS;
 	bool8 showStdout = context->flags & BUILD_CONTEXT_FLAG_SHOW_STDOUT;
@@ -284,7 +284,7 @@ static s32 BuildEXE( buildContext_t* context ) {
 
 static s32 BuildDynamicLibrary( buildContext_t* context ) {
 	Array<const char*> args;
-	array_reserve( &args,
+	args.reserve(
 		1 +	// clang
 		1 +	// -shared
 		1 +	// std
@@ -301,55 +301,55 @@ static s32 BuildDynamicLibrary( buildContext_t* context ) {
 		context->config.ignore_warnings.size()
 	);
 
-	array_add( &args, tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() ) );
-	array_add( &args, "-shared" );
+	args.add( tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() ) );
+	args.add( "-shared" );
 
 	For ( u64, i, 0, context->config.source_files.size() ) {
 		if ( string_ends_with( context->config.source_files[i], ".cpp" ) ) {
-			array_add( &args, "-std=c++20" );
+			args.add( "-std=c++20" );
 			break;
 		}
 	}
 
 	if ( !context->config.remove_symbols ) {
-		array_add( &args, "-g" );
+		args.add( "-g" );
 	}
 
-	array_add( &args, OptimizationLevelToString( context->config.optimization_level ) );
+	args.add( OptimizationLevelToString( context->config.optimization_level ) );
 
-	array_add( &args, "-o" );
-	array_add( &args, context->fullBinaryName );
+	args.add( "-o" );
+	args.add( context->fullBinaryName );
 
-	array_add_range( &args, context->config.source_files.data(), context->config.source_files.size() );
+	args.add_range( context->config.source_files.data(), context->config.source_files.size() );
 
 	For ( u32, i, 0, context->config.defines.size() ) {
-		array_add( &args, tprintf( "-D%s", context->config.defines[i] ) );
+		args.add( tprintf( "-D%s", context->config.defines[i] ) );
 	}
 
 	For ( u32, i, 0, context->config.additional_includes.size() ) {
-		array_add( &args, tprintf( "-I%s", context->config.additional_includes[i] ) );
+		args.add( tprintf( "-I%s", context->config.additional_includes[i] ) );
 	}
 
 	For ( u32, i, 0, context->config.additional_lib_paths.size() ) {
-		array_add( &args, tprintf( "-L%s", context->config.additional_lib_paths[i] ) );
+		args.add( tprintf( "-L%s", context->config.additional_lib_paths[i] ) );
 	}
 
 	For ( u32, i, 0, context->config.additional_libs.size() ) {
-		array_add( &args, tprintf( "-l%s", context->config.additional_libs[i] ) );
+		args.add( tprintf( "-l%s", context->config.additional_libs[i] ) );
 	}
 
 	// must come before ignored warnings
 	if ( context->config.warnings_as_errors ) {
-		array_add( &args, "-Werror" );
+		args.add( "-Werror" );
 	}
 
-	array_add( &args, "-Weverything" );
-	array_add( &args, "-Wall" );
-	array_add( &args, "-Wextra" );
-	array_add( &args, "-Wpedantic" );
+	args.add( "-Weverything" );
+	args.add( "-Wall" );
+	args.add( "-Wextra" );
+	args.add( "-Wpedantic" );
 
 	if ( context->config.ignore_warnings.size() > 0 ) {
-		array_add_range( &args, context->config.ignore_warnings.data(), context->config.ignore_warnings.size() );
+		args.add_range( context->config.ignore_warnings.data(), context->config.ignore_warnings.size() );
 	}
 
 	bool8 showArgs = context->flags & BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS;
@@ -372,7 +372,7 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 	Array<const char*> intermediateFiles;
 
 	Array<const char*> args;
-	array_reserve( &args,
+	args.reserve(
 		1 +	// clang
 		1 +	// -c
 		1 +	// std
@@ -393,25 +393,25 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 	For ( u64, sourceFileIndex, 0, context->config.source_files.size() ) {
 		const char* sourceFile = context->config.source_files[sourceFileIndex];
 
-		array_reset( &args );
+		args.reset();
 
-		array_add( &args, tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() ) );
-		array_add( &args, "-c" );
+		args.add( tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() ) );
+		args.add( "-c" );
 
 		if ( string_ends_with( context->config.source_files[sourceFileIndex], ".cpp" ) ) {
-			array_add( &args, "-std=c++20" );
+			args.add( "-std=c++20" );
 		} else if ( string_ends_with( context->config.source_files[sourceFileIndex], ".c" ) ) {
-			array_add( &args, "-std=c99" );
+			args.add( "-std=c99" );
 		} else {
 			assertf( false, "Something went really wrong.\n" );
 			return 1;
 		}
 
 		if ( !context->config.remove_symbols ) {
-			array_add( &args, "-g" );
+			args.add( "-g" );
 		}
 
-		array_add( &args, OptimizationLevelToString( context->config.optimization_level ) );
+		args.add( OptimizationLevelToString( context->config.optimization_level ) );
 
 		{
 			const char* sourceFileTrimmed = context->config.source_files[sourceFileIndex];
@@ -419,33 +419,33 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 
 			const char* outArg = tprintf( "%s\\%s.o", context->config.binary_folder.c_str(), sourceFileTrimmed );
 
-			array_add( &args, "-o" );
-			array_add( &args, outArg );
-			array_add( &intermediateFiles, outArg );
+			args.add( "-o" );
+			args.add( outArg );
+			intermediateFiles.add( outArg );
 		}
 
-		array_add( &args, sourceFile );
+		args.add( sourceFile );
 
 		For ( u32, i, 0, context->config.defines.size() ) {
-			array_add( &args, tprintf( "-D%s", context->config.defines[i] ) );
+			args.add( tprintf( "-D%s", context->config.defines[i] ) );
 		}
 
 		For ( u32, i, 0, context->config.additional_includes.size() ) {
-			array_add( &args, tprintf( "-I%s", context->config.additional_includes[i] ) );
+			args.add( tprintf( "-I%s", context->config.additional_includes[i] ) );
 		}
 
 		// must come before ignored warnings
 		if ( context->config.warnings_as_errors ) {
-			array_add( &args, "-Werror" );
+			args.add( "-Werror" );
 		}
 
-		array_add( &args, "-Weverything" );
-		array_add( &args, "-Wall" );
-		array_add( &args, "-Wextra" );
-		array_add( &args, "-Wpedantic" );
+		args.add( "-Weverything" );
+		args.add( "-Wall" );
+		args.add( "-Wextra" );
+		args.add( "-Wpedantic" );
 
 		if ( context->config.ignore_warnings.size() > 0 ) {
-			array_add_range( &args, context->config.ignore_warnings.data(), context->config.ignore_warnings.size() );
+			args.add_range( context->config.ignore_warnings.data(), context->config.ignore_warnings.size() );
 		}
 
 		exitCode = RunProc( &args, NULL, showArgs, showStdout );
@@ -461,14 +461,14 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 
 	// link step
 	{
-		array_reset( &args );
+		args.reset();
 
-		array_add( &args, "lld-link" );
-		array_add( &args, "/lib" );
+		args.add( "lld-link" );
+		args.add( "/lib" );
 
-		array_add( &args, tprintf( "/OUT:%s", context->fullBinaryName ) );
+		args.add( tprintf( "/OUT:%s", context->fullBinaryName ) );
 
-		array_add_range( &args, intermediateFiles.data, intermediateFiles.count );
+		args.add_range( intermediateFiles.data, intermediateFiles.count );
 
 		exitCode = RunProc( &args, NULL, showArgs, showStdout );
 
@@ -590,7 +590,7 @@ static void FindAllFilesInFolder_r( const char* basePath, const char* folder, co
 		if ( string_ends_with( fileInfo.filename, fileExtension ) ) {
 			const char* fullName = tprintf( "%s\\%s", folder, fileInfo.filename );
 
-			array_add( outFiles, fullName );
+			outFiles->add( fullName );
 		}
 	} while ( file_find_next( &file, &fileInfo ) );
 }
@@ -632,7 +632,7 @@ static void GetAllSubfolders_r( const char* basePath, const char* folder, Array<
 		}
 
 		if ( fileInfo.is_directory ) {
-			array_add( outSubfolders, fullName );
+			outSubfolders->add( fullName );
 
 			GetAllSubfolders_r( basePath, fullName, outSubfolders );
 		}
@@ -640,9 +640,9 @@ static void GetAllSubfolders_r( const char* basePath, const char* folder, Array<
 }
 
 static void GetAllIncludedFiles( const BuildConfig* config, const bool8 verbose, Array<const char*>* outBuildInfoFiles ) {
-	array_reset( outBuildInfoFiles );
+	outBuildInfoFiles->reset();
 
-	array_add_range( outBuildInfoFiles, config->source_files.data(), config->source_files.size() );
+	outBuildInfoFiles->add_range( config->source_files.data(), config->source_files.size() );
 
 	// for each file, open it and get every include inside it
 	// then go through _those_ included files
@@ -698,7 +698,7 @@ static void GetAllIncludedFiles( const BuildConfig* config, const bool8 verbose,
 					}
 
 					if ( !found ) {
-						array_add( outBuildInfoFiles, filename );
+						outBuildInfoFiles->add( filename );
 					}
 				} else if ( fileBuffer[fileOffset] == '<' ) {
 					// "external" include, so scan all the external include folders that we know about
@@ -736,7 +736,7 @@ static void GetAllIncludedFiles( const BuildConfig* config, const bool8 verbose,
 						}
 
 						if ( !found ) {
-							array_add( outBuildInfoFiles, fullFilename );
+							outBuildInfoFiles->add( fullFilename );
 						}
 					} else {
 						if ( verbose ) {
@@ -1238,7 +1238,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 	// give each project a guid
 	Array<const char*> projectGuids;
-	array_resize( &projectGuids, solution->projects.size() );
+	projectGuids.resize( solution->projects.size() );
 
 	For ( u64, i, 0, projectGuids.count ) {
 		projectGuids[i] = CreateVisualStudioGuid();
@@ -1841,8 +1841,8 @@ int main( int argc, char** argv ) {
 				bool8 correctClangVersion = false;
 
 				Array<const char*> args;
-				array_add( &args, clangAbsolutePath );
-				array_add( &args, "-v" );
+				args.add( clangAbsolutePath );
+				args.add( "-v" );
 
 				Process* clangVersionCheck = process_create( &args, NULL );
 				defer( process_destroy( clangVersionCheck ) );
@@ -1884,12 +1884,12 @@ int main( int argc, char** argv ) {
 				printf( "Downloading Clang (please wait) ...\n" );
 
 				Array<const char*> args;
-				array_reserve( &args, 4 );
-				array_add( &args, "curl" );
-				array_add( &args, "-o" );
-				array_add( &args, "temp\\clang_installer.exe" );
-				array_add( &args, "-L" );
-				array_add( &args, tprintf( "https://github.com/llvm/llvm-project/releases/download/llvmorg-%s/%s", CLANG_VERSION, clangInstallerFilename ) );
+				args.reserve( 4 );
+				args.add( "curl" );
+				args.add( "-o" );
+				args.add( "temp\\clang_installer.exe" );
+				args.add( "-L" );
+				args.add( tprintf( "https://github.com/llvm/llvm-project/releases/download/llvmorg-%s/%s", CLANG_VERSION, clangInstallerFilename ) );
 
 				s32 exitCode = RunProc( &args, NULL, false, true );
 
@@ -1916,13 +1916,13 @@ int main( int argc, char** argv ) {
 				// set clang installer command line arguments
 				// taken from: https://discourse.llvm.org/t/using-clang-windows-installer-from-command-line/49698/2 which references https://nsis.sourceforge.io/Docs/Chapter3.html#installerusagecommon
 				Array<const char*> args;
-				array_reserve( &args, 4 );
-				array_add( &args, ".\\temp\\clang_installer.exe" );
-				array_add( &args, "/S" );		// install in silent mode
-				array_add( &args, tprintf( "/D=%s\\%s", paths_get_app_path(), clangInstallFolder ) );	// set the install directory, absolute paths only
+				args.reserve( 4 );
+				args.add( ".\\temp\\clang_installer.exe" );
+				args.add( "/S" );		// install in silent mode
+				args.add( tprintf( "/D=%s\\%s", paths_get_app_path(), clangInstallFolder ) );	// set the install directory, absolute paths only
 
 				Array<const char*> envVars;
-				array_add( &envVars, "__compat_layer=RunAsInvoker" );	// this tricks the subprocess into thinking we are running with elevation
+				envVars.add( "__compat_layer=RunAsInvoker" );	// this tricks the subprocess into thinking we are running with elevation
 
 				s32 exitCode = RunProc( &args, &envVars );
 

@@ -49,9 +49,8 @@ const T& StaticArray<T, N>::operator[]( const u64 index ) const {
 }
 
 template<class T, u64 N>
-void array_zero( StaticArray<T, N>* array ) {
-	assert( array );
-	memset( array->data, 0, N * sizeof( T ) );
+void StaticArray<T, N>::zero() {
+	memset( data, 0, N * sizeof( T ) );
 }
 
 
@@ -81,12 +80,61 @@ Array<T>::~Array() {
 
 template<class T>
 Array<T>::Array( const Array<T>& other ) {
-	array_copy( this, other );
+	copy( this, other );
+}
+
+template<class T>
+void Array<T>::copy( const Array<T>* src ) {
+	resize( src->count );
+	memcpy( data, src->data, src->count * sizeof( T ) );
+}
+
+template<class T>
+void Array<T>::add( const T& element ) {
+	add_range( &element, 1 );
+}
+
+template<class T>
+void Array<T>::add_range( const T* ptr, const u64 num_items ) {
+	reserve( count + num_items );
+	memcpy( data + count, ptr, num_items * sizeof( T ) );
+	count += num_items;
+}
+
+template<class T>
+inline void Array<T>::remove_at( const u64 index ) {
+	assert( index < count );
+	memcpy( data + index, data + index + 1, ( count - index ) * sizeof( T ) );
+	count--;
+}
+
+template<class T>
+void Array<T>::resize( const u64 num_items ) {
+	reserve( num_items );
+	count = num_items;
+}
+
+template<class T>
+void Array<T>::reserve( const u64 bytes ) {
+	if ( bytes > alloced ) {
+		alloced = next_po2_up( bytes );
+		data = cast( T* ) mem_realloc( data, alloced * sizeof( T ) );
+	}
+}
+
+template<class T>
+void Array<T>::reset() {
+	count = 0;
+}
+
+template<class T>
+void Array<T>::zero() {
+	memset( data, 0, alloced * sizeof( T ) );
 }
 
 template<class T>
 Array<T>& Array<T>::operator=( const Array<T>& other ) {
-	array_copy( this, &other );
+	copy( this, &other );
 	return *this;
 }
 
@@ -100,63 +148,4 @@ template<class T>
 const T& Array<T>::operator[]( const u64 index ) const {
 	assert( index < count );
 	return data[index];
-}
-
-template<class T>
-void array_copy( Array<T>* dst, const Array<T>* src ) {
-	array_resize( dst, src->count );
-	memcpy( dst->data, src->data, src->count * sizeof( T ) );
-}
-
-template<class T>
-void array_add( Array<T>* array, const T& element ) {
-	array_add_range( array, &element, 1 );
-}
-
-void array_add( Array<const char*>* array, const char* element ) {
-	array_reserve( array, array->count + 1 );
-	array->data[array->count++] = element;
-}
-
-void array_add( Array<const wchar_t*>* array, const wchar_t* element ) {
-	array_reserve( array, array->count + 1 );
-	array->data[array->count++] = element;
-}
-
-template<class T>
-void array_add_range( Array<T>* array, const T* ptr, const u64 count ) {
-	array_reserve( array, array->count + count );
-	memcpy( array->data + array->count, ptr, count * sizeof( T ) );
-	array->count += count;
-}
-
-template<class T>
-inline void array_remove_at( Array<T>* array, const u64 index ) {
-	assert( index < array->count );
-	memcpy( array->data + index, array->data + index + 1, ( array->count - index ) * sizeof( T ) );
-	array->count--;
-}
-
-template<class T>
-void array_resize( Array<T>* array, const u64 count ) {
-	array_reserve( array, count );
-	array->count = count;
-}
-
-template<class T>
-void array_reserve( Array<T>* array, const u64 count ) {
-	if ( count > array->alloced ) {
-		array->alloced = next_po2_up( count );
-		array->data = cast( T* ) mem_realloc( array->data, array->alloced * sizeof( T ) );
-	}
-}
-
-template<class T>
-void array_reset( Array<T>* array ) {
-	array->count = 0;
-}
-
-template<class T>
-void array_zero( Array<T>* array ) {
-	memset( array->data, 0, array->alloced * sizeof( T ) );
 }

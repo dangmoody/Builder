@@ -35,13 +35,9 @@ static void core_init_platform() {
 	HANDLE process = GetCurrentProcess();
 
 	SymInitialize( process, NULL, TRUE );
-
-	paths_init();
 }
 
 static void core_shutdown_platform() {
-	paths_shutdown();
-
 	HANDLE process = GetCurrentProcess();
 
 	SymCleanup( process );

@@ -13,11 +13,6 @@ Proprietary and confidential.
 
 #pragma once
 
-struct Paths;
-
-void		paths_init();
-void		paths_shutdown();
-
 // Returns the absolute path of where the current program is running from.
 const char*	paths_get_app_path();
 

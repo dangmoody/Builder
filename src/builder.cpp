@@ -35,7 +35,7 @@ Proprietary and confidential.
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
 	BUILDER_VERSION_MINOR	= 4,
-	BUILDER_VERSION_PATCH	= 0,
+	BUILDER_VERSION_PATCH	= 1,
 };
 
 #define ARG_HELP_SHORT		"-h"
@@ -642,22 +642,23 @@ static void GetAllSubfolders_r( const char* basePath, const char* folder, Array<
 static void GetAllIncludedFiles( const BuildConfig* config, const char* inputFilePath, const bool8 verbose, Array<const char*>* outBuildInfoFiles ) {
 	outBuildInfoFiles->reset();
 
-	outBuildInfoFiles->add_range( config->source_files.data(), config->source_files.size() );
+	outBuildInfoFiles->resize( config->source_files.size() );
+
+	For ( u64, sourceFileIndex, 0, outBuildInfoFiles->count ) {
+		( *outBuildInfoFiles )[sourceFileIndex] = tprintf( "%s\\%s", inputFilePath, config->source_files[sourceFileIndex] );
+	}
 
 	// for each file, open it and get every include inside it
 	// then go through _those_ included files
 	For ( u64, sourceFileIndex, 0, outBuildInfoFiles->count ) {
 		const char* sourceFile = ( *outBuildInfoFiles )[sourceFileIndex];
-		const char* sourceFileWithInputPath = tprintf( "%s\\%s", inputFilePath, sourceFile );
 
-		( *outBuildInfoFiles )[sourceFileIndex] = sourceFile;
-
-		const char* sourceFilePath = paths_remove_file_from_path( sourceFileWithInputPath );
-		const char* sourceFileNoPath = paths_remove_path_from_file( sourceFileWithInputPath );
+		const char* sourceFilePath = paths_remove_file_from_path( sourceFile );
+		const char* sourceFileNoPath = paths_remove_path_from_file( sourceFile );
 
 		char* fileBuffer = NULL;
 		u64 fileLength = 0;
-		bool8 read = file_read_entire( sourceFileWithInputPath, &fileBuffer, &fileLength );
+		bool8 read = file_read_entire( sourceFile, &fileBuffer, &fileLength );
 
 		if ( !read ) {
 			if ( verbose ) {
@@ -668,17 +669,32 @@ static void GetAllIncludedFiles( const BuildConfig* config, const char* inputFil
 
 		defer( file_free_buffer( &fileBuffer ) );
 
-		For ( u64, fileOffset, 0, fileLength ) {
-			if ( string_starts_with( fileBuffer + fileOffset, "#include" ) ) {
-				fileOffset += strlen( "#include" );
+		char* seek = fileBuffer;
 
-				while ( fileBuffer[fileOffset] == ' ' ) {
-					fileOffset++;
+		while ( *seek ) {
+			// ignore includes that are commented out
+			if ( string_starts_with( seek, "//" ) ) {
+				seek += 2;	// skip past comment
+
+				while ( *seek == ' ' ) {
+					seek++;
 				}
 
-				if ( fileBuffer[fileOffset] == '"' ) {
+				if ( string_starts_with( seek, "#include" ) ) {
+					seek += strlen( "#include" );
+				}
+			}
+
+			if ( string_starts_with( seek, "#include" ) ) {
+				seek += strlen( "#include" );
+
+				while ( *seek == ' ' ) {
+					seek++;
+				}
+
+				if ( *seek == '"' ) {
 					// "local" include, so scan from where we are
-					const char* includeStart = fileBuffer + fileOffset;
+					const char* includeStart = seek;
 					includeStart++;
 
 					const char* includeEnd = strchr( includeStart, '"' );
@@ -690,7 +706,7 @@ static void GetAllIncludedFiles( const BuildConfig* config, const char* inputFil
 					strncpy( filename, includeStart, filenameLength * sizeof( char ) );
 					filename[filenameLength - 1] = 0;
 
-					filename = tprintf( "%s\\%s", paths_remove_file_from_path( sourceFile ), filename );
+					filename = tprintf( "%s\\%s", sourceFilePath, filename );
 
 					bool8 found = false;
 					For ( u64, fileIndex, 0, outBuildInfoFiles->count ) {
@@ -703,9 +719,9 @@ static void GetAllIncludedFiles( const BuildConfig* config, const char* inputFil
 					if ( !found ) {
 						outBuildInfoFiles->add( filename );
 					}
-				} else if ( fileBuffer[fileOffset] == '<' ) {
+				} else if ( *seek == '<' ) {
 					// "external" include, so scan all the external include folders that we know about
-					const char* includeStart = fileBuffer + fileOffset;
+					const char* includeStart = seek;
 					includeStart++;
 
 					const char* includeEnd = strchr( includeStart, '>' );
@@ -749,14 +765,7 @@ static void GetAllIncludedFiles( const BuildConfig* config, const char* inputFil
 				}
 			}
 
-			const char* lineEnd = strchr( fileBuffer + fileOffset, '\n' );
-			if ( !lineEnd ) lineEnd = strstr( fileBuffer + fileOffset, "\r\n" );
-			if ( !lineEnd ) lineEnd = fileBuffer + fileOffset;
-
-			u64 fileLineLength = cast( u64 ) lineEnd - cast( u64 ) ( fileBuffer + fileOffset );
-			fileLineLength = maxull( fileLineLength, 1ULL );	// TODO(DM): this line is hiding a bug in the parser - find the bug
-
-			fileOffset += fileLineLength;
+			seek += 1;
 		}
 	}
 }
@@ -823,10 +832,6 @@ static void SerializeBuildInfo( File* file, const std::vector<BuildConfig>& conf
 
 			For ( u64, buildInfoFileIndex, 0, buildInfoFiles.count ) {
 				const char* buildInfoFilename = buildInfoFiles[buildInfoFileIndex];
-
-				if ( !paths_is_path_absolute( buildInfoFilename ) ) {
-					buildInfoFilename = tprintf( "%s\\%s", inputFilePath, buildInfoFilename );
-				}
 
 				FileInfo fileInfo;
 				File foundFile = file_find_first( buildInfoFilename, &fileInfo );
@@ -1244,7 +1249,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 	}
 
 	const char* solutionPath = tprintf( "%s\\%s.sln", visualStudioProjectFilesPath, solution->name );
-	solutionPath = paths_canonicalise_path( solutionPath );
+	solutionPath = paths_canonicalise_path( paths_fix_slashes( solutionPath ) );
 
 	// give each project a guid
 	Array<const char*> projectGuids;
@@ -1429,7 +1434,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 					char* pathFromSolutionToCode = cast( char* ) mem_temp_alloc( MAX_PATH * sizeof( char ) );
 					memset( pathFromSolutionToCode, 0, MAX_PATH * sizeof( char ) );
-					PathRelativePathTo( pathFromSolutionToCode, solutionPath, FILE_ATTRIBUTE_NORMAL, inputFilename, FILE_ATTRIBUTE_DIRECTORY );
+					PathRelativePathTo( pathFromSolutionToCode, solutionPath, FILE_ATTRIBUTE_NORMAL, paths_fix_slashes( inputFilename ), FILE_ATTRIBUTE_DIRECTORY );
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcast-qual"

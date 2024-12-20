@@ -91,8 +91,10 @@ File file_open( const char* filename ) {
 	return open_file_internal( filename, GENERIC_READ | GENERIC_WRITE, OPEN_EXISTING );
 }
 
-File file_open_or_create( const char* filename ) {
-	return open_or_create_file_internal( filename, GENERIC_READ | GENERIC_WRITE, CREATE_NEW );
+File file_open_or_create( const char* filename, const bool8 keep_content ) {
+	DWORD creation_disposition = ( keep_content ) ? CREATE_NEW : CREATE_ALWAYS;
+
+	return open_or_create_file_internal( filename, GENERIC_READ | GENERIC_WRITE, creation_disposition );
 }
 
 bool8 file_close( File* file ) {

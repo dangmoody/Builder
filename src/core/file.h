@@ -41,7 +41,7 @@ struct FileInfo {
 File	file_open( const char* filename );
 
 // If the file exists then opens it for reading and writing, otherwise creates it and then opens it.
-File	file_open_or_create( const char* filename );
+File	file_open_or_create( const char* filename, const bool8 keep_content = false );
 
 // Closes the file.
 bool8	file_close( File* file );

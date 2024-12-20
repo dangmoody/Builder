@@ -1,3 +1,12 @@
+v0.4.1, <RELEASE DATE HERE>:
+
+* Fixed a bug where files that get overwritten did not get wiped, leaving lots of trailing garbage content.
+* Fixed a bug where includes that were commented out were being included in the .build_info file.  You actually don't want this to happen
+	* The file name/path could be wrong, and the file could not exist.
+	* Because this include is ultimately not included in the build, Builder shouldn't care about it.
+
+----------------------------------------------------------------
+
 v0.4.0, 18/12/2024:
 
 * Added BuildConfig::depends_on.

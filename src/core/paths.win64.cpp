@@ -119,13 +119,28 @@ bool8 paths_is_path_absolute( const char* path ) {
 }
 
 const char* paths_canonicalise_path( const char* path ) {
-	u64 maxPathLength = strlen( path ) * sizeof( char );
+	u64 max_path_length = strlen( path ) * sizeof( char );
 
-	char* result = cast( char* ) mem_temp_alloc( maxPathLength );
-	memset( result, 0, maxPathLength );
+	char* result = cast( char* ) mem_temp_alloc( max_path_length );
+	memset( result, 0, max_path_length );
 
 	BOOL success = PathCanonicalizeA( result, path );
 	assert( success );
+
+	return result;
+}
+
+const char* paths_fix_slashes( const char* path ) {
+	u64 path_length = strlen( path );
+	char* result = cast( char* ) mem_temp_alloc( ( path_length + 1 ) * sizeof( char ) );
+	memcpy( result, path, path_length * sizeof( char ) );
+	result[path_length] = 0;
+
+	For ( u64, i, 0, path_length ) {
+		if ( result[i] == '/' ) {
+			result[i] = '\\';
+		}
+	}
 
 	return result;
 }

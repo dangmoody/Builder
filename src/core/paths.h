@@ -33,3 +33,5 @@ const char*	paths_remove_file_extension( const char* filename );
 bool8		paths_is_path_absolute( const char* path );
 
 const char*	paths_canonicalise_path( const char* path );
+
+const char*	paths_fix_slashes( const char* path );

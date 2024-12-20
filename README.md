@@ -62,6 +62,8 @@ If you don't write `set_builder_options` then Builder can still build your progr
 * The program name will be the name of the source file you specified, except it will end with `.exe` instead of `.cpp`.
 * The program will be put in the same folder as the source file.
 
+Run `builder -h` or `builder --help` for help in the command line.
+
 ### Configs
 
 Builder supports building different "configs" in the way you may know them from Visual Studio.  A config is name that's applied to a series of build settings.

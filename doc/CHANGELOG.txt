@@ -7,8 +7,8 @@ v0.5.0, 03/01/2024:
 * User config build context now #defines _CRT_SECURE_NO_WARNINGS for you by default.
 	* This means you can now call functions that are banned by that #define if you need to, for some reason.
 * Fixed a bug where files that get overwritten did not get wiped, leaving lots of trailing garbage content.
-* Fixed a bug where includes that were commented out were being included in the .build_info file.  You actually don't want this to happen
-	* The file name/path could be wrong, and the file could not exist.
+* Fixed a bug where includes that were commented out were being included in the .build_info file.
+	* You actually don't want this to happen.  The file name/path could be wrong, and the file could not exist.
 	* Because this include is ultimately not included in the build, Builder shouldn't care about it.
 * Core: Fixed a bug where paths_canonicalise_path() didn't call paths_fix_slashes(), but it needed to.
 	* Turns out the WinAPI function PathCanonicalize() requires all slashes to be consistent, otherwise it will silently return incorrect results.

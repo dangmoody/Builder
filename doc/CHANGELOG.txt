@@ -1,9 +1,17 @@
-v0.4.1, <RELEASE DATE HERE>:
+v0.5.0, 03/01/2024:
 
+* BuildConfig::source_files now supports wildcards.
+	* This will make adding source files to your projects a lot less tedious, since you now won't need to tell Builder about every individual new source file that you add.
+* BuildConfig::additional_includes and BuildConfig::additional_lib_paths are now arrays of std::strings.
+	* This was done because sometimes you want to add something to these arrays that is queried dynamically at runtime (E.G.: based off an environment variable via a call to getenv()) and the memory would otherwise get lost.
+* User config build context now #defines _CRT_SECURE_NO_WARNINGS for you by default.
+	* This means you can now call functions that are banned by that #define if you need to, for some reason.
 * Fixed a bug where files that get overwritten did not get wiped, leaving lots of trailing garbage content.
 * Fixed a bug where includes that were commented out were being included in the .build_info file.  You actually don't want this to happen
 	* The file name/path could be wrong, and the file could not exist.
 	* Because this include is ultimately not included in the build, Builder shouldn't care about it.
+* Core: Fixed a bug where paths_canonicalise_path() didn't call paths_fix_slashes(), but it needed to.
+	* Turns out the WinAPI function PathCanonicalize() requires all slashes to be consistent, otherwise it will silently return incorrect results.
 
 ----------------------------------------------------------------
 

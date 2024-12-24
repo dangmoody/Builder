@@ -53,10 +53,10 @@ struct BuildConfig {
 	std::vector<const char*>	defines;
 
 	// Additional include paths to set for Clang.
-	std::vector<const char*>	additional_includes;
+	std::vector<std::string>	additional_includes;
 
 	// Additional library paths to set for Clang.
-	std::vector<const char*>	additional_lib_paths;
+	std::vector<std::string>	additional_lib_paths;
 
 	// Additional libraries to set for Clang.
 	std::vector<const char*>	additional_libs;

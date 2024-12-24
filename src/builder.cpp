@@ -244,11 +244,11 @@ static s32 BuildEXE( buildContext_t* context ) {
 	}
 
 	For ( u32, i, 0, context->config.additional_includes.size() ) {
-		args.add( tprintf( "-I%s", context->config.additional_includes[i] ) );
+		args.add( tprintf( "-I%s", context->config.additional_includes[i].c_str() ) );
 	}
 
 	For ( u32, i, 0, context->config.additional_lib_paths.size() ) {
-		args.add( tprintf( "-L%s", context->config.additional_lib_paths[i] ) );
+		args.add( tprintf( "-L%s", context->config.additional_lib_paths[i].c_str() ) );
 	}
 
 	For ( u32, i, 0, context->config.additional_libs.size() ) {
@@ -327,11 +327,11 @@ static s32 BuildDynamicLibrary( buildContext_t* context ) {
 	}
 
 	For ( u32, i, 0, context->config.additional_includes.size() ) {
-		args.add( tprintf( "-I%s", context->config.additional_includes[i] ) );
+		args.add( tprintf( "-I%s", context->config.additional_includes[i].c_str() ) );
 	}
 
 	For ( u32, i, 0, context->config.additional_lib_paths.size() ) {
-		args.add( tprintf( "-L%s", context->config.additional_lib_paths[i] ) );
+		args.add( tprintf( "-L%s", context->config.additional_lib_paths[i].c_str() ) );
 	}
 
 	For ( u32, i, 0, context->config.additional_libs.size() ) {
@@ -431,7 +431,7 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 		}
 
 		For ( u32, i, 0, context->config.additional_includes.size() ) {
-			args.add( tprintf( "-I%s", context->config.additional_includes[i] ) );
+			args.add( tprintf( "-I%s", context->config.additional_includes[i].c_str() ) );
 		}
 
 		// must come before ignored warnings
@@ -563,10 +563,18 @@ static const char* TryFindFile_r( const char* filename, const char* folder ) {
 
 static void FindAllFilesInFolder_r( const char* basePath, const char* folder, const char* fileExtension, const bool8 recursive, Array<const char*>* outFiles ) {
 	const char* fullSearchPath = NULL;
-	if ( string_ends_with( folder, "\\" ) || string_ends_with( folder, "/" ) ) {
-		fullSearchPath = tprintf( "%s\\%s*", basePath, folder );
+	if ( string_ends_with( basePath, "\\" ) || string_ends_with( basePath, "/" ) ) {
+		if ( folder ) {
+			fullSearchPath = tprintf( "%s%s*", basePath, folder );
+		} else {
+			fullSearchPath = tprintf( "%s*", basePath );
+		}
 	} else {
-		fullSearchPath = tprintf( "%s\\%s\\*", basePath, folder );
+		if ( folder ) {
+			fullSearchPath = tprintf( "%s\\%s\\*", basePath, folder );
+		} else {
+			fullSearchPath = tprintf( "%s\\*", basePath );
+		}
 	}
 
 	FileInfo fileInfo;
@@ -593,6 +601,84 @@ static void FindAllFilesInFolder_r( const char* basePath, const char* folder, co
 			outFiles->add( fullName );
 		}
 	} while ( file_find_next( &file, &fileInfo ) );
+}
+
+static void GetAllSourceFiles_r( const char* basePath, const char* folder, const char* searchFilter, std::vector<const char*>* outSourceFiles ) {
+	// find all files in current directory
+	{
+		const char* fullSearchPath = NULL;
+		if ( folder ) {
+			fullSearchPath = tprintf( "%s\\%s\\%s", basePath, folder, searchFilter );
+		} else {
+			fullSearchPath = tprintf( "%s\\%s", basePath, searchFilter );
+		}
+
+		FileInfo fileInfo;
+		File firstFile = file_find_first( fullSearchPath, &fileInfo );
+
+		if ( firstFile.ptr != INVALID_HANDLE_VALUE ) {
+			do {
+				if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) ) {
+					continue;
+				}
+
+				/*if ( fileInfo.is_directory ) {
+					const char* subfolder = NULL;
+					if ( folder ) {
+						subfolder = tprintf( "%s\\%s", folder, fileInfo.filename );
+					} else {
+						subfolder = tprintf( "%s", fileInfo.filename );
+					}
+
+					GetAllSourceFiles_r( basePath, subfolder, searchFilter, outSourceFiles );
+				} else*/
+				{
+					const char* fullName = NULL;
+					if ( folder ) {
+						fullName = tprintf( "%s\\%s\\%s", basePath, folder, fileInfo.filename );
+					} else {
+						fullName = tprintf( "%s\\%s", basePath, fileInfo.filename );
+					}
+
+					fullName = paths_canonicalise_path( fullName );
+
+					outSourceFiles->push_back( fullName );
+				}
+			} while ( file_find_next( &firstFile, &fileInfo ) );
+		}
+	}
+
+	// now go through all other directories
+	{
+		const char* fullSearchPath = NULL;
+		if ( folder ) {
+			fullSearchPath = tprintf( "%s\\%s\\*", basePath, folder );
+		} else {
+			fullSearchPath = tprintf( "%s\\*", basePath );
+		}
+
+		FileInfo fileInfo;
+		File firstFile = file_find_first( fullSearchPath, &fileInfo );
+
+		if ( firstFile.ptr != INVALID_HANDLE_VALUE ) {
+			do {
+				if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) ) {
+					continue;
+				}
+
+				if ( fileInfo.is_directory ) {
+					const char* subfolder = NULL;
+					if ( folder ) {
+						subfolder = tprintf( "%s\\%s", folder, fileInfo.filename );
+					} else {
+						subfolder = tprintf( "%s", fileInfo.filename );
+					}
+
+					GetAllSourceFiles_r( basePath, subfolder, searchFilter, outSourceFiles );
+				}
+			} while ( file_find_next( &firstFile, &fileInfo ) );
+		}
+	}
 }
 
 static void GetAllSubfolders_r( const char* basePath, const char* folder, Array<const char*>* outSubfolders ) {
@@ -736,7 +822,7 @@ static void GetAllIncludedFiles( const BuildConfig* config, const char* inputFil
 					const char* fullFilename = NULL;
 
 					For ( u64, includePathIndex, 0, config->additional_includes.size() ) {
-						const char* includePath = config->additional_includes[includePathIndex];
+						const char* includePath = config->additional_includes[includePathIndex].c_str();
 
 						fullFilename = TryFindFile_r( filename, includePath );
 
@@ -783,6 +869,15 @@ static void SerializeCStringArray( File* file, const std::vector<const char*>& a
 	}
 }
 
+static void SerializeSTDStringArray( File* file, const std::vector<std::string>& array, const char* name ) {
+	CHECK_WRITE( file_write( file, tprintf( "%s\n", name ) ) );
+	SerializeU64( file, array.size() );
+
+	For ( u64, i, 0, array.size() ) {
+		CHECK_WRITE( file_write( file, tprintf( "%s\n", array[i].c_str() ) ) );
+	}
+}
+
 static void SerializeBuildInfo( File* file, const std::vector<BuildConfig>& configs, const char* inputFilePath, const char* userConfigSourceFilename, const char* userConfigDLLFilename, const bool8 verbose ) {
 	CHECK_WRITE( file_write( file, tprintf( "build_source_file: %s\n", userConfigSourceFilename ) ) );
 	CHECK_WRITE( file_write( file, tprintf( "DLL: %s\n", userConfigDLLFilename ) ) );
@@ -809,8 +904,8 @@ static void SerializeBuildInfo( File* file, const std::vector<BuildConfig>& conf
 
 		SerializeCStringArray( file, config->source_files, "source_files" );
 		SerializeCStringArray( file, config->defines, "defines" );
-		SerializeCStringArray( file, config->additional_includes, "additional_includes" );
-		SerializeCStringArray( file, config->additional_lib_paths, "additional_lib_paths" );
+		SerializeSTDStringArray( file, config->additional_includes, "additional_includes" );
+		SerializeSTDStringArray( file, config->additional_lib_paths, "additional_lib_paths" );
 		SerializeCStringArray( file, config->additional_libs, "additional_libs" );
 		SerializeCStringArray( file, config->ignore_warnings, "ignore_warnings" );
 
@@ -954,6 +1049,19 @@ static std::vector<const char*> Parser_ParseCStringArray( parser_t* parser ) {
 	return result;
 }
 
+static std::vector<std::string> Parser_ParseSTDStringArray( parser_t* parser ) {
+	Parser_SkipPast( parser, '\n' );	// skip the name of the array
+
+	u64 arrayCount = Parser_ParseU64( parser );
+	std::vector<std::string> result( arrayCount );
+
+	For ( u64, i, 0, result.size() ) {
+		result[i] = Parser_ParseLine( parser );
+	}
+
+	return result;
+}
+
 struct buildInfoFileData_t {
 	std::vector<buildInfoConfig_t>	configs;
 	std::string						userConfigSourceFilename;
@@ -1001,8 +1109,8 @@ static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, buildInfoFile
 
 				config->source_files = Parser_ParseCStringArray( &parser );
 				config->defines = Parser_ParseCStringArray( &parser );
-				config->additional_includes = Parser_ParseCStringArray( &parser );
-				config->additional_lib_paths = Parser_ParseCStringArray( &parser );
+				config->additional_includes = Parser_ParseSTDStringArray( &parser );
+				config->additional_lib_paths = Parser_ParseSTDStringArray( &parser );
 				config->additional_libs = Parser_ParseCStringArray( &parser );
 				config->ignore_warnings = Parser_ParseCStringArray( &parser );
 
@@ -1073,11 +1181,25 @@ static const char* BuildConfig_ToString( const BuildConfig* config ) {
 
 	string_builder_appendf( &builder, "%s: {\n", config->name.c_str() );
 
-	auto PrintArray = [&builder]( const char* name, const std::vector<const char*>& array ) {
+	auto PrintCStringArray = [&builder]( const char* name, const std::vector<const char*>& array ) {
 		if ( array.size() > 0 ) {
 			string_builder_appendf( &builder, "\t%s: { ", name );
 			For ( u64, i, 0, array.size() ) {
 				string_builder_appendf( &builder, "%s", array[i] );
+
+				if ( i < array.size() - 1 ) {
+					string_builder_appendf( &builder, ", " );
+				}
+			}
+			string_builder_appendf( &builder, " }\n" );
+		}
+	};
+
+	auto PrintSTDStringArray = [&builder]( const char* name, const std::vector<std::string>& array ) {
+		if ( array.size() > 0 ) {
+			string_builder_appendf( &builder, "\t%s: { ", name );
+			For ( u64, i, 0, array.size() ) {
+				string_builder_appendf( &builder, "%s", array[i].c_str() );
 
 				if ( i < array.size() - 1 ) {
 					string_builder_appendf( &builder, ", " );
@@ -1103,12 +1225,12 @@ static const char* BuildConfig_ToString( const BuildConfig* config ) {
 		string_builder_appendf( &builder, " }\n" );
 	}
 
-	PrintArray( "source_files", config->source_files );
-	PrintArray( "defines", config->defines );
-	PrintArray( "additional_includes", config->additional_includes );
-	PrintArray( "additional_lib_paths", config->additional_lib_paths );
-	PrintArray( "additional_libs", config->additional_libs );
-	PrintArray( "ignore_warnings", config->ignore_warnings );
+	PrintCStringArray( "source_files", config->source_files );
+	PrintCStringArray( "defines", config->defines );
+	PrintSTDStringArray( "additional_includes", config->additional_includes );
+	PrintSTDStringArray( "additional_lib_paths", config->additional_lib_paths );
+	PrintCStringArray( "additional_libs", config->additional_libs );
+	PrintCStringArray( "ignore_warnings", config->ignore_warnings );
 
 	PrintField( "binary_name", config->binary_name.c_str() );
 	PrintField( "binary_folder", config->binary_folder.c_str() );
@@ -1249,7 +1371,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 	}
 
 	const char* solutionPath = tprintf( "%s\\%s.sln", visualStudioProjectFilesPath, solution->name );
-	solutionPath = paths_canonicalise_path( paths_fix_slashes( solutionPath ) );
+	solutionPath = paths_canonicalise_path( solutionPath );
 
 	// give each project a guid
 	Array<const char*> projectGuids;
@@ -1416,7 +1538,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 					// external include paths
 					CHECK_WRITE( file_write( &vcxproj, "\t\t<ExternalIncludePath>" ) );
 					For ( u64, includePathIndex, 0, config->options.additional_includes.size() ) {
-						CHECK_WRITE( file_write( &vcxproj, tprintf( "%s;", config->options.additional_includes[includePathIndex] ) ) );
+						CHECK_WRITE( file_write( &vcxproj, tprintf( "%s;", config->options.additional_includes[includePathIndex].c_str() ) ) );
 					}
 					CHECK_WRITE( file_write( &vcxproj, "$(ExternalIncludePath)" ) );
 					CHECK_WRITE( file_write( &vcxproj, "</ExternalIncludePath>\n" ) );
@@ -1424,7 +1546,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 					// external library paths
 					CHECK_WRITE( file_write( &vcxproj, "\t\t<LibraryPath>" ) );
 					For ( u64, libPathIndex, 0, config->options.additional_lib_paths.size() ) {
-						CHECK_WRITE( file_write( &vcxproj, tprintf( "%s;", config->options.additional_lib_paths[libPathIndex] ) ) );
+						CHECK_WRITE( file_write( &vcxproj, tprintf( "%s;", config->options.additional_lib_paths[libPathIndex].c_str() ) ) );
 					}
 					CHECK_WRITE( file_write( &vcxproj, "$(LibraryPath)" ) );
 					CHECK_WRITE( file_write( &vcxproj, "</LibraryPath>\n" ) );
@@ -2152,7 +2274,10 @@ int main( int argc, char** argv ) {
 
 		userConfigBuildContext.config.binary_name = tprintf( "%s.dll", paths_remove_path_from_file( paths_remove_file_extension( userConfigSourceFilename ) ) );
 		userConfigBuildContext.config.binary_folder = dotBuilderFolder;
-		userConfigBuildContext.config.defines.push_back( "BUILDER_DOING_USER_CONFIG_BUILD" );
+		userConfigBuildContext.config.defines = {
+			"_CRT_SECURE_NO_WARNINGS",
+			"BUILDER_DOING_USER_CONFIG_BUILD"
+		};
 
 		// this is needed because this tells the compiler what to set _ITERATOR_DEBUG_LEVEL to
 		// ABI compatibility will be broken if this is not the same between all binaries
@@ -2401,7 +2526,7 @@ int main( int argc, char** argv ) {
 
 		// make all non-absolute additional include paths relative to the build source file
 		For ( u64, includeIndex, 0, context.config.additional_includes.size() ) {
-			const char* additionalInclude = context.config.additional_includes[includeIndex];
+			const char* additionalInclude = context.config.additional_includes[includeIndex].c_str();
 
 			if ( paths_is_path_absolute( additionalInclude ) ) {
 				context.config.additional_includes[includeIndex] = additionalInclude;
@@ -2412,7 +2537,7 @@ int main( int argc, char** argv ) {
 
 		// make all non-absolute additional library paths relative to the build source file
 		For ( u64, libPathIndex, 0, context.config.additional_lib_paths.size() ) {
-			const char* additionalLibPath = context.config.additional_lib_paths[libPathIndex];
+			const char* additionalLibPath = context.config.additional_lib_paths[libPathIndex].c_str();
 
 			if ( paths_is_path_absolute( additionalLibPath ) ) {
 				context.config.additional_lib_paths[libPathIndex] = additionalLibPath;
@@ -2433,51 +2558,7 @@ int main( int argc, char** argv ) {
 			For ( u64, sourceFileIndex, 0, context.config.source_files.size() ) {
 				const char* sourceFile = context.config.source_files[sourceFileIndex];
 
-				bool8 inputFileIsSameAsSourceFile = string_equals( sourceFile, inputFile );
-
-				const char* fileSearchPath = NULL;
-				if ( inputFileIsSameAsSourceFile ) {
-					const char* sourceFileNoPath = paths_remove_path_from_file( sourceFile );
-
-					fileSearchPath = tprintf( "%s\\%s", inputFilePath, sourceFileNoPath );
-				} else {
-					fileSearchPath = tprintf( "%s\\%s", inputFilePath, sourceFile );
-				}
-
-				FileInfo fileInfo;
-				File firstFile = file_find_first( fileSearchPath, &fileInfo );
-
-				if ( firstFile.ptr == INVALID_HANDLE_VALUE ) {
-					error( "Source file \"%s\" can't be found.  Is it correct?\n", sourceFile );
-					return 1;
-				}
-
-				do {
-					if ( string_equals( sourceFile, "." ) || string_equals( sourceFile, ".." ) ) {
-						continue;
-					}
-
-					const char* foundSourceFile = NULL;
-
-					if ( PathHasSlash( sourceFile ) ) {
-						const char* localPath = paths_remove_file_from_path( sourceFile );
-
-						// TODO(DM): 25/10/2024: this is messy and needs tidying up
-						if ( string_equals( localPath, sourceFile ) ) {
-							foundSourceFile = tprintf( "%s\\%s", localPath, fileInfo.filename );
-						} else {
-							if ( inputFileIsSameAsSourceFile ) {
-								foundSourceFile = tprintf( "%s\\%s", inputFilePath, fileInfo.filename );
-							} else {
-								foundSourceFile = tprintf( "%s\\%s\\%s", inputFilePath, localPath, fileInfo.filename );
-							}
-						}
-					} else {
-						foundSourceFile = tprintf( "%s\\%s", inputFilePath, fileInfo.filename );
-					}
-
-					finalSourceFilesToBuild.push_back( foundSourceFile );
-				} while ( file_find_next( &firstFile, &fileInfo ) );
+				GetAllSourceFiles_r( inputFilePath, NULL, sourceFile, &finalSourceFilesToBuild );
 			}
 
 			context.config.source_files = finalSourceFilesToBuild;

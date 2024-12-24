@@ -633,13 +633,9 @@ static void GetAllSourceFiles_r( const char* basePath, const char* folder, const
 					GetAllSourceFiles_r( basePath, subfolder, searchFilter, outSourceFiles );
 				} else*/
 				{
-					const char* fullName = NULL;
-					if ( folder ) {
-						fullName = tprintf( "%s\\%s\\%s", basePath, folder, fileInfo.filename );
-					} else {
-						fullName = tprintf( "%s\\%s", basePath, fileInfo.filename );
-					}
+					const char* fullFolder = paths_remove_file_from_path( fullSearchPath );
 
+					const char* fullName = tprintf( "%s\\%s", fullFolder, fileInfo.filename );
 					fullName = paths_canonicalise_path( fullName );
 
 					outSourceFiles->push_back( fullName );
@@ -2325,7 +2321,7 @@ int main( int argc, char** argv ) {
 				setBuilderOptionsFunc( &options );
 
 				// if the user wants to generate a visual studio solution then do that now
-				if ( options.generate_solution && doingBuildFromSourceFile ) {
+				if ( options.generate_solution ) {
 					// make sure BuilderOptions::configs and configs from visual studio match
 					// we will need this list later for validation
 					options.configs.clear();
@@ -2429,6 +2425,10 @@ int main( int argc, char** argv ) {
 
 	For ( u64, configToBuildIndex, 0, configsToBuild.size() ) {
 		BuildConfig* config = &configsToBuild[configToBuildIndex];
+
+		if ( doingBuildFromSourceFile ) {
+			BuildConfig_AddDefaults( config );
+		}
 
 		context.config = *config;
 
@@ -2558,7 +2558,17 @@ int main( int argc, char** argv ) {
 			For ( u64, sourceFileIndex, 0, context.config.source_files.size() ) {
 				const char* sourceFile = context.config.source_files[sourceFileIndex];
 
-				GetAllSourceFiles_r( inputFilePath, NULL, sourceFile, &finalSourceFilesToBuild );
+				bool8 inputFileIsSameAsSourceFile = string_equals( sourceFile, inputFile );
+
+				const char* fileSearchPath = NULL;
+
+				if ( inputFileIsSameAsSourceFile ) {
+					const char* sourceFileNoPath = paths_remove_path_from_file( sourceFile );
+
+					GetAllSourceFiles_r( inputFilePath, NULL, sourceFileNoPath, &finalSourceFilesToBuild );
+				} else {
+					GetAllSourceFiles_r( inputFilePath, NULL, sourceFile, &finalSourceFilesToBuild );
+				}
 			}
 
 			context.config.source_files = finalSourceFilesToBuild;

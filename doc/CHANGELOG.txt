@@ -4,6 +4,8 @@ v0.5.0, 03/01/2024:
 	* This will make adding source files to your projects a lot less tedious, since you now won't need to tell Builder about every individual new source file that you add.
 * BuildConfig::additional_includes and BuildConfig::additional_lib_paths are now arrays of std::strings.
 	* This was done because sometimes you want to add something to these arrays that is queried dynamically at runtime (E.G.: based off an environment variable via a call to getenv()) and the memory would otherwise get lost.
+* Removed VisualStudioConfig::output_directory.
+	* This only existed because Builder wasn't smart enough to figure this out for you, but it is now.
 * User config build context now #defines _CRT_SECURE_NO_WARNINGS for you by default.
 	* This means you can now call functions that are banned by that #define if you need to, for some reason.
 * Fixed a bug where files that get overwritten did not get wiped, leaving lots of trailing garbage content.

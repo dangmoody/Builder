@@ -19,7 +19,7 @@ With Builder you can build your program from the same language you write your pr
 ## Installation
 
 1. Download the latest release.
-2. Extract the contents of the archive to anywhere on your computer that you like.
+2. Extract `builder.exe` and `builder.h` to anywhere on your computer that you like.  They MUST be in the same folder as each other.
 
 ## Usage
 
@@ -29,7 +29,7 @@ Instead of compiling your program like this:
 clang -std=c++20 -g -o my-program.exe -DIS_AWESOME=1 game.cpp ...
 ```
 
-Or suffering through the Visual Studio project settings or whatever you were doing before, you instead now do it like this:
+Or suffering through the Visual Studio project settings, or CMake, or whatever you were doing before, you instead now do it like this:
 
 ```cpp
 // build.cpp
@@ -106,6 +106,8 @@ builder build.cpp --config=debug
 
 The name of your config in code and the name of the config you pass via the command line MUST match exactly (case sensitive).
 
+If you only have the one config then you don't need to pass `--config=` at the command line.  Builder will know to build the only config that's there.
+
 See the `BuildConfig` struct inside `builder.h` for a full list of all the things that you can configure in your build.
 
 Builder also has other entry points:
@@ -129,7 +131,7 @@ Code example:
 BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	BuildConfig debug = {
 		.name = "debug",
-		.source_files = { "src/main.cpp" },
+		.source_files = { "../src/*.cpp" },
 		.binary_name = "test",
 		.binary_folder = "../bin/debug",
 		.optimization_level = OPTIMIZATION_LEVEL_O0,
@@ -138,7 +140,7 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 
 	BuildConfig release = {
 		.name = "release",
-		.source_files = { "src/main.cpp" },
+		.source_files = { "../src/*.cpp" },
 		.binary_name = "test",
 		.binary_folder = "../bin/release",
 		.optimization_level = OPTIMIZATION_LEVEL_O3,
@@ -151,18 +153,20 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 
 	// When this bool is true, Builder will always generate a Visual Studio solution, and it won't do a build.
 	// So if, suddenly, you decide you want to do a build without using Visual Studio, just set this to false and then pass this file to Builder.
+	// Alternatively, you could move this code into a separate .cpp file and pass that file to Builder instead when wishing to re-generate your solution.
 	options->generate_solution = true;
 
 	options->solution.name = "test-sln";
-	options->solution.path = "..";
+	options->solution.path = "../visual_studio";
 	options->solution.platforms = { "win64" };
 	options->solution.projects = {
 		{
 			.name = "test-project",
-			.source_files = { "src/*.cpp" },
+			.code_folders = { "../src/" },
+			.file_extensions = { "cpp", "h", "inl" },
 			.configs = {
-				{ debug,   { /* debugger arguments */ }, "bin/debug"   },
-				{ release, { /* debugger arguments */ }, "bin/release" },
+				{ debug,   { /* debugger arguments */ } },
+				{ release, { /* debugger arguments */ } },
 			}
 		}
 	};

@@ -2541,36 +2541,34 @@ int main( int argc, char** argv ) {
 		bool8 shouldSkipBuild = true;
 
 		// figure out if we need to even rebuild
-		{
-			// if the binary doesnt exist, we need to rebuild
-			if ( !FileExists( context.fullBinaryName ) ) {
-				shouldSkipBuild = false;
-			} else {
-				// get all the code files from the .build_info file
-				// if none of the code files have changed since we last checked then do not even try to rebuild
-				std::vector<trackedSourceFile_t> trackedSourceFiles;
+		// if the binary doesnt exist, we need to rebuild
+		if ( !FileExists( context.fullBinaryName ) ) {
+			shouldSkipBuild = false;
+		} else {
+			// otherwise get all the code files from the .build_info file
+			// if none of the code files have changed since we last checked then we do not need to rebuild
+			std::vector<trackedSourceFile_t> trackedSourceFiles;
 
-				For ( u64, i, 0, parsedBuildInfoData.configs.size() ) {
-					if ( context.config.name == parsedBuildInfoData.configs[i].config.name ) {
-						trackedSourceFiles = parsedBuildInfoData.configs[i].files;
-						break;
-					}
+			For ( u64, i, 0, parsedBuildInfoData.configs.size() ) {
+				if ( context.config.name == parsedBuildInfoData.configs[i].config.name ) {
+					trackedSourceFiles = parsedBuildInfoData.configs[i].files;
+					break;
 				}
+			}
 
-				For ( u64, i, 0, trackedSourceFiles.size() ) {
-					trackedSourceFile_t* trackedSourceFile = &trackedSourceFiles[i];
+			For ( u64, i, 0, trackedSourceFiles.size() ) {
+				trackedSourceFile_t* trackedSourceFile = &trackedSourceFiles[i];
 
-					const char* trackedSourceFileAndPath = tprintf( "%s\\%s", inputFilePath, trackedSourceFile->filename );
+				const char* trackedSourceFileAndPath = tprintf( "%s\\%s", inputFilePath, trackedSourceFile->filename );
 
-					FileInfo fileInfo = {};
-					File file = file_find_first( trackedSourceFileAndPath, &fileInfo );
+				FileInfo fileInfo = {};
+				File file = file_find_first( trackedSourceFileAndPath, &fileInfo );
 
-					assert( file.ptr != INVALID_HANDLE_VALUE );
+				assert( file.ptr != INVALID_HANDLE_VALUE );
 
-					if ( fileInfo.last_write_time != trackedSourceFile->lastWriteTime ) {
-						shouldSkipBuild = false;
-						break;
-					}
+				if ( fileInfo.last_write_time != trackedSourceFile->lastWriteTime ) {
+					shouldSkipBuild = false;
+					break;
 				}
 			}
 		}

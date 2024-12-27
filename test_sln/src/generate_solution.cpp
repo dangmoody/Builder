@@ -47,6 +47,8 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 		.additional_libs		= { "the-library.lib" },
 	};
 
+	// if you know that you only want to build with visual studio then you dont need to add the build configs like this
+	// it will happen for you automatically
 	add_build_config( options, &app_debug );
 	add_build_config( options, &app_release );
 
@@ -58,21 +60,21 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	options->solution.projects = {
 		{
 			.name = "the-library",
-			.code_folders = { "src/library/" },
+			.code_folders = { "../src/library/" },
 			.file_extensions = { "cpp" },
 			.configs = {
-				{ "debug",   library_debug,   { /* debugger arguments */ }, "bin/debug/library"   },
-				{ "release", library_release, { /* debugger arguments */ }, "bin/release/library" },
+				{ "debug",   library_debug,   { /* debugger arguments */ } },
+				{ "release", library_release, { /* debugger arguments */ } },
 			}
 		},
 
 		{
 			.name = "app",
-			.code_folders = { "src/app/" },
+			.code_folders = { "../src/app/" },
 			.file_extensions = { "cpp" },
 			.configs = {
-				{ "debug",   app_debug,   { /* debugger arguments */ }, "bin/debug/app"   },
-				{ "release", app_release, { /* debugger arguments */ }, "bin/release/app" },
+				{ "debug",   app_debug,   { /* debugger arguments */ } },
+				{ "release", app_release, { /* debugger arguments */ } },
 			}
 		}
 	};

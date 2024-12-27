@@ -16,6 +16,8 @@ if ["%config%"] NEQ ["debug"] (
 	)
 )
 
+echo Building config "%config%"...
+
 pushd %~dp0
 
 set bin_folder="bin\\win64\\"%config%

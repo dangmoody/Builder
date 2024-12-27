@@ -480,6 +480,13 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 	return exitCode;
 }
 
+static bool8 FileExists( const char* filename ) {
+	FileInfo fileInfo = {};
+	File file = file_find_first( filename, &fileInfo );
+
+	return file.ptr != INVALID_HANDLE_VALUE;
+}
+
 static void NukeFolder( const char* folder, const bool8 verbose ) {
 	const char* searchPattern = tprintf( "%s\\*", folder );
 
@@ -622,6 +629,7 @@ static void GetAllSourceFiles_r( const char* basePath, const char* folder, const
 					continue;
 				}
 
+#if 0
 				/*if ( fileInfo.is_directory ) {
 					const char* subfolder = NULL;
 					if ( folder ) {
@@ -640,6 +648,16 @@ static void GetAllSourceFiles_r( const char* basePath, const char* folder, const
 
 					outSourceFiles->push_back( fullName );
 				}
+#else
+				const char* fullName = NULL;
+				if ( folder ) {
+					fullName = tprintf( "%s\\%s", folder, fileInfo.filename );
+				} else {
+					fullName = tprintf( "%s", fileInfo.filename );
+				}
+
+				outSourceFiles->push_back( fullName );
+#endif
 			} while ( file_find_next( &firstFile, &fileInfo ) );
 		}
 	}
@@ -722,34 +740,45 @@ static void GetAllSubfolders_r( const char* basePath, const char* folder, Array<
 }
 
 static void GetAllIncludedFiles( const BuildConfig* config, const char* inputFilePath, const bool8 verbose, Array<const char*>* outBuildInfoFiles ) {
-	outBuildInfoFiles->reset();
-
-	outBuildInfoFiles->resize( config->source_files.size() );
-
-	For ( u64, sourceFileIndex, 0, outBuildInfoFiles->count ) {
-		( *outBuildInfoFiles )[sourceFileIndex] = tprintf( "%s\\%s", inputFilePath, config->source_files[sourceFileIndex] );
+	std::vector<const char*> sourceFiles;
+	For ( u64, sourceFileIndex, 0, config->source_files.size() ) {
+		GetAllSourceFiles_r( inputFilePath, NULL, config->source_files[sourceFileIndex], &sourceFiles );
 	}
+
+	/*outBuildInfoFiles->reset();
+	outBuildInfoFiles->resize( sourceFiles.size() );
+	memcpy( outBuildInfoFiles->data, sourceFiles.data(), sourceFiles.size() * sizeof( const char* ) );*/
+
+	/*For ( u64, sourceFileIndex, 0, outBuildInfoFiles->count ) {
+		( *outBuildInfoFiles )[sourceFileIndex] = tprintf( "%s\\%s", inputFilePath, sourceFiles[sourceFileIndex] );
+	}*/
+
+	outBuildInfoFiles->reserve( sourceFiles.size() );
 
 	// for each file, open it and get every include inside it
 	// then go through _those_ included files
-	For ( u64, sourceFileIndex, 0, outBuildInfoFiles->count ) {
-		const char* sourceFile = ( *outBuildInfoFiles )[sourceFileIndex];
+	For ( u64, sourceFileIndex, 0, sourceFiles.size() ) {
+		const char* sourceFile = sourceFiles[sourceFileIndex];
 
-		const char* sourceFilePath = paths_remove_file_from_path( sourceFile );
-		const char* sourceFileNoPath = paths_remove_path_from_file( sourceFile );
+		const char* sourceFileWithInputFilePath = tprintf( "%s\\%s", inputFilePath, sourceFile );
+
+		const char* sourceFilePath = paths_remove_file_from_path( sourceFileWithInputFilePath );
+		const char* sourceFileNoPath = paths_remove_path_from_file( sourceFileWithInputFilePath );
 
 		char* fileBuffer = NULL;
 		u64 fileLength = 0;
-		bool8 read = file_read_entire( sourceFile, &fileBuffer, &fileLength );
+		bool8 read = file_read_entire( sourceFileWithInputFilePath, &fileBuffer, &fileLength );
 
 		if ( !read ) {
 			if ( verbose ) {
-				printf( "Tried to read the file \"%s\", but I couldn't.  Therefore I can't resolve includes for this file.\n", ( *outBuildInfoFiles )[sourceFileIndex] );
+				warning( "Tried to read the file \"%s\", but I couldn't.  Therefore I can't resolve includes for this file.\n", sourceFiles[sourceFileIndex] );
 			}
 			continue;
 		}
 
 		defer( file_free_buffer( &fileBuffer ) );
+
+		outBuildInfoFiles->add( sourceFile );
 
 		char* seek = fileBuffer;
 
@@ -788,18 +817,18 @@ static void GetAllIncludedFiles( const BuildConfig* config, const char* inputFil
 					strncpy( filename, includeStart, filenameLength * sizeof( char ) );
 					filename[filenameLength - 1] = 0;
 
-					filename = tprintf( "%s\\%s", sourceFilePath, filename );
+					//filename = tprintf( "%s\\%s", sourceFilePath, filename );
 
 					bool8 found = false;
-					For ( u64, fileIndex, 0, outBuildInfoFiles->count ) {
-						if ( string_equals( ( *outBuildInfoFiles )[fileIndex], filename ) ) {
+					For ( u64, fileIndex, 0, sourceFiles.size() ) {
+						if ( string_equals( sourceFiles[fileIndex], filename ) ) {
 							found = true;
 							break;
 						}
 					}
 
 					if ( !found ) {
-						outBuildInfoFiles->add( filename );
+						sourceFiles.push_back( filename );
 					}
 				} else if ( *seek == '<' ) {
 					// "external" include, so scan all the external include folders that we know about
@@ -829,15 +858,15 @@ static void GetAllIncludedFiles( const BuildConfig* config, const char* inputFil
 
 					if ( fullFilename ) {
 						bool8 found = false;
-						For ( u64, fileIndex, 0, outBuildInfoFiles->count ) {
-							if ( string_equals( ( *outBuildInfoFiles )[fileIndex], fullFilename ) ) {
+						For ( u64, fileIndex, 0, sourceFiles.size() ) {
+							if ( string_equals( sourceFiles[fileIndex], fullFilename ) ) {
 								found = true;
 								break;
 							}
 						}
 
 						if ( !found ) {
-							outBuildInfoFiles->add( fullFilename );
+							sourceFiles.push_back( fullFilename );
 						}
 					} else {
 						if ( verbose ) {
@@ -922,14 +951,22 @@ static void SerializeBuildInfo( File* file, const std::vector<BuildConfig>& conf
 			SerializeU64( file, buildInfoFiles.count );
 
 			For ( u64, buildInfoFileIndex, 0, buildInfoFiles.count ) {
-				const char* buildInfoFilename = buildInfoFiles[buildInfoFileIndex];
+				const char* buildInfoFile = buildInfoFiles[buildInfoFileIndex];
+
+				const char* buildInfoFileAndPath = buildInfoFile;
+				if ( !paths_is_path_absolute( buildInfoFileAndPath ) ) {
+					buildInfoFileAndPath = tprintf( "%s\\%s", inputFilePath, buildInfoFile );
+				}
 
 				FileInfo fileInfo;
-				File foundFile = file_find_first( buildInfoFilename, &fileInfo );
+				File foundFile = file_find_first( buildInfoFileAndPath, &fileInfo );
 
 				assert( foundFile.ptr != INVALID_HANDLE_VALUE );
 
-				CHECK_WRITE( file_write( file, tprintf( "%s\n", buildInfoFilename ) ) );
+				// dont write full path of the filename
+				// the path to the source file can change depending on whether we are building from visual studio or the command line
+				// so just write the filename relative to the source folder and let Builder reconstruct the appropriate path as and when it needs to
+				CHECK_WRITE( file_write( file, tprintf( "%s\n", buildInfoFile ) ) );
 				SerializeU64( file, fileInfo.last_write_time );
 			}
 		}
@@ -1285,6 +1322,22 @@ static void BuildConfig_AddDefaults( BuildConfig* outConfig ) {
 	outConfig->ignore_warnings.push_back( "-Wno-missing-field-initializers" );	// LLVM 18.1.8
 }
 
+static const char* BuildConfig_GetFullBinaryName( BuildConfig* config ) {
+	assert( !config->binary_folder.empty() );
+	assert( !config->binary_name.empty() );
+
+	StringBuilder builder = {};
+	string_builder_reset( &builder );
+
+	string_builder_appendf( &builder, "%s\\%s", config->binary_folder.c_str(), config->binary_name.c_str() );
+
+	if ( !config->remove_file_extension ) {
+		string_builder_appendf( &builder, ".%s", GetFileExtensionFromBinaryType( config->binary_type ) );
+	}
+
+	return string_builder_to_string( &builder );
+}
+
 // data layout comes from: https://learn.microsoft.com/en-us/windows/win32/api/guiddef/ns-guiddef-guid
 static const char* CreateVisualStudioGuid() {
 	GUID guid;
@@ -1421,7 +1474,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 					return false;
 				}
 
-				if ( config->options.binary_type == BINARY_TYPE_EXE && config->output_directory == NULL ) {
+				if ( config->options.binary_type == BINARY_TYPE_EXE && config->options.binary_folder.empty() ) {
 					error(
 						"Build config \"%s\" is an executable, but you never specified an output directory when generating the Visual Studio project \"%s\", config \"%s\".\n"
 						"Visual Studio needs this in order to know where to run the executable from when debugging.  You need to set this.\n"
@@ -1479,6 +1532,21 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 			For ( u64, configIndex, 0, project->configs.size() ) {
 				VisualStudioConfig* config = &project->configs[configIndex];
 
+				const char* fullBinaryName = BuildConfig_GetFullBinaryName( &config->options );
+
+				const char* from = solutionPath;
+				const char* to = tprintf( "%s\\%s", inputFilePath, fullBinaryName );
+				to = paths_canonicalise_path( to );
+
+				char* pathFromSolutionToBinary = cast( char* ) mem_temp_alloc( MAX_PATH * sizeof( char ) );
+				memset( pathFromSolutionToBinary, 0, MAX_PATH * sizeof( char ) );
+				PathRelativePathTo( pathFromSolutionToBinary, from, FILE_ATTRIBUTE_NORMAL, to, FILE_ATTRIBUTE_DIRECTORY );
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-qual"
+				pathFromSolutionToBinary = cast( char* ) paths_remove_file_from_path( pathFromSolutionToBinary );
+#pragma clang diagnostic pop
+
 				For ( u64, platformIndex, 0, solution->platforms.size() ) {
 					const char* platform = solution->platforms[platformIndex];
 
@@ -1487,7 +1555,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 					CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<UseDebugLibraries>false</UseDebugLibraries>" ) );
 					CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<PlatformToolset>v143</PlatformToolset>" ) );
 
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<OutDir>%s</OutDir>", config->output_directory ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<OutDir>%s</OutDir>", pathFromSolutionToBinary ) ) );
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<IntDir>%s</IntDir>", tprintf( "%s\\intermediate", config->options.binary_folder.c_str() ) ) ) );
 					CHECK_WRITE( file_write_line( &vcxproj,			"\t</PropertyGroup>" ) );
 				}
@@ -1668,6 +1736,16 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 				For ( u64, configIndex, 0, project->configs.size() ) {
 					VisualStudioConfig* config = &project->configs[configIndex];
 
+					const char* fullBinaryName = BuildConfig_GetFullBinaryName( &config->options );
+
+					const char* from = solutionPath;
+					const char* to = tprintf( "%s\\%s", inputFilePath, fullBinaryName );
+					to = paths_canonicalise_path( to );
+
+					char* pathFromSolutionToBinary = cast( char* ) mem_temp_alloc( MAX_PATH * sizeof( char ) );
+					memset( pathFromSolutionToBinary, 0, MAX_PATH * sizeof( char ) );
+					PathRelativePathTo( pathFromSolutionToBinary, from, FILE_ATTRIBUTE_NORMAL, to, FILE_ATTRIBUTE_DIRECTORY );
+
 					For ( u64, platformIndex, 0, solution->platforms.size() ) {
 						const char* platform = solution->platforms[platformIndex];
 
@@ -1675,7 +1753,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 						CHECK_WRITE( file_write_line( &vcxproj,			 "\t\t<DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>" ) );	// TODO(DM): do want to include the other debugger types?
 						CHECK_WRITE( file_write_line( &vcxproj,			 "\t\t<LocalDebuggerDebuggerType>Auto</LocalDebuggerDebuggerType>" ) );
 						CHECK_WRITE( file_write_line( &vcxproj,			 "\t\t<LocalDebuggerAttach>false</LocalDebuggerAttach>" ) );
-						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<LocalDebuggerCommand>%s\\%s</LocalDebuggerCommand>", config->output_directory, config->options.binary_name.c_str() ) ) );
+						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<LocalDebuggerCommand>%s</LocalDebuggerCommand>", pathFromSolutionToBinary ) ) );
 						CHECK_WRITE( file_write_line( &vcxproj,			 "\t\t<LocalDebuggerWorkingDirectory>$(SolutionDir)</LocalDebuggerWorkingDirectory>" ) );
 
 						// if debugger arguments were specified, put those in
@@ -1959,11 +2037,8 @@ int main( int argc, char** argv ) {
 		{
 			const char* clangAbsolutePath = tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() );
 
-			FileInfo fileInfo;
-			File file = file_find_first( clangAbsolutePath, &fileInfo );
-
 			// if we cant find our copy of clang then we definitely need to run first time setup
-			if ( file.ptr == INVALID_HANDLE_VALUE ) {
+			if ( !FileExists( clangAbsolutePath ) ) {
 				doFirstTimeSetup = true;
 			} else {
 				// otherwise if we have clang but the version doesnt match, then we still need to re-download and re-install it
@@ -2083,7 +2158,11 @@ int main( int argc, char** argv ) {
 	const char* inputConfigName = NULL;
 	u64 inputConfigNameHash = 0;
 
+#ifdef _DEBUG
+	bool8 verbose = true;
+#else
 	bool8 verbose = false;
+#endif
 
 	// TODO(DM): 23/10/2024: feel like we shouldnt need these
 	// I think this is just hiding the fact that we dont use builder.exes or the input files CWD when we need to
@@ -2320,6 +2399,32 @@ int main( int argc, char** argv ) {
 			if ( setBuilderOptionsFunc ) {
 				setBuilderOptionsFunc( &options );
 
+				// make sure all configs have their binary folder and binary name set
+				For ( u64, configIndex, 0, options.configs.size() ) {
+					BuildConfig* config = &options.configs[configIndex];
+
+					if ( !config->binary_folder.empty() ) {
+						config->binary_folder = tprintf( "%s\\%s", inputFilePath, config->binary_folder.c_str() );
+					} else {
+						config->binary_folder = inputFilePath;
+					}
+
+					// user didnt override the binary name via the callback
+					// so give them a binary name based off the first source file
+					if ( config->binary_name.empty() ) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-qual"
+						char* inputFileWithoutExtension = cast( char* ) mem_temp_alloc( ( inputFileLength + 1 ) * sizeof( char ) );
+						strncpy( inputFileWithoutExtension, inputFile, inputFileLength * sizeof( char ) );
+						inputFileWithoutExtension[inputFileLength] = 0;
+
+						inputFileWithoutExtension = cast( char* ) paths_remove_file_extension( paths_remove_path_from_file( inputFileWithoutExtension ) );
+
+						config->binary_name = inputFileWithoutExtension;
+#pragma clang diagnostic pop
+					}
+				}
+
 				// if the user wants to generate a visual studio solution then do that now
 				if ( options.generate_solution ) {
 					// make sure BuilderOptions::configs and configs from visual studio match
@@ -2431,59 +2536,18 @@ int main( int argc, char** argv ) {
 		}
 
 		context.config = *config;
+		context.fullBinaryName = BuildConfig_GetFullBinaryName( &context.config );
 
 		bool8 shouldSkipBuild = true;
 
 		// figure out if we need to even rebuild
 		{
 			// if the binary doesnt exist, we need to rebuild
-			{
-				if ( !context.config.binary_folder.empty() ) {
-					context.config.binary_folder = tprintf( "%s\\%s", inputFilePath, context.config.binary_folder.c_str() );
-				} else {
-					context.config.binary_folder = inputFilePath;
-				}
-
-				if ( !folder_create_if_it_doesnt_exist( context.config.binary_folder.c_str() ) ) {
-					errorCode_t errorCode = GetLastErrorCode();
-					fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".  Error code: " ERROR_CODE_FORMAT "\n", SET_BUILDER_OPTIONS_FUNC_NAME, context.config.binary_folder.c_str(), errorCode );
-					return 1;
-				}
-
-				// user didnt override the binary name via the callback
-				// so give them a binary name based off the first source file
-				if ( context.config.binary_name.empty() ) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wcast-qual"
-					char* inputFileWithoutExtension = cast( char* ) mem_temp_alloc( ( inputFileLength + 1 ) * sizeof( char ) );
-					strncpy( inputFileWithoutExtension, inputFile, inputFileLength * sizeof( char ) );
-					inputFileWithoutExtension[inputFileLength] = 0;
-
-					inputFileWithoutExtension = cast( char* ) paths_remove_file_extension( paths_remove_path_from_file( inputFileWithoutExtension ) );
-
-					context.config.binary_name = inputFileWithoutExtension;
-#pragma clang diagnostic pop
-				}
-
-				context.fullBinaryName = tprintf( "%s\\%s", context.config.binary_folder.c_str(), context.config.binary_name.c_str() );
-
-				if ( !config->remove_file_extension ) {
-					context.fullBinaryName = tprintf( "%s.%s", context.fullBinaryName, GetFileExtensionFromBinaryType( config->binary_type ) );
-				}
-
-				{
-					FileInfo fileInfo = {};
-					File file = file_find_first( context.fullBinaryName, &fileInfo );
-
-					if ( file.ptr == INVALID_HANDLE_VALUE ) {
-						shouldSkipBuild = false;
-					}
-				}
-			}
-
-			// get all the code files from the .build_info file
-			// if none of the code files have changed since we last checked then do not even try to rebuild
-			{
+			if ( !FileExists( context.fullBinaryName ) ) {
+				shouldSkipBuild = false;
+			} else {
+				// get all the code files from the .build_info file
+				// if none of the code files have changed since we last checked then do not even try to rebuild
 				std::vector<trackedSourceFile_t> trackedSourceFiles;
 
 				For ( u64, i, 0, parsedBuildInfoData.configs.size() ) {
@@ -2496,8 +2560,10 @@ int main( int argc, char** argv ) {
 				For ( u64, i, 0, trackedSourceFiles.size() ) {
 					trackedSourceFile_t* trackedSourceFile = &trackedSourceFiles[i];
 
+					const char* trackedSourceFileAndPath = tprintf( "%s\\%s", inputFilePath, trackedSourceFile->filename );
+
 					FileInfo fileInfo = {};
-					File file = file_find_first( trackedSourceFile->filename, &fileInfo );
+					File file = file_find_first( trackedSourceFileAndPath, &fileInfo );
 
 					assert( file.ptr != INVALID_HANDLE_VALUE );
 
@@ -2522,6 +2588,12 @@ int main( int argc, char** argv ) {
 			}
 
 			printf( "\n" );
+		}
+
+		if ( !folder_create_if_it_doesnt_exist( context.config.binary_folder.c_str() ) ) {
+			errorCode_t errorCode = GetLastErrorCode();
+			fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".  Error code: " ERROR_CODE_FORMAT "\n", SET_BUILDER_OPTIONS_FUNC_NAME, context.config.binary_folder.c_str(), errorCode );
+			return 1;
 		}
 
 		// make all non-absolute additional include paths relative to the build source file
@@ -2569,6 +2641,12 @@ int main( int argc, char** argv ) {
 				} else {
 					GetAllSourceFiles_r( inputFilePath, NULL, sourceFile, &finalSourceFilesToBuild );
 				}
+			}
+
+			// the .build_info file wont store the full paths to the source files because the input path can change depending on whether we're building via visual studio or from the command line
+			// so we need to reconstruct the full paths to the source files ourselves
+			For ( u64, i, 0, finalSourceFilesToBuild.size() ) {
+				finalSourceFilesToBuild[i] = tprintf( "%s\\%s", inputFilePath, finalSourceFilesToBuild[i] );
 			}
 
 			context.config.source_files = finalSourceFilesToBuild;

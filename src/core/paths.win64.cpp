@@ -26,7 +26,7 @@ static const char* get_last_slash( const char* path ) {
 	const char* last_forward_slash = strrchr( path, '/' );
 
 	if ( !last_back_slash && !last_forward_slash ) {
-		return path;
+		return NULL;
 	}
 
 	if ( cast( u64 ) last_back_slash > cast( u64 ) last_forward_slash ) {
@@ -68,10 +68,14 @@ const char* paths_remove_file_from_path( const char* path ) {
 	const char* dot = strrchr( path, '.' );
 
 	if ( !dot ) {
-		return path;
+		return NULL;
 	}
 
 	const char* last_slash = get_last_slash( path );
+
+	if ( !last_slash ) {
+		return NULL;
+	}
 
 	u64 path_length = cast( u64 ) last_slash - cast( u64 ) path;
 

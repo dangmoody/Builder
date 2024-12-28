@@ -629,26 +629,6 @@ static void GetAllSourceFiles_r( const char* basePath, const char* folder, const
 					continue;
 				}
 
-#if 0
-				/*if ( fileInfo.is_directory ) {
-					const char* subfolder = NULL;
-					if ( folder ) {
-						subfolder = tprintf( "%s\\%s", folder, fileInfo.filename );
-					} else {
-						subfolder = tprintf( "%s", fileInfo.filename );
-					}
-
-					GetAllSourceFiles_r( basePath, subfolder, searchFilter, outSourceFiles );
-				} else*/
-				{
-					const char* fullFolder = paths_remove_file_from_path( fullSearchPath );
-
-					const char* fullName = tprintf( "%s\\%s", fullFolder, fileInfo.filename );
-					fullName = paths_canonicalise_path( fullName );
-
-					outSourceFiles->push_back( fullName );
-				}
-#else
 				const char* fullName = NULL;
 				if ( folder ) {
 					fullName = tprintf( "%s\\%s", folder, fileInfo.filename );
@@ -657,7 +637,6 @@ static void GetAllSourceFiles_r( const char* basePath, const char* folder, const
 				}
 
 				outSourceFiles->push_back( fullName );
-#endif
 			} while ( file_find_next( &firstFile, &fileInfo ) );
 		}
 	}
@@ -745,14 +724,6 @@ static void GetAllIncludedFiles( const BuildConfig* config, const char* inputFil
 		GetAllSourceFiles_r( inputFilePath, NULL, config->source_files[sourceFileIndex], &sourceFiles );
 	}
 
-	/*outBuildInfoFiles->reset();
-	outBuildInfoFiles->resize( sourceFiles.size() );
-	memcpy( outBuildInfoFiles->data, sourceFiles.data(), sourceFiles.size() * sizeof( const char* ) );*/
-
-	/*For ( u64, sourceFileIndex, 0, outBuildInfoFiles->count ) {
-		( *outBuildInfoFiles )[sourceFileIndex] = tprintf( "%s\\%s", inputFilePath, sourceFiles[sourceFileIndex] );
-	}*/
-
 	outBuildInfoFiles->reserve( sourceFiles.size() );
 
 	// for each file, open it and get every include inside it
@@ -817,8 +788,6 @@ static void GetAllIncludedFiles( const BuildConfig* config, const char* inputFil
 					strncpy( filename, includeStart, filenameLength * sizeof( char ) );
 					filename[filenameLength - 1] = 0;
 
-					//filename = tprintf( "%s\\%s", sourceFilePath, filename );
-
 					bool8 found = false;
 					For ( u64, fileIndex, 0, sourceFiles.size() ) {
 						if ( string_equals( sourceFiles[fileIndex], filename ) ) {
@@ -870,7 +839,7 @@ static void GetAllIncludedFiles( const BuildConfig* config, const char* inputFil
 						}
 					} else {
 						if ( verbose ) {
-							printf( "Tried to find external include \"%s\" from any of the additional include directories, but couldn't.  This file won't be tracked in the %s file.\n", filename, BUILD_INFO_FILE_EXTENSION );
+							warning( "Tried to find external include \"%s\" from any of the additional include directories, but couldn't.  This file won't be tracked in the %s file.\n", filename, BUILD_INFO_FILE_EXTENSION );
 						}
 					}
 				}
@@ -903,52 +872,55 @@ static void SerializeSTDStringArray( File* file, const std::vector<std::string>&
 	}
 }
 
-static void SerializeBuildInfo( File* file, const std::vector<BuildConfig>& configs, const char* inputFilePath, const char* userConfigSourceFilename, const char* userConfigDLLFilename, const bool8 verbose ) {
-	CHECK_WRITE( file_write( file, tprintf( "build_source_file: %s\n", userConfigSourceFilename ) ) );
-	CHECK_WRITE( file_write( file, tprintf( "DLL: %s\n", userConfigDLLFilename ) ) );
+static void SerializeBuildInfo( const char* filename, const std::vector<BuildConfig>& configs, const char* inputFilePath, const char* userConfigSourceFilename, const char* userConfigDLLFilename, const bool8 verbose ) {
+	File file = file_open_or_create( filename );
+	defer( file_close( &file ) );
 
-	SerializeU64( file, configs.size() );
+	CHECK_WRITE( file_write( &file, tprintf( "build_source_file: %s\n", userConfigSourceFilename ) ) );
+	CHECK_WRITE( file_write( &file, tprintf( "DLL: %s\n", userConfigDLLFilename ) ) );
+
+	SerializeU64( &file, configs.size() );
 
 	For ( u64, builderOptionsIndex, 0, configs.size() ) {
 		const BuildConfig* config = &configs[builderOptionsIndex];
 
-		CHECK_WRITE( file_write( file, tprintf( "config: %s\n", config->name.c_str() ) ) );
+		CHECK_WRITE( file_write( &file, tprintf( "config: %s\n", config->name.c_str() ) ) );
 
 		u64 configNameHash = hash_string( config->name.c_str(), 0 );
-		SerializeU64( file, configNameHash );
+		SerializeU64( &file, configNameHash );
 
 		// serialize names of all build dependencies
 		{
-			CHECK_WRITE( file_write( file, tprintf( "depends_on\n" ) ) );
-			SerializeU64( file, config->depends_on.size() );
+			CHECK_WRITE( file_write( &file, tprintf( "depends_on\n" ) ) );
+			SerializeU64( &file, config->depends_on.size() );
 
 			For ( u64, dependencyIndex, 0, config->depends_on.size() ) {
-				CHECK_WRITE( file_write( file, tprintf( "%s\n", config->depends_on[dependencyIndex].name.c_str() ) ) );
+				CHECK_WRITE( file_write( &file, tprintf( "%s\n", config->depends_on[dependencyIndex].name.c_str() ) ) );
 			}
 		}
 
-		SerializeCStringArray( file, config->source_files, "source_files" );
-		SerializeCStringArray( file, config->defines, "defines" );
-		SerializeSTDStringArray( file, config->additional_includes, "additional_includes" );
-		SerializeSTDStringArray( file, config->additional_lib_paths, "additional_lib_paths" );
-		SerializeCStringArray( file, config->additional_libs, "additional_libs" );
-		SerializeCStringArray( file, config->ignore_warnings, "ignore_warnings" );
+		SerializeCStringArray( &file, config->source_files, "source_files" );
+		SerializeCStringArray( &file, config->defines, "defines" );
+		SerializeSTDStringArray( &file, config->additional_includes, "additional_includes" );
+		SerializeSTDStringArray( &file, config->additional_lib_paths, "additional_lib_paths" );
+		SerializeCStringArray( &file, config->additional_libs, "additional_libs" );
+		SerializeCStringArray( &file, config->ignore_warnings, "ignore_warnings" );
 
-		CHECK_WRITE( file_write( file, tprintf( "binary_name: %s\n", config->binary_name.c_str() ) ) );
-		CHECK_WRITE( file_write( file, tprintf( "binary_folder: %s\n", config->binary_folder.c_str() ) ) );
+		CHECK_WRITE( file_write( &file, tprintf( "binary_name: %s\n", config->binary_name.c_str() ) ) );
+		CHECK_WRITE( file_write( &file, tprintf( "binary_folder: %s\n", config->binary_folder.c_str() ) ) );
 
-		CHECK_WRITE( file_write( file, &config->binary_type, sizeof( BinaryType ) ) );
-		CHECK_WRITE( file_write( file, &config->optimization_level, sizeof( OptimizationLevel ) ) );
-		CHECK_WRITE( file_write( file, &config->remove_symbols, sizeof( bool8 ) ) );
-		CHECK_WRITE( file_write( file, &config->remove_file_extension, sizeof( bool8 ) ) );
+		CHECK_WRITE( file_write( &file, &config->binary_type, sizeof( BinaryType ) ) );
+		CHECK_WRITE( file_write( &file, &config->optimization_level, sizeof( OptimizationLevel ) ) );
+		CHECK_WRITE( file_write( &file, &config->remove_symbols, sizeof( bool8 ) ) );
+		CHECK_WRITE( file_write( &file, &config->remove_file_extension, sizeof( bool8 ) ) );
 
 		// serialize all included files and their last write time
 		{
 			Array<const char*> buildInfoFiles;
 			GetAllIncludedFiles( config, inputFilePath, verbose, &buildInfoFiles );
 
-			CHECK_WRITE( file_write( file, "tracked_source_files\n" ) );
-			SerializeU64( file, buildInfoFiles.count );
+			CHECK_WRITE( file_write( &file, "tracked_source_files\n" ) );
+			SerializeU64( &file, buildInfoFiles.count );
 
 			For ( u64, buildInfoFileIndex, 0, buildInfoFiles.count ) {
 				const char* buildInfoFile = buildInfoFiles[buildInfoFileIndex];
@@ -966,12 +938,12 @@ static void SerializeBuildInfo( File* file, const std::vector<BuildConfig>& conf
 				// dont write full path of the filename
 				// the path to the source file can change depending on whether we are building from visual studio or the command line
 				// so just write the filename relative to the source folder and let Builder reconstruct the appropriate path as and when it needs to
-				CHECK_WRITE( file_write( file, tprintf( "%s\n", buildInfoFile ) ) );
-				SerializeU64( file, fileInfo.last_write_time );
+				CHECK_WRITE( file_write( &file, tprintf( "%s\n", buildInfoFile ) ) );
+				SerializeU64( &file, fileInfo.last_write_time );
 			}
 		}
 
-		CHECK_WRITE( file_write( file, "\n" ) );
+		CHECK_WRITE( file_write( &file, "\n" ) );
 	}
 }
 
@@ -1987,10 +1959,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 			}
 		}
 
-		File buildInfoFile = file_open_or_create( buildInfoFilename );
-		defer( file_close( &buildInfoFile ) );
-
-		SerializeBuildInfo( &buildInfoFile, allBuildConfigs, inputFilePath, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
+		SerializeBuildInfo( buildInfoFilename, allBuildConfigs, inputFilePath, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
 	}
 
 	return true;
@@ -2017,7 +1986,7 @@ int main( int argc, char** argv ) {
 	// TODO(DM): 23/10/2024: we dont use this?
 	set_command_line_args( argc, argv );
 
-	printf( "Builder v%d.%d.%d\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {};
 	context.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS | BUILD_CONTEXT_FLAG_SHOW_STDOUT;
@@ -2528,6 +2497,8 @@ int main( int argc, char** argv ) {
 		preBuildFunc();
 	}
 
+	bool8 allBuildsWereSkipped = true;
+
 	For ( u64, configToBuildIndex, 0, configsToBuild.size() ) {
 		BuildConfig* config = &configsToBuild[configToBuildIndex];
 
@@ -2574,19 +2545,21 @@ int main( int argc, char** argv ) {
 		}
 
 		{
-			printf( "\nBuilding \"%s\"", context.config.binary_name.c_str() );
-
-			if ( !context.config.name.empty() ) {
-				printf( ", config \"%s\"", context.config.name.c_str() );
-			}
-
 			if ( shouldSkipBuild ) {
-				printf( " (skipped).\n" );
+				printf( "Skipped \"%s\".\n", context.config.binary_name.c_str() );
 				continue;
-			}
+			} else {
+				printf( "Building \"%s\"", context.config.binary_name.c_str() );
 
-			printf( "\n" );
+				if ( !context.config.name.empty() ) {
+					printf( ", config \"%s\"", context.config.name.c_str() );
+				}
+
+				printf( "\n" );
+			}
 		}
+
+		allBuildsWereSkipped = false;
 
 		if ( !folder_create_if_it_doesnt_exist( context.config.binary_folder.c_str() ) ) {
 			errorCode_t errorCode = GetLastErrorCode();
@@ -2664,6 +2637,12 @@ int main( int argc, char** argv ) {
 				exitCode = BuildStaticLibrary( &context );
 				break;
 		}
+
+		// if the build was successful, write the new .build_info file now
+		if ( exitCode != 0 ) {
+			error( "Build failed.\n" );
+			return 1;
+		}
 	}
 
 	if ( postBuildFunc ) {
@@ -2671,17 +2650,9 @@ int main( int argc, char** argv ) {
 		postBuildFunc();
 	}
 
-	// if the build was successful, write the new .build_info file now
-	if ( exitCode == 0 ) {
-		File buildInfoFile = file_open_or_create( buildInfoFilename );
-		defer( file_close( &buildInfoFile ) );
-
-		// serialize all the builder options
-		SerializeBuildInfo( &buildInfoFile, options.configs, inputFilePath, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
-	} else {
-		error( "Build failed.\n" );
-		exitCode = 1;
+	if ( !allBuildsWereSkipped ) {
+		SerializeBuildInfo( buildInfoFilename, options.configs, inputFilePath, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
 	}
 
-	return exitCode;
+	return 0;
 }

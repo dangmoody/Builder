@@ -8,13 +8,15 @@ v0.5.0, 28/12/2024:
 	* This only existed because Builder wasn't smart enough to figure this out for you, but it is now.
 * User config build context now #defines _CRT_SECURE_NO_WARNINGS for you by default.
 	* This means you can now call functions that are banned by that #define if you need to, for some reason.
-* Fixed a bug where paths to source files weren't getting resolved properly when building from visual studio.
-* Fixed a bug where files that get overwritten did not get wiped, leaving lots of trailing garbage content.
-* Fixed a bug where includes that were commented out were being included in the .build_info file.
-	* You actually don't want this to happen.  The file name/path could be wrong, and the file could not exist.
-	* Because this include is ultimately not included in the build, Builder shouldn't care about it.
-* Core: Fixed a bug where paths_canonicalise_path() didn't call paths_fix_slashes(), but it needed to.
-	* Turns out the WinAPI function PathCanonicalize() requires all slashes to be consistent, otherwise it will silently return incorrect results.
+* Fixed the following bugs:
+	* If multiple configs are specified in the build source file but none were passed at the command line then Builder will now throw an error about this.
+	* Paths to source files are now resolved properly when building from visual studio.
+	* Includes that were commented out are no longer included in the .build_info file.
+		* Because this include is ultimately not included in the build, Builder shouldn't care about it.  The file name/path could be wrong, and the file could not exist.
+	* Core:
+		* Files that get overwritten did not get wiped, leaving lots of trailing garbage content.
+		* paths_canonicalise_path() now calls paths_fix_slashes().
+			* Turns out the WinAPI function PathCanonicalize() requires all slashes to be consistent, otherwise it will silently return incorrect results.
 
 ----------------------------------------------------------------
 

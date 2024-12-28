@@ -2228,7 +2228,7 @@ int main( int argc, char** argv ) {
 	if ( inputFile == NULL ) {
 		error(
 			"You haven't told me what source files I need to build.  I need one.\n"
-			"Use " ARG_HELP_SHORT " or " ARG_HELP_LONG " if you need help.\n"
+			"Run builder " ARG_HELP_LONG " if you need help.\n"
 		);
 
 		return 1;
@@ -2368,32 +2368,6 @@ int main( int argc, char** argv ) {
 			if ( setBuilderOptionsFunc ) {
 				setBuilderOptionsFunc( &options );
 
-				// make sure all configs have their binary folder and binary name set
-				For ( u64, configIndex, 0, options.configs.size() ) {
-					BuildConfig* config = &options.configs[configIndex];
-
-					if ( !config->binary_folder.empty() ) {
-						config->binary_folder = tprintf( "%s\\%s", inputFilePath, config->binary_folder.c_str() );
-					} else {
-						config->binary_folder = inputFilePath;
-					}
-
-					// user didnt override the binary name via the callback
-					// so give them a binary name based off the first source file
-					if ( config->binary_name.empty() ) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wcast-qual"
-						char* inputFileWithoutExtension = cast( char* ) mem_temp_alloc( ( inputFileLength + 1 ) * sizeof( char ) );
-						strncpy( inputFileWithoutExtension, inputFile, inputFileLength * sizeof( char ) );
-						inputFileWithoutExtension[inputFileLength] = 0;
-
-						inputFileWithoutExtension = cast( char* ) paths_remove_file_extension( paths_remove_path_from_file( inputFileWithoutExtension ) );
-
-						config->binary_name = inputFileWithoutExtension;
-#pragma clang diagnostic pop
-					}
-				}
-
 				// if the user wants to generate a visual studio solution then do that now
 				if ( options.generate_solution ) {
 					// make sure BuilderOptions::configs and configs from visual studio match
@@ -2425,6 +2399,8 @@ int main( int argc, char** argv ) {
 			}
 		}
 	}
+
+	printf( "\n" );
 
 	// none of the configs can have the same name
 	// TODO(DM): 14/11/2024: can we do better than o(n^2) here?
@@ -2490,6 +2466,15 @@ int main( int argc, char** argv ) {
 		}
 
 		add_build_config_unique( config, configsToBuild );
+	} else {
+		if ( !inputConfigName ) {
+			error(
+				"This build has multiple configs, but you never specified a config name.\n"
+				"You must pass in a config name via " ARG_CONFIG "\n"
+				"Run builder " ARG_HELP_LONG " if you need help.\n"
+			);
+			return 1;
+		}
 	}
 
 	if ( preBuildFunc ) {
@@ -2504,6 +2489,30 @@ int main( int argc, char** argv ) {
 
 		if ( doingBuildFromSourceFile ) {
 			BuildConfig_AddDefaults( config );
+		}
+
+		// make sure that the binary folder and binary name are at least set to defaults
+		{
+			if ( !config->binary_folder.empty() ) {
+				config->binary_folder = tprintf( "%s\\%s", inputFilePath, config->binary_folder.c_str() );
+			} else {
+				config->binary_folder = inputFilePath;
+			}
+
+			// user didnt override the binary name via the callback
+			// so give them a binary name based off the first source file
+			if ( config->binary_name.empty() ) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-qual"
+				char* inputFileWithoutExtension = cast( char* ) mem_temp_alloc( ( inputFileLength + 1 ) * sizeof( char ) );
+				strncpy( inputFileWithoutExtension, inputFile, inputFileLength * sizeof( char ) );
+				inputFileWithoutExtension[inputFileLength] = 0;
+
+				inputFileWithoutExtension = cast( char* ) paths_remove_file_extension( paths_remove_path_from_file( inputFileWithoutExtension ) );
+
+				config->binary_name = inputFileWithoutExtension;
+#pragma clang diagnostic pop
+			}
 		}
 
 		context.config = *config;
@@ -2601,16 +2610,18 @@ int main( int argc, char** argv ) {
 			For ( u64, sourceFileIndex, 0, context.config.source_files.size() ) {
 				const char* sourceFile = context.config.source_files[sourceFileIndex];
 
+				const char* sourceFileNoPath = paths_remove_path_from_file( sourceFile );
+
 				bool8 inputFileIsSameAsSourceFile = string_equals( sourceFile, inputFile );
 
 				const char* fileSearchPath = NULL;
 
 				if ( inputFileIsSameAsSourceFile ) {
-					const char* sourceFileNoPath = paths_remove_path_from_file( sourceFile );
-
 					GetAllSourceFiles_r( inputFilePath, NULL, sourceFileNoPath, &finalSourceFilesToBuild );
 				} else {
-					GetAllSourceFiles_r( inputFilePath, NULL, sourceFile, &finalSourceFilesToBuild );
+					const char* sourceFilePath = paths_remove_file_from_path( sourceFile );
+
+					GetAllSourceFiles_r( inputFilePath, sourceFilePath, sourceFileNoPath, &finalSourceFilesToBuild );
 				}
 			}
 
@@ -2643,6 +2654,8 @@ int main( int argc, char** argv ) {
 			error( "Build failed.\n" );
 			return 1;
 		}
+
+		printf( "\n" );
 	}
 
 	if ( postBuildFunc ) {

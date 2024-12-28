@@ -1,4 +1,4 @@
-v0.5.0, 03/01/2024:
+v0.5.0, 28/12/2024:
 
 * BuildConfig::source_files now supports wildcards.
 	* This will make adding source files to your projects a lot less tedious, since you now won't need to tell Builder about every individual new source file that you add.

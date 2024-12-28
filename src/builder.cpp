@@ -1482,7 +1482,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ProjectConfiguration Include=\"%s|%s\">", config->name, platform ) ) );
 						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Configuration>%s</Configuration>", config->name ) ) );
 						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Platform>%s</Platform>", platform ) ) );
-						CHECK_WRITE( file_write_line( &vcxproj,			"\t\t</ProjectConfiguration>" ) );
+						CHECK_WRITE( file_write_line( &vcxproj,          "\t\t</ProjectConfiguration>" ) );
 					}
 				}
 				CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemGroup>" ) );
@@ -1490,12 +1490,12 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 			// project globals
 			{
-				CHECK_WRITE( file_write_line( &vcxproj,			"\t<PropertyGroup Label=\"Globals\">" ) );
-				CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<VCProjectVersion>17.0</VCProjectVersion>" ) );
+				CHECK_WRITE( file_write_line( &vcxproj,          "\t<PropertyGroup Label=\"Globals\">" ) );
+				CHECK_WRITE( file_write_line( &vcxproj,          "\t\t<VCProjectVersion>17.0</VCProjectVersion>" ) );
 				CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ProjectGuid>{%s}</ProjectGuid>", projectGuids[projectIndex] ) ) );
-				CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<IgnoreWarnCompileDuplicatedFilename>true</IgnoreWarnCompileDuplicatedFilename>" ) );
-				CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<Keyword>MakeFileProj</Keyword>" ) );
-				CHECK_WRITE( file_write_line( &vcxproj,			"\t</PropertyGroup>" ) );
+				CHECK_WRITE( file_write_line( &vcxproj,          "\t\t<IgnoreWarnCompileDuplicatedFilename>true</IgnoreWarnCompileDuplicatedFilename>" ) );
+				CHECK_WRITE( file_write_line( &vcxproj,          "\t\t<Keyword>MakeFileProj</Keyword>" ) );
+				CHECK_WRITE( file_write_line( &vcxproj,          "\t</PropertyGroup>" ) );
 			}
 
 			CHECK_WRITE( file_write_line( &vcxproj, "\t<Import Project=\"$(VCTargetsPath)\\Microsoft.Cpp.Default.props\" />" ) );
@@ -1523,13 +1523,13 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 					const char* platform = solution->platforms[platformIndex];
 
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\" Label=\"Configuration\">", config->name, platform ) ) );
-					CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<ConfigurationType>Makefile</ConfigurationType>" ) );
-					CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<UseDebugLibraries>false</UseDebugLibraries>" ) );
-					CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<PlatformToolset>v143</PlatformToolset>" ) );
+					CHECK_WRITE( file_write_line( &vcxproj,          "\t\t<ConfigurationType>Makefile</ConfigurationType>" ) );
+					CHECK_WRITE( file_write_line( &vcxproj,          "\t\t<UseDebugLibraries>false</UseDebugLibraries>" ) );
+					CHECK_WRITE( file_write_line( &vcxproj,          "\t\t<PlatformToolset>v143</PlatformToolset>" ) );
 
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<OutDir>%s</OutDir>", pathFromSolutionToBinary ) ) );
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<IntDir>%s</IntDir>", tprintf( "%s\\intermediate", config->options.binary_folder.c_str() ) ) ) );
-					CHECK_WRITE( file_write_line( &vcxproj,			"\t</PropertyGroup>" ) );
+					CHECK_WRITE( file_write_line( &vcxproj,          "\t</PropertyGroup>" ) );
 				}
 			}
 
@@ -1547,8 +1547,8 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 					const char* platform = solution->platforms[platformIndex];
 
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<ImportGroup Label=\"PropertySheets\" Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">", config->name, platform ) ) );
-					CHECK_WRITE( file_write_line( &vcxproj,			"\t\t<Import Project=\"$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props\" Condition=\"exists(\'$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props\')\" Label=\"LocalAppDataPlatform\" />" ) );
-					CHECK_WRITE( file_write_line( &vcxproj,			"\t</ImportGroup>" ) );
+					CHECK_WRITE( file_write_line( &vcxproj,          "\t\t<Import Project=\"$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props\" Condition=\"exists(\'$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props\')\" Label=\"LocalAppDataPlatform\" />" ) );
+					CHECK_WRITE( file_write_line( &vcxproj,          "\t</ImportGroup>" ) );
 				}
 			}
 
@@ -1639,7 +1639,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 							if ( files.count > 0 ) {
 								CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
 
-								For( u64, fileIndex, 0, files.count ) {
+								For ( u64, fileIndex, 0, files.count ) {
 									CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ClCompile Include=\"%s\" />", files[fileIndex] ) ) );
 								}
 
@@ -1722,11 +1722,11 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 						const char* platform = solution->platforms[platformIndex];
 
 						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">", config->name, platform ) ) );
-						CHECK_WRITE( file_write_line( &vcxproj,			 "\t\t<DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>" ) );	// TODO(DM): do want to include the other debugger types?
-						CHECK_WRITE( file_write_line( &vcxproj,			 "\t\t<LocalDebuggerDebuggerType>Auto</LocalDebuggerDebuggerType>" ) );
-						CHECK_WRITE( file_write_line( &vcxproj,			 "\t\t<LocalDebuggerAttach>false</LocalDebuggerAttach>" ) );
+						CHECK_WRITE( file_write_line( &vcxproj,          "\t\t<DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>" ) );	// TODO(DM): do want to include the other debugger types?
+						CHECK_WRITE( file_write_line( &vcxproj,          "\t\t<LocalDebuggerDebuggerType>Auto</LocalDebuggerDebuggerType>" ) );
+						CHECK_WRITE( file_write_line( &vcxproj,          "\t\t<LocalDebuggerAttach>false</LocalDebuggerAttach>" ) );
 						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<LocalDebuggerCommand>%s</LocalDebuggerCommand>", pathFromSolutionToBinary ) ) );
-						CHECK_WRITE( file_write_line( &vcxproj,			 "\t\t<LocalDebuggerWorkingDirectory>$(SolutionDir)</LocalDebuggerWorkingDirectory>" ) );
+						CHECK_WRITE( file_write_line( &vcxproj,          "\t\t<LocalDebuggerWorkingDirectory>$(SolutionDir)</LocalDebuggerWorkingDirectory>" ) );
 
 						// if debugger arguments were specified, put those in
 						if ( config->debugger_arguments.size() > 0 ) {
@@ -1773,7 +1773,7 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<Filter Include=\"%s\">", subfolder ) ) );
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<UniqueIdentifier>{%s}</UniqueIdentifier>", guid ) ) );
-					CHECK_WRITE( file_write_line( &vcxproj, "\t\t</Filter>" ) );
+					CHECK_WRITE( file_write_line( &vcxproj,          "\t\t</Filter>" ) );
 				}
 
 				CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemGroup>" ) );
@@ -1819,19 +1819,19 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 							For ( u64, fileIndex, 0, filterFiles.count ) {
 								CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ClCompile Include=\"%s\\%s\">", folder, filterFiles[fileIndex] ) ) );
 								CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Filter>%s</Filter>", subfolder ) ) );
-								CHECK_WRITE( file_write_line( &vcxproj, "\t\t</ClCompile>" ) );
+								CHECK_WRITE( file_write_line( &vcxproj,          "\t\t</ClCompile>" ) );
 							}
 						} else if ( string_equals( fileExtension, "h" ) ) {
 							For ( u64, fileIndex, 0, filterFiles.count ) {
 								CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ClInclude Include=\"%s\\%s\">", folder, filterFiles[fileIndex] ) ) );
 								CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Filter>%s</Filter>", subfolder ) ) );
-								CHECK_WRITE( file_write_line( &vcxproj, "\t\t</ClInclude>" ) );
+								CHECK_WRITE( file_write_line( &vcxproj,          "\t\t</ClInclude>" ) );
 							}
 						} else {
 							For ( u64, fileIndex, 0, filterFiles.count ) {
 								CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<None Include=\"%s\\%s\">", folder, filterFiles[fileIndex] ) ) );
 								CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Filter>%s</Filter>", subfolder ) ) );
-								CHECK_WRITE( file_write_line( &vcxproj, "\t\t</None>" ) );
+								CHECK_WRITE( file_write_line( &vcxproj,          "\t\t</None>" ) );
 							}
 						}
 					}
@@ -1918,9 +1918,9 @@ static bool8 GenerateVisualStudioSolution( VisualStudioSolution* solution, const
 
 			//// we need to tell visual studio what the GUID of the solution is, apparently
 			//// and we also need to do it in this really roundabout way...for some reason
-			//CHECK_WRITE( file_write_line( &sln,			"\tGlobalSection(ExtensibilityGlobals) = postSolution" ) );
+			//CHECK_WRITE( file_write_line( &sln,          "\tGlobalSection(ExtensibilityGlobals) = postSolution" ) );
 			//CHECK_WRITE( file_write_line( &sln, tprintf( "\t\tSolutionGuid = {%s}", solutionGUID ) ) );
-			//CHECK_WRITE( file_write_line( &sln,			"\tEndGlobalSection" ) );
+			//CHECK_WRITE( file_write_line( &sln,          "\tEndGlobalSection" ) );
 		}
 		CHECK_WRITE( file_write_line( &sln, "EndGlobal" ) );
 

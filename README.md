@@ -36,6 +36,7 @@ Or suffering through the Visual Studio project settings, or CMake, or whatever y
 
 #include <builder.h> // builder will automatically resolve this include for you
 
+// this function MUST be called set_builder_options, MUST be void, and MUST use the BUILDER_CALLBACK modifier
 BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	BuildConfig config = {
 		.binary_name = "my-program",

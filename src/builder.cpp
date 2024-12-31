@@ -35,7 +35,7 @@ Proprietary and confidential.
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
 	BUILDER_VERSION_MINOR	= 5,
-	BUILDER_VERSION_PATCH	= 0,
+	BUILDER_VERSION_PATCH	= 1,
 };
 
 #define ARG_HELP_SHORT		"-h"

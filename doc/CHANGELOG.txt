@@ -1,3 +1,9 @@
+v0.5.1, 01/01/2025:
+
+* Some of the documentation was out of date; can't be having that!
+
+----------------------------------------------------------------
+
 v0.5.0, 28/12/2024:
 
 * BuildConfig::source_files now supports wildcards.

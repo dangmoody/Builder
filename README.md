@@ -44,7 +44,7 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 		.defines = { "IS_AWESOME=1" },
 	};
 
-	options.configs.push_back( config );
+	add_build_config( options, &config );
 }
 ```
 
@@ -95,8 +95,8 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 		.optimization_level = OPTIMIZATION_LEVEL_O3,
 	};
 
-	options->configs.push_back( debug );
-	options->configs.push_back( release );
+	add_build_config( options, &debug );
+	add_build_config( options, &release );
 }
 ```
 
@@ -148,8 +148,8 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	};
 
 	// If you know you're only building with Visual Studio, then you could optionally comment out these two lines.
-	options->configs.push_back( debug );
-	options->configs.push_back( release );
+	add_build_config( options, &debug );
+	add_build_config( options, &release );
 
 	// When this bool is true, Builder will always generate a Visual Studio solution, and it won't do a build.
 	// So if, suddenly, you decide you want to do a build without using Visual Studio, just set this to false and then pass this file to Builder.

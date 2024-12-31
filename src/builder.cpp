@@ -1286,10 +1286,10 @@ static void BuildConfig_AddDefaults( BuildConfig* outConfig ) {
 	outConfig->ignore_warnings.push_back( "-Wno-zero-as-null-pointer-constant" );
 	outConfig->ignore_warnings.push_back( "-Wno-c++98-compat-pedantic" );
 	outConfig->ignore_warnings.push_back( "-Wno-unused-macros" );
-	outConfig->ignore_warnings.push_back( "-Wno-unsafe-buffer-usage" );		// LLVM 17.0.1
+	outConfig->ignore_warnings.push_back( "-Wno-unsafe-buffer-usage" );			// LLVM 17.0.1
 	outConfig->ignore_warnings.push_back( "-Wno-reorder-init-list" );			// C++: "designated initializers must be in order"
 	outConfig->ignore_warnings.push_back( "-Wno-old-style-cast" );				// C++: "C-style casts are banned"
-	outConfig->ignore_warnings.push_back( "-Wno-global-constructors" );		// C++: "declaration requires a global destructor"
+	outConfig->ignore_warnings.push_back( "-Wno-global-constructors" );			// C++: "declaration requires a global destructor"
 	outConfig->ignore_warnings.push_back( "-Wno-exit-time-destructors" );		// C++: "declaration requires an exit-time destructor" (same as the above, basically)
 	outConfig->ignore_warnings.push_back( "-Wno-missing-field-initializers" );	// LLVM 18.1.8
 }

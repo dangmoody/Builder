@@ -17,5 +17,5 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 		},
 	};
 
-	options->configs.push_back( config );
+	add_build_config( options, &config );
 }

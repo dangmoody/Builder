@@ -13,6 +13,12 @@ Proprietary and confidential.
 
 #pragma once
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
+#endif
+
 /*
 ================================================================================================
 
@@ -31,19 +37,22 @@ void							dump_callstack( void );
 void							fatal_error_internal( const char* file, const int line, const char* prefix, const char* fmt, ... );
 
 
-#ifdef _WIN32
-	#ifndef debug_break
-		#define debug_break()	__debugbreak()
-	#endif
-#else
-	#error Unrecognised platform.  Please fill this #define in for this platform.
-#endif
-
 #ifndef fatal_error
 	#define fatal_error( fmt, ... )	fatal_error_internal( __FILE__, __LINE__, "FATAL ERROR", fmt, __VA_ARGS__ ); debug_break()
 #endif
 
 #ifdef _DEBUG
+	#ifdef _WIN32
+		#define debug_break() \
+			do { \
+				if ( IsDebuggerPresent() ) { \
+					__debugbreak(); \
+				} \
+			} while ( 0 )
+	#else
+		#error Unrecognised platform.
+	#endif
+
 	// helper macro for debugging
 	// will trigger a breakpoint if the condition is met
 	#define break_here_if( condition ) \
@@ -69,6 +78,7 @@ void							fatal_error_internal( const char* file, const int line, const char* p
 			} \
 		} while ( 0 )
 #else
+	#define debug_break()
 	#define assert( x )
 	#define assertf( x, fmt, ... )
 #endif

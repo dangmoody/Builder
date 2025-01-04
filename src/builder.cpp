@@ -56,6 +56,10 @@ enum {
 // C++ is the only language that builder knows/cares about
 #define VISUAL_STUDIO_CPP_PROJECT_TYPE_GUID	"8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942"
 
+#define QuitError() \
+	debug_break(); \
+	return 1
+
 #define CHECK_WRITE( func ) \
 	do { \
 		bool8 written = (func); \
@@ -398,13 +402,13 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 		args.add( tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() ) );
 		args.add( "-c" );
 
-		if ( string_ends_with( context->config.source_files[sourceFileIndex], ".cpp" ) ) {
+		if ( string_ends_with( context->config.source_files[sourceFileIndex], ".cpp" ) ) { // TODO(DM): 04/01/2025: IsSourceFile( sourceFile )
 			args.add( "-std=c++20" );
 		} else if ( string_ends_with( context->config.source_files[sourceFileIndex], ".c" ) ) {
 			args.add( "-std=c99" );
 		} else {
 			assertf( false, "Something went really wrong.\n" );
-			return 1;
+			QuitError();
 		}
 
 		if ( !context->config.remove_symbols ) {
@@ -2088,7 +2092,7 @@ int main( int argc, char** argv ) {
 			if ( !folder_create_if_it_doesnt_exist( ".\\temp" ) ) {
 				errorCode_t errorCode = GetLastErrorCode();
 				error( "Failed to create the temp folder that the Clang install uses.  Is it possible you have whacky user permissions? Error code: " ERROR_CODE_FORMAT "\n", errorCode );
-				return 1;
+				QuitError();
 			}
 
 			// download clang
@@ -2109,7 +2113,7 @@ int main( int argc, char** argv ) {
 					printf( "Done.\n" );
 				} else {
 					error( "Failed to download Clang.  The CURL HTTP request failed.\n" );
-					return 1;
+					QuitError();
 				}
 			}
 
@@ -2122,7 +2126,7 @@ int main( int argc, char** argv ) {
 				if ( !folder_create_if_it_doesnt_exist( clangInstallFolder ) ) {
 					errorCode_t errorCode = GetLastErrorCode();
 					error( "Failed to create the clang install folder \"%s\".  Is it possible you have some whacky user permissions? Error code: " ERROR_CODE_FORMAT "\n", clangInstallFolder, errorCode );
-					return 1;
+					QuitError();
 				}
 
 				// set clang installer command line arguments
@@ -2142,7 +2146,7 @@ int main( int argc, char** argv ) {
 					printf( "Done.\n" );
 				} else {
 					error( "Failed to install Clang.\n" );
-					return 1;
+					QuitError();
 				}
 			}
 
@@ -2193,7 +2197,7 @@ int main( int argc, char** argv ) {
 		if ( string_ends_with( arg, ".c" ) || string_ends_with( arg, ".cpp" ) ) {
 			if ( inputFile != NULL ) {
 				error( "You've already specified a file for me to build.  If you want me to build more than one source file, specify it via %s().\n", SET_BUILDER_OPTIONS_FUNC_NAME );
-				return 1;
+				QuitError();
 			}
 
 			inputFile = arg;
@@ -2205,7 +2209,7 @@ int main( int argc, char** argv ) {
 		if ( string_ends_with( arg, BUILD_INFO_FILE_EXTENSION ) ) {
 			if ( inputFile != NULL ) {
 				error( "You've already specified a file for me to build.  If you want me to build more than one source file, specify it via %s().\n", SET_BUILDER_OPTIONS_FUNC_NAME );
-				return 1;
+				QuitError();
 			}
 
 			inputFile = arg;
@@ -2240,7 +2244,7 @@ int main( int argc, char** argv ) {
 		if ( string_equals( arg, ARG_NUKE ) ) {
 			if ( argIndex == argc - 1 ) {
 				error( "You passed in " ARG_NUKE " but you never told me what folder you want me to nuke.  I need to know!" );
-				return 1;
+				QuitError();
 			}
 
 			const char* folderToNuke = argv[argIndex + 1];
@@ -2260,7 +2264,7 @@ int main( int argc, char** argv ) {
 
 		// unrecognised arg, show error
 		error( "Unrecognised argument \"%s\".\n", arg );
-		return 1;
+		QuitError();
 	}
 
 	// validate input file
@@ -2270,7 +2274,7 @@ int main( int argc, char** argv ) {
 			"Run builder " ARG_HELP_LONG " if you need help.\n"
 		);
 
-		return 1;
+		QuitError();
 	}
 
 	u64 inputFileLength = strlen( inputFile );
@@ -2310,8 +2314,8 @@ int main( int argc, char** argv ) {
 		}
 
 		if ( !readBuildInfo ) {
-			fatal_error( "Can't find \"%s\".  Does this file exist? Did you type it in correctly?\n", buildInfoFilename );
-			return 1;
+			error( "Can't find \"%s\".  Does this file exist? Did you type it in correctly?\n", buildInfoFilename );
+			QuitError();
 		}
 	}
 
@@ -2385,14 +2389,14 @@ int main( int argc, char** argv ) {
 		if ( !folder_create_if_it_doesnt_exist( userConfigBuildContext.config.binary_folder.c_str() ) ) {
 			errorCode_t errorCode = GetLastErrorCode();
 			error( "Failed to create the .builder folder.  Error code " ERROR_CODE_FORMAT "\n", userConfigBuildContext.config.binary_folder.c_str(), errorCode );
-			return 1;
+			QuitError();
 		}
 
 		exitCode = BuildDynamicLibrary( &userConfigBuildContext );
 
 		if ( exitCode != 0 ) {
 			error( "Pre-build failed!\n" );
-			return 1;
+			QuitError();
 		}
 	}
 
@@ -2434,7 +2438,7 @@ int main( int argc, char** argv ) {
 
 					if ( !generated ) {
 						error( "Failed to generate Visual Studio solution.\n" );	// TODO(DM): better error message
-						return 1;
+						QuitError();
 					}
 
 					printf( "Done.\n" );
@@ -2460,7 +2464,7 @@ int main( int argc, char** argv ) {
 
 			if ( configNameHashA == configNameHashB ) {
 				error( "I found multiple configs with the name \"%s\".  All config names MUST be unique, otherwise I don't know which specific config you want me to build.\n", configNameA );
-				return 1;
+				QuitError();
 			}
 		}
 	}
@@ -2489,7 +2493,7 @@ int main( int argc, char** argv ) {
 
 		if ( !foundConfig ) {
 			error( "You passed the config name \"%s\" via the command line, but I never found a config with that name inside %s.  Make sure they match.\n", inputConfigName, SET_BUILDER_OPTIONS_FUNC_NAME );
-			return 1;
+			QuitError();
 		}
 	}
 
@@ -2518,7 +2522,7 @@ int main( int argc, char** argv ) {
 				"You must pass in a config name via " ARG_CONFIG "\n"
 				"Run builder " ARG_HELP_LONG " if you need help.\n"
 			);
-			return 1;
+			QuitError();
 		}
 	}
 
@@ -2685,7 +2689,7 @@ int main( int argc, char** argv ) {
 		// if the build was successful, write the new .build_info file now
 		if ( exitCode != 0 ) {
 			error( "Build failed.\n" );
-			return 1;
+			QuitError();
 		}
 
 		printf( "\n" );

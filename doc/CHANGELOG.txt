@@ -1,3 +1,14 @@
+v0.5.2, 05/01/2025:
+
+* Fixed a crash when sometimes trying to generate a .sln file.
+* Fixed the binary folder being called "null" when the build source file doesn't contain a path.
+* Fixed "default" build config not getting written to .build_info file in a default build.
+* Fixed source files sometimes not getting resolved when the build source file contains a path.
+* Fixed duplicate files sometimes not getting treated as duplicates when tracking them in the .build_info file.
+* Better output in the console when generating a Visual Studio solution.
+
+----------------------------------------------------------------
+
 v0.5.1, 01/01/2025:
 
 * Some of the documentation was out of date; can't be having that!
@@ -19,10 +30,7 @@ v0.5.0, 28/12/2024:
 	* Paths to source files are now resolved properly when building from visual studio.
 	* Includes that were commented out are no longer included in the .build_info file.
 		* Because this include is ultimately not included in the build, Builder shouldn't care about it.  The file name/path could be wrong, and the file could not exist.
-	* Core:
-		* Files that get overwritten did not get wiped, leaving lots of trailing garbage content.
-		* paths_canonicalise_path() now calls paths_fix_slashes().
-			* Turns out the WinAPI function PathCanonicalize() requires all slashes to be consistent, otherwise it will silently return incorrect results.
+	* Files that got overwritten did not get wiped, leaving lots of trailing garbage content.
 
 ----------------------------------------------------------------
 

@@ -6,12 +6,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LocalDebuggerCommand>$(SolutionDir)builder.exe</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>../src/.builder/SuperZombieSmashHD.build_info --config=win64-debug</LocalDebuggerCommandArguments>
-    <LocalDebuggerWorkingDirectory>$(ProjectDir)bug_reports/SuperZombieSmashHD/visual_studio</LocalDebuggerWorkingDirectory>
+    <LocalDebuggerCommandArguments>tests/test_third_party_libraries/build.cpp</LocalDebuggerCommandArguments>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LocalDebuggerCommand>$(SolutionDir)builder.exe</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>../builder_bug_reports/assteroids/build_assteroids.cpp</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>C:/dev/TEF/src/build.cpp</LocalDebuggerCommandArguments>
   </PropertyGroup>
 </Project>

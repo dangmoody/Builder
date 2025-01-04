@@ -21,8 +21,8 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 		.optimization_level = OPTIMIZATION_LEVEL_O3,
 	};
 
-	options->configs.push_back( debug );
-	options->configs.push_back( release );
+	add_build_config( options, &debug );
+	add_build_config( options, &release );
 }
 
 int main() {

@@ -43,7 +43,7 @@ if /I [%config%]==[release] (
 
 set source_files=src\\builder.cpp
 
-set defines=-D_CRT_SECURE_NO_WARNINGS -DCORE_USE_XXHASH
+set defines=-D_CRT_SECURE_NO_WARNINGS -DCORE_USE_XXHASH -DCORE_SUC
 if /I [%config%]==[debug] (
 	set defines=!defines! -D_DEBUG
 )
@@ -52,7 +52,8 @@ if /I [%config%]==[release] (
 	set defines=!defines! -DNDEBUG
 )
 
-set includes=""
+set includes=-Isrc\\core\\include
+
 set libraries=-luser32.lib -lShlwapi.lib -lDbgHelp.lib -lOle32.lib
 if /I [%config%]==[debug] (
 	set libraries=!libraries! -lmsvcrtd.lib
@@ -64,7 +65,9 @@ set warning_levels=-Werror -Wall -Wextra -Weverything -Wpedantic
 
 set ignore_warnings=-Wno-newline-eof -Wno-format-nonliteral -Wno-gnu-zero-variadic-macro-arguments -Wno-declaration-after-statement -Wno-unsafe-buffer-usage -Wno-zero-as-null-pointer-constant -Wno-c++98-compat-pedantic -Wno-old-style-cast -Wno-missing-field-initializers -Wno-switch-default -Wno-covered-switch-default -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-cast-align
 
-clang -std=c++20 -o %bin_folder%\\builder.exe %symbols% %optimisation% %source_files% !defines! %includes% !libraries! %warning_levels% %ignore_warnings%
+set args=clang -std=c++20 -o %bin_folder%\\builder.exe %symbols% %optimisation% %source_files% !defines! %includes% !libraries! %warning_levels% %ignore_warnings%
+echo %args%
+%args%
 
 xcopy /v /y /f %bin_folder%\\builder.exe .\\
 

@@ -1,10 +1,12 @@
 v0.5.2, 05/01/2025:
 
 * Fixed a crash when sometimes trying to generate a .sln file.
+* Fixed a crash when sometimes trying to build from Visual Studio.
 * Fixed the binary folder being called "null" when the build source file doesn't contain a path.
 * Fixed "default" build config not getting written to .build_info file in a default build.
 * Fixed source files sometimes not getting resolved when the build source file contains a path.
 * Fixed duplicate files sometimes not getting treated as duplicates when tracking them in the .build_info file.
+* Fixed source file paths sometimes being NULL when serializing a .build_info file.
 * Better output in the console when generating a Visual Studio solution.
 
 ----------------------------------------------------------------

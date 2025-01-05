@@ -38,7 +38,11 @@ void							fatal_error_internal( const char* file, const int line, const char* p
 
 
 #ifndef fatal_error
-	#define fatal_error( fmt, ... )	fatal_error_internal( __FILE__, __LINE__, "FATAL ERROR", fmt, __VA_ARGS__ ); debug_break()
+	#define fatal_error( fmt, ... )	\
+		do { \
+			fatal_error_internal( __FILE__, __LINE__, "FATAL ERROR", fmt, __VA_ARGS__ ); \
+			debug_break(); \
+		} while ( 0 )
 #endif
 
 #ifdef _DEBUG
@@ -55,7 +59,7 @@ void							fatal_error_internal( const char* file, const int line, const char* p
 
 	// helper macro for debugging
 	// will trigger a breakpoint if the condition is met
-	#define break_here_if( condition ) \
+	#define debug_break_here_if( condition ) \
 		do { \
 			if ( (condition) ) { \
 				debug_break(); \

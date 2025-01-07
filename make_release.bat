@@ -20,8 +20,8 @@ if not exist %temp_folder% (
 robocopy .\\    %temp_folder% builder.exe
 robocopy .\\    %temp_folder% builder.h
 robocopy .\\    %temp_folder% README.md
+robocopy .\\    %temp_folder% LICENSE
 robocopy .\\doc %temp_folder% CHANGELOG.txt
-robocopy .\\doc %temp_folder% LICENSE
 
 .\\7zip\\7za.exe a -tzip releases\\builder_%version%.zip %temp_folder%
 

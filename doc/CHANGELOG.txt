@@ -1,3 +1,10 @@
+v0.5.3, 07/01/2025:
+
+* Builder now officially ships under the MIT license.
+	* I forgot to change the license when I made Builder publicly available - whoops!
+
+----------------------------------------------------------------
+
 v0.5.2, 05/01/2025:
 
 * Fixed a crash when sometimes trying to generate a .sln file.

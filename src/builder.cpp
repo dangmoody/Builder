@@ -50,7 +50,7 @@ SOFTWARE.
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
 	BUILDER_VERSION_MINOR	= 5,
-	BUILDER_VERSION_PATCH	= 2,
+	BUILDER_VERSION_PATCH	= 4,
 };
 
 #define ARG_HELP_SHORT		"-h"
@@ -1380,6 +1380,11 @@ static const char* CreateVisualStudioGuid() {
 }
 
 static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudioSolution* solution, const char* userConfigSourceFilename, const char* userConfigBuildDLLFilename, const bool8 verbose ) {
+	assert( context );
+	assert( context->inputFile );
+	assert( context->inputFilePath );
+	assert( context->dotBuilderFolder );
+	assert( context->buildInfoFilename );
 	assert( solution );
 
 	// TODO(DM): 18/11/2024: dont use abs path here
@@ -2040,13 +2045,13 @@ int main( int argc, char** argv ) {
 		printf( "Build finished: %f ms\n\n", buildEnd - buildStart );
 	);
 
-	core_init( MEM_KILOBYTES( 1 ), MEM_MEGABYTES( 64 ) );
+	core_init( MEM_KILOBYTES( 1 ), MEM_MEGABYTES( 128 ) );
 	defer( core_shutdown() );
 
 	// TODO(DM): 23/10/2024: we dont use this?
 	set_command_line_args( argc, argv );
 
-	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+	printf( "Builder v%d.%d.%d RC0\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {};
 	context.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS | BUILD_CONTEXT_FLAG_SHOW_STDOUT;
@@ -2590,15 +2595,24 @@ int main( int argc, char** argv ) {
 
 		bool8 shouldSkipBuild = true;
 
-		// figure out if we need to even rebuild
-		// if the binary doesnt exist, we definitely need to rebuild
-		if ( !FileExists( context.fullBinaryName ) ) {
-			shouldSkipBuild = false;
-		}
-		
-		// get all the code files from the .build_info file
-		// if none of the code files have changed since we last checked then we do not need to rebuild
 		{
+			// if the .build_info isnt there, or we expect a different name now, or something else
+			// then we wont have any tracked source files to check through later on in this subroutine
+			// and the build will be skipped
+			// so just force a rebuild if we cant find/read the .build_info for whatever reason
+			if ( !readBuildInfo ) {
+				printf( "Failed to read %s.  Rebuilding...\n", context.buildInfoFilename );
+				shouldSkipBuild = false;
+			}
+
+			// figure out if we need to even rebuild
+			// if the binary doesnt exist, we definitely need to rebuild
+			if ( !FileExists( context.fullBinaryName ) ) {
+				shouldSkipBuild = false;
+			}
+
+			// get all the code files from the .build_info file
+			// if none of the code files have changed since we last checked then we do not need to rebuild
 			std::vector<trackedSourceFile_t> trackedSourceFiles;
 
 			For ( u64, configIndex, 0, parsedBuildInfoData.configs.size() ) {

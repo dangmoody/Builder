@@ -1,3 +1,9 @@
+v0.5.4, <RELEASE DATE HERE>:
+
+* Fixed builds getting skipped if Builder can't find the .build_info file or if the expected .build_info file name changes.
+
+----------------------------------------------------------------
+
 v0.5.3, 07/01/2025:
 
 * Builder now officially ships under the MIT license.

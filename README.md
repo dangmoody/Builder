@@ -166,8 +166,8 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 			.code_folders = { "../src/" },
 			.file_extensions = { "cpp", "h", "inl" },
 			.configs = {
-				{ debug,   { /* debugger arguments */ } },
-				{ release, { /* debugger arguments */ } },
+				{ "debug",   debug,   { /* debugger arguments */ } },
+				{ "release", release, { /* debugger arguments */ } },
 			}
 		}
 	};

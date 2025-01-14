@@ -156,7 +156,7 @@ struct VisualStudioSolution {
 
 	// The folder where the solution (and it's projects) are going to live.
 	// If you don't set this then the solution is generated in the same path as the build file.
-	// This is relative to the source file that fills in the entry point set_visual_studio_options.
+	// This is relative to the source file that you specify at the command line.
 	const char*							path;
 };
 

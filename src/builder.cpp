@@ -1651,9 +1651,19 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 					// output path
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeOutput>%s</NMakeOutput>", config->options.binary_folder.c_str() ) ) );
 
+					const char* inputFileAndPath = NULL;
+					if ( PathHasSlash( context->inputFile ) ) {
+						inputFileAndPath = context->inputFile;
+					} else {
+						const char* inputFileNoPath = paths_remove_path_from_file( context->inputFile );
+						inputFileAndPath = tprintf( "%s\\%s", context->inputFilePath, inputFileNoPath );
+					}
+
 					char* pathFromSolutionToCode = cast( char* ) mem_temp_alloc( MAX_PATH * sizeof( char ) );
 					memset( pathFromSolutionToCode, 0, MAX_PATH * sizeof( char ) );
-					PathRelativePathTo( pathFromSolutionToCode, solutionFilename, FILE_ATTRIBUTE_NORMAL, paths_fix_slashes( context->inputFile ), FILE_ATTRIBUTE_DIRECTORY );
+					PathRelativePathTo( pathFromSolutionToCode, solutionFilename, FILE_ATTRIBUTE_NORMAL, paths_fix_slashes( inputFileAndPath ), FILE_ATTRIBUTE_DIRECTORY );
+
+					assert( pathFromSolutionToCode != NULL );
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcast-qual"
@@ -2051,7 +2061,7 @@ int main( int argc, char** argv ) {
 	// TODO(DM): 23/10/2024: we dont use this?
 	set_command_line_args( argc, argv );
 
-	printf( "Builder v%d.%d.%d RC0\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+	printf( "Builder v%d.%d.%d RC1\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {};
 	context.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS | BUILD_CONTEXT_FLAG_SHOW_STDOUT;

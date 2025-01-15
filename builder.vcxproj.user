@@ -6,8 +6,8 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LocalDebuggerCommand>$(SolutionDir)builder.exe</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>../src/.builder/SuperZombieSmashHD.build_info --config=win64-debug</LocalDebuggerCommandArguments>
-    <LocalDebuggerWorkingDirectory>$(ProjectDir)bug_reports/SuperZombieSmashHD/visual_studio</LocalDebuggerWorkingDirectory>
+    <LocalDebuggerCommandArguments>build.cpp --config=win64-debug-suc</LocalDebuggerCommandArguments>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)bug_reports/MoodyCore/Core</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LocalDebuggerCommand>$(SolutionDir)builder.exe</LocalDebuggerCommand>

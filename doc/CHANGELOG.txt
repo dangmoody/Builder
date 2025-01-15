@@ -1,6 +1,7 @@
 v0.5.4, <RELEASE DATE HERE>:
 
 * Fixed builds getting skipped if Builder can't find the .build_info file or if the expected .build_info file name changes.
+* Fixed path from Visual Studio solution to Builder being null if the input file didn't also contain a path.
 
 ----------------------------------------------------------------
 
@@ -19,7 +20,7 @@ v0.5.2, 05/01/2025:
 * Fixed "default" build config not getting written to .build_info file in a default build.
 * Fixed source files sometimes not getting resolved when the build source file contains a path.
 * Fixed duplicate files sometimes not getting treated as duplicates when tracking them in the .build_info file.
-* Fixed source file paths sometimes being NULL when serializing a .build_info file.
+* Fixed source file paths sometimes being null when serializing a .build_info file.
 * Better output in the console when generating a Visual Studio solution.
 
 ----------------------------------------------------------------

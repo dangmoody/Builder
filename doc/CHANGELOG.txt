@@ -1,4 +1,4 @@
-v0.5.4, <RELEASE DATE HERE>:
+v0.5.4, 17/01/2025:
 
 * Fixed builds getting skipped if Builder can't find the .build_info file or if the expected .build_info file name changes.
 * Fixed path from Visual Studio solution to Builder being null if the input file didn't also contain a path.

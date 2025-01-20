@@ -962,6 +962,14 @@ static void GetAllIncludedFiles( const buildContext_t* context, const BuildConfi
 	}
 }
 
+static void SerializeBool8( File* file, const bool8 x ) {
+	CHECK_WRITE( file_write( file, &x, sizeof( bool8 ) ) );
+}
+
+static void SerializeS32( File* file, const s32 x ) {
+	CHECK_WRITE( file_write( file, &x, sizeof( s32 ) ) );
+}
+
 static void SerializeU64( File* file, const u64 x ) {
 	CHECK_WRITE( file_write( file, &x, sizeof( u64 ) ) );
 }
@@ -987,6 +995,11 @@ static void SerializeSTDStringArray( File* file, const std::vector<std::string>&
 static void SerializeBuildInfo( const buildContext_t* context, const std::vector<BuildConfig>& configs, const char* userConfigSourceFilename, const char* userConfigDLLFilename, const bool8 verbose ) {
 	File file = file_open_or_create( context->buildInfoFilename );
 	defer( file_close( &file ) );
+
+	CHECK_WRITE( file_write( &file, "builder_version:\n" ) );
+	SerializeS32( &file, BUILDER_VERSION_MAJOR );
+	SerializeS32( &file, BUILDER_VERSION_MINOR );
+	SerializeS32( &file, BUILDER_VERSION_PATCH );
 
 	CHECK_WRITE( file_write( &file, tprintf( "build_source_file: %s\n", userConfigSourceFilename ) ) );
 	CHECK_WRITE( file_write( &file, tprintf( "DLL: %s\n", userConfigDLLFilename ) ) );
@@ -1023,8 +1036,8 @@ static void SerializeBuildInfo( const buildContext_t* context, const std::vector
 
 		CHECK_WRITE( file_write( &file, &config->binary_type, sizeof( BinaryType ) ) );
 		CHECK_WRITE( file_write( &file, &config->optimization_level, sizeof( OptimizationLevel ) ) );
-		CHECK_WRITE( file_write( &file, &config->remove_symbols, sizeof( bool8 ) ) );
-		CHECK_WRITE( file_write( &file, &config->remove_file_extension, sizeof( bool8 ) ) );
+		SerializeBool8( &file, config->remove_symbols );
+		SerializeBool8( &file, config->remove_file_extension );
 
 		// serialize all included files and their last write time
 		{
@@ -1179,10 +1192,17 @@ static std::vector<std::string> Parser_ParseSTDStringArray( parser_t* parser ) {
 	return result;
 }
 
+struct builderVersion_t {
+	s32								major;
+	s32								minor;
+	s32								patch;
+};
+
 struct buildInfoFileData_t {
 	std::vector<buildInfoConfig_t>	configs;
 	std::string						userConfigSourceFilename;
 	std::string						userConfigDLLFilename;
+	builderVersion_t				builderVersion;
 };
 
 static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, buildInfoFileData_t* outData ) {
@@ -1194,6 +1214,11 @@ static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, buildInfoFile
 	}
 
 	defer( Parser_Shutdown( &parser ) );
+
+	Parser_ParseLine( &parser );	// "builder_version" tag, skip
+	outData->builderVersion.major = Parser_ParseS32( &parser );
+	outData->builderVersion.minor = Parser_ParseS32( &parser );
+	outData->builderVersion.patch = Parser_ParseS32( &parser );
 
 	Parser_ParseStringField( &parser, NULL, &outData->userConfigSourceFilename );
 	Parser_ParseStringField( &parser, NULL, &outData->userConfigDLLFilename );
@@ -2116,7 +2141,7 @@ int main( int argc, char** argv ) {
 	// TODO(DM): 23/10/2024: we dont use this?
 	set_command_line_args( argc, argv );
 
-	printf( "Builder v%d.%d.%d RC0\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+	printf( "Builder v%d.%d.%d RC1\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {};
 	context.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS | BUILD_CONTEXT_FLAG_SHOW_STDOUT;
@@ -2660,6 +2685,7 @@ int main( int argc, char** argv ) {
 
 		bool8 shouldSkipBuild = true;
 
+		// figure out if we need to even rebuild
 		{
 			// if the .build_info isnt there, or we expect a different name now, or something else
 			// then we wont have any tracked source files to check through later on in this subroutine
@@ -2670,7 +2696,14 @@ int main( int argc, char** argv ) {
 				shouldSkipBuild = false;
 			}
 
-			// figure out if we need to even rebuild
+			// if this was last built on a different version of builder then rebuild
+			if ( parsedBuildInfoData.builderVersion.major != BUILDER_VERSION_MAJOR ||
+				 parsedBuildInfoData.builderVersion.minor != BUILDER_VERSION_MINOR ||
+				 parsedBuildInfoData.builderVersion.patch != BUILDER_VERSION_PATCH )
+			{
+				shouldSkipBuild = false;
+			}
+
 			// if the binary doesnt exist, we definitely need to rebuild
 			if ( !FileExists( context.fullBinaryName ) ) {
 				shouldSkipBuild = false;

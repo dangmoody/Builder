@@ -132,18 +132,18 @@ Code example:
 BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	BuildConfig debug = {
 		.name = "debug",
-		.source_files = { "../src/*.cpp" },
+		.source_files = { "src/*.cpp" },
 		.binary_name = "test",
-		.binary_folder = "../bin/debug",
+		.binary_folder = "bin/debug",
 		.optimization_level = OPTIMIZATION_LEVEL_O0,
 		.defines = { "_DEBUG" },
 	};
 
 	BuildConfig release = {
 		.name = "release",
-		.source_files = { "../src/*.cpp" },
+		.source_files = { "src/*.cpp" },
 		.binary_name = "test",
-		.binary_folder = "../bin/release",
+		.binary_folder = "bin/release",
 		.optimization_level = OPTIMIZATION_LEVEL_O3,
 		.defines = { "NDEBUG" },
 	};
@@ -158,12 +158,12 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	options->generate_solution = true;
 
 	options->solution.name = "test-sln";
-	options->solution.path = "../visual_studio";
-	options->solution.platforms = { "win64" };
+	options->solution.path = "visual_studio";
+	options->solution.platforms = { "x64" };
 	options->solution.projects = {
 		{
 			.name = "test-project",
-			.code_folders = { "../src/" },
+			.code_folders = { "src" },
 			.file_extensions = { "cpp", "h", "inl" },
 			.configs = {
 				{ "debug",   debug,   { /* debugger arguments */ } },

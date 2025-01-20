@@ -134,6 +134,7 @@ struct VisualStudioProject {
 
 	// These are the source files that will be included in the "Source Files" filter in the project.
 	// This is a separate list to the build options as you likely want the superset of all files in your Solution, but may conditionally exclude a subset of files based on config/target etc.
+	// This folders you include here are relative to your build script.
 	// This list must NOT contain any search filters.
 	std::vector<const char*>		code_folders;
 

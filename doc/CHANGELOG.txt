@@ -1,4 +1,13 @@
-v0.5.4, <RELEASE DATE HERE>:
+v0.5.5, 21/01/2025:
+
+* Builder now serializes it's version number into all .build_info files.
+	* This is to detect whether or not we need to rebuild between new versions of builder.
+	* As a result of this, all old .build_info files are out of date and will need to be deleted before using this version.
+* Fixed Visual Studio filters not showing all the files in their correct folder/subfolder.
+
+----------------------------------------------------------------
+
+v0.5.4, 17/01/2025:
 
 * Fixed builds getting skipped if Builder can't find the .build_info file or if the expected .build_info file name changes.
 * Fixed path from Visual Studio solution to Builder being null if the input file didn't also contain a path.

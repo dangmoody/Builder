@@ -1,4 +1,4 @@
-#include "../src/core/core.cpp"
+#include "../src/core/src/core.suc.cpp"
 
 #define TEMPERDEV_ASSERT assert
 #define TEMPER_IMPLEMENTATION

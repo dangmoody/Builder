@@ -50,7 +50,7 @@ SOFTWARE.
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
 	BUILDER_VERSION_MINOR	= 5,
-	BUILDER_VERSION_PATCH	= 4,
+	BUILDER_VERSION_PATCH	= 5,
 };
 
 #define ARG_HELP_SHORT		"-h"
@@ -143,6 +143,38 @@ static const char* GetFileExtensionFromBinaryType( BinaryType type ) {
 	assertf( false, "Something went really wrong here.\n" );
 
 	return "ERROR";
+}
+
+static bool8 FileIsSourceFile( const char* filename ) {
+	static const char* fileExtensions[] = {
+		".cpp",
+		".cxx",
+		".cc",
+		".c",
+	};
+
+	For ( u64, extensionIndex, 0, count_of( fileExtensions ) ) {
+		if ( string_ends_with( filename, fileExtensions[extensionIndex] ) ) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static bool8 FileIsHeaderFile( const char* filename ) {
+	static const char* fileExtensions[] = {
+		".h",
+		".hpp",
+	};
+
+	For ( u64, extensionIndex, 0, count_of( fileExtensions ) ) {
+		if ( string_ends_with( filename, fileExtensions[extensionIndex] ) ) {
+			return true;
+		}
+	}
+
+	return false;
 }
 
 static s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVariables, const bool8 showArgs = false, const bool8 showStdout = false ) {
@@ -627,7 +659,9 @@ static void FindAllFilesInFolder_r( const char* basePath, const char* folder, co
 			FindAllFilesInFolder_r( basePath, subfolder, fileExtension, recursive, outFiles );
 		}
 
-		if ( string_ends_with( fileInfo.filename, fileExtension ) ) {
+		const char* fileExtension2 = tprintf( ".%s", fileExtension );
+
+		if ( string_ends_with( fileInfo.filename, fileExtension2 ) ) {
 			const char* fullName = tprintf( "%s\\%s", folder, fileInfo.filename );
 
 			outFiles->add( fullName );
@@ -700,47 +734,65 @@ static void GetAllSourceFiles_r( const char* basePath, const char* folder, const
 }
 
 static void GetAllSubfolders_r( const char* basePath, const char* folder, Array<const char*>* outSubfolders ) {
-	const char* fullSearchPath = NULL;
-	if ( string_ends_with( basePath, "\\" ) || string_ends_with( basePath, "/" ) ) {
-		if ( folder ) {
-			fullSearchPath = tprintf( "%s\\%s*", basePath, folder );
-		} else {
+	// do initial find from base path
+	{
+		const char* fullSearchPath = NULL;
+		if ( string_ends_with( basePath, "\\" ) || string_ends_with( basePath, "/" ) ) {
 			fullSearchPath = tprintf( "%s*", basePath );
-		}
-	} else {
-		if ( folder ) {
-			fullSearchPath = tprintf( "%s\\%s\\*", basePath, folder );
 		} else {
 			fullSearchPath = tprintf( "%s\\*", basePath );
 		}
+
+		FileInfo fileInfo;
+		File file = file_find_first( fullSearchPath, &fileInfo );
+
+		do {
+			if ( !string_equals( fileInfo.filename, folder ) ) {
+				continue;
+			}
+
+			if ( fileInfo.is_directory ) {
+				const char* folderName = tprintf( "%s", fileInfo.filename );
+				outSubfolders->add( folderName );
+				break;
+			}
+		} while ( file_find_next( &file, &fileInfo ) );
 	}
 
-	FileInfo fileInfo;
-	File file = file_find_first( fullSearchPath, &fileInfo );
-
-	do {
-		// assume this means folder contains no files of this type
-		if ( file.ptr == INVALID_HANDLE_VALUE ) {
-			continue;
-		}
-
-		if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) ) {
-			continue;
-		}
-
-		const char* fullName = NULL;
-		if ( folder ) {
-			fullName = tprintf( "%s\\%s", folder, fileInfo.filename );
+	// now search subfolders of the one we just found
+	{
+		const char* fullSearchPath = NULL;
+		if ( string_ends_with( basePath, "\\" ) || string_ends_with( basePath, "/" ) ) {
+			if ( folder ) {
+				fullSearchPath = tprintf( "%s%s\\*", basePath, folder );
+			} else {
+				fullSearchPath = tprintf( "%s*", basePath );
+			}
 		} else {
-			fullName = tprintf( "%s", fileInfo.filename );
+			if ( folder ) {
+				fullSearchPath = tprintf( "%s\\%s\\*", basePath, folder );
+			} else {
+				fullSearchPath = tprintf( "%s\\*", basePath );
+			}
 		}
 
-		if ( fileInfo.is_directory ) {
-			outSubfolders->add( fullName );
+		FileInfo fileInfo;
+		File file = file_find_first( fullSearchPath, &fileInfo );
 
-			GetAllSubfolders_r( basePath, fullName, outSubfolders );
-		}
-	} while ( file_find_next( &file, &fileInfo ) );
+		do {
+			if ( fileInfo.is_directory ) {
+				if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) ) {
+					continue;
+				}
+
+				const char* fullName = tprintf( "%s\\%s", folder, fileInfo.filename );
+
+				outSubfolders->add( fullName );
+
+				GetAllSubfolders_r( basePath, fullName, outSubfolders );
+			}
+		} while ( file_find_next( &file, &fileInfo ) );
+	}
 }
 
 static std::vector<const char*> BuildConfig_GetAllSourceFiles( const buildContext_t* context, const BuildConfig* config ) {
@@ -910,6 +962,14 @@ static void GetAllIncludedFiles( const buildContext_t* context, const BuildConfi
 	}
 }
 
+static void SerializeBool8( File* file, const bool8 x ) {
+	CHECK_WRITE( file_write( file, &x, sizeof( bool8 ) ) );
+}
+
+static void SerializeS32( File* file, const s32 x ) {
+	CHECK_WRITE( file_write( file, &x, sizeof( s32 ) ) );
+}
+
 static void SerializeU64( File* file, const u64 x ) {
 	CHECK_WRITE( file_write( file, &x, sizeof( u64 ) ) );
 }
@@ -935,6 +995,11 @@ static void SerializeSTDStringArray( File* file, const std::vector<std::string>&
 static void SerializeBuildInfo( const buildContext_t* context, const std::vector<BuildConfig>& configs, const char* userConfigSourceFilename, const char* userConfigDLLFilename, const bool8 verbose ) {
 	File file = file_open_or_create( context->buildInfoFilename );
 	defer( file_close( &file ) );
+
+	CHECK_WRITE( file_write( &file, "builder_version:\n" ) );
+	SerializeS32( &file, BUILDER_VERSION_MAJOR );
+	SerializeS32( &file, BUILDER_VERSION_MINOR );
+	SerializeS32( &file, BUILDER_VERSION_PATCH );
 
 	CHECK_WRITE( file_write( &file, tprintf( "build_source_file: %s\n", userConfigSourceFilename ) ) );
 	CHECK_WRITE( file_write( &file, tprintf( "DLL: %s\n", userConfigDLLFilename ) ) );
@@ -971,8 +1036,8 @@ static void SerializeBuildInfo( const buildContext_t* context, const std::vector
 
 		CHECK_WRITE( file_write( &file, &config->binary_type, sizeof( BinaryType ) ) );
 		CHECK_WRITE( file_write( &file, &config->optimization_level, sizeof( OptimizationLevel ) ) );
-		CHECK_WRITE( file_write( &file, &config->remove_symbols, sizeof( bool8 ) ) );
-		CHECK_WRITE( file_write( &file, &config->remove_file_extension, sizeof( bool8 ) ) );
+		SerializeBool8( &file, config->remove_symbols );
+		SerializeBool8( &file, config->remove_file_extension );
 
 		// serialize all included files and their last write time
 		{
@@ -1127,10 +1192,17 @@ static std::vector<std::string> Parser_ParseSTDStringArray( parser_t* parser ) {
 	return result;
 }
 
+struct builderVersion_t {
+	s32								major;
+	s32								minor;
+	s32								patch;
+};
+
 struct buildInfoFileData_t {
 	std::vector<buildInfoConfig_t>	configs;
 	std::string						userConfigSourceFilename;
 	std::string						userConfigDLLFilename;
+	builderVersion_t				builderVersion;
 };
 
 static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, buildInfoFileData_t* outData ) {
@@ -1142,6 +1214,11 @@ static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, buildInfoFile
 	}
 
 	defer( Parser_Shutdown( &parser ) );
+
+	Parser_ParseLine( &parser );	// "builder_version" tag, skip
+	outData->builderVersion.major = Parser_ParseS32( &parser );
+	outData->builderVersion.minor = Parser_ParseS32( &parser );
+	outData->builderVersion.patch = Parser_ParseS32( &parser );
 
 	Parser_ParseStringField( &parser, NULL, &outData->userConfigSourceFilename );
 	Parser_ParseStringField( &parser, NULL, &outData->userConfigDLLFilename );
@@ -1518,6 +1595,61 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 			}
 		}
 
+		Array<const char*> sourceFiles;
+		Array<const char*> headerFiles;
+		Array<const char*> otherFiles;
+
+		Array<const char*> sourceFilePaths;
+		Array<const char*> headerFilePaths;
+		Array<const char*> otherFilePaths;
+
+		// get all the files that the project will know about
+		// the arrays in here get referred to multiple times throughout generating the files for the project
+		{
+			For ( u64, folderIndex, 0, project->code_folders.size() ) {
+				const char* folder = project->code_folders[folderIndex];
+
+				Array<const char*> subfolders;
+				GetAllSubfolders_r( context->inputFilePath, folder, &subfolders );
+
+				For ( u64, fileExtensionIndex, 0, project->file_extensions.size() ) {
+					const char* fileExtension = project->file_extensions[fileExtensionIndex];
+
+					For ( u64, subfolderIndex, 0, subfolders.count ) {
+						const char* subfolder = subfolders[subfolderIndex];
+
+						Array<const char*> files;
+						FindAllFilesInFolder_r( context->inputFilePath, subfolder, fileExtension, false, &files );
+
+						For ( u64, fileIndex, 0, files.count ) {
+							const char* file = files[fileIndex];
+
+							const char* fileFull = tprintf( "%s\\%s", context->inputFilePath, file );
+
+							char* fileRelative = cast( char* ) mem_temp_alloc( MAX_PATH * sizeof( char ) );
+							memset( fileRelative, 0, MAX_PATH * sizeof( char ) );
+							PathRelativePathTo( fileRelative, solutionFilename, FILE_ATTRIBUTE_NORMAL, fileFull, FILE_ATTRIBUTE_NORMAL );
+
+							if ( FileIsSourceFile( file ) ) {
+								sourceFiles.add( fileRelative );
+								sourceFilePaths.add( subfolder );
+							} else if ( FileIsHeaderFile( file ) ) {
+								headerFiles.add( fileRelative );
+								headerFilePaths.add( subfolder );
+							} else {
+								otherFiles.add( fileRelative );
+								otherFilePaths.add( subfolder );
+							}
+						}
+
+						assert( sourceFiles.count == sourceFilePaths.count );
+						assert( headerFiles.count == headerFilePaths.count );
+						assert( otherFiles.count == otherFilePaths.count );
+					}
+				}
+			}
+		}
+
 		// .vcxproj
 		{
 			const char* projectPath = tprintf( "%s\\%s.vcxproj", visualStudioProjectFilesPath, project->name );
@@ -1697,53 +1829,34 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 			// tell visual studio what files we have in this project
 			// this is typically done via a filter (E.G: src/*.cpp)
 			{
-				For ( u64, folderIndex, 0, project->code_folders.size() ) {
-					const char* folder = project->code_folders[folderIndex];
+				if ( sourceFiles.count > 0 ) {
+					CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
 
-					For ( u64, fileExtensionIndex, 0, project->file_extensions.size() ) {
-						const char* fileExtension = project->file_extensions[fileExtensionIndex];
-
-						if ( string_equals( fileExtension, "cpp" ) ) {	// TODO(DM): 01/01/2025: FileExtensionIsSourceFile( fileExtension )
-							Array<const char*> files;
-							FindAllFilesInFolder_r( context->inputFilePath, folder, fileExtension, true, &files );
-
-							if ( files.count > 0 ) {
-								CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
-
-								For ( u64, fileIndex, 0, files.count ) {
-									CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ClCompile Include=\"%s\" />", files[fileIndex] ) ) );
-								}
-
-								CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemGroup>" ) );
-							}
-						} else if ( string_equals( fileExtension, "h" ) ) {
-							Array<const char*> files;
-							FindAllFilesInFolder_r( context->inputFilePath, folder, fileExtension, true, &files );
-
-							if ( files.count > 0 ) {
-								CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
-
-								For ( u64, fileIndex, 0, files.count ) {
-									CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ClInclude Include=\"%s\" />", files[fileIndex] ) ) );
-								}
-
-								CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemGroup>" ) );
-							}
-						} else {
-							Array<const char*> files;
-							FindAllFilesInFolder_r( context->inputFilePath, folder, fileExtension, true, &files );
-
-							if ( files.count > 0 ) {
-								CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
-
-								For ( u64, fileIndex, 0, files.count ) {
-									CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<None Include=\"%s\" />", files[fileIndex] ) ) );
-								}
-
-								CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemGroup>" ) );
-							}
-						}
+					For ( u64, fileIndex, 0, sourceFiles.count ) {
+						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ClCompile Include=\"%s\" />", sourceFiles[fileIndex] ) ) );
 					}
+
+					CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemGroup>" ) );
+				}
+
+				if ( headerFiles.count > 0 ) {
+					CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
+
+					For ( u64, fileIndex, 0, headerFiles.count ) {
+						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ClInclude Include=\"%s\" />", headerFiles[fileIndex] ) ) );
+					}
+
+					CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemGroup>" ) );
+				}
+
+				if ( otherFiles.count > 0 ) {
+					CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
+
+					For ( u64, fileIndex, 0, otherFiles.count ) {
+						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<None Include=\"%s\" />", otherFiles[fileIndex] ) ) );
+					}
+
+					CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemGroup>" ) );
 				}
 			}
 
@@ -1830,14 +1943,14 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 			CHECK_WRITE( file_write_line( &vcxproj, "<?xml version=\"1.0\" encoding=\"utf-8\"?>" ) );
 			CHECK_WRITE( file_write_line( &vcxproj, "<Project ToolsVersion=\"4.0\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">" ) );
 
+			CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
+
 			// write all filter guids
 			For ( u64, folderIndex, 0, project->code_folders.size() ) {
-				const char* folder = tprintf( "%s\\%s", context->inputFilePath, project->code_folders[folderIndex] );
+				const char* folder = project->code_folders[folderIndex];
 
 				Array<const char*> subfolders;
-				GetAllSubfolders_r( folder, NULL, &subfolders );
-
-				CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
+				GetAllSubfolders_r( context->inputFilePath, folder, &subfolders );
 
 				For ( u64, subfolderIndex, 0, subfolders.count ) {
 					const char* subfolder = subfolders[subfolderIndex];
@@ -1848,69 +1961,36 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<UniqueIdentifier>{%s}</UniqueIdentifier>", guid ) ) );
 					CHECK_WRITE( file_write_line( &vcxproj,          "\t\t</Filter>" ) );
 				}
-
-				CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemGroup>" ) );
 			}
+
+			CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemGroup>" ) );
 
 			// now put all files in the filter
 			// visual studio requires that we list each file by type
-			For ( u64, fileExtensionIndex, 0, project->file_extensions.size() ) {
-				const char* fileExtension = project->file_extensions[fileExtensionIndex];
-
-				For ( u64, folderIndex, 0, project->code_folders.size() ) {
-					const char* folder = project->code_folders[folderIndex];
-
-					CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
-
-					Array<const char*> files;
-					FindAllFilesInFolder_r( context->inputFilePath, folder, fileExtension, false, &files );
-
-					if ( string_equals( fileExtension, "cpp" ) ) {	// TODO(DM): 01/01/2025: FileExtensionIsSourceFile( fileExtension )
-						For ( u64, fileIndex, 0, files.count ) {
-							CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ClCompile Include=\"%s\" />", files[fileIndex] ) ) );
-						}
-					} else if ( string_equals( fileExtension, "h" ) ) {
-						For ( u64, fileIndex, 0, files.count ) {
-							CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ClInclude Include=\"%s\" />", files[fileIndex] ) ) );
-						}
-					} else if ( string_equals( fileExtension, "inl" ) ) {
-						For ( u64, fileIndex, 0, files.count ) {
-							CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<None Include=\"%s\" />", files[fileIndex] ) ) );
-						}
-					}
-
-					Array<const char*> subfolders;
-					GetAllSubfolders_r( context->inputFilePath, NULL, &subfolders );
-
-					For ( u64, subfolderIndex, 0, subfolders.count ) {
-						const char* subfolder = subfolders[subfolderIndex];
-
-						Array<const char*> filterFiles;
-						FindAllFilesInFolder_r( context->inputFilePath, subfolder, fileExtension, false, &filterFiles );
-
-						if ( string_equals( fileExtension, "cpp" ) ) {	// TODO(DM): 01/01/2025: FileExtensionIsSourceFile( fileExtension )
-							For ( u64, fileIndex, 0, filterFiles.count ) {
-								CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ClCompile Include=\"%s\\%s\">", folder, filterFiles[fileIndex] ) ) );
-								CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Filter>%s</Filter>", subfolder ) ) );
-								CHECK_WRITE( file_write_line( &vcxproj,          "\t\t</ClCompile>" ) );
-							}
-						} else if ( string_equals( fileExtension, "h" ) ) {
-							For ( u64, fileIndex, 0, filterFiles.count ) {
-								CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ClInclude Include=\"%s\\%s\">", folder, filterFiles[fileIndex] ) ) );
-								CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Filter>%s</Filter>", subfolder ) ) );
-								CHECK_WRITE( file_write_line( &vcxproj,          "\t\t</ClInclude>" ) );
-							}
-						} else {
-							For ( u64, fileIndex, 0, filterFiles.count ) {
-								CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<None Include=\"%s\\%s\">", folder, filterFiles[fileIndex] ) ) );
-								CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Filter>%s</Filter>", subfolder ) ) );
-								CHECK_WRITE( file_write_line( &vcxproj,          "\t\t</None>" ) );
-							}
-						}
-					}
-
-					CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemGroup>" ) );
+			{
+				CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
+				For ( u64, fileIndex, 0, sourceFiles.count ) {
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ClCompile Include=\"%s\">", sourceFiles[fileIndex] ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Filter>%s</Filter>", sourceFilePaths[fileIndex] ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj,          "\t\t</ClCompile>" ) );
 				}
+				CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemGroup>" ) );
+
+				CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
+				For ( u64, fileIndex, 0, headerFiles.count ) {
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ClInclude Include=\"%s\">", headerFiles[fileIndex] ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Filter>%s</Filter>", headerFilePaths[fileIndex] ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj,          "\t\t</ClInclude>" ) );
+				}
+				CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemGroup>" ) );
+
+				CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
+				For ( u64, fileIndex, 0, otherFiles.count ) {
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<None Include=\"%s\">", otherFiles[fileIndex] ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Filter>%s</Filter>", otherFilePaths[fileIndex] ) ) );
+					CHECK_WRITE( file_write_line( &vcxproj,          "\t\t</None>" ) );
+				}
+				CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemGroup>" ) );
 			}
 
 			CHECK_WRITE( file_write_line( &vcxproj, "</Project>" ) );
@@ -2061,7 +2141,7 @@ int main( int argc, char** argv ) {
 	// TODO(DM): 23/10/2024: we dont use this?
 	set_command_line_args( argc, argv );
 
-	printf( "Builder v%d.%d.%d RC1\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {};
 	context.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS | BUILD_CONTEXT_FLAG_SHOW_STDOUT;
@@ -2465,6 +2545,7 @@ int main( int argc, char** argv ) {
 
 		bool8 shouldSkipBuild = true;
 
+		// figure out if we need to even rebuild
 		{
 			// if the .build_info isnt there, or we expect a different name now, or something else
 			// then we wont have any tracked source files to check through later on in this subroutine
@@ -2475,7 +2556,15 @@ int main( int argc, char** argv ) {
 				shouldSkipBuild = false;
 			}
 
-			// figure out if we need to even rebuild
+			// if this was last built on a different version of builder then rebuild
+			if ( parsedBuildInfoData.builderVersion.major != BUILDER_VERSION_MAJOR ||
+				 parsedBuildInfoData.builderVersion.minor != BUILDER_VERSION_MINOR ||
+				 parsedBuildInfoData.builderVersion.patch != BUILDER_VERSION_PATCH )
+			{
+				printf( "Different Builder version detected since last build.  Rebuilding...\n" );
+				shouldSkipBuild = false;
+			}
+
 			// if the binary doesnt exist, we definitely need to rebuild
 			if ( !FileExists( context.fullBinaryName ) ) {
 				shouldSkipBuild = false;

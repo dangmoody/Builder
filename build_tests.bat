@@ -41,7 +41,7 @@ if /I [%config%]==[release] (
 
 set source_files=tests\\tests_main.cpp
 
-set defines=-D_CRT_SECURE_NO_WARNINGS
+set defines=-D_CRT_SECURE_NO_WARNINGS -DCORE_SUC
 if /I [%config%]==[debug] (
 	set defines=!defines! -D_DEBUG
 )
@@ -50,7 +50,8 @@ if /I [%config%]==[release] (
 	set defines=!defines! -DNDEBUG
 )
 
-set includes=""
+set includes=-Isrc/core/include
+
 set libraries=-luser32.lib -lShlwapi.lib -lDbgHelp.lib
 if /I [%config%]==[debug] (
 	set libraries=!libraries! -lmsvcrtd.lib

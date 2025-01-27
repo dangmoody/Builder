@@ -22,6 +22,7 @@ robocopy .\\      %temp_folder% builder.h
 robocopy .\\      %temp_folder% README.md
 robocopy .\\      %temp_folder% LICENSE
 robocopy .\\clang %temp_folder%\\clang /e
+robocopy .\\gcc   %temp_folder%\\gcc /e
 robocopy .\\doc   %temp_folder% CHANGELOG.txt
 
 .\\7zip\\7za.exe a -tzip releases\\builder_%version%.zip %temp_folder%

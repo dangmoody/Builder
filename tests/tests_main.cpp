@@ -224,5 +224,7 @@ int main( int argc, char** argv ) {
 
 	TEMPER_RUN( argc, argv );
 
-	return TEMPER_GET_EXIT_CODE();
+	int exitCode = TEMPER_GET_EXIT_CODE();
+
+	return exitCode;
 }

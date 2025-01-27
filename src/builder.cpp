@@ -50,7 +50,7 @@ SOFTWARE.
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
 	BUILDER_VERSION_MINOR	= 5,
-	BUILDER_VERSION_PATCH	= 5,
+	BUILDER_VERSION_PATCH	= 6,
 };
 
 #define ARG_HELP_SHORT		"-h"
@@ -112,6 +112,7 @@ struct trackedSourceFile_t {
 struct buildInfoConfig_t {
 	BuildConfig							config;
 	std::vector<trackedSourceFile_t>	files;
+	u64									lastBinaryWriteTime;
 };
 
 #ifdef _WIN64
@@ -177,6 +178,156 @@ static bool8 FileIsHeaderFile( const char* filename ) {
 	return false;
 }
 
+static const char* BinaryTypeToString( const BinaryType type ) {
+	switch ( type ) {
+		case BINARY_TYPE_EXE:				return "BINARY_TYPE_EXE";
+		case BINARY_TYPE_DYNAMIC_LIBRARY:	return "BINARY_TYPE_DYNAMIC_LIBRARY";
+		case BINARY_TYPE_STATIC_LIBRARY:	return "BINARY_TYPE_STATIC_LIBRARY";
+	}
+}
+
+static const char* OptimizationLevelToString( const OptimizationLevel level ) {
+	switch ( level ) {
+		case OPTIMIZATION_LEVEL_O0: return "-O0";
+		case OPTIMIZATION_LEVEL_O1: return "-O1";
+		case OPTIMIZATION_LEVEL_O2: return "-O2";
+		case OPTIMIZATION_LEVEL_O3: return "-O3";
+	}
+}
+
+static const char* BuildConfig_ToString( const BuildConfig* config ) {
+	StringBuilder builder = {};
+	string_builder_reset( &builder );
+
+	string_builder_appendf( &builder, "%s: {\n", config->name.c_str() );
+
+	auto PrintCStringArray = [&builder]( const char* name, const std::vector<const char*>& array ) {
+		if ( array.size() > 0 ) {
+			string_builder_appendf( &builder, "\t%s: { ", name );
+			For( u64, i, 0, array.size() ) {
+				string_builder_appendf( &builder, "%s", array[i] );
+
+				if ( i < array.size() - 1 ) {
+					string_builder_appendf( &builder, ", " );
+				}
+			}
+			string_builder_appendf( &builder, " }\n" );
+		}
+	};
+
+	auto PrintSTDStringArray = [&builder]( const char* name, const std::vector<std::string>& array ) {
+		if ( array.size() > 0 ) {
+			string_builder_appendf( &builder, "\t%s: { ", name );
+			For( u64, i, 0, array.size() ) {
+				string_builder_appendf( &builder, "%s", array[i].c_str() );
+
+				if ( i < array.size() - 1 ) {
+					string_builder_appendf( &builder, ", " );
+				}
+			}
+			string_builder_appendf( &builder, " }\n" );
+		}
+	};
+
+	auto PrintField = [&builder]( const char* key, const char* value ) {
+		string_builder_appendf( &builder, "\t%s: %s\n", key, value );
+	};
+
+	if ( config->depends_on.size() > 0 ) {
+		string_builder_appendf( &builder, "\tdepends_on: { " );
+		For( u64, dependencyIndex, 0, config->depends_on.size() ) {
+			string_builder_appendf( &builder, "%s", config->depends_on[dependencyIndex].name.c_str() );
+
+			if ( dependencyIndex < config->depends_on.size() - 1 ) {
+				string_builder_appendf( &builder, ", " );
+			}
+		}
+		string_builder_appendf( &builder, " }\n" );
+	}
+
+	PrintCStringArray( "source_files", config->source_files );
+	PrintCStringArray( "defines", config->defines );
+	PrintSTDStringArray( "additional_includes", config->additional_includes );
+	PrintSTDStringArray( "additional_lib_paths", config->additional_lib_paths );
+	PrintCStringArray( "additional_libs", config->additional_libs );
+	PrintCStringArray( "ignore_warnings", config->ignore_warnings );
+
+	PrintField( "binary_name", config->binary_name.c_str() );
+	PrintField( "binary_folder", config->binary_folder.c_str() );
+	PrintField( "binary_type", BinaryTypeToString( config->binary_type ) );
+	PrintField( "optimization_level", OptimizationLevelToString( config->optimization_level ) );
+	PrintField( "remove_symbols", config->remove_symbols ? "true" : "false" );
+	PrintField( "remove_file_extension", config->remove_file_extension ? "true" : "false" );
+	PrintField( "warnings_as_errors", config->warnings_as_errors ? "true" : "false" );
+
+	string_builder_appendf( &builder, "}\n" );
+
+	return string_builder_to_string( &builder );
+}
+
+static void BuildConfig_AddDefaults( BuildConfig* outConfig ) {
+	// add the folder that builder lives in as an additional include path
+	// so that people can just include builder.h without having to add the include path manually every time
+	outConfig->additional_includes.push_back( paths_get_app_path() );
+
+	outConfig->additional_includes.push_back( "." );
+
+#if defined( _WIN64 )
+	outConfig->additional_libs.push_back( "user32.lib" );
+
+	// MSVCRT is needed for ABI compatibility between builder and the user config DLL
+#if defined( _DEBUG )
+	outConfig->additional_libs.push_back( "msvcrtd.lib" );
+#elif defined( NDEBUG )
+	outConfig->additional_libs.push_back( "msvcrt.lib" );
+#endif
+#endif // defined( _WIN64 )
+
+	outConfig->ignore_warnings.push_back( "-Wno-newline-eof" );
+	outConfig->ignore_warnings.push_back( "-Wno-pointer-integer-compare" );
+	outConfig->ignore_warnings.push_back( "-Wno-declaration-after-statement" );
+	outConfig->ignore_warnings.push_back( "-Wno-gnu-zero-variadic-macro-arguments" );
+	outConfig->ignore_warnings.push_back( "-Wno-cast-align" );
+	outConfig->ignore_warnings.push_back( "-Wno-bad-function-cast" );
+	outConfig->ignore_warnings.push_back( "-Wno-format-nonliteral" );
+	outConfig->ignore_warnings.push_back( "-Wno-missing-braces" );
+	outConfig->ignore_warnings.push_back( "-Wno-switch-enum" );
+	outConfig->ignore_warnings.push_back( "-Wno-covered-switch-default" );
+	outConfig->ignore_warnings.push_back( "-Wno-double-promotion" );
+	outConfig->ignore_warnings.push_back( "-Wno-cast-qual" );
+	outConfig->ignore_warnings.push_back( "-Wno-unused-variable" );
+	outConfig->ignore_warnings.push_back( "-Wno-unused-function" );
+	outConfig->ignore_warnings.push_back( "-Wno-empty-translation-unit" );
+	outConfig->ignore_warnings.push_back( "-Wno-zero-as-null-pointer-constant" );
+	outConfig->ignore_warnings.push_back( "-Wno-c++98-compat-pedantic" );
+	outConfig->ignore_warnings.push_back( "-Wno-unused-macros" );
+	outConfig->ignore_warnings.push_back( "-Wno-unsafe-buffer-usage" );			// LLVM 17.0.1
+	outConfig->ignore_warnings.push_back( "-Wno-reorder-init-list" );			// C++: "designated initializers must be in order"
+	outConfig->ignore_warnings.push_back( "-Wno-old-style-cast" );				// C++: "C-style casts are banned"
+	outConfig->ignore_warnings.push_back( "-Wno-global-constructors" );			// C++: "declaration requires a global destructor"
+	outConfig->ignore_warnings.push_back( "-Wno-exit-time-destructors" );		// C++: "declaration requires an exit-time destructor" (same as the above, basically)
+	outConfig->ignore_warnings.push_back( "-Wno-missing-field-initializers" );	// LLVM 18.1.8
+}
+
+static const char* BuildConfig_GetFullBinaryName( const BuildConfig* config ) {
+	assert( !config->binary_name.empty() );
+
+	StringBuilder builder = {};
+	string_builder_reset( &builder );
+
+	if ( !config->binary_folder.empty() ) {
+		string_builder_appendf( &builder, "%s\\", config->binary_folder.c_str() );
+	}
+
+	string_builder_appendf( &builder, "%s", config->binary_name.c_str() );
+
+	if ( !config->remove_file_extension ) {
+		string_builder_appendf( &builder, ".%s", GetFileExtensionFromBinaryType( config->binary_type ) );
+	}
+
+	return string_builder_to_string( &builder );
+}
+
 static s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVariables, const bool8 showArgs = false, const bool8 showStdout = false ) {
 	assert( args );
 	assert( args->data );
@@ -239,23 +390,6 @@ static s32 ShowUsage( const s32 exitCode ) {
 	);
 
 	return exitCode;
-}
-
-static const char* BinaryTypeToString( const BinaryType type ) {
-	switch ( type ) {
-		case BINARY_TYPE_EXE:				return "BINARY_TYPE_EXE";
-		case BINARY_TYPE_DYNAMIC_LIBRARY:	return "BINARY_TYPE_DYNAMIC_LIBRARY";
-		case BINARY_TYPE_STATIC_LIBRARY:	return "BINARY_TYPE_STATIC_LIBRARY";
-	}
-}
-
-static const char* OptimizationLevelToString( const OptimizationLevel level ) {
-	switch ( level ) {
-		case OPTIMIZATION_LEVEL_O0: return "-O0";
-		case OPTIMIZATION_LEVEL_O1: return "-O1";
-		case OPTIMIZATION_LEVEL_O2: return "-O2";
-		case OPTIMIZATION_LEVEL_O3: return "-O3";
-	}
 }
 
 static s32 BuildEXE( buildContext_t* context ) {
@@ -846,7 +980,7 @@ static void GetAllIncludedFiles( const buildContext_t* context, const BuildConfi
 
 		if ( !read ) {
 			if ( verbose ) {
-				warning( "Tried to read the file \"%s\", but I couldn't.  Therefore I can't resolve includes for this file.\n", sourceFiles[sourceFileIndex] );
+				warning( "Tried to read the file \"%s\", but I couldn't.  Therefore I can't resolve includes for this file.\n", sourceFile );
 			}
 			continue;
 		}
@@ -962,82 +1096,115 @@ static void GetAllIncludedFiles( const buildContext_t* context, const BuildConfi
 	}
 }
 
-static void SerializeBool8( File* file, const bool8 x ) {
+static void Serialize_Bool8( File* file, const bool8 x ) {
 	CHECK_WRITE( file_write( file, &x, sizeof( bool8 ) ) );
 }
 
-static void SerializeS32( File* file, const s32 x ) {
+static void Serialize_S32( File* file, const s32 x ) {
 	CHECK_WRITE( file_write( file, &x, sizeof( s32 ) ) );
 }
 
-static void SerializeU64( File* file, const u64 x ) {
+static void Serialize_U64( File* file, const u64 x ) {
 	CHECK_WRITE( file_write( file, &x, sizeof( u64 ) ) );
 }
 
-static void SerializeCStringArray( File* file, const std::vector<const char*>& array, const char* name ) {
-	CHECK_WRITE( file_write( file, tprintf( "%s\n", name ) ) );
-	SerializeU64( file, array.size() );
+static void Serialize_StringField( File* file, const char* key, const char* value ) {
+	assert( key );
+	assert( value );
+
+	CHECK_WRITE( file_write( file, tprintf( "%s: %s", key, value ) ) );
+	CHECK_WRITE( file_write( file, "\n" ) );
+}
+
+static void Serialize_CStringArray( File* file, const std::vector<const char*>& array, const char* name ) {
+	assert( name );
+
+	CHECK_WRITE( file_write( file, name ) );
+	CHECK_WRITE( file_write( file, "\n" ) );
+	Serialize_U64( file, array.size() );
 
 	For ( u64, i, 0, array.size() ) {
-		CHECK_WRITE( file_write( file, tprintf( "%s\n", array[i] ) ) );
+		CHECK_WRITE( file_write( file, array[i] ) );
+		CHECK_WRITE( file_write( file, "\n" ) );
 	}
 }
 
-static void SerializeSTDStringArray( File* file, const std::vector<std::string>& array, const char* name ) {
-	CHECK_WRITE( file_write( file, tprintf( "%s\n", name ) ) );
-	SerializeU64( file, array.size() );
+static void Serialize_STDStringArray( File* file, const std::vector<std::string>& array, const char* name ) {
+	assert( name );
+
+	CHECK_WRITE( file_write( file, name ) );
+	CHECK_WRITE( file_write( file, "\n" ) );
+	Serialize_U64( file, array.size() );
 
 	For ( u64, i, 0, array.size() ) {
-		CHECK_WRITE( file_write( file, tprintf( "%s\n", array[i].c_str() ) ) );
+		CHECK_WRITE( file_write( file, array[i].c_str() ) );
+		CHECK_WRITE( file_write( file, "\n" ) );
 	}
 }
 
-static void SerializeBuildInfo( const buildContext_t* context, const std::vector<BuildConfig>& configs, const char* userConfigSourceFilename, const char* userConfigDLLFilename, const bool8 verbose ) {
+static void Serialize_BuildInfo( const buildContext_t* context, const std::vector<BuildConfig>& configs, const char* userConfigSourceFilename, const char* userConfigDLLFilename, const bool8 verbose ) {
 	File file = file_open_or_create( context->buildInfoFilename );
 	defer( file_close( &file ) );
 
 	CHECK_WRITE( file_write( &file, "builder_version:\n" ) );
-	SerializeS32( &file, BUILDER_VERSION_MAJOR );
-	SerializeS32( &file, BUILDER_VERSION_MINOR );
-	SerializeS32( &file, BUILDER_VERSION_PATCH );
+	Serialize_S32( &file, BUILDER_VERSION_MAJOR );
+	Serialize_S32( &file, BUILDER_VERSION_MINOR );
+	Serialize_S32( &file, BUILDER_VERSION_PATCH );
 
-	CHECK_WRITE( file_write( &file, tprintf( "build_source_file: %s\n", userConfigSourceFilename ) ) );
-	CHECK_WRITE( file_write( &file, tprintf( "DLL: %s\n", userConfigDLLFilename ) ) );
+	Serialize_StringField( &file, "build_source_file", userConfigSourceFilename );
+	Serialize_StringField( &file, "DLL", userConfigDLLFilename );
 
-	SerializeU64( &file, configs.size() );
+	Serialize_U64( &file, configs.size() );
 
 	For ( u64, builderOptionsIndex, 0, configs.size() ) {
 		const BuildConfig* config = &configs[builderOptionsIndex];
 
-		CHECK_WRITE( file_write( &file, tprintf( "config: %s\n", config->name.c_str() ) ) );
+		Serialize_StringField( &file, "config", config->name.c_str() );
 
 		u64 configNameHash = hash_string( config->name.c_str(), 0 );
-		SerializeU64( &file, configNameHash );
+		Serialize_U64( &file, configNameHash );
 
 		// serialize names of all build dependencies
 		{
-			CHECK_WRITE( file_write( &file, tprintf( "depends_on\n" ) ) );
-			SerializeU64( &file, config->depends_on.size() );
+			CHECK_WRITE( file_write( &file, "depends_on\n" ) );
+			Serialize_U64( &file, config->depends_on.size() );
 
 			For ( u64, dependencyIndex, 0, config->depends_on.size() ) {
 				CHECK_WRITE( file_write( &file, tprintf( "%s\n", config->depends_on[dependencyIndex].name.c_str() ) ) );
 			}
 		}
 
-		SerializeCStringArray( &file, config->source_files, "source_files" );
-		SerializeCStringArray( &file, config->defines, "defines" );
-		SerializeSTDStringArray( &file, config->additional_includes, "additional_includes" );
-		SerializeSTDStringArray( &file, config->additional_lib_paths, "additional_lib_paths" );
-		SerializeCStringArray( &file, config->additional_libs, "additional_libs" );
-		SerializeCStringArray( &file, config->ignore_warnings, "ignore_warnings" );
+		Serialize_CStringArray( &file, config->source_files, "source_files" );
+		Serialize_CStringArray( &file, config->defines, "defines" );
+		Serialize_STDStringArray( &file, config->additional_includes, "additional_includes" );
+		Serialize_STDStringArray( &file, config->additional_lib_paths, "additional_lib_paths" );
+		Serialize_CStringArray( &file, config->additional_libs, "additional_libs" );
+		Serialize_CStringArray( &file, config->ignore_warnings, "ignore_warnings" );
 
-		CHECK_WRITE( file_write( &file, tprintf( "binary_name: %s\n", config->binary_name.c_str() ) ) );
-		CHECK_WRITE( file_write( &file, tprintf( "binary_folder: %s\n", config->binary_folder.c_str() ) ) );
+		Serialize_StringField( &file, "binary_name", config->binary_name.c_str() );
+		Serialize_StringField( &file, "binary_folder", config->binary_folder.c_str() );
 
-		CHECK_WRITE( file_write( &file, &config->binary_type, sizeof( BinaryType ) ) );
-		CHECK_WRITE( file_write( &file, &config->optimization_level, sizeof( OptimizationLevel ) ) );
-		SerializeBool8( &file, config->remove_symbols );
-		SerializeBool8( &file, config->remove_file_extension );
+		// write the last write time of the binary
+		// if the binary doesnt exist (we havent built it yet) then just write 0
+		{
+			CHECK_WRITE( file_write( &file, "last_binary_write_time\n" ) );
+
+			const char* binaryFullName = tprintf( "%s\\%s", context->inputFilePath, BuildConfig_GetFullBinaryName( config ) );
+
+			FileInfo fileInfo;
+			File binaryFile = file_find_first( binaryFullName, &fileInfo );
+
+			if ( binaryFile.ptr != INVALID_HANDLE_VALUE ) {
+				Serialize_U64( &file, fileInfo.last_write_time );
+			} else {
+				Serialize_U64( &file, 0 );
+			}
+		}
+
+		Serialize_S32( &file, config->binary_type );
+		Serialize_S32( &file, config->optimization_level );
+		Serialize_Bool8( &file, config->remove_symbols );
+		Serialize_Bool8( &file, config->remove_file_extension );
 
 		// serialize all included files and their last write time
 		{
@@ -1045,7 +1212,7 @@ static void SerializeBuildInfo( const buildContext_t* context, const std::vector
 			GetAllIncludedFiles( context, config, verbose, &buildInfoFiles );
 
 			CHECK_WRITE( file_write( &file, "tracked_source_files\n" ) );
-			SerializeU64( &file, buildInfoFiles.count );
+			Serialize_U64( &file, buildInfoFiles.count );
 
 			For ( u64, buildInfoFileIndex, 0, buildInfoFiles.count ) {
 				const char* buildInfoFile = buildInfoFiles[buildInfoFileIndex];
@@ -1063,12 +1230,15 @@ static void SerializeBuildInfo( const buildContext_t* context, const std::vector
 				// dont write full path of the filename
 				// the path to the source file can change depending on whether we are building from visual studio or the command line
 				// so just write the filename relative to the source folder and let Builder reconstruct the appropriate path as and when it needs to
-				CHECK_WRITE( file_write( &file, tprintf( "%s\n", buildInfoFile ) ) );
-				SerializeU64( &file, fileInfo.last_write_time );
+				CHECK_WRITE( file_write( &file, buildInfoFile ) );
+				CHECK_WRITE( file_write( &file, "\n" ) );
+				Serialize_U64( &file, fileInfo.last_write_time );
 			}
 		}
 
 		CHECK_WRITE( file_write( &file, "\n" ) );
+
+		mem_reset_temp_storage();
 	}
 }
 
@@ -1259,6 +1429,9 @@ static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, buildInfoFile
 				Parser_ParseStringField( &parser, NULL, &config->binary_name );
 				Parser_ParseStringField( &parser, NULL, &config->binary_folder );
 
+				Parser_SkipPast( &parser, '\n' );	// binary_last_write_time, skip
+				buildInfoConfig->lastBinaryWriteTime = Parser_ParseU64( &parser );
+
 				config->binary_type = cast( BinaryType ) Parser_ParseS32( &parser );
 				config->optimization_level = cast( OptimizationLevel ) Parser_ParseS32( &parser );
 				config->remove_symbols = Parser_ParseBool( &parser );
@@ -1315,136 +1488,6 @@ static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, buildInfoFile
 	}
 
 	return true;
-}
-
-static const char* BuildConfig_ToString( const BuildConfig* config ) {
-	StringBuilder builder = {};
-	string_builder_reset( &builder );
-
-	string_builder_appendf( &builder, "%s: {\n", config->name.c_str() );
-
-	auto PrintCStringArray = [&builder]( const char* name, const std::vector<const char*>& array ) {
-		if ( array.size() > 0 ) {
-			string_builder_appendf( &builder, "\t%s: { ", name );
-			For ( u64, i, 0, array.size() ) {
-				string_builder_appendf( &builder, "%s", array[i] );
-
-				if ( i < array.size() - 1 ) {
-					string_builder_appendf( &builder, ", " );
-				}
-			}
-			string_builder_appendf( &builder, " }\n" );
-		}
-	};
-
-	auto PrintSTDStringArray = [&builder]( const char* name, const std::vector<std::string>& array ) {
-		if ( array.size() > 0 ) {
-			string_builder_appendf( &builder, "\t%s: { ", name );
-			For ( u64, i, 0, array.size() ) {
-				string_builder_appendf( &builder, "%s", array[i].c_str() );
-
-				if ( i < array.size() - 1 ) {
-					string_builder_appendf( &builder, ", " );
-				}
-			}
-			string_builder_appendf( &builder, " }\n" );
-		}
-	};
-
-	auto PrintField = [&builder]( const char* key, const char* value ) {
-		string_builder_appendf( &builder, "\t%s: %s\n", key, value );
-	};
-
-	if ( config->depends_on.size() > 0 ) {
-		string_builder_appendf( &builder, "\tdepends_on: { " );
-		For ( u64, dependencyIndex, 0, config->depends_on.size() ) {
-			string_builder_appendf( &builder, "%s", config->depends_on[dependencyIndex].name.c_str() );
-
-			if ( dependencyIndex < config->depends_on.size() - 1 ) {
-				string_builder_appendf( &builder, ", " );
-			}
-		}
-		string_builder_appendf( &builder, " }\n" );
-	}
-
-	PrintCStringArray( "source_files", config->source_files );
-	PrintCStringArray( "defines", config->defines );
-	PrintSTDStringArray( "additional_includes", config->additional_includes );
-	PrintSTDStringArray( "additional_lib_paths", config->additional_lib_paths );
-	PrintCStringArray( "additional_libs", config->additional_libs );
-	PrintCStringArray( "ignore_warnings", config->ignore_warnings );
-
-	PrintField( "binary_name", config->binary_name.c_str() );
-	PrintField( "binary_folder", config->binary_folder.c_str() );
-	PrintField( "binary_type", BinaryTypeToString( config->binary_type ) );
-	PrintField( "optimization_level", OptimizationLevelToString( config->optimization_level ) );
-	PrintField( "remove_symbols", config->remove_symbols ? "true" : "false" );
-	PrintField( "remove_file_extension", config->remove_file_extension ? "true" : "false" );
-	PrintField( "warnings_as_errors", config->warnings_as_errors ? "true" : "false" );
-
-	string_builder_appendf( &builder, "}\n" );
-
-	return string_builder_to_string( &builder );
-}
-
-static void BuildConfig_AddDefaults( BuildConfig* outConfig ) {
-	// add the folder that builder lives in as an additional include path
-	// so that people can just include builder.h without having to add the include path manually every time
-	outConfig->additional_includes.push_back( paths_get_app_path() );
-
-	outConfig->additional_includes.push_back( "." );
-
-#if defined( _WIN64 )
-	outConfig->additional_libs.push_back( "user32.lib" );
-
-	// MSVCRT is needed for ABI compatibility between builder and the user config DLL
-#if defined( _DEBUG )
-	outConfig->additional_libs.push_back( "msvcrtd.lib" );
-#elif defined( NDEBUG )
-	outConfig->additional_libs.push_back( "msvcrt.lib" );
-#endif
-#endif // defined( _WIN64 )
-
-	outConfig->ignore_warnings.push_back( "-Wno-newline-eof" );
-	outConfig->ignore_warnings.push_back( "-Wno-pointer-integer-compare" );
-	outConfig->ignore_warnings.push_back( "-Wno-declaration-after-statement" );
-	outConfig->ignore_warnings.push_back( "-Wno-gnu-zero-variadic-macro-arguments" );
-	outConfig->ignore_warnings.push_back( "-Wno-cast-align" );
-	outConfig->ignore_warnings.push_back( "-Wno-bad-function-cast" );
-	outConfig->ignore_warnings.push_back( "-Wno-format-nonliteral" );
-	outConfig->ignore_warnings.push_back( "-Wno-missing-braces" );
-	outConfig->ignore_warnings.push_back( "-Wno-switch-enum" );
-	outConfig->ignore_warnings.push_back( "-Wno-covered-switch-default" );
-	outConfig->ignore_warnings.push_back( "-Wno-double-promotion" );
-	outConfig->ignore_warnings.push_back( "-Wno-cast-qual" );
-	outConfig->ignore_warnings.push_back( "-Wno-unused-variable" );
-	outConfig->ignore_warnings.push_back( "-Wno-unused-function" );
-	outConfig->ignore_warnings.push_back( "-Wno-empty-translation-unit" );
-	outConfig->ignore_warnings.push_back( "-Wno-zero-as-null-pointer-constant" );
-	outConfig->ignore_warnings.push_back( "-Wno-c++98-compat-pedantic" );
-	outConfig->ignore_warnings.push_back( "-Wno-unused-macros" );
-	outConfig->ignore_warnings.push_back( "-Wno-unsafe-buffer-usage" );			// LLVM 17.0.1
-	outConfig->ignore_warnings.push_back( "-Wno-reorder-init-list" );			// C++: "designated initializers must be in order"
-	outConfig->ignore_warnings.push_back( "-Wno-old-style-cast" );				// C++: "C-style casts are banned"
-	outConfig->ignore_warnings.push_back( "-Wno-global-constructors" );			// C++: "declaration requires a global destructor"
-	outConfig->ignore_warnings.push_back( "-Wno-exit-time-destructors" );		// C++: "declaration requires an exit-time destructor" (same as the above, basically)
-	outConfig->ignore_warnings.push_back( "-Wno-missing-field-initializers" );	// LLVM 18.1.8
-}
-
-static const char* BuildConfig_GetFullBinaryName( BuildConfig* config ) {
-	assert( !config->binary_folder.empty() );
-	assert( !config->binary_name.empty() );
-
-	StringBuilder builder = {};
-	string_builder_reset( &builder );
-
-	string_builder_appendf( &builder, "%s\\%s", config->binary_folder.c_str(), config->binary_name.c_str() );
-
-	if ( !config->remove_file_extension ) {
-		string_builder_appendf( &builder, ".%s", GetFileExtensionFromBinaryType( config->binary_type ) );
-	}
-
-	return string_builder_to_string( &builder );
 }
 
 // data layout comes from: https://learn.microsoft.com/en-us/windows/win32/api/guiddef/ns-guiddef-guid
@@ -1625,6 +1668,7 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 							const char* file = files[fileIndex];
 
 							const char* fileFull = tprintf( "%s\\%s", context->inputFilePath, file );
+							fileFull = paths_fix_slashes( fileFull );
 
 							char* fileRelative = cast( char* ) mem_temp_alloc( MAX_PATH * sizeof( char ) );
 							memset( fileRelative, 0, MAX_PATH * sizeof( char ) );
@@ -2114,7 +2158,7 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 			}
 		}
 
-		SerializeBuildInfo( context, allBuildConfigs, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
+		Serialize_BuildInfo( context, allBuildConfigs, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
 	}
 
 	return true;
@@ -2141,7 +2185,7 @@ int main( int argc, char** argv ) {
 	// TODO(DM): 23/10/2024: we dont use this?
 	set_command_line_args( argc, argv );
 
-	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+	printf( "Builder v%d.%d.%d RC0\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {};
 	context.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS | BUILD_CONTEXT_FLAG_SHOW_STDOUT;
@@ -2274,6 +2318,8 @@ int main( int argc, char** argv ) {
 
 			doFirstTimeSetup = false;
 		}
+
+		mem_reset_temp_storage();
 	}
 
 	//const char* inputFile = NULL;
@@ -2391,31 +2437,55 @@ int main( int argc, char** argv ) {
 	u64 inputFileLength = strlen( context.inputFile );
 
 	// the default binary folder is the same folder as the source file
-	/*const char* inputFilePath = paths_remove_file_from_path( inputFile );
-	if ( !inputFilePath ) {
-		inputFilePath = paths_get_current_working_directory();
+	// if the file doesnt have a path then assume its in the same path as the current working directory (where we are calling builder from)
+	context.inputFilePath = NULL;
+	{
+		const char* inputFilePathOnly = paths_remove_file_from_path( context.inputFile );
+
+		if ( !inputFilePathOnly ) {
+			context.inputFilePath = paths_get_current_working_directory();
+		} else {
+			u64 inputFilePathLength = ( strlen( inputFilePathOnly ) + 1 );	// + 1 for null terminator
+
+			char* inputFilePath = cast( char* ) mem_alloc( inputFilePathLength * sizeof( char ) );
+			strncpy( inputFilePath, inputFilePathOnly, inputFilePathLength );
+			inputFilePath[inputFilePathLength] = 0;
+
+			context.inputFilePath = inputFilePath;
+		}
 	}
 
-	const char* dotBuilderFolder = NULL;
-	const char* buildInfoFilename = NULL;*/
-
-	context.inputFilePath = paths_remove_file_from_path( context.inputFile );
-	if ( !context.inputFilePath ) {
-		context.inputFilePath = paths_get_current_working_directory();
-	}
-
+	// TODO(DM): 27/01/2025: this whole thing is horrible
+	// Core really needs a string data structure that we can use
 	if ( doingBuildFromBuildInfo ) {
 		context.dotBuilderFolder = context.inputFilePath;
 		context.buildInfoFilename = context.inputFile;
 
-		context.inputFilePath = tprintf( "%s\\..", context.inputFilePath );
+		u64 inputFilePathLength = strlen( context.inputFilePath ) + 2 + 2;	// 2 for '\\', 2 for '..'
+		char* inputFilePath = cast( char* ) mem_alloc( ( inputFilePathLength + 1 ) * sizeof( char ) );	// + 1 for null terminator
+		sprintf( inputFilePath, "%s\\..", context.inputFilePath );
+		inputFilePath[inputFilePathLength] = 0;
+
+		context.inputFilePath = inputFilePath;
 	} else {
 		const char* inputFileNoPath = paths_remove_path_from_file( context.inputFile );
 		const char* inputFileNoPathOrExtension = paths_remove_file_extension( inputFileNoPath );
 
-		context.dotBuilderFolder = tprintf( "%s\\.builder", context.inputFilePath );
-		context.buildInfoFilename = tprintf( "%s\\%s%s", context.dotBuilderFolder, inputFileNoPathOrExtension, BUILD_INFO_FILE_EXTENSION );
+		u64 dotBuilderFolderLength = strlen( context.inputFilePath ) + 2 + strlen( ".builder" );	// + 2 for '\\'
+		char* dotBuilderFolder = cast( char* ) mem_alloc( ( dotBuilderFolderLength + 1 ) * sizeof( char ) );	// + 1 for null terminator
+		sprintf( dotBuilderFolder, "%s\\.builder", context.inputFilePath );
+		dotBuilderFolder[dotBuilderFolderLength] = 0;
+
+		u64 buildInfoFilenameLength = strlen( dotBuilderFolder ) + 2 + strlen( inputFileNoPathOrExtension ) + strlen( BUILD_INFO_FILE_EXTENSION );	// + 2 for '\\'
+		char* buildInfoFilename = cast( char* ) mem_alloc( ( buildInfoFilenameLength + 1 ) * sizeof( char ) );
+		sprintf( buildInfoFilename, "%s\\%s%s", dotBuilderFolder, inputFileNoPathOrExtension, BUILD_INFO_FILE_EXTENSION );
+		buildInfoFilename[buildInfoFilenameLength] = 0;
+
+		context.dotBuilderFolder = dotBuilderFolder;
+		context.buildInfoFilename = buildInfoFilename;
 	}
+
+	const char* defaultBinaryName = paths_remove_file_extension( paths_remove_path_from_file( context.inputFile ) );
 
 	BuilderOptions options = {};
 
@@ -2423,15 +2493,15 @@ int main( int argc, char** argv ) {
 	bool8 readBuildInfo = Parser_ParseBuildInfo( context.buildInfoFilename, &parsedBuildInfoData );
 
 	if ( doingBuildFromBuildInfo ) {
+		if ( !readBuildInfo ) {
+			error( "Can't find \"%s\".  Does this file exist? Did you type it in correctly?\n", context.buildInfoFilename );
+			QUIT_ERROR();
+		}
+
 		// TODO(DM): 24/11/2024: this is stupid and slow
 		// need to think of a better way to do this
 		For ( u64, configIndex, 0, parsedBuildInfoData.configs.size() ) {
 			options.configs.push_back( parsedBuildInfoData.configs[configIndex].config );
-		}
-
-		if ( !readBuildInfo ) {
-			error( "Can't find \"%s\".  Does this file exist? Did you type it in correctly?\n", context.buildInfoFilename );
-			QUIT_ERROR();
 		}
 	}
 
@@ -2616,7 +2686,8 @@ int main( int argc, char** argv ) {
 	// if no configs were manually added then assume we are just doing a default build with no user-specified options
 	if ( options.configs.size() == 0 ) {
 		BuildConfig config = {
-			.source_files = { context.inputFile }
+			.source_files = { context.inputFile },
+			.binary_name = defaultBinaryName
 		};
 
 		options.configs.push_back( config );
@@ -2652,6 +2723,8 @@ int main( int argc, char** argv ) {
 	For ( u64, configToBuildIndex, 0, configsToBuild.size() ) {
 		BuildConfig* config = &configsToBuild[configToBuildIndex];
 
+		assert( !config->binary_name.empty() );
+
 		if ( doingBuildFromSourceFile ) {
 			BuildConfig_AddDefaults( config );
 		}
@@ -2663,21 +2736,6 @@ int main( int argc, char** argv ) {
 			} else {
 				config->binary_folder = context.inputFilePath;
 			}
-
-			// user didnt override the binary name via the callback
-			// so give them a binary name based off the first source file
-			if ( config->binary_name.empty() ) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wcast-qual"
-				char* inputFileWithoutExtension = cast( char* ) mem_temp_alloc( ( inputFileLength + 1 ) * sizeof( char ) );
-				strncpy( inputFileWithoutExtension, context.inputFile, inputFileLength * sizeof( char ) );
-				inputFileWithoutExtension[inputFileLength] = 0;
-
-				inputFileWithoutExtension = cast( char* ) paths_remove_file_extension( paths_remove_path_from_file( inputFileWithoutExtension ) );
-
-				config->binary_name = inputFileWithoutExtension;
-#pragma clang diagnostic pop
-			}
 		}
 
 		context.config = *config;
@@ -2686,28 +2744,48 @@ int main( int argc, char** argv ) {
 		bool8 shouldSkipBuild = true;
 
 		// figure out if we need to even rebuild
-		{
+		auto ShouldRebuild = [readBuildInfo, &parsedBuildInfoData, context]() -> bool8 {
 			// if the .build_info isnt there, or we expect a different name now, or something else
 			// then we wont have any tracked source files to check through later on in this subroutine
 			// and the build will be skipped
 			// so just force a rebuild if we cant find/read the .build_info for whatever reason
 			if ( !readBuildInfo ) {
 				printf( "Failed to read %s.  Rebuilding...\n", context.buildInfoFilename );
-				shouldSkipBuild = false;
+				return true;
 			}
 
 			// if this was last built on a different version of builder then rebuild
 			if ( parsedBuildInfoData.builderVersion.major != BUILDER_VERSION_MAJOR ||
 				 parsedBuildInfoData.builderVersion.minor != BUILDER_VERSION_MINOR ||
-				 parsedBuildInfoData.builderVersion.patch != BUILDER_VERSION_PATCH )
-			{
+				 parsedBuildInfoData.builderVersion.patch != BUILDER_VERSION_PATCH ) {
 				printf( "Different Builder version detected since last build.  Rebuilding...\n" );
-				shouldSkipBuild = false;
+				return true;
 			}
 
 			// if the binary doesnt exist, we definitely need to rebuild
-			if ( !FileExists( context.fullBinaryName ) ) {
-				shouldSkipBuild = false;
+			{
+				FileInfo binaryFileInfo;
+				File binaryFile = file_find_first( context.fullBinaryName, &binaryFileInfo );
+
+				if ( binaryFile.ptr == INVALID_HANDLE_VALUE ) {
+					return true;
+				} else {
+					buildInfoConfig_t* buildInfoConfig = NULL;
+					For ( u64, configIndex, 0, parsedBuildInfoData.configs.size() ) {
+						buildInfoConfig_t* buildInfoConfig2 = &parsedBuildInfoData.configs[configIndex];
+
+						if ( string_equals( buildInfoConfig2->config.name.c_str(), context.config.name.c_str() ) ) {
+							buildInfoConfig = buildInfoConfig2;
+							break;
+						}
+					}
+
+					assert( buildInfoConfig != NULL );
+
+					if ( buildInfoConfig->lastBinaryWriteTime != binaryFileInfo.last_write_time ) {
+						return true;
+					}
+				}
 			}
 
 			// get all the code files from the .build_info file
@@ -2738,13 +2816,14 @@ int main( int argc, char** argv ) {
 				assert( file.ptr != INVALID_HANDLE_VALUE );
 
 				if ( fileInfo.last_write_time != trackedSourceFile->lastWriteTime ) {
-					shouldSkipBuild = false;
-					break;
+					return true;
 				}
 			}
-		}
 
-		if ( shouldSkipBuild ) {
+			return false;
+		};
+
+		if ( !ShouldRebuild() ) {
 			printf( "Skipped \"%s\".\n", context.config.binary_name.c_str() );
 			continue;
 		} else {
@@ -2831,6 +2910,8 @@ int main( int argc, char** argv ) {
 		}
 
 		printf( "\n" );
+
+		mem_reset_temp_storage();
 	}
 
 	if ( postBuildFunc ) {
@@ -2839,7 +2920,7 @@ int main( int argc, char** argv ) {
 	}
 
 	if ( !allBuildsWereSkipped ) {
-		SerializeBuildInfo( &context, options.configs, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
+		Serialize_BuildInfo( &context, options.configs, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
 	}
 
 	return 0;

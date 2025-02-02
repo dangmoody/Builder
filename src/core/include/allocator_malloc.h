@@ -29,21 +29,29 @@ SOFTWARE.
 #pragma once
 
 #include "core_types.h"
+#include "memory_units.h"
 
-#define HASHMAP32_UNUSED 0xffffffffUL
+struct Allocator;
 
-struct Hashmap32 {
-	u32		count;
-	u32*	keys;
-	u32*	values;
-};
+/*
+================================================================================================
 
-Hashmap32*	hashmap32_create( u32 count );
-void		hashmap32_destroy( Hashmap32* map );
+	Generic Malloc Allocator
 
-void		hashmap32_reset( Hashmap32* map );
+	Wrap of malloc/free, this allocator is used as the first allocator on the stack of CoreContext
 
-// Returns the value associated with the key if the key has a value, otherwise returns 0.
-u32			hashmap32_get_value( const Hashmap32* map, const u32 key );
+================================================================================================
+*/
 
-void		hashmap32_set_value( Hashmap32* map, const u32 key, const u32 value );
+void*	malloc_allocator_create( const u64 size );
+void	malloc_allocator_destroy( void* allocator_data );
+
+void*	malloc_allocator_alloc( void* allocator_data, const u64 size, const MemoryAlignment alignment );
+void*	malloc_allocator_realloc( void* allocator_data, void* ptr, const u64 new_size, const MemoryAlignment alignment );
+
+void	malloc_allocator_free( void* allocator_data, void* ptr );
+
+// Not allowed.
+void	malloc_allocator_reset( void* allocator_data );
+
+void 	malloc_allocator_create_generic_interface( Allocator& out_interface );

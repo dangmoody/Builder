@@ -30,20 +30,52 @@ SOFTWARE.
 
 #include "core_types.h"
 
-#define HASHMAP64_UNUSED 0xffffffffffffffffULL
+struct Allocator;
 
-struct Hashmap64 {
-	u64			count;
-	u64*		keys;
-	u64*		values;
+constexpr u64 HASHMAP_UNUSED_BUCKET 	= 0U;
+constexpr u64 HASHMAP_TOMBSTONE_BUCKET 	= 0xffffffffffffffffU;
+constexpr u32 HASHMAP_INVALID_VALUE 	= 0xffffffffU;
+
+struct HashmapBucket {
+	u32		key_hi;
+	u32		key_lo;
+	u32		value;
 };
 
-Hashmap64*		hashmap64_create( u64 count );
-void			hashmap64_destroy( Hashmap64* map );
+struct Hashmap {
+	u32				capacity;
+	u32				usage_count;
+	u32 			tombstone_count;
+	u32				last_linear_probe;
+	float32			max_utilisation;
+	bool8			should_grow;
+	HashmapBucket*	buckets;
+	Allocator*		allocator;
+};
 
-void			hashmap64_reset( Hashmap64* map );
+Hashmap*	hashmap_create( u32 starting_capacity, float32 normalized_max_utilisation = 0.5f, bool8 should_grow = true);
+void		hashmap_destroy( Hashmap* map );
+
+void		hashmap_reset( Hashmap* map );
 
 // Returns the value associated with the key if the key has a value, otherwise returns 0.
-u64				hashmap64_get_value( const Hashmap64* map, const u64 key );
+u32			hashmap_get_value( const Hashmap* map, const u64 key );
 
-void			hashmap64_set_value( Hashmap64* map, const u64 key, const u64 value );
+void		hashmap_set_value( Hashmap* map, const u64 key, const u32 value );
+void		hashmap_remove_key( Hashmap* map, const u64 key );
+
+constexpr inline u64 hashmap_internal_combine( u32 hi, u32 lo ) {
+	return ( cast( u64 ) lo << 32 ) | hi;
+}
+
+inline u64 hashmap_internal_combine_at_index( const Hashmap* map, u32 index ) {
+	return hashmap_internal_combine( map->buckets[index].key_hi, map->buckets[index].key_lo );
+}
+
+constexpr inline u32 hashmap_internal_get_lo_part( u64 key ) {
+	return cast( u32 ) ( key >> 32 );
+}
+
+constexpr inline u32 hashmap_internal_get_hi_part( u64 key ) {
+	return cast( u32 ) ( key & 0xFFFFFFFF );
+}

@@ -60,8 +60,6 @@ enum {
 #define ARG_NUKE			"--nuke"
 #define ARG_CONFIG			"--config="
 
-#define CLANG_VERSION	"18.1.8"
-
 #define BUILD_INFO_FILE_EXTENSION			".build_info"
 #define SET_BUILDER_OPTIONS_FUNC_NAME		"set_builder_options"
 #define PRE_BUILD_FUNC_NAME					"on_pre_build"

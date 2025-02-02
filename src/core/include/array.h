@@ -32,6 +32,7 @@ SOFTWARE.
 
 #include "core_types.h"
 
+struct Allocator;
 template<class T, u64 N>
 struct StaticArray {
 	T			data[N];
@@ -51,7 +52,8 @@ struct Array {
 	T*			data;
 	u64			count;
 	u64			alloced;
-
+	Allocator*	allocator;
+	
 				Array();
 				~Array();
 
@@ -64,6 +66,7 @@ struct Array {
 	void		add_range( const T* ptr, const u64 count );
 
 	void		remove_at( const u64 index );
+	void		swap_remove_at(const u64 index);
 
 	void		resize( const u64 count );
 	void		reserve( const u64 count );

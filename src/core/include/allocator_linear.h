@@ -31,6 +31,8 @@ SOFTWARE.
 #include "core_types.h"
 #include "memory_units.h"
 
+struct Allocator;
+
 /*
 ================================================================================================
 
@@ -43,28 +45,27 @@ SOFTWARE.
 ================================================================================================
 */
 
-struct AllocatorLinearData {
+struct LinearAllocator {
 	u64			offset;
 	u64			size_bytes;
+	void*		arena;
 };
 
-struct LinearAllocatorHeader {
-	u64			size_bytes;
-	u32			line;
-	const char*	file;
-};
+LinearAllocator*	linear_allocator_create( const u64 size_bytes );
+void				linear_allocator_destroy( LinearAllocator* allocator );
 
-void	mem_create_linear( const u64 size_bytes, void** out_allocator_data );
-void	mem_destroy_linear( void* allocator_data );
+void*				linear_allocator_alloc( LinearAllocator* allocator, const u64 size_bytes, const MemoryAlignment alignment );
 
-void*	mem_alloc_linear( void* allocator_data, const u64 size_bytes, const char* file, const int line );
-void*	mem_alloc_linear_aligned( void* allocator_data, const u64 size_bytes, const MemoryAlignment alignment, const char* file, const int line );
-
-void*	mem_realloc_linear( void* allocator_data, void* ptr, const u64 newSize, const char* file, const int line );
+void*				linear_allocator_realloc( LinearAllocator* allocator, void* ptr, const u64 newSize, const MemoryAlignment alignment );
 
 // Not allowed.
-void	mem_free_linear( void* allocator_data, void* ptr, const char* file, const int line );
+void				linear_allocator_free( LinearAllocator* allocator, void* ptr );
+
+u64					linear_allocator_tell( LinearAllocator* allocator );
+void				linear_allocator_rewind( LinearAllocator* allocator, u64 previous_position );
 
 // "Resets" the position of the linear allocator back to the start of the memory block.
 // All allocations made after calling this will override previously made allocations from this allocator.
-void	mem_reset_linear( void* allocator_data );
+void				linear_allocator_reset( LinearAllocator* allocator );
+
+void 				linear_allocator_create_generic_interface( Allocator& out_interface );

@@ -27,6 +27,7 @@ SOFTWARE.
 */
 
 #include <allocator_linear.h>
+#include <allocation_context.h>
 
 #include <core_types.h>
 #include <memory_units.h>
@@ -42,112 +43,113 @@ SOFTWARE.
 ================================================================================================
 */
 
-void mem_create_linear( const u64 size_bytes, void** out_allocator_data ) {
+LinearAllocator* linear_allocator_create( const u64 size_bytes) {
 	assertf( size_bytes, "Can't create a linear allocator with a size of 0 bytes." );
-	assert( out_allocator_data );
 
-	void* memory = malloc( sizeof( AllocatorLinearData ) + size_bytes );
+	void* memory = malloc( sizeof( LinearAllocator ) + size_bytes );
 
-	AllocatorLinearData* allocator = cast( AllocatorLinearData* ) memory;
+	LinearAllocator* allocator = cast( LinearAllocator* ) memory;
 	allocator->offset = 0;
 	allocator->size_bytes = size_bytes;
+	allocator->arena = cast( u8* ) memory + sizeof( LinearAllocator );
 
-	*out_allocator_data = allocator;
+	return allocator;
 }
 
-void mem_destroy_linear( void* allocator_data ) {
-	assertf( allocator_data, "Linear allocator MUST be non-NULL." );
-
-	AllocatorLinearData* allocator = cast( AllocatorLinearData* ) allocator_data;
+void linear_allocator_destroy( LinearAllocator* allocator ) {
+	assertf( allocator, "Linear allocator MUST be non-NULL." );
 
 	free( allocator );
-	allocator = NULL;
-}
-
-void* mem_alloc_linear( void* allocator_data, const u64 size_bytes, const char* file, const int line ) {
-	return mem_alloc_linear_aligned( allocator_data, size_bytes, MEMORY_ALIGNMENT_EIGHT, file, line );
 }
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcast-align"
 
-void* mem_alloc_linear_aligned( void* allocator_data, const u64 size_bytes, const MemoryAlignment alignment, const char* file, const int line ) {
-	assertf( allocator_data, "Linear allocator handle MUST be non-NULL." );
+void* linear_allocator_alloc( LinearAllocator* allocator, const u64 size_bytes, const MemoryAlignment alignment ) {
+	assertf( allocator, "Linear allocator handle MUST be non-NULL." );
 	assertf( size_bytes, "Not allowed to allocate 0 bytes from linear allocator." );
 	assertf( alignment != 0, "Not allowed to allocate memory from allocator with an alignment of 0 bytes." );
-	assert( file );
-	assert( line > 0 );
 
-	AllocatorLinearData* allocator = cast( AllocatorLinearData* ) allocator_data;
+	u64 padding = padding_up( allocator->offset, alignment );
 
 	{
 		u64 remaining_bytes = allocator->size_bytes - allocator->offset;
-
-		assertf( allocator->offset + size_bytes <= allocator->size_bytes,
+		u64 total_size = size_bytes + padding;
+		assertf( allocator->offset + total_size <= allocator->size_bytes,
 				 "Linear allocator wanted to allocate %d bytes, but it only has %d bytes left.  It needs at least another %d bytes.\n",
-				 size_bytes, remaining_bytes, ( size_bytes - remaining_bytes )
+				 total_size, remaining_bytes, ( size_bytes - total_size )
 		);
 	}
 
-	allocator->offset = align_up( allocator->offset, cast( u64 ) alignment );
+	allocator->offset += padding;
 
-	void* base_ptr = allocator + sizeof( AllocatorLinearData );
-	u8* ptr = cast( u8* ) base_ptr + allocator->offset;
+	void* ptr = ( cast( u8* ) ( allocator->arena ) ) + allocator->offset;
 
-	LinearAllocatorHeader* header = cast( LinearAllocatorHeader* ) ptr;
-	header->size_bytes = size_bytes;
-	header->line = cast( u32 ) line;
-	header->file = file;
-
-	ptr += sizeof( LinearAllocatorHeader );
-
-	allocator->offset += size_bytes + sizeof( LinearAllocatorHeader );
+	allocator->offset += size_bytes;
 
 	return ptr;
 }
 
 #pragma clang diagnostic pop
 
-void* mem_realloc_linear( void* allocator_data, void* ptr, const u64 newSize, const char* file, const int line ) {
-	assert( allocator_data );
+void* linear_allocator_realloc( LinearAllocator* allocator, void* ptr, const u64 newSize, const MemoryAlignment alignment) {
+	assert( allocator );
 	assert( ptr );
 	assert( newSize );
-	assert( file );
-	assert( line );
 
-	unused( allocator_data );
+	unused( allocator );
 	unused( ptr );
 	unused( newSize );
-	unused( file );
-	unused( line );
+	unused( alignment );
 
-	//fatal_error( "Linear allocator does not currently support memory reallocation." );
+	fatal_error( "Linear allocator does not currently support memory reallocation." );
 
 	return NULL;
 }
 
-void mem_free_linear( void* allocator_data, void* ptr, const char* file, const int line ) {
-	assert( allocator_data );
+void linear_allocator_free( LinearAllocator* allocator, void* ptr) {
+	assert( allocator );
 	assert( ptr );
-	assert( file );
-	assert( line );
 
-	unused( allocator_data );
+	unused( allocator );
 	unused( ptr );
-	unused( file );
-	unused( line );
 
-	/*fatal_error(
+	fatal_error(
 		"Linear allocators do not free individual memory allocations.  " \
 		"They are instead reset hollistically.  " \
 		"Maybe you want to call Mem_Reset() instead?\n"
-	);*/
+	);
 }
 
-void mem_reset_linear( void* allocator_data ) {
-	AllocatorLinearData* allocator = cast( AllocatorLinearData* ) allocator_data;
+u64	linear_allocator_tell( LinearAllocator* allocator ) {
+	return allocator->offset;
+}
 
+void linear_allocator_rewind( LinearAllocator* allocator, u64 previous_position ) {
+	assert( allocator );
+	assertf( previous_position <= allocator->offset, "Cannot rewind forwads!" );
+
+	allocator->offset = previous_position;
+}
+
+void linear_allocator_reset( LinearAllocator* allocator ) {
 	assertf( allocator, "Linear allocator MUST be non-NULL." );
 
 	allocator->offset = 0;
 }
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-function-type-strict"
+void linear_allocator_create_generic_interface( Allocator& out_interface ) {
+	out_interface.init = cast( allocator_init ) &linear_allocator_create;
+	out_interface.shutdown = cast( allocator_shutdown ) &linear_allocator_destroy;
+
+	out_interface.allocate_aligned = cast( allocator_allocate_aligned ) &linear_allocator_alloc;
+	out_interface.reallocate_aligned = cast( allocator_reallocate_aligned ) &linear_allocator_realloc;
+
+	out_interface.free = cast( allocator_free ) &linear_allocator_free;
+	out_interface.reset = cast( allocator_reset ) &linear_allocator_reset;
+
+	out_interface.data = NULL; // set by calling allocator_intitialize;
+}
+#pragma clang diagnostic pop

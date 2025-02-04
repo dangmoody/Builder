@@ -54,11 +54,11 @@ Process* process_create( Array<const char*>* args, Array<const char*>* environme
 	assertf( args->count >= 1, "When calling \"%s\", the args array MUST have at least one element in it (which is the name of the process you want to call).\n" );
 	assert( args->data != NULL );
 
-	Allocator* old_allocator = g_core_context.allocator;
-	void* old_allocator_data = g_core_context.allocator_data;
-	defer( mem_set_allocator( old_allocator, old_allocator_data ) );
+	//TODO(TOM): Figure out how to configure the file IO allocator
+	Allocator* platform_allocator = g_core_ptr->allocator_stack[0];
 
-	mem_set_allocator( &g_default_allocator, g_default_allocator_data );
+	mem_push_allocator( platform_allocator );
+	defer( mem_pop_allocator() );
 
 	// dont memset here because kicking off a subprocess is a slow thing to do
 	// and we need all the speed wins we can get here, no matter how small
@@ -93,11 +93,11 @@ Process* process_create( Array<const char*>* args, Array<const char*>* environme
 void process_destroy( Process* process ) {
 	assert( process );
 
-	Allocator* old_allocator = g_core_context.allocator;
-	void* old_allocator_data = g_core_context.allocator_data;
-	defer( mem_set_allocator( old_allocator, old_allocator_data ) );
+	//TODO(TOM): Figure out how to configure the file IO allocator
+	Allocator* platform_allocator = g_core_ptr->allocator_stack[0];
 
-	mem_set_allocator( &g_default_allocator, g_default_allocator_data );
+	mem_push_allocator( platform_allocator );
+	defer( mem_pop_allocator() );
 
 	int result = subprocess_destroy( &process->proc );
 

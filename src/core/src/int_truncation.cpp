@@ -57,7 +57,7 @@ s16 TruncS32ToS16( const s32 x ) {
 	return cast( s16 ) x;
 }
 
-s16 TruncS32ToS8( const s32 x ) {
+s8 TruncS32ToS8( const s32 x ) {
 	assert( x < S8_MAX );
 	return cast( s8 ) x;
 }

@@ -29,12 +29,17 @@ SOFTWARE.
 #pragma once
 
 #include "core_types.h"
+#include "memory_units.h"
 
 
 void							mem_reset_temp_storage( void );
+u64								mem_tell_temp_storage( void );
+void							mem_rewind_temp_storage( const u64 position );
 
-// DONT CALL THIS DIRECTLY
-void*							mem_temp_alloc_internal( const u64 size, const char* file, const int line );
+// DONT CALL THESE DIRECTLY
+void*							mem_temp_alloc_internal( const u64 size );
+void*							mem_temp_alloc_aligned_internal( const u64 size, const MemoryAlignment alignment );
 
-// call this one instead
-#define mem_temp_alloc( size )	mem_temp_alloc_internal( size, __FILE__, __LINE__ )
+// call these instead
+#define mem_temp_alloc( size )						mem_temp_alloc_internal( size )
+#define mem_temp_alloc_aligned( size, alignment )	mem_temp_alloc_aligned_internal( size, cast(MemoryAlignment)(alignment) )

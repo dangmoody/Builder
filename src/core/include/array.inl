@@ -81,6 +81,7 @@ Array<T>::Array()
 	: data( NULL )
 	, count( 0 )
 	, alloced( 0 )
+	, allocator( mem_get_current_allocator() )
 {
 }
 
@@ -93,14 +94,20 @@ Array<T>::~Array() {
 }
 
 template<class T>
-Array<T>::Array( const Array<T>& other ) {
-	copy( this, other );
+Array<T>::Array( const Array<T>& other )
+: data( NULL )
+	, count( 0 )
+	, alloced( 0 )
+	, allocator( mem_get_current_allocator() )
+{
+	copy( other );
 }
 
 template<class T>
 void Array<T>::copy( const Array<T>* src ) {
 	resize( src->count );
 	memcpy( data, src->data, src->count * sizeof( T ) );
+	count = src->count;
 }
 
 template<class T>
@@ -123,6 +130,13 @@ inline void Array<T>::remove_at( const u64 index ) {
 }
 
 template<class T>
+inline void	Array<T>::swap_remove_at( const u64 index ) {
+	assert( index < count );
+	data[index] = data[count-1];
+	count--;
+}
+
+template<class T>
 void Array<T>::resize( const u64 num_items ) {
 	reserve( num_items );
 	count = num_items;
@@ -131,8 +145,15 @@ void Array<T>::resize( const u64 num_items ) {
 template<class T>
 void Array<T>::reserve( const u64 bytes ) {
 	if ( bytes > alloced ) {
+		u64 previous_alloced = alloced;
 		alloced = next_multiple_of_4_up( bytes );
+
+		// allocator = allocator == nullptr ? mem_get_current_allocator() : allocator;
+		assert( allocator != NULL );
+
+		mem_push_allocator( allocator );
 		data = cast( T* ) mem_realloc( data, alloced * sizeof( T ) );
+		mem_pop_allocator();
 	}
 }
 
@@ -148,7 +169,7 @@ void Array<T>::zero() {
 
 template<class T>
 Array<T>& Array<T>::operator=( const Array<T>& other ) {
-	copy( this, &other );
+	copy( &other );
 	return *this;
 }
 

@@ -26,8 +26,7 @@ SOFTWARE.
 ===========================================================================
 */
 
-#include <hashmap32.h>
-#include <hashmap64.h>
+#include <hashmap.h>
 
 #include <debug.h>
 #include <allocation_context.h>
@@ -37,124 +36,165 @@ SOFTWARE.
 /*
 ================================================================================================
 
-	Hashmap32
+	Hashmap
 
 ================================================================================================
 */
 
-Hashmap32* hashmap32_create( const u32 count ) {
-	assert( count );
+Hashmap* hashmap_create( const u32 starting_capacity, float32 normalized_max_utilisation, bool8 should_grow ) {
+	assert( starting_capacity );
+	assert( normalized_max_utilisation < 0.f );
+	assert( normalized_max_utilisation <= 1.f );
 
-	Hashmap32* map = cast( Hashmap32* ) mem_alloc( sizeof( Hashmap32 ) );
-	map->count = count;
-	map->keys = cast( u32* ) mem_alloc( count * sizeof( u32 ) );
-	map->values = cast( u32* ) mem_alloc( count * sizeof( u32 ) );
+	Hashmap* map = cast( Hashmap* ) mem_alloc( sizeof( Hashmap ) );
+	map->capacity = starting_capacity;
+	map->buckets = cast( HashmapBucket* ) mem_alloc( starting_capacity * sizeof( HashmapBucket ) );
+	map->should_grow = should_grow;
+	map->max_utilisation = normalized_max_utilisation;
 
-	hashmap32_reset( map );
+	hashmap_reset( map );
 
-	return map;
-}
-
-void hashmap32_destroy( Hashmap32* map ) {
-	assert( map );
-
-	mem_free( map->values );
-	map->values = NULL;
-
-	mem_free( map->keys );
-	map->keys = NULL;
-
-	mem_free( map );
-	map = NULL;
-}
-
-void hashmap32_reset( Hashmap32* map ) {
-	memset( map->keys, 0xff, map->count * sizeof( u32 ) );
-	memset( map->values, 0xff, map->count * sizeof( u32 ) );
-}
-
-u32 hashmap32_get_value( const Hashmap32* map, const u32 key ) {
-	u32 i = key % map->count;
-
-	while ( map->keys[i] != key && map->keys[i] != HASHMAP32_UNUSED ) {
-		i = ( i + 1 ) % map->count;
-	}
-
-	return map->values[i] == HASHMAP32_UNUSED ? 0 : map->values[i];
-}
-
-void hashmap32_set_value( Hashmap32* map, const u32 key, const u32 value ) {
-	u32 i = key % map->count;
-
-	while ( map->keys[i] != key && map->keys[i] != HASHMAP32_UNUSED ) {
-		i = ( i + 1 ) % map->count;
-	}
-
-	map->keys[i] = key;
-	map->values[i] = value;
-}
-
-
-/*
-================================================================================================
-
-	Hashmap64
-
-================================================================================================
-*/
-
-Hashmap64* hashmap64_create( u64 count ) {
-	assert( count );
-
-	Hashmap64* map = cast( Hashmap64* ) mem_alloc( sizeof( Hashmap64 ) );
-	map->count = count;
-	map->keys = cast( u64* ) mem_alloc( count * sizeof( u64 ) );
-	map->values = cast( u64* ) mem_alloc( count * sizeof( u64 ) );
-
-	hashmap64_reset( map );
+	map->allocator = mem_get_current_allocator();
 
 	return map;
 }
 
-void hashmap64_destroy( Hashmap64* map ) {
+void hashmap_destroy( Hashmap* map ) {
 	assert( map );
 
-	mem_free( map->values );
-	map->values = NULL;
+	mem_push_allocator( map->allocator );
 
-	mem_free( map->keys );
-	map->keys = NULL;
+	mem_free( map->buckets );
+	map->buckets = NULL;
 
 	mem_free( map );
 	map = NULL;
+
+	mem_pop_allocator();
 }
 
-void hashmap64_reset( Hashmap64* map ) {
-	memset( map->keys, 0xff, map->count * sizeof( u64 ) );
-	memset( map->values, 0xff, map->count * sizeof( u64 ) );
+inline void set_key_at_index( Hashmap* map, u32 index, u64 key ) {
+	map->buckets[index].key_hi = hashmap_internal_get_hi_part( key );
+	map->buckets[index].key_lo = hashmap_internal_get_lo_part( key );
 }
 
-u64 hashmap64_get_value( const Hashmap64* map, const u64 key ) {
-	assert( key );
-
-	u64 i = key % map->count;
-
-	while ( map->keys[i] != key && map->keys[i] != HASHMAP64_UNUSED ) {
-		i = ( i + 1 ) % map->count;
+void hashmap_reset( Hashmap* map ) {
+	For( u32, i, 0, map->capacity ) {
+		set_key_at_index( map, i, HASHMAP_UNUSED_BUCKET );
+		map->buckets[i].value = HASHMAP_INVALID_VALUE;
 	}
 
-	return map->values[i] == HASHMAP64_UNUSED ? 0 : map->values[i];
+	map->usage_count = 0;
+	map->tombstone_count = 0;
 }
 
-void hashmap64_set_value( Hashmap64* map, const u64 key, const u64 value ) {
-	assert( key );
+inline u32 try_get_index_of_hash( const Hashmap* map, const u64 key ) {
+	u32 i = key % map->capacity;
 
-	u64 i = key % map->count;
+	// Note(Tom): I think this is a legit use of const cast since it's purely for telemetry
+	const_cast<Hashmap*>( map )->last_linear_probe = 0;
+	
+	u64 recombined_hash = hashmap_internal_combine_at_index( map, i );
 
-	while ( map->keys[i] != key && map->keys[i] != HASHMAP64_UNUSED ) {
-		i = ( i + 1 ) % map->count;
+	while ( recombined_hash != key && recombined_hash != HASHMAP_UNUSED_BUCKET && map->last_linear_probe < map->capacity ) {
+		i = ( i + 1 ) % map->capacity;
+		recombined_hash = hashmap_internal_combine_at_index( map, i );
+		const_cast<Hashmap*>( map )->last_linear_probe++;
 	}
 
-	map->keys[i] = key;
-	map->values[i] = value;
+	return i;
+}
+
+u32 hashmap_get_value( const Hashmap* map, const u64 key ) {
+	assertf( key != HASHMAP_UNUSED_BUCKET, "Key cannot equal empty bucket value (0)" );
+	assertf( key != HASHMAP_TOMBSTONE_BUCKET, "Key cannot equal Tombstone (u32 MAX)" );
+
+	u32 i = try_get_index_of_hash( map, key );
+
+	if ( hashmap_internal_combine_at_index( map, i ) != key ) {
+		warning( "GET: Key %llu not found in hashmap\n", key );
+		return HASHMAP_INVALID_VALUE;
+	}
+
+	return map->buckets[i].value;
+}
+
+void hashmap_set_value( Hashmap* map, const u64 key, const u32 value ) {
+	u32 i = try_get_index_of_hash( map, key );
+	u64 key_at_location = hashmap_internal_combine_at_index( map, i );
+
+	if ( key_at_location != key && key_at_location != HASHMAP_UNUSED_BUCKET ) {
+		warning( "SET: Key %llu or empty space not found in hashmap\n", key );
+		return;
+	}
+
+	if ( key_at_location == HASHMAP_UNUSED_BUCKET ) {
+		map->usage_count++;
+
+		float32 utilization = cast( float32 ) ( map->usage_count + map->tombstone_count ) / cast( float32 ) map->capacity;
+		if ( utilization > map->max_utilisation ) {
+			if( map->should_grow ) {
+				mem_push_allocator( map->allocator );
+				defer( mem_pop_allocator() );
+
+				HashmapBucket* old_buckets = map->buckets;
+				defer( mem_free( old_buckets ) );
+
+				u32 old_capacity = map->capacity;
+				map->capacity = cast( u32 ) ( cast( float32 ) map->capacity * 1.5f );
+				map->buckets = cast( HashmapBucket* ) mem_alloc( map->capacity * sizeof( HashmapBucket ) );
+				// Note(Tom): I don't love that this isn't a memset anymore. this isn's possible if we keep caring about values of unused buckets: unused value != empty bucket.
+				// I suggest we start leaving them untouched. Yes they have stale old data in them, but so long as people are using set that should never be an issue
+				// (we're testing this right?)
+				// Alternatively we could swap tombstone and unused values round and then unused value == empty bucket and zero the entire damn thing :)
+				hashmap_reset( map );
+
+				For( u32, old_bucket_index, 0, old_capacity ) {
+					u64 key_in_bucket = hashmap_internal_combine( old_buckets[old_bucket_index].key_hi, old_buckets[old_bucket_index].key_lo );
+					if ( key_in_bucket != HASHMAP_UNUSED_BUCKET && key_in_bucket != HASHMAP_TOMBSTONE_BUCKET ) {
+						hashmap_set_value( map, key_in_bucket, old_buckets[old_bucket_index].value );
+					}
+				}
+
+				// Finally add this one
+				hashmap_set_value( map, key, value );
+				return;
+			} else {
+				warning( "Hashmap is above utilization of %f with %u buckets", map->max_utilisation, map->capacity );
+			}
+		}
+	}
+
+	set_key_at_index( map, i, key );
+	map->buckets[i].value = value;
+}
+
+void hashmap_remove_key( Hashmap* map, const u64 key ) {
+	assertf( key != HASHMAP_UNUSED_BUCKET, "Key cannot equal empty bucket value (0)" );
+	assertf( key != HASHMAP_TOMBSTONE_BUCKET, "Key cannot equal Tombstone (u32 MAX)" );
+
+	u32 i = try_get_index_of_hash( map, key );
+	u64 key_at_location = hashmap_internal_combine_at_index( map, i );
+
+	if ( key_at_location != key ) {
+		warning( "REMOVE: Key %llu not found in hashmap\n", key );
+		return;
+	}
+
+	u32 next = ( i + 1 ) % map->capacity;
+	if ( hashmap_internal_combine_at_index( map, next ) != HASHMAP_UNUSED_BUCKET ) {
+		set_key_at_index( map, i, HASHMAP_TOMBSTONE_BUCKET );
+		map->tombstone_count++;
+	} else {
+		set_key_at_index( map, i, HASHMAP_UNUSED_BUCKET );
+		i = ( i - 1 ) % map->capacity;
+
+ 		while ( hashmap_internal_combine_at_index( map, i ) == HASHMAP_TOMBSTONE_BUCKET ) {
+			set_key_at_index( map, i, HASHMAP_UNUSED_BUCKET );
+			map->tombstone_count--;
+			i = ( i - 1 ) % map->capacity;
+		}
+	}
+
+	map->usage_count--;
 }

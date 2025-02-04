@@ -1,4 +1,4 @@
-v0.5.6, <RELEASE DATE HERE>:
+v0.5.6, 02/02/2025:
 
 * Fixed temp storage overflows which caused Builder to crash.
 * Fixed builds incorrectly being skipped if an old version of the binary with the same name existed.

@@ -1,3 +1,10 @@
+v0.5.7, <RELEASE DATE HERE>:
+
+* Added a new error message for if multiple BuildConfigs have an empty name.
+* Fixed input file path sometimes getting corrupted.
+
+----------------------------------------------------------------
+
 v0.5.6, 02/02/2025:
 
 * Fixed temp storage overflows which caused Builder to crash.

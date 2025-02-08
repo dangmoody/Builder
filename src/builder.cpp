@@ -50,7 +50,7 @@ SOFTWARE.
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
 	BUILDER_VERSION_MINOR	= 5,
-	BUILDER_VERSION_PATCH	= 6,
+	BUILDER_VERSION_PATCH	= 7,
 };
 
 #define ARG_HELP_SHORT		"-h"
@@ -1019,9 +1019,9 @@ static void GetAllIncludedFiles( const buildContext_t* context, const BuildConfi
 
 					const char* includeEnd = strchr( includeStart, '"' );
 
-					u64 filenameLength = cast( u64 ) includeEnd - cast( u64 ) includeStart;
+					u64 filenameLength = cast( u64, includeEnd ) - cast( u64, includeStart );
 
-					char* filename = cast( char* ) mem_temp_alloc( ( filenameLength + 1 ) * sizeof( char ) );
+					char* filename = cast( char*, mem_temp_alloc( ( filenameLength + 1 ) * sizeof( char ) ) );
 					strncpy( filename, includeStart, filenameLength * sizeof( char ) );
 					filename[filenameLength] = 0;
 
@@ -1031,7 +1031,7 @@ static void GetAllIncludedFiles( const buildContext_t* context, const BuildConfi
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcast-qual"
-					filename = cast( char* ) paths_canonicalise_path( filename );
+					filename = cast( char*, paths_canonicalise_path( filename ) );
 #pragma clang diagnostic push
 
 					bool8 found = false;
@@ -1052,10 +1052,10 @@ static void GetAllIncludedFiles( const buildContext_t* context, const BuildConfi
 
 					const char* includeEnd = strchr( includeStart, '>' );
 
-					u64 filenameLength = cast( u64 ) includeEnd - cast( u64 ) includeStart;
+					u64 filenameLength = cast( u64, includeEnd ) - cast( u64, includeStart );
 					filenameLength++;
 
-					char* filename = cast( char* ) mem_temp_alloc( filenameLength * sizeof( char ) );
+					char* filename = cast( char*, mem_temp_alloc( filenameLength * sizeof( char ) ) );
 					strncpy( filename, includeStart, filenameLength * sizeof( char ) );
 					filename[filenameLength - 1] = 0;
 
@@ -1274,7 +1274,7 @@ static void Parser_SkipPast( parser_t* parser, const char c ) {
 }
 
 static bool8 Parser_ParseBool( parser_t* parser ) {
-	bool8* x = cast( bool8* ) parser->bufferPos;
+	bool8* x = cast( bool8*, parser->bufferPos );
 
 	parser->bufferPos += sizeof( bool8 );
 
@@ -1282,7 +1282,7 @@ static bool8 Parser_ParseBool( parser_t* parser ) {
 }
 
 static s32 Parser_ParseS32( parser_t* parser ) {
-	s32* x = cast( s32* ) parser->bufferPos;
+	s32* x = cast( s32*, parser->bufferPos );
 
 	parser->bufferPos += sizeof( s32 );
 
@@ -1290,7 +1290,7 @@ static s32 Parser_ParseS32( parser_t* parser ) {
 }
 
 static u64 Parser_ParseU64( parser_t* parser ) {
-	u64* x = cast( u64* ) parser->bufferPos;
+	u64* x = cast( u64*, parser->bufferPos );
 
 	parser->bufferPos += sizeof( u64 );
 
@@ -1298,10 +1298,10 @@ static u64 Parser_ParseU64( parser_t* parser ) {
 }
 
 static char* Parser_ParseLine( parser_t* parser ) {
-	const char* lineEnd = cast( const char* ) memchr( parser->bufferPos, '\n', parser->fileLength );
-	u64 stringLength = cast( u64 ) lineEnd - cast( u64 ) parser->bufferPos;
+	const char* lineEnd = cast( const char*, memchr( parser->bufferPos, '\n', parser->fileLength ) );
+	u64 stringLength = cast( u64, lineEnd ) - cast( u64, parser->bufferPos );
 
-	char* string = cast( char* ) mem_alloc( ( stringLength + 1 ) * sizeof( char ) );
+	char* string = cast( char*, mem_alloc( ( stringLength + 1 ) * sizeof( char ) ) );
 	memcpy( string, parser->bufferPos, stringLength * sizeof( char ) );
 	string[stringLength] = 0;
 
@@ -1316,11 +1316,11 @@ static char* Parser_ParseLine( parser_t* parser ) {
 //
 // where "key" and "value" are both strings
 static void Parser_ParseStringField( parser_t* parser, char** outKey, std::string* outValue ) {
-	const char* colon = cast( const char* ) memchr( parser->bufferPos, ':', parser->fileLength );
-	u64 keyLength = cast( u64 ) colon - cast( u64 ) parser->bufferPos;
+	const char* colon = cast( const char*, memchr( parser->bufferPos, ':', parser->fileLength ) );
+	u64 keyLength = cast( u64, colon ) - cast( u64, parser->bufferPos );
 
 	if ( outKey ) {
-		*outKey = cast( char* ) mem_alloc( ( keyLength + 1 ) * sizeof( char ) );
+		*outKey = cast( char*, mem_alloc( ( keyLength + 1 ) * sizeof( char ) ) );
 		memcpy( *outKey, parser->bufferPos, keyLength * sizeof( char ) );
 		*outKey[keyLength] = 0;
 	}
@@ -1432,8 +1432,8 @@ static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, buildInfoFile
 				Parser_SkipPast( &parser, '\n' );	// binary_last_write_time, skip
 				buildInfoConfig->lastBinaryWriteTime = Parser_ParseU64( &parser );
 
-				config->binary_type = cast( BinaryType ) Parser_ParseS32( &parser );
-				config->optimization_level = cast( OptimizationLevel ) Parser_ParseS32( &parser );
+				config->binary_type = cast( BinaryType, Parser_ParseS32( &parser ) );
+				config->optimization_level = cast( OptimizationLevel, Parser_ParseS32( &parser ) );
 				config->remove_symbols = Parser_ParseBool( &parser );
 				config->remove_file_extension = Parser_ParseBool( &parser );
 			}
@@ -1670,7 +1670,7 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 							const char* fileFull = tprintf( "%s\\%s", context->inputFilePath, file );
 							fileFull = paths_fix_slashes( fileFull );
 
-							char* fileRelative = cast( char* ) mem_temp_alloc( MAX_PATH * sizeof( char ) );
+							char* fileRelative = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
 							memset( fileRelative, 0, MAX_PATH * sizeof( char ) );
 							PathRelativePathTo( fileRelative, solutionFilename, FILE_ATTRIBUTE_NORMAL, fileFull, FILE_ATTRIBUTE_NORMAL );
 
@@ -1747,13 +1747,13 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 				const char* to = tprintf( "%s\\%s", context->inputFilePath, fullBinaryName );
 				to = paths_canonicalise_path( to );
 
-				char* pathFromSolutionToBinary = cast( char* ) mem_temp_alloc( MAX_PATH * sizeof( char ) );
+				char* pathFromSolutionToBinary = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
 				memset( pathFromSolutionToBinary, 0, MAX_PATH * sizeof( char ) );
 				PathRelativePathTo( pathFromSolutionToBinary, from, FILE_ATTRIBUTE_NORMAL, to, FILE_ATTRIBUTE_DIRECTORY );
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcast-qual"
-				pathFromSolutionToBinary = cast( char* ) paths_remove_file_from_path( pathFromSolutionToBinary );
+				pathFromSolutionToBinary = cast( char*, paths_remove_file_from_path( pathFromSolutionToBinary ) );
 #pragma clang diagnostic pop
 
 				For ( u64, platformIndex, 0, solution->platforms.size() ) {
@@ -1835,7 +1835,7 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 						inputFileAndPath = tprintf( "%s\\%s", context->inputFilePath, inputFileNoPath );
 					}
 
-					char* pathFromSolutionToCode = cast( char* ) mem_temp_alloc( MAX_PATH * sizeof( char ) );
+					char* pathFromSolutionToCode = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
 					memset( pathFromSolutionToCode, 0, MAX_PATH * sizeof( char ) );
 					PathRelativePathTo( pathFromSolutionToCode, solutionFilename, FILE_ATTRIBUTE_NORMAL, paths_fix_slashes( inputFileAndPath ), FILE_ATTRIBUTE_DIRECTORY );
 
@@ -1843,7 +1843,7 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcast-qual"
-					pathFromSolutionToCode = cast( char* ) paths_remove_file_from_path( pathFromSolutionToCode );
+					pathFromSolutionToCode = cast( char*, paths_remove_file_from_path( pathFromSolutionToCode ) );
 #pragma clang diagnostic pop
 
 					const char* buildInfoFileRelative = tprintf( "%s\\.builder\\%s%s", pathFromSolutionToCode, solution->name, BUILD_INFO_FILE_EXTENSION );
@@ -1942,7 +1942,7 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 					const char* to = tprintf( "%s\\%s", context->inputFilePath, fullBinaryName );
 					to = paths_canonicalise_path( to );
 
-					char* pathFromSolutionToBinary = cast( char* ) mem_temp_alloc( MAX_PATH * sizeof( char ) );
+					char* pathFromSolutionToBinary = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
 					memset( pathFromSolutionToBinary, 0, MAX_PATH * sizeof( char ) );
 					PathRelativePathTo( pathFromSolutionToBinary, from, FILE_ATTRIBUTE_NORMAL, to, FILE_ATTRIBUTE_DIRECTORY );
 
@@ -2185,7 +2185,7 @@ int main( int argc, char** argv ) {
 	// TODO(DM): 23/10/2024: we dont use this?
 	set_command_line_args( argc, argv );
 
-	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+	printf( "Builder v%d.%d.%d RC0\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {};
 	context.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS | BUILD_CONTEXT_FLAG_SHOW_STDOUT;
@@ -2443,11 +2443,19 @@ int main( int argc, char** argv ) {
 		const char* inputFilePathOnly = paths_remove_file_from_path( context.inputFile );
 
 		if ( !inputFilePathOnly ) {
-			context.inputFilePath = paths_get_current_working_directory();
+			const char* cwd = paths_get_current_working_directory();
+
+			u64 inputFilePathLength = ( strlen( cwd ) + 1 );	// + 1 for null terminator
+
+			char* inputFilePath = cast( char*, mem_alloc( inputFilePathLength * sizeof( char ) ) );
+			strncpy( inputFilePath, cwd, inputFilePathLength );
+			inputFilePath[inputFilePathLength] = 0;
+
+			context.inputFilePath = inputFilePath;
 		} else {
 			u64 inputFilePathLength = ( strlen( inputFilePathOnly ) + 1 );	// + 1 for null terminator
 
-			char* inputFilePath = cast( char* ) mem_alloc( inputFilePathLength * sizeof( char ) );
+			char* inputFilePath = cast( char*, mem_alloc( inputFilePathLength * sizeof( char ) ) );
 			strncpy( inputFilePath, inputFilePathOnly, inputFilePathLength );
 			inputFilePath[inputFilePathLength] = 0;
 
@@ -2462,7 +2470,7 @@ int main( int argc, char** argv ) {
 		context.buildInfoFilename = context.inputFile;
 
 		u64 inputFilePathLength = strlen( context.inputFilePath ) + 2 + 2;	// 2 for '\\', 2 for '..'
-		char* inputFilePath = cast( char* ) mem_alloc( ( inputFilePathLength + 1 ) * sizeof( char ) );	// + 1 for null terminator
+		char* inputFilePath = cast( char*, mem_alloc( ( inputFilePathLength + 1 ) * sizeof( char ) ) );	// + 1 for null terminator
 		sprintf( inputFilePath, "%s\\..", context.inputFilePath );
 		inputFilePath[inputFilePathLength] = 0;
 
@@ -2472,12 +2480,12 @@ int main( int argc, char** argv ) {
 		const char* inputFileNoPathOrExtension = paths_remove_file_extension( inputFileNoPath );
 
 		u64 dotBuilderFolderLength = strlen( context.inputFilePath ) + 2 + strlen( ".builder" );	// + 2 for '\\'
-		char* dotBuilderFolder = cast( char* ) mem_alloc( ( dotBuilderFolderLength + 1 ) * sizeof( char ) );	// + 1 for null terminator
+		char* dotBuilderFolder = cast( char*, mem_alloc( ( dotBuilderFolderLength + 1 ) * sizeof( char ) ) );	// + 1 for null terminator
 		sprintf( dotBuilderFolder, "%s\\.builder", context.inputFilePath );
 		dotBuilderFolder[dotBuilderFolderLength] = 0;
 
 		u64 buildInfoFilenameLength = strlen( dotBuilderFolder ) + 2 + strlen( inputFileNoPathOrExtension ) + strlen( BUILD_INFO_FILE_EXTENSION );	// + 2 for '\\'
-		char* buildInfoFilename = cast( char* ) mem_alloc( ( buildInfoFilenameLength + 1 ) * sizeof( char ) );
+		char* buildInfoFilename = cast( char*, mem_alloc( ( buildInfoFilenameLength + 1 ) * sizeof( char ) ) );
 		sprintf( buildInfoFilename, "%s\\%s%s", dotBuilderFolder, inputFileNoPathOrExtension, BUILD_INFO_FILE_EXTENSION );
 		buildInfoFilename[buildInfoFilenameLength] = 0;
 
@@ -2594,12 +2602,12 @@ int main( int argc, char** argv ) {
 			assert( library.ptr != INVALID_HANDLE_VALUE );
 		}
 
-		preBuildFunc = cast( preBuildFunc_t ) library_get_proc_address( library, PRE_BUILD_FUNC_NAME );
-		postBuildFunc = cast( postBuildFunc_t ) library_get_proc_address( library, POST_BUILD_FUNC_NAME );
+		preBuildFunc = cast( preBuildFunc_t, library_get_proc_address( library, PRE_BUILD_FUNC_NAME ) );
+		postBuildFunc = cast( postBuildFunc_t, library_get_proc_address( library, POST_BUILD_FUNC_NAME ) );
 
 		if ( doingBuildFromSourceFile ) {
 			// now get the user-specified options
-			setBuilderOptionsFunc_t setBuilderOptionsFunc = cast( setBuilderOptionsFunc_t ) library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME );
+			setBuilderOptionsFunc_t setBuilderOptionsFunc = cast( setBuilderOptionsFunc_t, library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME ) );
 			if ( setBuilderOptionsFunc ) {
 				setBuilderOptionsFunc( &options );
 
@@ -2635,53 +2643,7 @@ int main( int argc, char** argv ) {
 		}
 	}
 
-	// none of the configs can have the same name
-	// TODO(DM): 14/11/2024: can we do better than o(n^2) here?
-	For ( size_t, configIndexA, 0, options.configs.size() ) {
-		const char* configNameA = options.configs[configIndexA].name.c_str();
-		u64 configNameHashA = hash_string( configNameA, 0 );
-
-		For ( size_t, configIndexB, 0, options.configs.size() ) {
-			if ( configIndexA == configIndexB ) {
-				continue;
-			}
-
-			u64 configNameHashB = hash_string( options.configs[configIndexB].name.c_str(), 0 );
-
-			if ( configNameHashA == configNameHashB ) {
-				error( "I found multiple configs with the name \"%s\".  All config names MUST be unique, otherwise I don't know which specific config you want me to build.\n", configNameA );
-				QUIT_ERROR();
-			}
-		}
-	}
-
 	std::vector<BuildConfig> configsToBuild;
-
-	// of all the configs that the user filled out inside set_builder_options
-	// find the one the user asked for in the command line
-	if ( inputConfigName ) {
-		bool8 foundConfig = false;
-		For ( u64, configIndex, 0, options.configs.size() ) {
-			BuildConfig* config = &options.configs[configIndex];
-
-			if ( hash_string( config->name.c_str(), 0 ) == inputConfigNameHash ) {
-				For ( size_t, dependencyIndex, 0, config->depends_on.size() ) {
-					AddBuildConfigAndDependencies( &config->depends_on[dependencyIndex], configsToBuild );
-				}
-
-				add_build_config_unique( config, configsToBuild );
-
-				foundConfig = true;
-
-				break;
-			}
-		}
-
-		if ( !foundConfig ) {
-			error( "You passed the config name \"%s\" via the command line, but I never found a config with that name inside %s.  Make sure they match.\n", inputConfigName, SET_BUILDER_OPTIONS_FUNC_NAME );
-			QUIT_ERROR();
-		}
-	}
 
 	// if no configs were manually added then assume we are just doing a default build with no user-specified options
 	if ( options.configs.size() == 0 ) {
@@ -2711,6 +2673,65 @@ int main( int argc, char** argv ) {
 			);
 			QUIT_ERROR();
 		}
+
+		For ( size_t, configIndex, 0, options.configs.size() ) {
+			if ( options.configs[configIndex].name.empty() ) {
+				error(
+					"You have multiple BuildConfigs in your build source file, but some of them have empty names.\n"
+					"When you have multiple BuildConfigs, ALL of them MUST have non-empty names.\n"
+					"You need to set 'BuildConfig::name' in every BuildConfig that you add via add_build_config() (including dependencies!).\n"
+				);
+
+				QUIT_ERROR();
+			}
+		}
+	}
+
+	// none of the configs can have the same name
+	// TODO(DM): 14/11/2024: can we do better than o(n^2) here?
+	For ( size_t, configIndexA, 0, options.configs.size() ) {
+		const char* configNameA = options.configs[configIndexA].name.c_str();
+		u64 configNameHashA = hash_string( configNameA, 0 );
+
+		For ( size_t, configIndexB, 0, options.configs.size() ) {
+			if ( configIndexA == configIndexB ) {
+				continue;
+			}
+
+			const char* configNameB = options.configs[configIndexB].name.c_str();
+			u64 configNameHashB = hash_string( configNameB, 0 );
+
+			if ( configNameHashA == configNameHashB ) {
+				error( "I found multiple configs with the name \"%s\".  All config names MUST be unique, otherwise I don't know which specific config you want me to build.\n", configNameA );
+				QUIT_ERROR();
+			}
+		}
+	}
+
+	// of all the configs that the user filled out inside set_builder_options
+	// find the one the user asked for in the command line
+	if ( inputConfigName ) {
+		bool8 foundConfig = false;
+		For ( u64, configIndex, 0, options.configs.size() ) {
+			BuildConfig* config = &options.configs[configIndex];
+
+			if ( hash_string( config->name.c_str(), 0 ) == inputConfigNameHash ) {
+				For ( size_t, dependencyIndex, 0, config->depends_on.size() ) {
+					AddBuildConfigAndDependencies( &config->depends_on[dependencyIndex], configsToBuild );
+				}
+
+				add_build_config_unique( config, configsToBuild );
+
+				foundConfig = true;
+
+				break;
+			}
+		}
+
+		if ( !foundConfig ) {
+			error( "You passed the config name \"%s\" via the command line, but I never found a config with that name inside %s.  Make sure they match.\n", inputConfigName, SET_BUILDER_OPTIONS_FUNC_NAME );
+			QUIT_ERROR();
+		}
 	}
 
 	if ( preBuildFunc ) {
@@ -2718,7 +2739,7 @@ int main( int argc, char** argv ) {
 		preBuildFunc();
 	}
 
-	bool8 allBuildsWereSkipped = true;
+	u32 numFailedBuilds = 0;
 
 	For ( u64, configToBuildIndex, 0, configsToBuild.size() ) {
 		BuildConfig* config = &configsToBuild[configToBuildIndex];
@@ -2836,8 +2857,6 @@ int main( int argc, char** argv ) {
 			printf( "\n" );
 		}
 
-		allBuildsWereSkipped = false;
-
 		if ( !folder_create_if_it_doesnt_exist( context.config.binary_folder.c_str() ) ) {
 			errorCode_t errorCode = GetLastErrorCode();
 			fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".  Error code: " ERROR_CODE_FORMAT "\n", SET_BUILDER_OPTIONS_FUNC_NAME, context.config.binary_folder.c_str(), errorCode );
@@ -2905,6 +2924,8 @@ int main( int argc, char** argv ) {
 
 		// if the build was successful, write the new .build_info file now
 		if ( exitCode != 0 ) {
+			numFailedBuilds++;
+
 			error( "Build failed.\n" );
 			QUIT_ERROR();
 		}
@@ -2919,7 +2940,7 @@ int main( int argc, char** argv ) {
 		postBuildFunc();
 	}
 
-	if ( !allBuildsWereSkipped ) {
+	if ( numFailedBuilds == 0 ) {
 		Serialize_BuildInfo( &context, options.configs, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
 	}
 

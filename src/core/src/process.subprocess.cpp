@@ -27,10 +27,12 @@ SOFTWARE.
 */
 
 #include <process.h>
+
 #include <debug.h>
 #include <allocation_context.h>
 #include <defer.h>
 #include <array.inl>
+#include <typecast.inl>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"

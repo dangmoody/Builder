@@ -27,8 +27,10 @@ SOFTWARE.
 */
 
 #include <string_helpers.h>
+
 #include <debug.h>
 #include <temp_storage.h>
+#include <typecast.inl>
 
 #include <string.h>
 #include <stdarg.h>

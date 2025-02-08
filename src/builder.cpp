@@ -2123,7 +2123,7 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 		}
 		CHECK_WRITE( file_write_line( &sln, "EndGlobal" ) );
 
-		printf( "Done\n" );
+		printf( "Done\n\n" );
 	}
 
 	// generate .build_info file
@@ -2613,6 +2613,15 @@ int main( int argc, char** argv ) {
 
 				// if the user wants to generate a visual studio solution then do that now
 				if ( options.generate_solution ) {
+					// you either want to generate a visual studio solution or build this config, but not both
+					if ( inputConfigName ) {
+						error(
+							"I see you want to generate a Visual Studio Solution, but you've also specified a config that you want to build.\n"
+							"You must do one or the other, you can't do both.\n\n"
+						);
+						QUIT_ERROR();
+					}
+
 					// make sure BuilderOptions::configs and configs from visual studio match
 					// we will need this list later for validation
 					options.configs.clear();

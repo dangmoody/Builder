@@ -1,6 +1,8 @@
 v0.5.7, <RELEASE DATE HERE>:
 
-* Added a new error message for if multiple BuildConfigs have an empty name.
+* Throw an error if multiple BuildConfigs have an empty name.
+* Throw an error if specifying a config whilst also trying to generate a Visual Studio solution.
+	* Having Builder actually do both of those things feels hacky so I'm deliberately not allowing it to do both right now.
 * Fixed input file path sometimes getting corrupted.
 
 ----------------------------------------------------------------

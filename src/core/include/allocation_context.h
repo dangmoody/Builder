@@ -118,4 +118,4 @@ static void 										mem_allow_allocator_nuking( bool allow ) { unused( allow )
 
 #endif
 
-inline Allocator*									mem_get_current_allocator() { return g_core_ptr->allocator_stack[g_core_ptr->current_stack_size -1]; }
+inline Allocator*									mem_get_current_allocator() { return g_core_ptr->allocator_stack[g_core_ptr->current_stack_size - 1]; }

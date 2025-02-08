@@ -30,6 +30,7 @@ SOFTWARE.
 
 #include <debug.h>
 #include <allocation_context.h>
+#include <typecast.inl>
 
 #include <memory.h>	// memset
 
@@ -79,7 +80,7 @@ inline void set_key_at_index( Hashmap* map, u32 index, u64 key ) {
 }
 
 void hashmap_reset( Hashmap* map ) {
-	For( u32, i, 0, map->capacity ) {
+	For ( u32, i, 0, map->capacity ) {
 		set_key_at_index( map, i, HASHMAP_UNUSED_BUCKET );
 		map->buckets[i].value = HASHMAP_INVALID_VALUE;
 	}
@@ -133,7 +134,7 @@ void hashmap_set_value( Hashmap* map, const u64 key, const u32 value ) {
 
 		float32 utilization = cast( float32, map->usage_count + map->tombstone_count ) / cast( float32, map->capacity );
 		if ( utilization > map->max_utilisation ) {
-			if( map->should_grow ) {
+			if ( map->should_grow ) {
 				mem_push_allocator( map->allocator );
 				defer( mem_pop_allocator() );
 
@@ -149,7 +150,7 @@ void hashmap_set_value( Hashmap* map, const u64 key, const u32 value ) {
 				// Alternatively we could swap tombstone and unused values round and then unused value == empty bucket and zero the entire damn thing :)
 				hashmap_reset( map );
 
-				For( u32, old_bucket_index, 0, old_capacity ) {
+				For ( u32, old_bucket_index, 0, old_capacity ) {
 					u64 key_in_bucket = hashmap_internal_combine( old_buckets[old_bucket_index].key_hi, old_buckets[old_bucket_index].key_lo );
 					if ( key_in_bucket != HASHMAP_UNUSED_BUCKET && key_in_bucket != HASHMAP_TOMBSTONE_BUCKET ) {
 						hashmap_set_value( map, key_in_bucket, old_buckets[old_bucket_index].value );
@@ -197,4 +198,20 @@ void hashmap_remove_key( Hashmap* map, const u64 key ) {
 	}
 
 	map->usage_count--;
+}
+
+u64 hashmap_internal_combine( const u32 hi, const u32 lo ) {
+	return ( cast( u64, lo ) << 32 ) | hi;
+}
+
+u64 hashmap_internal_combine_at_index( const Hashmap* map, const u32 index ) {
+	return hashmap_internal_combine( map->buckets[index].key_hi, map->buckets[index].key_lo );
+}
+
+u32 hashmap_internal_get_lo_part( const u64 key ) {
+	return trunc_cast( u32, key >> 32 );
+}
+
+u32 hashmap_internal_get_hi_part( const u64 key ) {
+	return trunc_cast( u32, key & 0xFFFFFFFF );
 }

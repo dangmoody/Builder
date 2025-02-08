@@ -29,71 +29,9 @@ SOFTWARE.
 #pragma once
 
 #include <stdint.h>
+#include <float.h>
 
 #include "defer.h"
-
-// #define HLML_ASSERT assert
-// #include "hlml/bool2.h"
-// #include "hlml/bool3.h"
-// #include "hlml/bool4.h"
-// #include "hlml/int2.h"
-// #include "hlml/int3.h"
-// #include "hlml/int4.h"
-// #include "hlml/uint2.h"
-// #include "hlml/uint3.h"
-// #include "hlml/uint4.h"
-// #include "hlml/float2.h"
-// #include "hlml/float3.h"
-// #include "hlml/float4.h"
-// #include "hlml/double2.h"
-// #include "hlml/double3.h"
-// #include "hlml/double4.h"
-
-// #include "hlml/bool2x2.h"
-// #include "hlml/bool2x3.h"
-// #include "hlml/bool2x4.h"
-// #include "hlml/bool3x2.h"
-// #include "hlml/bool3x3.h"
-// #include "hlml/bool3x4.h"
-// #include "hlml/bool4x2.h"
-// #include "hlml/bool4x3.h"
-// #include "hlml/bool4x4.h"
-// #include "hlml/int2x2.h"
-// #include "hlml/int2x3.h"
-// #include "hlml/int2x4.h"
-// #include "hlml/int3x2.h"
-// #include "hlml/int3x3.h"
-// #include "hlml/int3x4.h"
-// #include "hlml/int4x2.h"
-// #include "hlml/int4x3.h"
-// #include "hlml/int4x4.h"
-// #include "hlml/uint2x2.h"
-// #include "hlml/uint2x3.h"
-// #include "hlml/uint2x4.h"
-// #include "hlml/uint3x2.h"
-// #include "hlml/uint3x3.h"
-// #include "hlml/uint3x4.h"
-// #include "hlml/uint4x2.h"
-// #include "hlml/uint4x3.h"
-// #include "hlml/uint4x4.h"
-// #include "hlml/float2x2.h"
-// #include "hlml/float2x3.h"
-// #include "hlml/float2x4.h"
-// #include "hlml/float3x2.h"
-// #include "hlml/float3x3.h"
-// #include "hlml/float3x4.h"
-// #include "hlml/float4x2.h"
-// #include "hlml/float4x3.h"
-// #include "hlml/float4x4.h"
-// #include "hlml/double2x2.h"
-// #include "hlml/double2x3.h"
-// #include "hlml/double2x4.h"
-// #include "hlml/double3x2.h"
-// #include "hlml/double3x3.h"
-// #include "hlml/double3x4.h"
-// #include "hlml/double4x2.h"
-// #include "hlml/double4x3.h"
-// #include "hlml/double4x4.h"
 
 /*
 ================================================================================================
@@ -110,7 +48,7 @@ SOFTWARE.
 #define count_of( x )				( sizeof( (x) ) / sizeof( (x)[0] ) )
 
 // use this to avoid compiler warning about unused variable if you need to keep it
-#define unused( x )					( cast( void, (x) ) )
+#define unused( x )					( (void) (x) )
 
 // for loop helper macro
 // DM: these exist because I'm getting bored of typing the whole thing out every time and it feels like boiler-plate
@@ -153,3 +91,9 @@ typedef u8			bool8;
 #define U16_MAX		UINT16_MAX
 #define U32_MAX		UINT32_MAX
 #define U64_MAX		UINT64_MAX
+
+#define FLOAT32_MIN	FLT_MIN
+#define FLOAT32_MAX	FLT_MAX
+
+#define FLOAT64_MIN	DBL_MIN
+#define FLOAT64_MAX	DBL_MAX

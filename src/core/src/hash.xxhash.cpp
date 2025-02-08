@@ -27,8 +27,10 @@ SOFTWARE.
 */
 
 #include <hash.h>
+
 #include <allocation_context.h>
 #include <debug.h>
+#include <typecast.inl>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"

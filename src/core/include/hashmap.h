@@ -53,7 +53,7 @@ struct Hashmap {
 	Allocator*		allocator;
 };
 
-Hashmap*	hashmap_create( u32 starting_capacity, float32 normalized_max_utilisation = 0.5f, bool8 should_grow = true);
+Hashmap*	hashmap_create( u32 starting_capacity, float32 normalized_max_utilisation = 0.5f, bool8 should_grow = true );
 void		hashmap_destroy( Hashmap* map );
 
 void		hashmap_reset( Hashmap* map );
@@ -64,18 +64,7 @@ u32			hashmap_get_value( const Hashmap* map, const u64 key );
 void		hashmap_set_value( Hashmap* map, const u64 key, const u32 value );
 void		hashmap_remove_key( Hashmap* map, const u64 key );
 
-constexpr inline u64 hashmap_internal_combine( u32 hi, u32 lo ) {
-	return ( cast( u64, lo ) << 32 ) | hi;
-}
-
-inline u64 hashmap_internal_combine_at_index( const Hashmap* map, u32 index ) {
-	return hashmap_internal_combine( map->buckets[index].key_hi, map->buckets[index].key_lo );
-}
-
-constexpr inline u32 hashmap_internal_get_lo_part( u64 key ) {
-	return cast( u32, key >> 32 );
-}
-
-constexpr inline u32 hashmap_internal_get_hi_part( u64 key ) {
-	return cast( u32, key & 0xFFFFFFFF );
-}
+u64			hashmap_internal_combine( const u32 hi, const u32 lo );
+u64			hashmap_internal_combine_at_index( const Hashmap* map, const u32 index );
+u32			hashmap_internal_get_lo_part( const u64 key );
+u32			hashmap_internal_get_hi_part( const u64 key );

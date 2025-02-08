@@ -29,7 +29,7 @@ SOFTWARE.
 #ifdef _WIN64
 
 #include <timer.h>
-#include <cast.inl>
+#include <typecast.inl>
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>

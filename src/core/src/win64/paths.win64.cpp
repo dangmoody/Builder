@@ -33,6 +33,7 @@ SOFTWARE.
 #include <allocation_context.h>
 #include <temp_storage.h>
 #include <debug.h>
+#include <typecast.inl>
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>

@@ -29,8 +29,10 @@ SOFTWARE.
 #ifdef _WIN64
 
 #include <debug.h>
+
 #include <core_types.h>
-//#include <string_helpers.h>
+#include <string_helpers.h>
+#include <typecast.inl>
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -40,8 +42,6 @@ SOFTWARE.
 #include <stdio.h>	// printf, vprintf
 #include <stdlib.h>	// malloc, free
 #include <malloc.h>	// alloca
-
-#include <string_helpers.h>
 
 /*
 ================================================================================================
@@ -73,11 +73,11 @@ static void log( LogVerbosity required_verbosity, ConsoleColor prefix_color, Con
 	SetConsoleTextAttribute( handle, prefix_color );
 
 #ifdef LOG_SHOW_FUNCTIONS
-	printf( "\n%s(%s):  ", prefix, function );
+	printf( "%s(%s):  ", prefix, function );
 #else
 	unused( function );
 	
-	printf( "\n%s:  ", prefix );
+	printf( "%s:  ", prefix );
 #endif
 
 	SetConsoleTextAttribute( handle, message_color );

@@ -27,8 +27,10 @@ SOFTWARE.
 */
 
 #include <temp_storage.h>
+
 #include <allocation_context.h>
 #include <allocator_linear.h>
+#include <typecast.inl>
 
 #include <debug.h>
 /*

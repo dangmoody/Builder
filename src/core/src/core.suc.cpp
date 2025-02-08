@@ -34,6 +34,7 @@ SOFTWARE.
 	#error Unrecognised platform.
 #endif
 
+#include <typecast.inl>
 #include <array.inl>
 #include <ring.inl>
 #include "allocation_context.cpp"

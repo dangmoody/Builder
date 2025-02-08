@@ -28,6 +28,8 @@ SOFTWARE.
 
 #include <random.h>
 
+#include <typecast.inl>
+
 #include <stdlib.h>
 #include <time.h>
 

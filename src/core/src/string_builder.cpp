@@ -30,11 +30,11 @@ SOFTWARE.
 
 #include <debug.h>
 #include <allocation_context.h>
+#include <string_helpers.h>
+#include <typecast.inl>
 
 #include <stdio.h>
 #include <stdarg.h>
-
-#include "string_helpers.h"
 
 /*
 ================================================================================================

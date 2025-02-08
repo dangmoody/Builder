@@ -27,11 +27,12 @@ SOFTWARE.
 */
 
 #include <allocator_linear.h>
-#include <allocation_context.h>
 
+#include <allocation_context.h>
 #include <core_types.h>
 #include <memory_units.h>
 #include <debug.h>
+#include <typecast.inl>
 
 #include <stdlib.h>	// malloc, free
 

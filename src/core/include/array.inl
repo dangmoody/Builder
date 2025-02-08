@@ -35,8 +35,6 @@ SOFTWARE.
 #include "allocation_context.h"
 #include "core_math.h"
 
-#include "cast.inl"
-
 #include <memory.h>
 
 /*
@@ -154,7 +152,13 @@ void Array<T>::reserve( const u64 bytes ) {
 		allocator = allocator == nullptr ? mem_get_current_allocator() : allocator;
 
 		mem_push_allocator( allocator );
-		data = cast( T*, mem_realloc( data, alloced * sizeof( T ) ) );
+		// TODO(DM): 07/02/2025: using our own cast( T, x ) function doesnt work here when we enable CORE_MEMORY_TRACKING
+		// this is because in that instance mem_realloc calls track_allocation_internal() followed immediately by track_free_internal(), which the compiler wont like if we were to do the following:
+		//
+		//	data = cast( T*, mem_realloc( data, alloced * sizeof( T ) ) );
+		//
+		// therefore we need to make the mem_realloc() define call just the one function instead of one after the other
+		data = (T*) mem_realloc( data, alloced * sizeof( T ) );
 		mem_pop_allocator();
 	}
 }

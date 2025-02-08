@@ -252,24 +252,7 @@ bool8 file_write_entire( const char* filename, const void* data, const u64 size 
 	assertf( filename, "File name cannot be null." );
 	assertf( data, "Write data cannot be null." );
 
-	File file = {};
-
-	// we want to wipe any pre-existing content in this file (if it exists) and overwrite it with the new content
-	// so check that it exists first and if it does then delete it and re-create it
-	file = open_file_internal( filename, GENERIC_READ, OPEN_EXISTING );
-
-	if ( file.ptr ) {
-		bool8 closed = file_close( &file );
-		assert( closed );
-		unused( closed );
-
-		bool8 deleted = file_delete( filename );
-		assert( deleted );
-		unused( deleted );
-	}
-
-	// now write our new content to it
-	file = file_open_or_create( filename );
+	File file = file_open_or_create( filename );
 
 	if ( file.ptr == NULL ) {
 		return false;

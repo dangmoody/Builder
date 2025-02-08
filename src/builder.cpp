@@ -1552,17 +1552,17 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 			}
 
 			if ( !foundDefaultPlatformName ) {
-				StringBuilder builder = {};
-				string_builder_reset( &builder );
-				string_builder_appendf( &builder, "None of your platform names are any of the Visual Studio recognized defaults:\n" );
+				StringBuilder error = {};
+				string_builder_reset( &error );
+				string_builder_appendf( &error, "None of your platform names are any of the Visual Studio recognized defaults:\n" );
 				For ( u64, platformIndex, 0, count_of( defaultPlatformNames ) ) {
-					string_builder_appendf( &builder, "\t- %s\n", defaultPlatformNames[platformIndex] );
+					string_builder_appendf( &error, "\t- %s\n", defaultPlatformNames[platformIndex] );
 				}
-				string_builder_appendf( &builder, "Visual Studio relies on those specific names in order to generate fields like \"Executable Path\" properly (for example).\n" );
-				string_builder_appendf( &builder, "Builder will still generate the solution, but know that not setting at least one platform name to any of these defaults will cause certain fields in the property pages of your Visual Studio project to not be correct.\n" );
-				string_builder_appendf( &builder, "You have been warned.\n" );
+				string_builder_appendf( &error, "Visual Studio relies on those specific names in order to generate fields like \"Executable Path\" properly (for example).\n" );
+				string_builder_appendf( &error, "Builder will still generate the solution, but know that not setting at least one platform name to any of these defaults will cause certain fields in the property pages of your Visual Studio project to not be correct.\n" );
+				string_builder_appendf( &error, "You have been warned.\n" );
 
-				warning( string_builder_to_string( &builder ) );
+				warning( string_builder_to_string( &error ) );
 			}
 		}
 	}
@@ -1591,6 +1591,21 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 
 		return false;
 	}
+
+	auto WriteStringBuilderToFile = []( StringBuilder* stringBuilder, const char* filename ) -> bool8 {
+		const char* msg = string_builder_to_string( stringBuilder );
+		const u64 msgLength = strlen( msg );
+		bool8 written = file_write_entire( filename, msg, msgLength );
+
+		if ( !written ) {
+			errorCode_t errorCode = GetLastErrorCode();
+			error( "Failed to write \"%s\": " ERROR_CODE_FORMAT ".\n", filename, errorCode );
+
+			return false;
+		}
+
+		return true;
+	};
 
 	// generate each .vcxproj
 	For ( u64, projectIndex, 0, solution->projects.size() ) {
@@ -1700,15 +1715,15 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 
 			printf( "Generating %s ... ", projectPath );
 
-			File vcxproj = file_open_or_create( projectPath );
-			defer( file_close( &vcxproj ) );
+			StringBuilder vcxprojContent = {};
+			string_builder_reset( &vcxprojContent );
 
-			CHECK_WRITE( file_write_line( &vcxproj, "<?xml version=\"1.0\" encoding=\"utf-8\"?>" ) );
-			CHECK_WRITE( file_write_line( &vcxproj, "<Project DefaultTargets=\"Build\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">" ) );
+			string_builder_appendf( &vcxprojContent, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
+			string_builder_appendf( &vcxprojContent, "<Project DefaultTargets=\"Build\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n" );
 
 			// generate every single config and platform pairing
 			{
-				CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup Label=\"ProjectConfigurations\">" ) );
+				string_builder_appendf( &vcxprojContent, "\t<ItemGroup Label=\"ProjectConfigurations\">\n" );
 				For ( u64, configIndex, 0, project->configs.size() ) {
 					VisualStudioConfig* config = &project->configs[configIndex];
 
@@ -1716,26 +1731,26 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 						const char* platform = solution->platforms[platformIndex];
 
 						// TODO: Alternative targets
-						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ProjectConfiguration Include=\"%s|%s\">", config->name, platform ) ) );
-						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Configuration>%s</Configuration>", config->name ) ) );
-						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Platform>%s</Platform>", platform ) ) );
-						CHECK_WRITE( file_write_line( &vcxproj,          "\t\t</ProjectConfiguration>" ) );
+						string_builder_appendf( &vcxprojContent, "\t\t<ProjectConfiguration Include=\"%s|%s\">\n", config->name, platform );
+						string_builder_appendf( &vcxprojContent, "\t\t\t<Configuration>%s</Configuration>\n", config->name );
+						string_builder_appendf( &vcxprojContent, "\t\t\t<Platform>%s</Platform>\n", platform );
+						string_builder_appendf( &vcxprojContent, "\t\t</ProjectConfiguration>\n" );
 					}
 				}
-				CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemGroup>" ) );
+				string_builder_appendf( &vcxprojContent, "\t</ItemGroup>\n" );
 			}
 
 			// project globals
 			{
-				CHECK_WRITE( file_write_line( &vcxproj,          "\t<PropertyGroup Label=\"Globals\">" ) );
-				CHECK_WRITE( file_write_line( &vcxproj,          "\t\t<VCProjectVersion>17.0</VCProjectVersion>" ) );
-				CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ProjectGuid>{%s}</ProjectGuid>", projectGuids[projectIndex] ) ) );
-				CHECK_WRITE( file_write_line( &vcxproj,          "\t\t<IgnoreWarnCompileDuplicatedFilename>true</IgnoreWarnCompileDuplicatedFilename>" ) );
-				CHECK_WRITE( file_write_line( &vcxproj,          "\t\t<Keyword>MakeFileProj</Keyword>" ) );
-				CHECK_WRITE( file_write_line( &vcxproj,          "\t</PropertyGroup>" ) );
+				string_builder_appendf( &vcxprojContent, "\t<PropertyGroup Label=\"Globals\">\n" );
+				string_builder_appendf( &vcxprojContent, "\t\t<VCProjectVersion>17.0</VCProjectVersion>\n" );
+				string_builder_appendf( &vcxprojContent, "\t\t<ProjectGuid>{%s}</ProjectGuid>\n", projectGuids[projectIndex] );
+				string_builder_appendf( &vcxprojContent, "\t\t<IgnoreWarnCompileDuplicatedFilename>true</IgnoreWarnCompileDuplicatedFilename>\n" );
+				string_builder_appendf( &vcxprojContent, "\t\t<Keyword>MakeFileProj</Keyword>\n" );
+				string_builder_appendf( &vcxprojContent, "\t</PropertyGroup>\n" );
 			}
 
-			CHECK_WRITE( file_write_line( &vcxproj, "\t<Import Project=\"$(VCTargetsPath)\\Microsoft.Cpp.Default.props\" />" ) );
+			string_builder_appendf( &vcxprojContent, "\t<Import Project=\"$(VCTargetsPath)\\Microsoft.Cpp.Default.props\" />\n" );
 
 			// for each config and platform, define config type, toolset, out dir, and intermediate dir
 			For ( u64, configIndex, 0, project->configs.size() ) {
@@ -1759,22 +1774,22 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 				For ( u64, platformIndex, 0, solution->platforms.size() ) {
 					const char* platform = solution->platforms[platformIndex];
 
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\" Label=\"Configuration\">", config->name, platform ) ) );
-					CHECK_WRITE( file_write_line( &vcxproj,          "\t\t<ConfigurationType>Makefile</ConfigurationType>" ) );
-					CHECK_WRITE( file_write_line( &vcxproj,          "\t\t<UseDebugLibraries>false</UseDebugLibraries>" ) );
-					CHECK_WRITE( file_write_line( &vcxproj,          "\t\t<PlatformToolset>v143</PlatformToolset>" ) );
+					string_builder_appendf( &vcxprojContent, "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\" Label=\"Configuration\">\n", config->name, platform );
+					string_builder_appendf( &vcxprojContent, "\t\t<ConfigurationType>Makefile</ConfigurationType>\n" );
+					string_builder_appendf( &vcxprojContent, "\t\t<UseDebugLibraries>false</UseDebugLibraries>\n" );
+					string_builder_appendf( &vcxprojContent, "\t\t<PlatformToolset>v143</PlatformToolset>\n" );
 
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<OutDir>%s</OutDir>", pathFromSolutionToBinary ) ) );
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<IntDir>%s</IntDir>", tprintf( "%s\\intermediate", config->options.binary_folder.c_str() ) ) ) );
-					CHECK_WRITE( file_write_line( &vcxproj,          "\t</PropertyGroup>" ) );
+					string_builder_appendf( &vcxprojContent, "\t\t<OutDir>%s</OutDir>\n", pathFromSolutionToBinary );
+					string_builder_appendf( &vcxprojContent, "\t\t<IntDir>%s\\intermediate</IntDir>\n", config->options.binary_folder.c_str() );
+					string_builder_appendf( &vcxprojContent, "\t</PropertyGroup>\n" );
 				}
 			}
 
-			CHECK_WRITE( file_write_line( &vcxproj, "\t<Import Project=\"$(VCTargetsPath)\\Microsoft.Cpp.props\" />" ) );
+			string_builder_appendf( &vcxprojContent, "\t<Import Project=\"$(VCTargetsPath)\\Microsoft.Cpp.props\" />\n" );
 
 			// not sure what this is or why we need this one but visual studio seems to want it
-			CHECK_WRITE( file_write_line( &vcxproj, "\t<ImportGroup Label=\"ExtensionSettings\">" ) );
-			CHECK_WRITE( file_write_line( &vcxproj, "\t</ImportGroup>" ) );
+			string_builder_appendf( &vcxprojContent, "\t<ImportGroup Label=\"ExtensionSettings\">\n" );
+			string_builder_appendf( &vcxprojContent, "\t</ImportGroup>\n" );
 
 			// for each config and platform, import the property sheets that visual studio requires
 			For ( u64, configIndex, 0, project->configs.size() ) {
@@ -1783,14 +1798,14 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 				For ( u64, platformIndex, 0, solution->platforms.size() ) {
 					const char* platform = solution->platforms[platformIndex];
 
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<ImportGroup Label=\"PropertySheets\" Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">", config->name, platform ) ) );
-					CHECK_WRITE( file_write_line( &vcxproj,          "\t\t<Import Project=\"$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props\" Condition=\"exists(\'$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props\')\" Label=\"LocalAppDataPlatform\" />" ) );
-					CHECK_WRITE( file_write_line( &vcxproj,          "\t</ImportGroup>" ) );
+					string_builder_appendf( &vcxprojContent, "\t<ImportGroup Label=\"PropertySheets\" Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">\n", config->name, platform );
+					string_builder_appendf( &vcxprojContent, "\t\t<Import Project=\"$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props\" Condition=\"exists(\'$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props\')\" Label=\"LocalAppDataPlatform\" />\n" );
+					string_builder_appendf( &vcxprojContent, "\t</ImportGroup>\n" );
 				}
 			}
 
 			// not sure what this is or why we need this one but visual studio seems to want it
-			CHECK_WRITE( file_write_line( &vcxproj, "\t<PropertyGroup Label=\"UserMacros\" />" ) );
+			string_builder_appendf( &vcxprojContent, "\t<PropertyGroup Label=\"UserMacros\" />\n" );
 		
 			// for each config and platform, set the following:
 			//	external include paths
@@ -1806,26 +1821,26 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 				For ( u64, platformIndex, 0, solution->platforms.size() ) {
 					const char* platform = solution->platforms[platformIndex];
 
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">", config->name, platform ) ) );
+					string_builder_appendf( &vcxprojContent, "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">\n", config->name, platform );
 
 					// external include paths
-					CHECK_WRITE( file_write( &vcxproj, "\t\t<ExternalIncludePath>" ) );
+					string_builder_appendf( &vcxprojContent, "\t\t<ExternalIncludePath>" );
 					For ( u64, includePathIndex, 0, config->options.additional_includes.size() ) {
-						CHECK_WRITE( file_write( &vcxproj, tprintf( "%s;", config->options.additional_includes[includePathIndex].c_str() ) ) );
+						string_builder_appendf( &vcxprojContent, "%s;", config->options.additional_includes[includePathIndex].c_str() );
 					}
-					CHECK_WRITE( file_write( &vcxproj, "$(ExternalIncludePath)" ) );
-					CHECK_WRITE( file_write( &vcxproj, "</ExternalIncludePath>\n" ) );
+					string_builder_appendf( &vcxprojContent, "$(ExternalIncludePath)" );
+					string_builder_appendf( &vcxprojContent, "</ExternalIncludePath>\n" );
 
 					// external library paths
-					CHECK_WRITE( file_write( &vcxproj, "\t\t<LibraryPath>" ) );
+					string_builder_appendf( &vcxprojContent, "\t\t<LibraryPath>" );
 					For ( u64, libPathIndex, 0, config->options.additional_lib_paths.size() ) {
-						CHECK_WRITE( file_write( &vcxproj, tprintf( "%s;", config->options.additional_lib_paths[libPathIndex].c_str() ) ) );
+						string_builder_appendf( &vcxprojContent, "%s;", config->options.additional_lib_paths[libPathIndex].c_str() );
 					}
-					CHECK_WRITE( file_write( &vcxproj, "$(LibraryPath)" ) );
-					CHECK_WRITE( file_write( &vcxproj, "</LibraryPath>\n" ) );
+					string_builder_appendf( &vcxprojContent, "$(LibraryPath)" );
+					string_builder_appendf( &vcxprojContent, "</LibraryPath>\n" );
 
 					// output path
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeOutput>%s</NMakeOutput>", config->options.binary_folder.c_str() ) ) );
+					string_builder_appendf( &vcxprojContent, "\t\t<NMakeOutput>%s</NMakeOutput>\n", config->options.binary_folder.c_str() );
 
 					const char* inputFileAndPath = NULL;
 					if ( PathHasSlash( context->inputFile ) ) {
@@ -1850,67 +1865,71 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 
 					const char* fullConfigName = config->options.name.c_str();
 
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeBuildCommandLine>%s\\builder.exe %s %s%s</NMakeBuildCommandLine>", paths_get_app_path(), buildInfoFileRelative, ARG_CONFIG, fullConfigName ) ) );
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeReBuildCommandLine>%s\\builder.exe %s %s%s</NMakeReBuildCommandLine>", paths_get_app_path(), buildInfoFileRelative, ARG_CONFIG, fullConfigName ) ) );
+					string_builder_appendf( &vcxprojContent, "\t\t<NMakeBuildCommandLine>%s\\builder.exe %s %s%s</NMakeBuildCommandLine>\n", paths_get_app_path(), buildInfoFileRelative, ARG_CONFIG, fullConfigName );
+					string_builder_appendf( &vcxprojContent, "\t\t<NMakeReBuildCommandLine>%s\\builder.exe %s %s%s</NMakeReBuildCommandLine>\n", paths_get_app_path(), buildInfoFileRelative, ARG_CONFIG, fullConfigName );
 
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<NMakeCleanCommandLine>%s\\builder.exe --nuke %s</NMakeCleanCommandLine>", paths_get_app_path(), config->options.binary_folder.c_str() ) ) );
+					string_builder_appendf( &vcxprojContent, "\t\t<NMakeCleanCommandLine>%s\\builder.exe --nuke %s</NMakeCleanCommandLine>\n", paths_get_app_path(), config->options.binary_folder.c_str() );
 
 					// preprocessor definitions
-					CHECK_WRITE( file_write( &vcxproj, "\t\t<NMakePreprocessorDefinitions>" ) );
+					string_builder_appendf( &vcxprojContent, "\t\t<NMakePreprocessorDefinitions>" );
 					For ( u64, definitionIndex, 0, config->options.defines.size() ) {
-						CHECK_WRITE( file_write( &vcxproj, tprintf( "%s;", config->options.defines[definitionIndex] ) ) );
+						string_builder_appendf( &vcxprojContent, tprintf( "%s;", config->options.defines[definitionIndex] ) );
 					}
-					CHECK_WRITE( file_write( &vcxproj, "$(NMakePreprocessorDefinitions)" ) );
-					CHECK_WRITE( file_write( &vcxproj, "</NMakePreprocessorDefinitions>\n" ) );
+					string_builder_appendf( &vcxprojContent, "$(NMakePreprocessorDefinitions)" );
+					string_builder_appendf( &vcxprojContent, "</NMakePreprocessorDefinitions>\n" );
 
-					CHECK_WRITE( file_write_line( &vcxproj, "\t</PropertyGroup>" ) );
+					string_builder_appendf( &vcxprojContent, "\t</PropertyGroup>\n" );
 				}
 			}
 
-			CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemDefinitionGroup>" ) );
-			CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemDefinitionGroup>" ) );
+			string_builder_appendf( &vcxprojContent, "\t<ItemDefinitionGroup>\n" );
+			string_builder_appendf( &vcxprojContent, "\t</ItemDefinitionGroup>\n" );
 
 			// tell visual studio what files we have in this project
 			// this is typically done via a filter (E.G: src/*.cpp)
 			{
 				if ( sourceFiles.count > 0 ) {
-					CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
+					string_builder_appendf( &vcxprojContent, "\t<ItemGroup>\n" );
 
 					For ( u64, fileIndex, 0, sourceFiles.count ) {
-						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ClCompile Include=\"%s\" />", sourceFiles[fileIndex] ) ) );
+						string_builder_appendf( &vcxprojContent, "\t\t<ClCompile Include=\"%s\" />\n", sourceFiles[fileIndex] );
 					}
 
-					CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemGroup>" ) );
+					string_builder_appendf( &vcxprojContent, "\t</ItemGroup>\n" );
 				}
 
 				if ( headerFiles.count > 0 ) {
-					CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
+					string_builder_appendf( &vcxprojContent, "\t<ItemGroup>\n" );
 
 					For ( u64, fileIndex, 0, headerFiles.count ) {
-						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ClInclude Include=\"%s\" />", headerFiles[fileIndex] ) ) );
+						string_builder_appendf( &vcxprojContent, "\t\t<ClInclude Include=\"%s\" />\n", headerFiles[fileIndex] );
 					}
 
-					CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemGroup>" ) );
+					string_builder_appendf( &vcxprojContent, "\t</ItemGroup>\n" );
 				}
 
 				if ( otherFiles.count > 0 ) {
-					CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
+					string_builder_appendf( &vcxprojContent, "\t<ItemGroup>\n" );
 
 					For ( u64, fileIndex, 0, otherFiles.count ) {
-						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<None Include=\"%s\" />", otherFiles[fileIndex] ) ) );
+						string_builder_appendf( &vcxprojContent, "\t\t<None Include=\"%s\" />\n", otherFiles[fileIndex] );
 					}
 
-					CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemGroup>" ) );
+					string_builder_appendf( &vcxprojContent, "\t</ItemGroup>\n" );
 				}
 			}
 
-			CHECK_WRITE( file_write_line( &vcxproj, "\t<Import Project=\"$(VCTargetsPath)\\Microsoft.Cpp.targets\" />" ) );
+			string_builder_appendf( &vcxprojContent, "\t<Import Project=\"$(VCTargetsPath)\\Microsoft.Cpp.targets\" />\n" );
 
 			// not sure what this is or why we need this one but visual studio seems to want it
-			CHECK_WRITE( file_write_line( &vcxproj, "\t<ImportGroup Label=\"ExtensionTargets\">" ) );
-			CHECK_WRITE( file_write_line( &vcxproj, "\t</ImportGroup>" ) );
+			string_builder_appendf( &vcxprojContent, "\t<ImportGroup Label=\"ExtensionTargets\">\n" );
+			string_builder_appendf( &vcxprojContent, "\t</ImportGroup>\n" );
 
-			CHECK_WRITE( file_write_line( &vcxproj, "</Project>" ) );
+			string_builder_appendf( &vcxprojContent, "</Project>\n" );
+
+			if ( !WriteStringBuilderToFile( &vcxprojContent, projectPath ) ) {
+				return false;
+			}
 
 			printf( "Done\n" );
 		}
@@ -1921,15 +1940,15 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 
 			printf( "Generating %s ... ", projectPath );
 
-			File vcxproj = file_open_or_create( projectPath );
-			defer( file_close( &vcxproj ) );
+			StringBuilder vcxprojContent = {};
+			string_builder_reset( &vcxprojContent );
 
-			CHECK_WRITE( file_write_line( &vcxproj, "<?xml version=\"1.0\" encoding=\"utf-8\"?>" ) );
-			CHECK_WRITE( file_write_line( &vcxproj, "<Project ToolsVersion=\"Current\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">" ) );
+			string_builder_appendf( &vcxprojContent, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
+			string_builder_appendf( &vcxprojContent, "<Project ToolsVersion=\"Current\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n" );
 
-			CHECK_WRITE( file_write_line( &vcxproj, "\t<PropertyGroup>" ) );
-			CHECK_WRITE( file_write_line( &vcxproj, "\t\t<ShowAllFiles>false</ShowAllFiles>" ) );
-			CHECK_WRITE( file_write_line( &vcxproj, "\t</PropertyGroup>" ) );
+			string_builder_appendf( &vcxprojContent, "\t<PropertyGroup>\n" );
+			string_builder_appendf( &vcxprojContent, "\t\t<ShowAllFiles>false</ShowAllFiles>\n" );
+			string_builder_appendf( &vcxprojContent, "\t</PropertyGroup>\n" );
 
 			// for each config and platform, generate the debugger settings
 			{
@@ -1949,28 +1968,32 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 					For ( u64, platformIndex, 0, solution->platforms.size() ) {
 						const char* platform = solution->platforms[platformIndex];
 
-						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">", config->name, platform ) ) );
-						CHECK_WRITE( file_write_line( &vcxproj,          "\t\t<DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>" ) );	// TODO(DM): do want to include the other debugger types?
-						CHECK_WRITE( file_write_line( &vcxproj,          "\t\t<LocalDebuggerDebuggerType>Auto</LocalDebuggerDebuggerType>" ) );
-						CHECK_WRITE( file_write_line( &vcxproj,          "\t\t<LocalDebuggerAttach>false</LocalDebuggerAttach>" ) );
-						CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<LocalDebuggerCommand>%s</LocalDebuggerCommand>", pathFromSolutionToBinary ) ) );
-						CHECK_WRITE( file_write_line( &vcxproj,          "\t\t<LocalDebuggerWorkingDirectory>$(SolutionDir)</LocalDebuggerWorkingDirectory>" ) );
+						string_builder_appendf( &vcxprojContent, "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">\n", config->name, platform );
+						string_builder_appendf( &vcxprojContent, "\t\t<DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>\n" );	// TODO(DM): do want to include the other debugger typ?
+						string_builder_appendf( &vcxprojContent, "\t\t<LocalDebuggerDebuggerType>Auto</LocalDebuggerDebuggerType>\n" );
+						string_builder_appendf( &vcxprojContent, "\t\t<LocalDebuggerAttach>false</LocalDebuggerAttach>\n" );
+						string_builder_appendf( &vcxprojContent, "\t\t<LocalDebuggerCommand>%s</LocalDebuggerCommand>\n", pathFromSolutionToBinary );
+						string_builder_appendf( &vcxprojContent, "\t\t<LocalDebuggerWorkingDirectory>$(SolutionDir)</LocalDebuggerWorkingDirectory>\n" );
 
 						// if debugger arguments were specified, put those in
 						if ( config->debugger_arguments.size() > 0 ) {
-							CHECK_WRITE( file_write( &vcxproj, "\t\t<LocalDebuggerCommandArguments>" ) );
+							string_builder_appendf( &vcxprojContent, "\t\t<LocalDebuggerCommandArguments>\n" );
 							For ( u64, argIndex, 0, config->debugger_arguments.size() ) {
-								CHECK_WRITE( file_write( &vcxproj, tprintf( "%s " ) ) );
+								string_builder_appendf( &vcxprojContent, "%s ", config->debugger_arguments[argIndex] );
 							}
-							CHECK_WRITE( file_write( &vcxproj, "</LocalDebuggerCommandArguments>\n" ) );
+							string_builder_appendf( &vcxprojContent, "</LocalDebuggerCommandArguments>\n" );
 						}
 
-						CHECK_WRITE( file_write_line( &vcxproj, "\t</PropertyGroup>" ) );
+						string_builder_appendf( &vcxprojContent, "\t</PropertyGroup>\n" );
 					}
 				}
 			}
 
-			CHECK_WRITE( file_write_line( &vcxproj, "</Project>" ) );
+			string_builder_appendf( &vcxprojContent, "</Project>\n" );
+
+			if ( !WriteStringBuilderToFile( &vcxprojContent, projectPath ) ) {
+				return false;
+			}
 
 			printf( "Done\n" );
 		}
@@ -1981,13 +2004,13 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 
 			printf( "Generating %s ... ", projectPath );
 
-			File vcxproj = file_open_or_create( projectPath );
-			defer( file_close( &vcxproj ) );
+			StringBuilder vcxprojContent = {};
+			string_builder_reset( &vcxprojContent );
 
-			CHECK_WRITE( file_write_line( &vcxproj, "<?xml version=\"1.0\" encoding=\"utf-8\"?>" ) );
-			CHECK_WRITE( file_write_line( &vcxproj, "<Project ToolsVersion=\"4.0\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">" ) );
+			string_builder_appendf( &vcxprojContent, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
+			string_builder_appendf( &vcxprojContent, "<Project ToolsVersion=\"4.0\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n" );
 
-			CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
+			string_builder_appendf( &vcxprojContent, "\t<ItemGroup>\n" );
 
 			// write all filter guids
 			For ( u64, folderIndex, 0, project->code_folders.size() ) {
@@ -2001,43 +2024,47 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 
 					const char* guid = CreateVisualStudioGuid();
 
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<Filter Include=\"%s\">", subfolder ) ) );
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<UniqueIdentifier>{%s}</UniqueIdentifier>", guid ) ) );
-					CHECK_WRITE( file_write_line( &vcxproj,          "\t\t</Filter>" ) );
+					string_builder_appendf( &vcxprojContent, "\t\t<Filter Include=\"%s\">\n", subfolder );
+					string_builder_appendf( &vcxprojContent, "\t\t\t<UniqueIdentifier>{%s}</UniqueIdentifier>\n", guid );
+					string_builder_appendf( &vcxprojContent, "\t\t</Filter>\n" );
 				}
 			}
 
-			CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemGroup>" ) );
+			string_builder_appendf( &vcxprojContent, "\t</ItemGroup>\n" );
 
 			// now put all files in the filter
 			// visual studio requires that we list each file by type
 			{
-				CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
+				string_builder_appendf( &vcxprojContent, "\t<ItemGroup>\n" );
 				For ( u64, fileIndex, 0, sourceFiles.count ) {
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ClCompile Include=\"%s\">", sourceFiles[fileIndex] ) ) );
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Filter>%s</Filter>", sourceFilePaths[fileIndex] ) ) );
-					CHECK_WRITE( file_write_line( &vcxproj,          "\t\t</ClCompile>" ) );
+					string_builder_appendf( &vcxprojContent, "\t\t<ClCompile Include=\"%s\">\n", sourceFiles[fileIndex] );
+					string_builder_appendf( &vcxprojContent, "\t\t\t<Filter>%s</Filter>\n", sourceFilePaths[fileIndex] );
+					string_builder_appendf( &vcxprojContent, "\t\t</ClCompile>\n" );
 				}
-				CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemGroup>" ) );
+				string_builder_appendf( &vcxprojContent, "\t</ItemGroup>\n" );
 
-				CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
+				string_builder_appendf( &vcxprojContent, "\t<ItemGroup>\n" );
 				For ( u64, fileIndex, 0, headerFiles.count ) {
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<ClInclude Include=\"%s\">", headerFiles[fileIndex] ) ) );
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Filter>%s</Filter>", headerFilePaths[fileIndex] ) ) );
-					CHECK_WRITE( file_write_line( &vcxproj,          "\t\t</ClInclude>" ) );
+					string_builder_appendf( &vcxprojContent, "\t\t<ClInclude Include=\"%s\">\n", headerFiles[fileIndex] );
+					string_builder_appendf( &vcxprojContent, "\t\t\t<Filter>%s</Filter>\n", headerFilePaths[fileIndex] );
+					string_builder_appendf( &vcxprojContent, "\t\t</ClInclude>\n" );
 				}
-				CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemGroup>" ) );
+				string_builder_appendf( &vcxprojContent, "\t</ItemGroup>\n" );
 
-				CHECK_WRITE( file_write_line( &vcxproj, "\t<ItemGroup>" ) );
+				string_builder_appendf( &vcxprojContent, "\t<ItemGroup>\n" );
 				For ( u64, fileIndex, 0, otherFiles.count ) {
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t<None Include=\"%s\">", otherFiles[fileIndex] ) ) );
-					CHECK_WRITE( file_write_line( &vcxproj, tprintf( "\t\t\t<Filter>%s</Filter>", otherFilePaths[fileIndex] ) ) );
-					CHECK_WRITE( file_write_line( &vcxproj,          "\t\t</None>" ) );
+					string_builder_appendf( &vcxprojContent, "\t\t<None Include=\"%s\">\n", otherFiles[fileIndex] );
+					string_builder_appendf( &vcxprojContent, "\t\t\t<Filter>%s</Filter>\n", otherFilePaths[fileIndex] );
+					string_builder_appendf( &vcxprojContent, "\t\t</None>\n" );
 				}
-				CHECK_WRITE( file_write_line( &vcxproj, "\t</ItemGroup>" ) );
+				string_builder_appendf( &vcxprojContent, "\t</ItemGroup>\n" );
 			}
 
-			CHECK_WRITE( file_write_line( &vcxproj, "</Project>" ) );
+			string_builder_appendf( &vcxprojContent, "</Project>" );
+
+			if ( !WriteStringBuilderToFile( &vcxprojContent, projectPath ) ) {
+				return false;
+			}
 		}
 
 		printf( "Done\n" );
@@ -2047,31 +2074,31 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 	{
 		printf( "Generating %s ... ", solutionFilename );
 
-		File sln = file_open_or_create( solutionFilename );
-		defer( file_close( &sln ) );
+		StringBuilder slnContent = {};
+		string_builder_reset( &slnContent );
 
-		CHECK_WRITE( file_write(      &sln, "\n" ) );
-		CHECK_WRITE( file_write_line( &sln, "Microsoft Visual Studio Solution File, Format Version 12.00" ) );
-		CHECK_WRITE( file_write_line( &sln, "# Visual Studio Version 17" ) );
-		CHECK_WRITE( file_write_line( &sln, "VisualStudioVersion = 17.7.34202.233" ) );			// TODO(DM): how do we query windows for this?
-		CHECK_WRITE( file_write_line( &sln, "MinimunVisualStudioVersion = 10.0.40219.1" ) );	// TODO(DM): how do we query windows for this?
+		string_builder_appendf( &slnContent, "\n" );
+		string_builder_appendf( &slnContent, "Microsoft Visual Studio Solution File, Format Version 12.00\n" );
+		string_builder_appendf( &slnContent, "# Visual Studio Version 17\n" );
+		string_builder_appendf( &slnContent, "VisualStudioVersion = 17.7.34202.233\n" );		// TODO(DM): how do we query windows for this?
+		string_builder_appendf( &slnContent, "MinimunVisualStudioVersion = 10.0.40219.1\n" );	// TODO(DM): how do we query windows for this?
 
 		// generate project dependencies
 		For ( u64, projectIndex, 0, solution->projects.size() ) {
 			VisualStudioProject* project = &solution->projects[projectIndex];
 
-			CHECK_WRITE( file_write_line( &sln, tprintf( "Project(\"{%s}\") = \"%s\", \"%s.vcxproj\", \"{%s}\"", VISUAL_STUDIO_CPP_PROJECT_TYPE_GUID, project->name, project->name, projectGuids[projectIndex] ) ) );
+			string_builder_appendf( &slnContent, "Project(\"{%s}\") = \"%s\", \"%s.vcxproj\", \"{%s}\"\n", VISUAL_STUDIO_CPP_PROJECT_TYPE_GUID, project->name, project->name, projectGuids[projectIndex] );
 			// TODO: project dependencies go here and look like this:
 			//	ProjectSection(ProjectDependencies) = postProject
 			//		{NAME_GUID} = {NAME_GUID}
 			//	EndProjectSection
-			CHECK_WRITE( file_write_line( &sln, "EndProject" ) );
+			string_builder_appendf( &slnContent, "EndProject\n" );
 		}
 
-		CHECK_WRITE( file_write_line( &sln, "Global" ) );
+		string_builder_appendf( &slnContent, "Global\n" );
 		{
 			// which config|platform maps to which config|platform?
-			CHECK_WRITE( file_write_line( &sln, "\tGlobalSection(SolutionConfigurationPlatforms) = preSolution" ) );
+			string_builder_appendf( &slnContent, "\tGlobalSection(SolutionConfigurationPlatforms) = preSolution\n" );
 			For ( u64, projectIndex, 0, solution->projects.size() ) {
 				VisualStudioProject* project = &solution->projects[projectIndex];
 
@@ -2081,14 +2108,14 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 					For ( u64, platformIndex, 0, solution->platforms.size() ) {
 						const char* platform = solution->platforms[platformIndex];
 
-						CHECK_WRITE( file_write_line( &sln, tprintf( "\t\t%s|%s = %s|%s", config->name, platform, config->name, platform ) ) );
+						string_builder_appendf( &slnContent, tprintf( "\t\t%s|%s = %s|%s\n", config->name, platform, config->name, platform ) );
 					}
 				}
 			}
-			CHECK_WRITE( file_write_line( &sln, "\tEndGlobalSection" ) );
+			string_builder_appendf( &slnContent, "\tEndGlobalSection\n" );
 
 			// which project config|platform is active?
-			CHECK_WRITE( file_write_line( &sln, "\tGlobalSection(SolutionConfigurationPlatforms) = postSolution" ) );
+			string_builder_appendf( &slnContent, "\tGlobalSection(SolutionConfigurationPlatforms) = postSolution\n" );
 			For ( u64, projectIndex, 0, solution->projects.size() ) {
 				VisualStudioProject* project = &solution->projects[projectIndex];
 
@@ -2100,28 +2127,32 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 
 						// TODO: the first config and platform in this line are actually the ones that the PROJECT has, not the SOLUTION
 						// but we dont use those, and we should
-						CHECK_WRITE( file_write_line( &sln, tprintf( "\t\t{%s}.%s|%s.ActiveCfg = %s|%s", projectGuids[projectIndex], config->name, platform, config->name, platform ) ) );
-						CHECK_WRITE( file_write_line( &sln, tprintf( "\t\t{%s}.%s|%s.Build.0 = %s|%s", projectGuids[projectIndex], config->name, platform, config->name, platform ) ) );
+						string_builder_appendf( &slnContent, "\t\t{%s}.%s|%s.ActiveCfg = %s|%s\n", projectGuids[projectIndex], config->name, platform, config->name, platform );
+						string_builder_appendf( &slnContent, "\t\t{%s}.%s|%s.Build.0 = %s|%s\n", projectGuids[projectIndex], config->name, platform, config->name, platform );
 					}
 				}
 			}
-			CHECK_WRITE( file_write_line( &sln, "\tEndGlobalSection" ) );
+			string_builder_appendf( &slnContent, "\tEndGlobalSection\n" );
 
 			// tell visual studio to not hide the solution node in the Solution Explorer
 			// why would you ever want it to be hidden?
-			CHECK_WRITE( file_write_line( &sln, "\tGlobalSection(SolutionProperties) = preSolution" ) );
-			CHECK_WRITE( file_write_line( &sln, "\t\tHideSolutionNode = FALSE" ) );
-			CHECK_WRITE( file_write_line( &sln, "\tEndGlobalSection" ) );
+			string_builder_appendf( &slnContent, "\tGlobalSection(SolutionProperties) = preSolution\n" );
+			string_builder_appendf( &slnContent, "\t\tHideSolutionNode = FALSE\n" );
+			string_builder_appendf( &slnContent, "\tEndGlobalSection\n" );
 
 			//const char* solutionGUID = CreateVisualStudioGuid();
 
 			//// we need to tell visual studio what the GUID of the solution is, apparently
 			//// and we also need to do it in this really roundabout way...for some reason
-			//CHECK_WRITE( file_write_line( &sln,          "\tGlobalSection(ExtensibilityGlobals) = postSolution" ) );
-			//CHECK_WRITE( file_write_line( &sln, tprintf( "\t\tSolutionGuid = {%s}", solutionGUID ) ) );
-			//CHECK_WRITE( file_write_line( &sln,          "\tEndGlobalSection" ) );
+			//string_builder_appendf( &slnContent, "\tGlobalSection(ExtensibilityGlobals) = postSolution\n" );
+			//string_builder_appendf( &slnContent, "\t\tSolutionGuid = {%s}\n", solutionGUID );
+			//string_builder_appendf( &slnContent, "\tEndGlobalSection\n" );
 		}
-		CHECK_WRITE( file_write_line( &sln, "EndGlobal" ) );
+		string_builder_appendf( &slnContent, "EndGlobal\n" );
+
+		if ( !WriteStringBuilderToFile( &slnContent, solutionFilename ) ) {
+			return false;
+		}
 
 		printf( "Done\n\n" );
 	}

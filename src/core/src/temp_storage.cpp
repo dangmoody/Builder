@@ -45,7 +45,7 @@ u64 mem_tell_temp_storage( void ) {
 	assert( g_core_ptr );
 	assert( g_core_ptr->temp_storage.data );
 
-	LinearAllocator* linear_allocator = cast( LinearAllocator* ) g_core_ptr->temp_storage.data;
+	LinearAllocator* linear_allocator = cast( LinearAllocator*, g_core_ptr->temp_storage.data );
 	return linear_allocator_tell( linear_allocator );
 }
 
@@ -53,7 +53,7 @@ void mem_rewind_temp_storage( const u64 position ) {
 	assert( g_core_ptr );
 	assert( g_core_ptr->temp_storage.data );
 
-	LinearAllocator* linear_allocator = cast( LinearAllocator* ) g_core_ptr->temp_storage.data;
+	LinearAllocator* linear_allocator = cast( LinearAllocator*, g_core_ptr->temp_storage.data );
 
 	linear_allocator_rewind( linear_allocator, position );
 }

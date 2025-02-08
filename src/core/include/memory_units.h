@@ -37,6 +37,6 @@ enum MemoryAlignment {
 };
 
 // memory conversion helpers
-#define MEM_KILOBYTES( x )	( cast( u64 ) (x) * 1000 )
+#define MEM_KILOBYTES( x )	( cast( u64, (x) ) * 1000 )
 #define MEM_MEGABYTES( x )	( MEM_KILOBYTES( x ) * 1000 )
 #define MEM_GIGABYTES( x )	( MEM_MEGABYTES( x ) * 1000 )

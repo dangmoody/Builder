@@ -62,7 +62,7 @@ Process* process_create( Array<const char*>* args, Array<const char*>* environme
 
 	// dont memset here because kicking off a subprocess is a slow thing to do
 	// and we need all the speed wins we can get here, no matter how small
-	Process* process = cast( Process* ) mem_alloc( sizeof( Process ) );
+	Process* process = cast( Process*, mem_alloc( sizeof( Process ) ) );
 	process->proc = {};
 
 	// separate stdout and stderr doesnt work for some reason?

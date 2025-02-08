@@ -71,13 +71,13 @@ static void string_builder_appendfv( StringBuilder* builder, const char* fmt, va
 	assert( fmt );
 	assert( args );
 
-	StringBuilderBuffer* buffer = cast( StringBuilderBuffer* ) mem_alloc( sizeof( StringBuilderBuffer ) );
+	StringBuilderBuffer* buffer = cast( StringBuilderBuffer*, mem_alloc( sizeof( StringBuilderBuffer ) ) );
 	buffer->next = NULL;
 
 	int length = string_vsnprintf( NULL, 0, fmt, args );
 	length++;
 
-	buffer->data = cast( char* ) mem_alloc( cast( u64 ) length * sizeof( char ) );
+	buffer->data = cast( char*, mem_alloc( cast( u64, length ) * sizeof( char ) ) );
 
 	string_vsnprintf( buffer->data, length, fmt, args );
 
@@ -111,17 +111,17 @@ const char* string_builder_to_string( StringBuilder* builder ) {
 	StringBuilderBuffer* current = builder->head;
 
 	while ( current ) {
-		length += cast( u64 ) string_snprintf( NULL, 0, current->data );
+		length += cast( u64, string_snprintf( NULL, 0, current->data ) );
 
 		current = current->next;
 	}
 
-	result = cast( char* ) mem_alloc( length * sizeof( char ) );
+	result = cast( char*, mem_alloc( length * sizeof( char ) ) );
 
 	current = builder->head;
 
 	while ( current ) {
-		offset += cast( u64 ) string_snprintf( result + offset, cast( s64 ) length, current->data );
+		offset += cast( u64, string_snprintf( result + offset, cast( s64, length ), current->data ) );
 
 		current = current->next;
 	}

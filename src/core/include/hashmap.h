@@ -65,7 +65,7 @@ void		hashmap_set_value( Hashmap* map, const u64 key, const u32 value );
 void		hashmap_remove_key( Hashmap* map, const u64 key );
 
 constexpr inline u64 hashmap_internal_combine( u32 hi, u32 lo ) {
-	return ( cast( u64 ) lo << 32 ) | hi;
+	return ( cast( u64, lo ) << 32 ) | hi;
 }
 
 inline u64 hashmap_internal_combine_at_index( const Hashmap* map, u32 index ) {
@@ -73,9 +73,9 @@ inline u64 hashmap_internal_combine_at_index( const Hashmap* map, u32 index ) {
 }
 
 constexpr inline u32 hashmap_internal_get_lo_part( u64 key ) {
-	return cast( u32 ) ( key >> 32 );
+	return cast( u32, key >> 32 );
 }
 
 constexpr inline u32 hashmap_internal_get_hi_part( u64 key ) {
-	return cast( u32 ) ( key & 0xFFFFFFFF );
+	return cast( u32, key & 0xFFFFFFFF );
 }

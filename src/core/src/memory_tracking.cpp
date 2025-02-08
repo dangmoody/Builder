@@ -22,7 +22,7 @@ ScopedFlags::~ScopedFlags() {
 }
 
 void init_memory_tracking() {
-	g_core_ptr->memory_tracking = cast( MemoryTracking* ) malloc( sizeof( MemoryTracking ) );
+	g_core_ptr->memory_tracking = cast( MemoryTracking*, malloc( sizeof( MemoryTracking ) ) );
 
 	assert( g_core_ptr->memory_tracking != NULL );
 	assert( sizeof( MemoryTracking ) == sizeof( *g_core_ptr->memory_tracking ) );
@@ -52,7 +52,7 @@ void start_tracking_allocator( Allocator* allocator ) {
 	ScopedFlags scoped_flags( MTF_IGNORE );
 
 	MemoryTracking* memory_tracking = g_core_ptr->memory_tracking;
-	assert( hashmap_get_value( memory_tracking->allocator_tracking_lookup, cast( u64 ) allocator ) == HASHMAP_INVALID_VALUE );
+	assert( hashmap_get_value( memory_tracking->allocator_tracking_lookup, cast( u64, allocator ) ) == HASHMAP_INVALID_VALUE );
 
 	AllocatorTrackingData tracking;
 	tracking.allocation_lookup = hashmap_create( 64 );
@@ -62,7 +62,7 @@ void start_tracking_allocator( Allocator* allocator ) {
 
 	memory_tracking->allocator_tracking_data.add( tracking );
 	u64 index = memory_tracking->allocator_tracking_data.count - 1;
-	hashmap_set_value( memory_tracking->allocator_tracking_lookup, cast( u64 ) allocator, cast( u32 ) index );
+	hashmap_set_value( memory_tracking->allocator_tracking_lookup, cast( u64, allocator ), cast( u32, index ) );
 }
 
 static AllocatorTrackingData* get_current_tracking_data() {
@@ -70,7 +70,7 @@ static AllocatorTrackingData* get_current_tracking_data() {
 
 	Allocator* current_allocator = g_core_ptr->allocator_stack[g_core_ptr->current_stack_size - 1];
 
-	u32 index = hashmap_get_value( memory_tracking->allocator_tracking_lookup, cast( u64 ) current_allocator );
+	u32 index = hashmap_get_value( memory_tracking->allocator_tracking_lookup, cast( u64, current_allocator ) );
 	assert( index != HASHMAP_INVALID_VALUE );
 
 	return &memory_tracking->allocator_tracking_data[index];
@@ -84,25 +84,25 @@ void* track_allocation_internal( void* allocation, const char* function, const u
 	ScopedFlags scoped_flags( MTF_IGNORE );
 	AllocatorTrackingData* allocator_data = get_current_tracking_data();
 
-	assert( hashmap_get_value( allocator_data->allocation_lookup, cast( u64 ) allocation) == HASHMAP_INVALID_VALUE );
+	assert( hashmap_get_value( allocator_data->allocation_lookup, cast( u64, allocation ) ) == HASHMAP_INVALID_VALUE );
 
 	Allocation allocation_data = { function, line_number, allocation, is_memeory_tracking_flag_active( MTF_IS_ALLOCATOR ) };
 
 	allocator_data->allocations.add( allocation_data );
 	u64 index = allocator_data->allocations.count - 1;
 
-	hashmap_set_value( allocator_data->allocation_lookup, cast( u64 ) allocation, cast( u32 ) index );
+	hashmap_set_value( allocator_data->allocation_lookup, cast( u64, allocation ), cast( u32, index ) );
 
 	return allocation;
 }
 
 static void recursively_track_frees( AllocatorTrackingData* allocator_data, void* allocation ) {
-	u32 index = hashmap_get_value( allocator_data->allocation_lookup, cast( u64 ) allocation );
+	u32 index = hashmap_get_value( allocator_data->allocation_lookup, cast( u64, allocation ) );
 	assertf( index != HASHMAP_INVALID_VALUE, "Pointer freed was never allocated in the first place" );
 
 	if ( allocator_data->allocations[index].is_allocator ) {
 		MemoryTracking* memory_tracking = g_core_ptr->memory_tracking;
-		Allocator* allocator = cast(Allocator*)allocator_data->allocations[index].ptr;
+		Allocator* allocator = cast( Allocator*, allocator_data->allocations[index].ptr );
 
 		bool allocator_found = false;
 
@@ -124,7 +124,7 @@ static void recursively_track_frees( AllocatorTrackingData* allocator_data, void
 				}
 
 				memory_tracking->allocator_tracking_data.swap_remove_at( track_index );
-				hashmap_remove_key( memory_tracking->allocator_tracking_lookup, cast( u64 ) allocator );
+				hashmap_remove_key( memory_tracking->allocator_tracking_lookup, cast( u64, allocator ) );
 
 				break;
 			}
@@ -139,7 +139,7 @@ static void recursively_track_frees( AllocatorTrackingData* allocator_data, void
 
 	// Patch up the allocators lookup info that got swaped into index's place
 	if ( index < allocator_data->allocations.count ) {
-		hashmap_set_value( allocator_data->allocation_lookup, cast( u64 ) allocator_data->allocations[index].ptr, index );
+		hashmap_set_value( allocator_data->allocation_lookup, cast( u64, allocator_data->allocations[index].ptr ), index );
 	}
 }
 
@@ -176,7 +176,7 @@ void track_free_whole_allocator_internal( bool stop_tracking ) {
 
 	if ( stop_tracking ) {
 		MemoryTracking* memory_tracking = g_core_ptr->memory_tracking;
-		u32 index = hashmap_get_value( memory_tracking->allocator_tracking_lookup, cast( u64 ) allocator_data->allocator );
+		u32 index = hashmap_get_value( memory_tracking->allocator_tracking_lookup, cast( u64, allocator_data->allocator ) );
 
 		AllocatorTrackingData& data = memory_tracking->allocator_tracking_data[index];
 
@@ -184,11 +184,11 @@ void track_free_whole_allocator_internal( bool stop_tracking ) {
 		data.allocations.~Array();
 
 		memory_tracking->allocator_tracking_data.swap_remove_at( index );
-		hashmap_remove_key( memory_tracking->allocator_tracking_lookup, cast( u64 ) allocator_data->allocator );
+		hashmap_remove_key( memory_tracking->allocator_tracking_lookup, cast( u64, allocator_data->allocator ) );
 
 		// Fixup the lookup of the swaped in allocator data in this index pos
 		if ( index < memory_tracking->allocator_tracking_data.count ) {
-			hashmap_set_value( memory_tracking->allocator_tracking_lookup, cast( u64 ) memory_tracking->allocator_tracking_data[index].allocator, index );
+			hashmap_set_value( memory_tracking->allocator_tracking_lookup, cast( u64, memory_tracking->allocator_tracking_data[index].allocator ), index );
 		}
 	}
 }

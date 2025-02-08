@@ -28,8 +28,6 @@ SOFTWARE.
 
 #ifdef CORE_SUC
 
-#include "int_truncation.cpp"
-
 #if defined( _WIN64 )
 	#include "core.win64.suc.cpp"
 #else

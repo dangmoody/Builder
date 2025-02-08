@@ -31,8 +31,6 @@ SOFTWARE.
 #include "core_types.h"
 #include "memory_units.h"
 
-struct Allocator;
-
 /*
 ================================================================================================
 

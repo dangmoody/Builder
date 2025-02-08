@@ -62,7 +62,7 @@ struct Hasher {
 };
 
 Hasher* hasher_create( const u64 seed ) {
-	Hasher* hasher = cast( Hasher* ) mem_alloc( sizeof( Hasher ) );
+	Hasher* hasher = cast( Hasher*, mem_alloc( sizeof( Hasher ) ) );
 	memset( hasher, 0, sizeof( Hasher ) );
 
 	hasher->state = XXH64_createState();

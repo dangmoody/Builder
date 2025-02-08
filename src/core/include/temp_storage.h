@@ -42,4 +42,4 @@ void*							mem_temp_alloc_aligned_internal( const u64 size, const MemoryAlignme
 
 // call these instead
 #define mem_temp_alloc( size )						mem_temp_alloc_internal( size )
-#define mem_temp_alloc_aligned( size, alignment )	mem_temp_alloc_aligned_internal( size, cast(MemoryAlignment)(alignment) )
+#define mem_temp_alloc_aligned( size, alignment )	mem_temp_alloc_aligned_internal( size, cast( MemoryAlignment, (alignment) ) )

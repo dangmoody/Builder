@@ -56,9 +56,9 @@ void							info_internal( const char* function, const char* fmt, ... );
 void							warning_internal( const char* function, const char* fmt, ... );
 void							error_internal( const char* function, const char* fmt, ... );
 
-#define info( fmt, ... )		info_internal( __FUNCTION__, fmt, ##__VA_ARGS__ )
-#define warning( fmt, ... )		warning_internal( __FUNCTION__, fmt, ##__VA_ARGS__ )
-#define error( fmt, ... )		error_internal( __FUNCTION__, fmt, ##__VA_ARGS__ )
+#define info( fmt, ... )		info_internal( __FUNCTION__, fmt, __VA_ARGS__ )
+#define warning( fmt, ... )		warning_internal( __FUNCTION__, fmt, __VA_ARGS__ )
+#define error( fmt, ... )		error_internal( __FUNCTION__, fmt, __VA_ARGS__ )
 
 void							set_log_verbosity( LogVerbosity verbosity );
 LogVerbosity					get_log_verbosity();

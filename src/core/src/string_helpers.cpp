@@ -117,7 +117,7 @@ int string_vsprintf( char* buffer, const char* fmt, const va_list args ) {
 
 // TODO(DM): 1/1/2023: this needs to be replaced with a vsprintf #define that chooses stb if the use_stb define is set
 int string_vsnprintf( char* buffer, const s64 buffer_length, const char* fmt, const va_list args ) {
-	return stbsp_vsnprintf( buffer, TruncS64ToS32( buffer_length ), fmt, args );
+	return stbsp_vsnprintf( buffer, trunc_cast( s32, buffer_length ), fmt, args );
 }
 
 char* tprintf( const char* fmt, ... ) {
@@ -136,10 +136,10 @@ char* tprintf( const char* fmt, ... ) {
 char* vtprintf( const char* fmt, const va_list args ) {
 	assertf( fmt, "Format string MUST be non-NULL." );
 
-	s64 string_length = cast( s64 ) string_vsnprintf( NULL, 0, fmt, args );
+	s64 string_length = cast( s64, string_vsnprintf( NULL, 0, fmt, args ) );
 	string_length++;	// + 1 for null terminator
 
-	char* out_string = cast( char* ) mem_temp_alloc( cast( u64 ) string_length * sizeof( char ) );
+	char* out_string = cast( char*, mem_temp_alloc( cast( u64, string_length ) * sizeof( char ) ) );
 
 	string_vsnprintf( out_string, string_length, fmt, args );
 	out_string[string_length - 1] = 0;

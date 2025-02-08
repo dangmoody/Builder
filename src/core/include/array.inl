@@ -35,6 +35,8 @@ SOFTWARE.
 #include "allocation_context.h"
 #include "core_math.h"
 
+#include "cast.inl"
+
 #include <memory.h>
 
 /*
@@ -81,8 +83,9 @@ Array<T>::Array()
 	: data( NULL )
 	, count( 0 )
 	, alloced( 0 )
-	, allocator( mem_get_current_allocator() )
+	, allocator( NULL )
 {
+
 }
 
 template<class T>
@@ -98,7 +101,7 @@ Array<T>::Array( const Array<T>& other )
 : data( NULL )
 	, count( 0 )
 	, alloced( 0 )
-	, allocator( mem_get_current_allocator() )
+	, allocator( NULL )
 {
 	copy( other );
 }
@@ -148,11 +151,10 @@ void Array<T>::reserve( const u64 bytes ) {
 		u64 previous_alloced = alloced;
 		alloced = next_multiple_of_4_up( bytes );
 
-		// allocator = allocator == nullptr ? mem_get_current_allocator() : allocator;
-		assert( allocator != NULL );
+		allocator = allocator == nullptr ? mem_get_current_allocator() : allocator;
 
 		mem_push_allocator( allocator );
-		data = cast( T* ) mem_realloc( data, alloced * sizeof( T ) );
+		data = cast( T*, mem_realloc( data, alloced * sizeof( T ) ) );
 		mem_pop_allocator();
 	}
 }

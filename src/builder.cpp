@@ -1490,6 +1490,14 @@ static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, buildInfoFile
 	return true;
 }
 
+static void AddBuildConfigAndDependencies( BuildConfig* config, std::vector<BuildConfig>& outConfigs ) {
+	For( size_t, dependencyIndex, 0, config->depends_on.size() ) {
+		AddBuildConfigAndDependencies( &config->depends_on[dependencyIndex], outConfigs );
+	}
+
+	add_build_config_unique( config, outConfigs );
+}
+
 // data layout comes from: https://learn.microsoft.com/en-us/windows/win32/api/guiddef/ns-guiddef-guid
 static const char* CreateVisualStudioGuid() {
 	GUID guid;
@@ -2159,9 +2167,6 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 
 	// generate .build_info file
 	{
-		BuildConfig defaultBuildConfig;
-		BuildConfig_AddDefaults( &defaultBuildConfig );
-
 		std::vector<BuildConfig> allBuildConfigs;
 
 		For ( u64, platformIndex, 0, solution->platforms.size() ) {
@@ -2173,18 +2178,16 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 				For ( u64, configIndex, 0, project->configs.size() ) {
 					VisualStudioConfig* config = &project->configs[configIndex];
 
-					// TODO(DM): 25/10/2024: this whole thing feels like a massive hack
-					// users dont get the default BuilderOptions because they have to create their own ones inside set_visual_studio_options
-					// so here we have to "merge" the defaults into what they specified
-					// the user should have the defaults by default so that they can see what they have from the beginning
-					// being transparent with the user is good, mkay?
 					{
-						config->options.additional_includes.insert( config->options.additional_includes.end(), defaultBuildConfig.additional_includes.begin(), defaultBuildConfig.additional_includes.end() );
-						config->options.additional_libs.insert( config->options.additional_libs.end(), defaultBuildConfig.additional_libs.begin(), defaultBuildConfig.additional_libs.end() );
-						config->options.ignore_warnings.insert( config->options.ignore_warnings.end(), defaultBuildConfig.ignore_warnings.begin(), defaultBuildConfig.ignore_warnings.end() );
+						// TODO(DM): 25/10/2024: this whole thing feels like a massive hack
+						// users dont get the default options because they have to create their own ones inside set_builder_options
+						// so here we have to "merge" the defaults into what they specified
+						// the user should have the defaults by default so that they can see what they have from the beginning
+						// being transparent with the user is good, mkay?
+						BuildConfig_AddDefaults( &config->options );
 					}
 
-					allBuildConfigs.push_back( config->options );
+					AddBuildConfigAndDependencies( &config->options, allBuildConfigs );
 				}
 			}
 		}
@@ -2193,14 +2196,6 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 	}
 
 	return true;
-}
-
-static void AddBuildConfigAndDependencies( BuildConfig* config, std::vector<BuildConfig>& outConfigs ) {
-	For ( size_t, dependencyIndex, 0, config->depends_on.size() ) {
-		AddBuildConfigAndDependencies( &config->depends_on[dependencyIndex], outConfigs );
-	}
-
-	add_build_config_unique( config, outConfigs );
 }
 
 int main( int argc, char** argv ) {
@@ -2779,7 +2774,9 @@ int main( int argc, char** argv ) {
 		preBuildFunc();
 	}
 
+	u32 numSuccessfulBuilds = 0;
 	u32 numFailedBuilds = 0;
+	u32 numSkippedBuilds = 0;
 
 	For ( u64, configToBuildIndex, 0, configsToBuild.size() ) {
 		BuildConfig* config = &configsToBuild[configToBuildIndex];
@@ -2885,6 +2882,8 @@ int main( int argc, char** argv ) {
 		};
 
 		if ( !ShouldRebuild() ) {
+			numSkippedBuilds++;
+
 			printf( "Skipped \"%s\".\n", context.config.binary_name.c_str() );
 			continue;
 		} else {
@@ -2963,7 +2962,9 @@ int main( int argc, char** argv ) {
 		}
 
 		// if the build was successful, write the new .build_info file now
-		if ( exitCode != 0 ) {
+		if ( exitCode == 0 ) {
+			numSuccessfulBuilds++;
+		} else {
 			numFailedBuilds++;
 
 			error( "Build failed.\n" );
@@ -2980,7 +2981,8 @@ int main( int argc, char** argv ) {
 		postBuildFunc();
 	}
 
-	if ( numFailedBuilds == 0 ) {
+	bool8 shouldSerializeBuildInfo = ( numSuccessfulBuilds > 0 ) && ( numFailedBuilds == 0 );
+	if ( shouldSerializeBuildInfo ) {
 		Serialize_BuildInfo( &context, options.configs, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
 	}
 

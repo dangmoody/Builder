@@ -176,10 +176,19 @@ struct BuilderOptions {
 	bool						generate_solution;
 };
 
+unsigned int builder_get_config_hash( BuildConfig* config, const unsigned int seed );
+
+static bool config_equals( BuildConfig* configA, BuildConfig* configB ) {
+	unsigned int hashA = builder_get_config_hash( configA, 0 );
+	unsigned int hashB = builder_get_config_hash( configB, 0 );
+
+	return hashA == hashB;
+}
+
 static void add_build_config_unique( BuildConfig* config, std::vector<BuildConfig>& outConfigs ) {
 	bool duplicate = false;
 	for ( size_t i = 0; i < outConfigs.size(); i++ ) {
-		if ( memcmp( &outConfigs[i], config, sizeof( BuildConfig ) ) == 0 ) {
+		if ( config_equals( &outConfigs[i], config ) ) {
 			duplicate = true;
 			break;
 		}
@@ -196,4 +205,77 @@ static void add_build_config( BuilderOptions* options, BuildConfig* config ) {
 	}
 
 	add_build_config_unique( config, options->configs );
+}
+
+
+//
+// The following is not for users.
+// Don't touch any of this unless you're either a Builder developer or you know exactly what you're doing.
+//
+
+static unsigned int builder_hash_sdbm( void* data, const unsigned int seed, const size_t length ) {
+	unsigned char* c = (unsigned char*) data;
+
+	unsigned int hash = seed;
+
+	for ( size_t i = 0; i < length; i++ ) {
+		hash = ( c[i] ) + ( hash << 6 ) + ( hash << 16 ) - hash;
+	}
+
+	return hash;
+}
+
+static unsigned int builder_hash_c_string( const unsigned int seed, const char* str, const size_t length ) {
+	return builder_hash_sdbm( (void*) str, seed, length );
+};
+
+static unsigned int builder_hash_c_string_array( const unsigned int seed, const std::vector<const char*>& strings ) {
+	unsigned int hash = seed;
+
+	for ( size_t i = 0; i < strings.size(); i++ ) {
+		const char* str = strings[i];
+
+		hash = builder_hash_c_string( hash, str, strlen( str ) );
+	}
+
+	return hash;
+};
+
+static unsigned int builder_hash_string_array( const unsigned int seed, const std::vector<std::string>& strings ) {
+	unsigned int hash = seed;
+
+	for ( size_t i = 0; i < strings.size(); i++ ) {
+		const std::string& str = strings[i];
+		hash = builder_hash_c_string( hash, str.c_str(), str.size() );
+	}
+
+	return hash;
+};
+
+unsigned int builder_get_config_hash( BuildConfig* config, const unsigned int seed ) {
+	unsigned int hash = seed;
+
+	for ( size_t dependencyIndex = 0; dependencyIndex < config->depends_on.size(); dependencyIndex++ ) {
+		hash = builder_get_config_hash( &config->depends_on[dependencyIndex], hash );
+	}
+
+	hash = builder_hash_c_string_array( hash, config->source_files );
+	hash = builder_hash_c_string_array( hash, config->defines );
+	hash = builder_hash_string_array( hash, config->additional_includes );
+	hash = builder_hash_string_array( hash, config->additional_lib_paths );
+	hash = builder_hash_c_string_array( hash, config->additional_libs );
+	hash = builder_hash_c_string_array( hash, config->ignore_warnings );
+
+	hash = builder_hash_c_string( hash, config->binary_name.c_str(), config->binary_name.length() );
+	hash = builder_hash_c_string( hash, config->binary_folder.c_str(), config->binary_folder.length() );
+	hash = builder_hash_c_string( hash, config->name.c_str(), config->name.length() );
+
+	hash = builder_hash_sdbm( &config->binary_type, hash, sizeof( BinaryType ) );
+	hash = builder_hash_sdbm( &config->optimization_level, hash, sizeof( OptimizationLevel ) );
+
+	hash = builder_hash_sdbm( &config->remove_symbols, hash, sizeof( bool ) );
+	hash = builder_hash_sdbm( &config->remove_file_extension, hash, sizeof( bool ) );
+	hash = builder_hash_sdbm( &config->warnings_as_errors, hash, sizeof( bool ) );
+
+	return hash;
 }

@@ -50,7 +50,7 @@ SOFTWARE.
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
 	BUILDER_VERSION_MINOR	= 5,
-	BUILDER_VERSION_PATCH	= 7,
+	BUILDER_VERSION_PATCH	= 8,
 };
 
 #define ARG_HELP_SHORT		"-h"
@@ -1491,7 +1491,7 @@ static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, buildInfoFile
 }
 
 static void AddBuildConfigAndDependencies( BuildConfig* config, std::vector<BuildConfig>& outConfigs ) {
-	For( size_t, dependencyIndex, 0, config->depends_on.size() ) {
+	For ( size_t, dependencyIndex, 0, config->depends_on.size() ) {
 		AddBuildConfigAndDependencies( &config->depends_on[dependencyIndex], outConfigs );
 	}
 
@@ -2815,7 +2815,8 @@ int main( int argc, char** argv ) {
 			// if this was last built on a different version of builder then rebuild
 			if ( parsedBuildInfoData.builderVersion.major != BUILDER_VERSION_MAJOR ||
 				 parsedBuildInfoData.builderVersion.minor != BUILDER_VERSION_MINOR ||
-				 parsedBuildInfoData.builderVersion.patch != BUILDER_VERSION_PATCH ) {
+				 parsedBuildInfoData.builderVersion.patch != BUILDER_VERSION_PATCH )
+			{
 				printf( "Different Builder version detected since last build.  Rebuilding...\n" );
 				return true;
 			}
@@ -2961,7 +2962,6 @@ int main( int argc, char** argv ) {
 				break;
 		}
 
-		// if the build was successful, write the new .build_info file now
 		if ( exitCode == 0 ) {
 			numSuccessfulBuilds++;
 		} else {
@@ -2981,6 +2981,7 @@ int main( int argc, char** argv ) {
 		postBuildFunc();
 	}
 
+	// only dont want to write the .build_info if all the builds skipped or if a build failed
 	bool8 shouldSerializeBuildInfo = ( numSuccessfulBuilds > 0 ) && ( numFailedBuilds == 0 );
 	if ( shouldSerializeBuildInfo ) {
 		Serialize_BuildInfo( &context, options.configs, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );

@@ -50,7 +50,7 @@ SOFTWARE.
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
 	BUILDER_VERSION_MINOR	= 5,
-	BUILDER_VERSION_PATCH	= 8,
+	BUILDER_VERSION_PATCH	= 9,
 };
 
 #define ARG_HELP_SHORT		"-h"
@@ -871,6 +871,7 @@ static void GetAllSubfolders_r( const char* basePath, const char* folder, Array<
 	// do initial find from base path
 	{
 		const char* fullSearchPath = NULL;
+
 		if ( string_ends_with( basePath, "\\" ) || string_ends_with( basePath, "/" ) ) {
 			fullSearchPath = tprintf( "%s*", basePath );
 		} else {
@@ -881,6 +882,14 @@ static void GetAllSubfolders_r( const char* basePath, const char* folder, Array<
 		File file = file_find_first( fullSearchPath, &fileInfo );
 
 		do {
+			if ( string_equals( fileInfo.filename, "." ) ) {
+				continue;
+			}
+
+			if ( string_equals( fileInfo.filename, ".." ) ) {
+				continue;
+			}
+
 			if ( !string_equals( fileInfo.filename, folder ) ) {
 				continue;
 			}
@@ -896,6 +905,7 @@ static void GetAllSubfolders_r( const char* basePath, const char* folder, Array<
 	// now search subfolders of the one we just found
 	{
 		const char* fullSearchPath = NULL;
+
 		if ( string_ends_with( basePath, "\\" ) || string_ends_with( basePath, "/" ) ) {
 			if ( folder ) {
 				fullSearchPath = tprintf( "%s%s\\*", basePath, folder );
@@ -927,6 +937,114 @@ static void GetAllSubfolders_r( const char* basePath, const char* folder, Array<
 			}
 		} while ( file_find_next( &file, &fileInfo ) );
 	}
+}
+
+static void GetAllSubfolders( const char* basePath, const char* folder, Array<const char*>* outSubfolders ) {
+	// do initial find from base path
+	{
+		const char* fullSearchPath = NULL;
+
+		if ( string_ends_with( basePath, "\\" ) || string_ends_with( basePath, "/" ) ) {
+			if ( folder ) {
+				fullSearchPath = tprintf( "%s%s\\*", basePath, folder );
+			} else {
+				fullSearchPath = tprintf( "%s*", basePath );
+			}
+		} else {
+			if ( folder ) {
+				fullSearchPath = tprintf( "%s\\%s\\*", basePath, folder );
+			} else {
+				fullSearchPath = tprintf( "%s\\*", basePath );
+			}
+		}
+
+		FileInfo fileInfo;
+		File file = file_find_first( fullSearchPath, &fileInfo );
+
+		do {
+			if ( string_equals( fileInfo.filename, "." ) ) {
+				continue;
+			}
+
+			if ( string_equals( fileInfo.filename, ".." ) ) {
+				continue;
+			}
+
+			if ( fileInfo.is_directory ) {
+				const char* folderName = tprintf( "%s", fileInfo.filename );
+
+				//outSubfolders->add( folderName );
+
+				const char* newPath = NULL;
+				if ( folder ) {
+					newPath = tprintf( "%s\\%s", folder, folderName );
+				} else {
+					newPath = folderName;
+				}
+
+				outSubfolders->add( newPath );
+
+				GetAllSubfolders( basePath, newPath, outSubfolders );
+			}
+		} while ( file_find_next( &file, &fileInfo ) );
+	}
+}
+
+struct fileFilter_t {
+	const char*	pathFromVisualStudioToRootFolder;
+	const char*	folder;	// relative from the root code folder that it was found in
+	const char*	filename;
+};
+
+static void GetAllVisualStudioFiles_r( const char* basePath, const char* subfolder, const std::vector<const char*> fileExtensions, Array<fileFilter_t>& outFilterFiles ) {
+	const char* fullSearchPath = NULL;
+
+	if ( string_ends_with( basePath, "\\" ) || string_ends_with( basePath, "/" ) ) {
+		if ( subfolder ) {
+			fullSearchPath = tprintf( "%s%s\\*", basePath, subfolder );
+		} else {
+			fullSearchPath = tprintf( "%s*", basePath );
+		}
+	} else {
+		if ( subfolder ) {
+			fullSearchPath = tprintf( "%s\\%s\\*", basePath, subfolder );
+		} else {
+			fullSearchPath = tprintf( "%s\\*", basePath );
+		}
+	}
+
+	FileInfo fileInfo;
+	File file = file_find_first( fullSearchPath, &fileInfo );
+
+	do {
+		if ( string_equals( fileInfo.filename, "." ) ) {
+			continue;
+		}
+
+		if ( string_equals( fileInfo.filename, ".." ) ) {
+			continue;
+		}
+
+		if ( fileInfo.is_directory ) {
+			const char* folderName = NULL;
+			if ( subfolder ) {
+				folderName = tprintf( "%s\\%s", subfolder, fileInfo.filename );
+			} else {
+				folderName = tprintf( "%s", fileInfo.filename );
+			}
+
+			GetAllVisualStudioFiles_r( basePath, folderName, fileExtensions, outFilterFiles );
+		} else {
+			const char* filename = tprintf( "%s", fileInfo.filename );
+
+			For ( u64, fileExtensionIndex, 0, fileExtensions.size() ) {
+				if ( string_ends_with( filename, fileExtensions[fileExtensionIndex] ) ) {
+					outFilterFiles.add( { NULL, subfolder, filename } );
+					break;
+				}
+			}
+		}
+	} while ( file_find_next( &file, &fileInfo ) );
 }
 
 static std::vector<const char*> BuildConfig_GetAllSourceFiles( const buildContext_t* context, const BuildConfig* config ) {
@@ -1507,30 +1625,30 @@ static const char* CreateVisualStudioGuid() {
 	return tprintf( "%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X", guid.Data1, guid.Data2, guid.Data3, guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3], guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7] );
 }
 
-static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudioSolution* solution, const char* userConfigSourceFilename, const char* userConfigBuildDLLFilename, const bool8 verbose ) {
+static bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* options, const char* userConfigSourceFilename, const char* userConfigBuildDLLFilename, const bool8 verbose ) {
 	assert( context );
 	assert( context->inputFile );
 	assert( context->inputFilePath );
 	assert( context->dotBuilderFolder );
 	assert( context->buildInfoFilename );
-	assert( solution );
+	assert( options );
 
 	// TODO(DM): 18/11/2024: dont use abs path here
-	context->buildInfoFilename = tprintf( "%s\\.builder\\%s%s", context->inputFilePath, solution->name, BUILD_INFO_FILE_EXTENSION );
+	context->buildInfoFilename = tprintf( "%s\\.builder\\%s%s", context->inputFilePath, options->solution.name, BUILD_INFO_FILE_EXTENSION );
 
 	// validate the solution
 	{
-		if ( solution->name == NULL ) {
+		if ( options->solution.name == NULL ) {
 			error( "You never set the name of the solution.  I need that.\n" );
 			return false;
 		}
 
-		if ( solution->platforms.size() < 1 ) {
+		if ( options->solution.platforms.size() < 1 ) {
 			error( "You must set at least one platform when generating a Visual Studio Solution.\n" );
 			return false;
 		}
 
-		if ( solution->projects.size() < 1 ) {
+		if ( options->solution.projects.size() < 1 ) {
 			error( "As well as a Solution, you must also generate at least one Visual Studio Project to go with it.\n" );
 			return false;
 		}
@@ -1546,8 +1664,8 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 				"x64"
 			};
 
-			For ( u64, platformIndex, 0, solution->platforms.size() ) {
-				const char* platform = solution->platforms[platformIndex];
+			For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
+				const char* platform = options->solution.platforms[platformIndex];
 
 				For ( u64, defaultPlatformIndex, 0, count_of( defaultPlatformNames ) ) {
 					const char* defaultPlatformName = defaultPlatformNames[defaultPlatformIndex];
@@ -1576,18 +1694,18 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 	}
 
 	const char* visualStudioProjectFilesPath = NULL;
-	if ( solution->path ) {
-		visualStudioProjectFilesPath = tprintf( "%s\\%s", context->inputFilePath, solution->path );
+	if ( options->solution.path ) {
+		visualStudioProjectFilesPath = tprintf( "%s\\%s", context->inputFilePath, options->solution.path );
 	} else {
 		visualStudioProjectFilesPath = context->inputFilePath;
 	}
 	visualStudioProjectFilesPath = paths_canonicalise_path( visualStudioProjectFilesPath );
 
-	const char* solutionFilename = tprintf( "%s\\%s.sln", visualStudioProjectFilesPath, solution->name );
+	const char* solutionFilename = tprintf( "%s\\%s.sln", visualStudioProjectFilesPath, options->solution.name );
 
 	// give each project a guid
 	Array<const char*> projectGuids;
-	projectGuids.resize( solution->projects.size() );
+	projectGuids.resize( options->solution.projects.size() );
 
 	For ( u64, guidIndex, 0, projectGuids.count ) {
 		projectGuids[guidIndex] = CreateVisualStudioGuid();
@@ -1616,8 +1734,8 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 	};
 
 	// generate each .vcxproj
-	For ( u64, projectIndex, 0, solution->projects.size() ) {
-		VisualStudioProject* project = &solution->projects[projectIndex];
+	For ( u64, projectIndex, 0, options->solution.projects.size() ) {
+		VisualStudioProject* project = &options->solution.projects[projectIndex];
 
 		// validate the project
 		{
@@ -1661,6 +1779,9 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 			}
 		}
 
+		// get all the files that the project will know about
+		// the arrays in here get referred to multiple times throughout generating the files for the project
+#if 0
 		Array<const char*> sourceFiles;
 		Array<const char*> headerFiles;
 		Array<const char*> otherFiles;
@@ -1669,14 +1790,14 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 		Array<const char*> headerFilePaths;
 		Array<const char*> otherFilePaths;
 
-		// get all the files that the project will know about
-		// the arrays in here get referred to multiple times throughout generating the files for the project
 		{
 			For ( u64, folderIndex, 0, project->code_folders.size() ) {
 				const char* folder = project->code_folders[folderIndex];
 
 				Array<const char*> subfolders;
-				GetAllSubfolders_r( context->inputFilePath, folder, &subfolders );
+				//GetAllSubfolders_r( context->inputFilePath, folder, &subfolders );
+				subfolders.add( folder );
+				GetAllSubfolders( context->inputFilePath, folder, &subfolders );
 
 				For ( u64, fileExtensionIndex, 0, project->file_extensions.size() ) {
 					const char* fileExtension = project->file_extensions[fileExtensionIndex];
@@ -1716,6 +1837,43 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 				}
 			}
 		}
+#else
+		Array<fileFilter_t> sourceFiles;
+		Array<fileFilter_t> headerFiles;
+		Array<fileFilter_t> otherFiles;
+
+		{
+			For ( u64, folderIndex, 0, project->code_folders.size() ) {
+				const char* folder = project->code_folders[folderIndex];
+
+				// get relative path from visual studio to this code folder
+				const char* inputFilePathAndCodePath = paths_fix_slashes( tprintf( "%s\\%s", context->inputFilePath, folder ) );
+				char* pathFromSolutionToCode = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
+				memset( pathFromSolutionToCode, 0, MAX_PATH * sizeof( char ) );
+				PathRelativePathTo( pathFromSolutionToCode, solutionFilename, FILE_ATTRIBUTE_NORMAL, inputFilePathAndCodePath, FILE_ATTRIBUTE_DIRECTORY );
+				assert( pathFromSolutionToCode != NULL || !string_equals( pathFromSolutionToCode, "" ) );
+
+				Array<fileFilter_t> filterFiles;
+				GetAllVisualStudioFiles_r( tprintf( "%s\\%s", context->inputFilePath, folder ), NULL, project->file_extensions, filterFiles );
+
+				For ( u64, i, 0, filterFiles.count ) {
+					fileFilter_t* fileFilter = &filterFiles[i];
+
+					fileFilter->pathFromVisualStudioToRootFolder = pathFromSolutionToCode;
+
+					if ( FileIsSourceFile( fileFilter->filename ) ) {
+						sourceFiles.add( *fileFilter );
+					} else if ( FileIsHeaderFile( fileFilter->filename ) ) {
+						headerFiles.add( *fileFilter );
+					} else {
+						otherFiles.add( *fileFilter );
+					}
+				}
+
+				assert( sourceFiles.count + headerFiles.count + otherFiles.count == filterFiles.count );
+			}
+		}
+#endif
 
 		// .vcxproj
 		{
@@ -1735,8 +1893,8 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 				For ( u64, configIndex, 0, project->configs.size() ) {
 					VisualStudioConfig* config = &project->configs[configIndex];
 
-					For ( u64, platformIndex, 0, solution->platforms.size() ) {
-						const char* platform = solution->platforms[platformIndex];
+					For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
+						const char* platform = options->solution.platforms[platformIndex];
 
 						// TODO: Alternative targets
 						string_builder_appendf( &vcxprojContent, "\t\t<ProjectConfiguration Include=\"%s|%s\">\n", config->name, platform );
@@ -1779,8 +1937,8 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 				pathFromSolutionToBinary = cast( char*, paths_remove_file_from_path( pathFromSolutionToBinary ) );
 #pragma clang diagnostic pop
 
-				For ( u64, platformIndex, 0, solution->platforms.size() ) {
-					const char* platform = solution->platforms[platformIndex];
+				For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
+					const char* platform = options->solution.platforms[platformIndex];
 
 					string_builder_appendf( &vcxprojContent, "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\" Label=\"Configuration\">\n", config->name, platform );
 					string_builder_appendf( &vcxprojContent, "\t\t<ConfigurationType>Makefile</ConfigurationType>\n" );
@@ -1803,8 +1961,8 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 			For ( u64, configIndex, 0, project->configs.size() ) {
 				VisualStudioConfig* config = &project->configs[configIndex];
 
-				For ( u64, platformIndex, 0, solution->platforms.size() ) {
-					const char* platform = solution->platforms[platformIndex];
+				For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
+					const char* platform = options->solution.platforms[platformIndex];
 
 					string_builder_appendf( &vcxprojContent, "\t<ImportGroup Label=\"PropertySheets\" Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">\n", config->name, platform );
 					string_builder_appendf( &vcxprojContent, "\t\t<Import Project=\"$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props\" Condition=\"exists(\'$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props\')\" Label=\"LocalAppDataPlatform\" />\n" );
@@ -1826,8 +1984,8 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 			For ( u64, configIndex, 0, project->configs.size() ) {
 				VisualStudioConfig* config = &project->configs[configIndex];
 
-				For ( u64, platformIndex, 0, solution->platforms.size() ) {
-					const char* platform = solution->platforms[platformIndex];
+				For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
+					const char* platform = options->solution.platforms[platformIndex];
 
 					string_builder_appendf( &vcxprojContent, "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">\n", config->name, platform );
 
@@ -1869,7 +2027,7 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 					pathFromSolutionToCode = cast( char*, paths_remove_file_from_path( pathFromSolutionToCode ) );
 #pragma clang diagnostic pop
 
-					const char* buildInfoFileRelative = tprintf( "%s\\.builder\\%s%s", pathFromSolutionToCode, solution->name, BUILD_INFO_FILE_EXTENSION );
+					const char* buildInfoFileRelative = tprintf( "%s\\.builder\\%s%s", pathFromSolutionToCode, options->solution.name, BUILD_INFO_FILE_EXTENSION );
 
 					const char* fullConfigName = config->options.name.c_str();
 
@@ -1895,6 +2053,7 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 
 			// tell visual studio what files we have in this project
 			// this is typically done via a filter (E.G: src/*.cpp)
+#if 0
 			{
 				if ( sourceFiles.count > 0 ) {
 					string_builder_appendf( &vcxprojContent, "\t<ItemGroup>\n" );
@@ -1926,6 +2085,33 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 					string_builder_appendf( &vcxprojContent, "\t</ItemGroup>\n" );
 				}
 			}
+#else
+			{
+				auto WriteFilterFilesToVcxproj = []( StringBuilder* stringBuilder, const Array<fileFilter_t>& files, const char* tag ) {
+					if ( files.count == 0 ) {
+						return;
+					}
+
+					string_builder_appendf( stringBuilder, "\t<ItemGroup>\n" );
+
+					For ( u64, fileIndex, 0, files.count ) {
+						const fileFilter_t* file = &files[fileIndex];
+
+						if ( file->folder ) {
+							string_builder_appendf( stringBuilder, "\t\t<%s Include=\"%s\\%s\\%s\" />\n", tag, file->pathFromVisualStudioToRootFolder, file->folder, file->filename );
+						} else {
+							string_builder_appendf( stringBuilder, "\t\t<%s Include=\"%s\\%s\" />\n", tag, file->pathFromVisualStudioToRootFolder, file->filename );
+						}
+					}
+
+					string_builder_appendf( stringBuilder, "\t</ItemGroup>\n" );
+				};
+
+				WriteFilterFilesToVcxproj( &vcxprojContent, sourceFiles, "ClCompile" );
+				WriteFilterFilesToVcxproj( &vcxprojContent, headerFiles, "ClInclude" );
+				WriteFilterFilesToVcxproj( &vcxprojContent, otherFiles, "None" );
+			}
+#endif
 
 			string_builder_appendf( &vcxprojContent, "\t<Import Project=\"$(VCTargetsPath)\\Microsoft.Cpp.targets\" />\n" );
 
@@ -1973,11 +2159,11 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 					memset( pathFromSolutionToBinary, 0, MAX_PATH * sizeof( char ) );
 					PathRelativePathTo( pathFromSolutionToBinary, from, FILE_ATTRIBUTE_NORMAL, to, FILE_ATTRIBUTE_DIRECTORY );
 
-					For ( u64, platformIndex, 0, solution->platforms.size() ) {
-						const char* platform = solution->platforms[platformIndex];
+					For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
+						const char* platform = options->solution.platforms[platformIndex];
 
 						string_builder_appendf( &vcxprojContent, "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">\n", config->name, platform );
-						string_builder_appendf( &vcxprojContent, "\t\t<DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>\n" );	// TODO(DM): do want to include the other debugger typ?
+						string_builder_appendf( &vcxprojContent, "\t\t<DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>\n" );	// TODO(DM): do want to include the other debugger types?
 						string_builder_appendf( &vcxprojContent, "\t\t<LocalDebuggerDebuggerType>Auto</LocalDebuggerDebuggerType>\n" );
 						string_builder_appendf( &vcxprojContent, "\t\t<LocalDebuggerAttach>false</LocalDebuggerAttach>\n" );
 						string_builder_appendf( &vcxprojContent, "\t\t<LocalDebuggerCommand>%s</LocalDebuggerCommand>\n", pathFromSolutionToBinary );
@@ -2025,7 +2211,12 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 				const char* folder = project->code_folders[folderIndex];
 
 				Array<const char*> subfolders;
-				GetAllSubfolders_r( context->inputFilePath, folder, &subfolders );
+				GetAllSubfolders( tprintf( "%s\\%s", context->inputFilePath, folder ), NULL, &subfolders );
+				//GetAllSubfolders_r( context->inputFilePath, folder, &subfolders );
+
+				For ( u64, subfolderIndex, 0, subfolders.count ) {
+					subfolders[subfolderIndex] = paths_fix_slashes( subfolders[subfolderIndex] );
+				}
 
 				For ( u64, subfolderIndex, 0, subfolders.count ) {
 					const char* subfolder = subfolders[subfolderIndex];
@@ -2042,6 +2233,7 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 
 			// now put all files in the filter
 			// visual studio requires that we list each file by type
+#if 0
 			{
 				string_builder_appendf( &vcxprojContent, "\t<ItemGroup>\n" );
 				For ( u64, fileIndex, 0, sourceFiles.count ) {
@@ -2067,6 +2259,35 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 				}
 				string_builder_appendf( &vcxprojContent, "\t</ItemGroup>\n" );
 			}
+#else
+			{
+				auto WriteFileFilters = []( StringBuilder* stringBuilder, const Array<fileFilter_t>& fileFilters, const char* tag ) {
+					if ( fileFilters.count == 0 ) {
+						return;
+					}
+
+					string_builder_appendf( stringBuilder, "\t<ItemGroup>\n" );
+
+					For ( u64, fileIndex, 0, fileFilters.count ) {
+						const fileFilter_t* file = &fileFilters[fileIndex];
+
+						if ( file->folder == NULL ) {
+							string_builder_appendf( stringBuilder, "\t\t<%s Include=\"%s\\%s\" />\n", tag, file->pathFromVisualStudioToRootFolder, file->filename );
+						} else {
+							string_builder_appendf( stringBuilder, "\t\t<%s Include=\"%s\\%s\\%s\">\n", tag, file->pathFromVisualStudioToRootFolder, file->folder, file->filename );
+							string_builder_appendf( stringBuilder, "\t\t\t<Filter>%s</Filter>\n", file->folder );
+							string_builder_appendf( stringBuilder, "\t\t</%s>\n", tag );
+						}
+					}
+
+					string_builder_appendf( stringBuilder, "\t</ItemGroup>\n" );
+				};
+
+				WriteFileFilters( &vcxprojContent, sourceFiles, "ClCompile" );
+				WriteFileFilters( &vcxprojContent, headerFiles, "ClInclude" );
+				WriteFileFilters( &vcxprojContent, otherFiles, "None" );
+			}
+#endif
 
 			string_builder_appendf( &vcxprojContent, "</Project>" );
 
@@ -2092,8 +2313,8 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 		string_builder_appendf( &slnContent, "MinimunVisualStudioVersion = 10.0.40219.1\n" );	// TODO(DM): how do we query windows for this?
 
 		// generate project dependencies
-		For ( u64, projectIndex, 0, solution->projects.size() ) {
-			VisualStudioProject* project = &solution->projects[projectIndex];
+		For ( u64, projectIndex, 0, options->solution.projects.size() ) {
+			VisualStudioProject* project = &options->solution.projects[projectIndex];
 
 			string_builder_appendf( &slnContent, "Project(\"{%s}\") = \"%s\", \"%s.vcxproj\", \"{%s}\"\n", VISUAL_STUDIO_CPP_PROJECT_TYPE_GUID, project->name, project->name, projectGuids[projectIndex] );
 			// TODO: project dependencies go here and look like this:
@@ -2107,14 +2328,14 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 		{
 			// which config|platform maps to which config|platform?
 			string_builder_appendf( &slnContent, "\tGlobalSection(SolutionConfigurationPlatforms) = preSolution\n" );
-			For ( u64, projectIndex, 0, solution->projects.size() ) {
-				VisualStudioProject* project = &solution->projects[projectIndex];
+			For ( u64, projectIndex, 0, options->solution.projects.size() ) {
+				VisualStudioProject* project = &options->solution.projects[projectIndex];
 
 				For ( u64, configIndex, 0, project->configs.size() ) {
 					VisualStudioConfig* config = &project->configs[configIndex];
 
-					For ( u64, platformIndex, 0, solution->platforms.size() ) {
-						const char* platform = solution->platforms[platformIndex];
+					For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
+						const char* platform = options->solution.platforms[platformIndex];
 
 						string_builder_appendf( &slnContent, tprintf( "\t\t%s|%s = %s|%s\n", config->name, platform, config->name, platform ) );
 					}
@@ -2124,14 +2345,14 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 
 			// which project config|platform is active?
 			string_builder_appendf( &slnContent, "\tGlobalSection(SolutionConfigurationPlatforms) = postSolution\n" );
-			For ( u64, projectIndex, 0, solution->projects.size() ) {
-				VisualStudioProject* project = &solution->projects[projectIndex];
+			For ( u64, projectIndex, 0, options->solution.projects.size() ) {
+				VisualStudioProject* project = &options->solution.projects[projectIndex];
 
 				For ( u64, configIndex, 0, project->configs.size() ) {
 					VisualStudioConfig* config = &project->configs[configIndex];
 
-					For ( u64, platformIndex, 0, solution->platforms.size() ) {
-						const char* platform = solution->platforms[platformIndex];
+					For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
+						const char* platform = options->solution.platforms[platformIndex];
 
 						// TODO: the first config and platform in this line are actually the ones that the PROJECT has, not the SOLUTION
 						// but we dont use those, and we should
@@ -2167,32 +2388,11 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, VisualStudio
 
 	// generate .build_info file
 	{
-		std::vector<BuildConfig> allBuildConfigs;
-
-		For ( u64, platformIndex, 0, solution->platforms.size() ) {
-			const char* platform = solution->platforms[platformIndex];
-
-			For ( u64, projectIndex, 0, solution->projects.size() ) {
-				VisualStudioProject* project = &solution->projects[projectIndex];
-
-				For ( u64, configIndex, 0, project->configs.size() ) {
-					VisualStudioConfig* config = &project->configs[configIndex];
-
-					{
-						// TODO(DM): 25/10/2024: this whole thing feels like a massive hack
-						// users dont get the default options because they have to create their own ones inside set_builder_options
-						// so here we have to "merge" the defaults into what they specified
-						// the user should have the defaults by default so that they can see what they have from the beginning
-						// being transparent with the user is good, mkay?
-						BuildConfig_AddDefaults( &config->options );
-					}
-
-					AddBuildConfigAndDependencies( &config->options, allBuildConfigs );
-				}
-			}
+		For ( u64, configIndex, 0, options->configs.size() ) {
+			BuildConfig_AddDefaults( &options->configs[configIndex] );
 		}
 
-		Serialize_BuildInfo( context, allBuildConfigs, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
+		Serialize_BuildInfo( context, options->configs, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
 	}
 
 	return true;
@@ -2207,9 +2407,6 @@ int main( int argc, char** argv ) {
 
 	core_init( MEM_KILOBYTES( 1 ), MEM_MEGABYTES( 128 ) );
 	defer( core_shutdown() );
-
-	// TODO(DM): 23/10/2024: we dont use this?
-	set_command_line_args( argc, argv );
 
 	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
@@ -2657,13 +2854,13 @@ int main( int argc, char** argv ) {
 						For ( u64, configIndex, 0, project->configs.size() ) {
 							VisualStudioConfig* config = &project->configs[configIndex];
 
-							options.configs.push_back( config->options );
+							AddBuildConfigAndDependencies( &config->options, options.configs );
 						}
 					}
 
 					printf( "Generating Visual Studio files\n" );
 
-					bool8 generated = GenerateVisualStudioSolution( &context, &options.solution, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
+					bool8 generated = GenerateVisualStudioSolution( &context, &options, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
 
 					if ( !generated ) {
 						error( "Failed to generate Visual Studio solution.\n" );	// TODO(DM): better error message

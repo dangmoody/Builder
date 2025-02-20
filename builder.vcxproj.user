@@ -6,8 +6,8 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LocalDebuggerCommand>$(SolutionDir)builder.exe</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>..\.builder\Core.build_info --config=win64-debug-non-suc</LocalDebuggerCommandArguments>
-    <LocalDebuggerWorkingDirectory>C:\dev\Core\visual_studio</LocalDebuggerWorkingDirectory>
+    <LocalDebuggerCommandArguments>..\.builder\test-sln.build_info --config=app-debug</LocalDebuggerCommandArguments>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)tests/test_generate_visual_studio_files/visual_studio</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LocalDebuggerCommand>$(SolutionDir)builder.exe</LocalDebuggerCommand>

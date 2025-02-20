@@ -1,6 +1,6 @@
 v0.6.0, <RELEASE DATE HERE>:
 
-* Fixed top-level files and some subfolders inside VisualStudioProject::code_folders not getting detected and therefore not getting added to the Visual Studio project.
+* Fixed top-level files and some subfolders inside VisualStudioProject::code_folders not getting added to the Visual Studio project.
 
 ----------------------------------------------------------------
 

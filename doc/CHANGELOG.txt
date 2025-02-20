@@ -1,3 +1,9 @@
+v0.6.0, <RELEASE DATE HERE>:
+
+* Fixed top-level files and some subfolders inside VisualStudioProject::code_folders not getting detected and therefore not getting added to the Visual Studio project.
+
+----------------------------------------------------------------
+
 v0.5.8, 09/02/2025:
 
 * Fixed the way Builder checks for duplicate BuildConfigs when calling add_build_config().

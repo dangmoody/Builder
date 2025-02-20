@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+	<ItemGroup Label="ProjectConfigurations">
+		<ProjectConfiguration Include="debug|x64">
+			<Configuration>debug</Configuration>
+			<Platform>x64</Platform>
+		</ProjectConfiguration>
+		<ProjectConfiguration Include="release|x64">
+			<Configuration>release</Configuration>
+			<Platform>x64</Platform>
+		</ProjectConfiguration>
+	</ItemGroup>
+	<PropertyGroup Label="Globals">
+		<VCProjectVersion>17.0</VCProjectVersion>
+		<ProjectGuid>{A0E4F3FC-522A-49D8-BA81-B506B2861A97}</ProjectGuid>
+		<IgnoreWarnCompileDuplicatedFilename>true</IgnoreWarnCompileDuplicatedFilename>
+		<Keyword>MakeFileProj</Keyword>
+	</PropertyGroup>
+	<Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='debug|x64'" Label="Configuration">
+		<ConfigurationType>Makefile</ConfigurationType>
+		<UseDebugLibraries>false</UseDebugLibraries>
+		<PlatformToolset>v143</PlatformToolset>
+		<OutDir>..\bin\debug\library</OutDir>
+		<IntDir>bin/debug/library\intermediate</IntDir>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='release|x64'" Label="Configuration">
+		<ConfigurationType>Makefile</ConfigurationType>
+		<UseDebugLibraries>false</UseDebugLibraries>
+		<PlatformToolset>v143</PlatformToolset>
+		<OutDir>..\bin\release\library</OutDir>
+		<IntDir>bin/release/library\intermediate</IntDir>
+	</PropertyGroup>
+	<Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+	<ImportGroup Label="ExtensionSettings">
+	</ImportGroup>
+	<ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='debug|x64'">
+		<Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+	</ImportGroup>
+	<ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='release|x64'">
+		<Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+	</ImportGroup>
+	<PropertyGroup Label="UserMacros" />
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='debug|x64'">
+		<ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
+		<LibraryPath>$(LibraryPath)</LibraryPath>
+		<NMakeOutput>bin/debug/library</NMakeOutput>
+		<NMakeBuildCommandLine>C:\dev\builder\builder.exe ..\.builder\test-sln.build_info --config=library-debug</NMakeBuildCommandLine>
+		<NMakeReBuildCommandLine>C:\dev\builder\builder.exe ..\.builder\test-sln.build_info --config=library-debug</NMakeReBuildCommandLine>
+		<NMakeCleanCommandLine>C:\dev\builder\builder.exe --nuke bin/debug/library</NMakeCleanCommandLine>
+		<NMakePreprocessorDefinitions>LIBRARY_EXPORTS;_DEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='release|x64'">
+		<ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
+		<LibraryPath>$(LibraryPath)</LibraryPath>
+		<NMakeOutput>bin/release/library</NMakeOutput>
+		<NMakeBuildCommandLine>C:\dev\builder\builder.exe ..\.builder\test-sln.build_info --config=library-release</NMakeBuildCommandLine>
+		<NMakeReBuildCommandLine>C:\dev\builder\builder.exe ..\.builder\test-sln.build_info --config=library-release</NMakeReBuildCommandLine>
+		<NMakeCleanCommandLine>C:\dev\builder\builder.exe --nuke bin/release/library</NMakeCleanCommandLine>
+		<NMakePreprocessorDefinitions>LIBRARY_EXPORTS;NDEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+	</PropertyGroup>
+	<ItemDefinitionGroup>
+	</ItemDefinitionGroup>
+	<ItemGroup>
+		<ClCompile Include="..\src\library\library.cpp" />
+	</ItemGroup>
+	<ItemGroup>
+		<ClInclude Include="..\src\library\library.h" />
+	</ItemGroup>
+	<Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+	<ImportGroup Label="ExtensionTargets">
+	</ImportGroup>
+</Project>

@@ -218,6 +218,41 @@ TEMPER_TEST( Compile_DynamicLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 	}
 }
 
+TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
+	// generate the solution
+	{
+		Array<const char*> args;
+		args.add( "builder.exe" );
+		args.add( "tests\\test_generate_visual_studio_files\\generate_solution.cpp" );
+
+		s32 exitCode = RunProc( &args );
+
+		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
+	}
+
+	// build the app project in the solution via MSBuild
+	{
+		Array<const char*> args;
+		args.add( "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\MSBuild\\Current\\Bin\\MSBuild.exe" );	// TODO(DM): query for this instead
+		args.add( "tests\\test_generate_visual_studio_files\\visual_studio\\app.vcxproj" );
+		args.add( "/property:Platform=x64" );
+
+		s32 exitCode = RunProc( &args );
+
+		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
+	}
+
+	// run the program, make sure it returns the correct exit code
+	{
+		Array<const char*> args;
+		args.add( "tests\\test_generate_visual_studio_files\\bin\\debug\\app\\the-app.exe" );
+
+		s32 exitCode = RunProc( &args );
+
+		TEMPER_CHECK_TRUE_M( exitCode == 69420, "Exit code actually returned %d.\n", exitCode );
+	}
+}
+
 int main( int argc, char** argv ) {
 	core_init( MEM_KILOBYTES( 64 ), MEM_KILOBYTES( 64 ) );
 	defer( core_shutdown() );

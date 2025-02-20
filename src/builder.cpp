@@ -868,126 +868,51 @@ static void GetAllSourceFiles_r( const char* basePath, const char* folder, const
 }
 
 static void GetAllSubfolders_r( const char* basePath, const char* folder, Array<const char*>* outSubfolders ) {
-	// do initial find from base path
-	{
-		const char* fullSearchPath = NULL;
+	const char* fullSearchPath = NULL;
 
-		if ( string_ends_with( basePath, "\\" ) || string_ends_with( basePath, "/" ) ) {
+	if ( string_ends_with( basePath, "\\" ) || string_ends_with( basePath, "/" ) ) {
+		if ( folder ) {
+			fullSearchPath = tprintf( "%s%s\\*", basePath, folder );
+		} else {
 			fullSearchPath = tprintf( "%s*", basePath );
+		}
+	} else {
+		if ( folder ) {
+			fullSearchPath = tprintf( "%s\\%s\\*", basePath, folder );
 		} else {
 			fullSearchPath = tprintf( "%s\\*", basePath );
 		}
-
-		FileInfo fileInfo;
-		File file = file_find_first( fullSearchPath, &fileInfo );
-
-		do {
-			if ( string_equals( fileInfo.filename, "." ) ) {
-				continue;
-			}
-
-			if ( string_equals( fileInfo.filename, ".." ) ) {
-				continue;
-			}
-
-			if ( !string_equals( fileInfo.filename, folder ) ) {
-				continue;
-			}
-
-			if ( fileInfo.is_directory ) {
-				const char* folderName = tprintf( "%s", fileInfo.filename );
-				outSubfolders->add( folderName );
-				break;
-			}
-		} while ( file_find_next( &file, &fileInfo ) );
 	}
 
-	// now search subfolders of the one we just found
-	{
-		const char* fullSearchPath = NULL;
+	FileInfo fileInfo;
+	File file = file_find_first( fullSearchPath, &fileInfo );
 
-		if ( string_ends_with( basePath, "\\" ) || string_ends_with( basePath, "/" ) ) {
-			if ( folder ) {
-				fullSearchPath = tprintf( "%s%s\\*", basePath, folder );
-			} else {
-				fullSearchPath = tprintf( "%s*", basePath );
-			}
-		} else {
-			if ( folder ) {
-				fullSearchPath = tprintf( "%s\\%s\\*", basePath, folder );
-			} else {
-				fullSearchPath = tprintf( "%s\\*", basePath );
-			}
+	do {
+		if ( string_equals( fileInfo.filename, "." ) ) {
+			continue;
 		}
 
-		FileInfo fileInfo;
-		File file = file_find_first( fullSearchPath, &fileInfo );
-
-		do {
-			if ( fileInfo.is_directory ) {
-				if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) ) {
-					continue;
-				}
-
-				const char* fullName = tprintf( "%s\\%s", folder, fileInfo.filename );
-
-				outSubfolders->add( fullName );
-
-				GetAllSubfolders_r( basePath, fullName, outSubfolders );
-			}
-		} while ( file_find_next( &file, &fileInfo ) );
-	}
-}
-
-static void GetAllSubfolders( const char* basePath, const char* folder, Array<const char*>* outSubfolders ) {
-	// do initial find from base path
-	{
-		const char* fullSearchPath = NULL;
-
-		if ( string_ends_with( basePath, "\\" ) || string_ends_with( basePath, "/" ) ) {
-			if ( folder ) {
-				fullSearchPath = tprintf( "%s%s\\*", basePath, folder );
-			} else {
-				fullSearchPath = tprintf( "%s*", basePath );
-			}
-		} else {
-			if ( folder ) {
-				fullSearchPath = tprintf( "%s\\%s\\*", basePath, folder );
-			} else {
-				fullSearchPath = tprintf( "%s\\*", basePath );
-			}
+		if ( string_equals( fileInfo.filename, ".." ) ) {
+			continue;
 		}
 
-		FileInfo fileInfo;
-		File file = file_find_first( fullSearchPath, &fileInfo );
+		if ( fileInfo.is_directory ) {
+			const char* folderName = tprintf( "%s", fileInfo.filename );
 
-		do {
-			if ( string_equals( fileInfo.filename, "." ) ) {
-				continue;
+			//outSubfolders->add( folderName );
+
+			const char* newPath = NULL;
+			if ( folder ) {
+				newPath = tprintf( "%s\\%s", folder, folderName );
+			} else {
+				newPath = folderName;
 			}
 
-			if ( string_equals( fileInfo.filename, ".." ) ) {
-				continue;
-			}
+			outSubfolders->add( newPath );
 
-			if ( fileInfo.is_directory ) {
-				const char* folderName = tprintf( "%s", fileInfo.filename );
-
-				//outSubfolders->add( folderName );
-
-				const char* newPath = NULL;
-				if ( folder ) {
-					newPath = tprintf( "%s\\%s", folder, folderName );
-				} else {
-					newPath = folderName;
-				}
-
-				outSubfolders->add( newPath );
-
-				GetAllSubfolders( basePath, newPath, outSubfolders );
-			}
-		} while ( file_find_next( &file, &fileInfo ) );
-	}
+			GetAllSubfolders_r( basePath, newPath, outSubfolders );
+		}
+	} while ( file_find_next( &file, &fileInfo ) );
 }
 
 struct fileFilter_t {
@@ -1781,63 +1706,6 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptio
 
 		// get all the files that the project will know about
 		// the arrays in here get referred to multiple times throughout generating the files for the project
-#if 0
-		Array<const char*> sourceFiles;
-		Array<const char*> headerFiles;
-		Array<const char*> otherFiles;
-
-		Array<const char*> sourceFilePaths;
-		Array<const char*> headerFilePaths;
-		Array<const char*> otherFilePaths;
-
-		{
-			For ( u64, folderIndex, 0, project->code_folders.size() ) {
-				const char* folder = project->code_folders[folderIndex];
-
-				Array<const char*> subfolders;
-				//GetAllSubfolders_r( context->inputFilePath, folder, &subfolders );
-				subfolders.add( folder );
-				GetAllSubfolders( context->inputFilePath, folder, &subfolders );
-
-				For ( u64, fileExtensionIndex, 0, project->file_extensions.size() ) {
-					const char* fileExtension = project->file_extensions[fileExtensionIndex];
-
-					For ( u64, subfolderIndex, 0, subfolders.count ) {
-						const char* subfolder = subfolders[subfolderIndex];
-
-						Array<const char*> files;
-						FindAllFilesInFolder_r( context->inputFilePath, subfolder, fileExtension, false, &files );
-
-						For ( u64, fileIndex, 0, files.count ) {
-							const char* file = files[fileIndex];
-
-							const char* fileFull = tprintf( "%s\\%s", context->inputFilePath, file );
-							fileFull = paths_fix_slashes( fileFull );
-
-							char* fileRelative = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
-							memset( fileRelative, 0, MAX_PATH * sizeof( char ) );
-							PathRelativePathTo( fileRelative, solutionFilename, FILE_ATTRIBUTE_NORMAL, fileFull, FILE_ATTRIBUTE_NORMAL );
-
-							if ( FileIsSourceFile( file ) ) {
-								sourceFiles.add( fileRelative );
-								sourceFilePaths.add( subfolder );
-							} else if ( FileIsHeaderFile( file ) ) {
-								headerFiles.add( fileRelative );
-								headerFilePaths.add( subfolder );
-							} else {
-								otherFiles.add( fileRelative );
-								otherFilePaths.add( subfolder );
-							}
-						}
-
-						assert( sourceFiles.count == sourceFilePaths.count );
-						assert( headerFiles.count == headerFilePaths.count );
-						assert( otherFiles.count == otherFilePaths.count );
-					}
-				}
-			}
-		}
-#else
 		Array<fileFilter_t> sourceFiles;
 		Array<fileFilter_t> headerFiles;
 		Array<fileFilter_t> otherFiles;
@@ -1873,7 +1741,6 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptio
 				assert( sourceFiles.count + headerFiles.count + otherFiles.count == filterFiles.count );
 			}
 		}
-#endif
 
 		// .vcxproj
 		{
@@ -2053,39 +1920,6 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptio
 
 			// tell visual studio what files we have in this project
 			// this is typically done via a filter (E.G: src/*.cpp)
-#if 0
-			{
-				if ( sourceFiles.count > 0 ) {
-					string_builder_appendf( &vcxprojContent, "\t<ItemGroup>\n" );
-
-					For ( u64, fileIndex, 0, sourceFiles.count ) {
-						string_builder_appendf( &vcxprojContent, "\t\t<ClCompile Include=\"%s\" />\n", sourceFiles[fileIndex] );
-					}
-
-					string_builder_appendf( &vcxprojContent, "\t</ItemGroup>\n" );
-				}
-
-				if ( headerFiles.count > 0 ) {
-					string_builder_appendf( &vcxprojContent, "\t<ItemGroup>\n" );
-
-					For ( u64, fileIndex, 0, headerFiles.count ) {
-						string_builder_appendf( &vcxprojContent, "\t\t<ClInclude Include=\"%s\" />\n", headerFiles[fileIndex] );
-					}
-
-					string_builder_appendf( &vcxprojContent, "\t</ItemGroup>\n" );
-				}
-
-				if ( otherFiles.count > 0 ) {
-					string_builder_appendf( &vcxprojContent, "\t<ItemGroup>\n" );
-
-					For ( u64, fileIndex, 0, otherFiles.count ) {
-						string_builder_appendf( &vcxprojContent, "\t\t<None Include=\"%s\" />\n", otherFiles[fileIndex] );
-					}
-
-					string_builder_appendf( &vcxprojContent, "\t</ItemGroup>\n" );
-				}
-			}
-#else
 			{
 				auto WriteFilterFilesToVcxproj = []( StringBuilder* stringBuilder, const Array<fileFilter_t>& files, const char* tag ) {
 					if ( files.count == 0 ) {
@@ -2111,7 +1945,6 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptio
 				WriteFilterFilesToVcxproj( &vcxprojContent, headerFiles, "ClInclude" );
 				WriteFilterFilesToVcxproj( &vcxprojContent, otherFiles, "None" );
 			}
-#endif
 
 			string_builder_appendf( &vcxprojContent, "\t<Import Project=\"$(VCTargetsPath)\\Microsoft.Cpp.targets\" />\n" );
 
@@ -2211,8 +2044,7 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptio
 				const char* folder = project->code_folders[folderIndex];
 
 				Array<const char*> subfolders;
-				GetAllSubfolders( tprintf( "%s\\%s", context->inputFilePath, folder ), NULL, &subfolders );
-				//GetAllSubfolders_r( context->inputFilePath, folder, &subfolders );
+				GetAllSubfolders_r( tprintf( "%s\\%s", context->inputFilePath, folder ), NULL, &subfolders );
 
 				For ( u64, subfolderIndex, 0, subfolders.count ) {
 					subfolders[subfolderIndex] = paths_fix_slashes( subfolders[subfolderIndex] );
@@ -2233,33 +2065,6 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptio
 
 			// now put all files in the filter
 			// visual studio requires that we list each file by type
-#if 0
-			{
-				string_builder_appendf( &vcxprojContent, "\t<ItemGroup>\n" );
-				For ( u64, fileIndex, 0, sourceFiles.count ) {
-					string_builder_appendf( &vcxprojContent, "\t\t<ClCompile Include=\"%s\">\n", sourceFiles[fileIndex] );
-					string_builder_appendf( &vcxprojContent, "\t\t\t<Filter>%s</Filter>\n", sourceFilePaths[fileIndex] );
-					string_builder_appendf( &vcxprojContent, "\t\t</ClCompile>\n" );
-				}
-				string_builder_appendf( &vcxprojContent, "\t</ItemGroup>\n" );
-
-				string_builder_appendf( &vcxprojContent, "\t<ItemGroup>\n" );
-				For ( u64, fileIndex, 0, headerFiles.count ) {
-					string_builder_appendf( &vcxprojContent, "\t\t<ClInclude Include=\"%s\">\n", headerFiles[fileIndex] );
-					string_builder_appendf( &vcxprojContent, "\t\t\t<Filter>%s</Filter>\n", headerFilePaths[fileIndex] );
-					string_builder_appendf( &vcxprojContent, "\t\t</ClInclude>\n" );
-				}
-				string_builder_appendf( &vcxprojContent, "\t</ItemGroup>\n" );
-
-				string_builder_appendf( &vcxprojContent, "\t<ItemGroup>\n" );
-				For ( u64, fileIndex, 0, otherFiles.count ) {
-					string_builder_appendf( &vcxprojContent, "\t\t<None Include=\"%s\">\n", otherFiles[fileIndex] );
-					string_builder_appendf( &vcxprojContent, "\t\t\t<Filter>%s</Filter>\n", otherFilePaths[fileIndex] );
-					string_builder_appendf( &vcxprojContent, "\t\t</None>\n" );
-				}
-				string_builder_appendf( &vcxprojContent, "\t</ItemGroup>\n" );
-			}
-#else
 			{
 				auto WriteFileFilters = []( StringBuilder* stringBuilder, const Array<fileFilter_t>& fileFilters, const char* tag ) {
 					if ( fileFilters.count == 0 ) {
@@ -2287,7 +2092,6 @@ static bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptio
 				WriteFileFilters( &vcxprojContent, headerFiles, "ClInclude" );
 				WriteFileFilters( &vcxprojContent, otherFiles, "None" );
 			}
-#endif
 
 			string_builder_appendf( &vcxprojContent, "</Project>" );
 

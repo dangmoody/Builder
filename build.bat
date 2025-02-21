@@ -41,7 +41,7 @@ if /I [%config%]==[release] (
 	set optimisation=-O3
 )
 
-set source_files=src\\builder.cpp
+set source_files=src\\builder.cpp src\\visual_studio.cpp src\\core\\src\\core.suc.cpp
 
 set defines=-D_CRT_SECURE_NO_WARNINGS -DCORE_USE_XXHASH -DCORE_SUC
 if /I [%config%]==[debug] (

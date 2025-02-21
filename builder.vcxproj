@@ -90,12 +90,14 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\builder.cpp" />
+    <ClCompile Include="src\visual_studio.cpp" />
     <ClCompile Include="test_sln\src\app\main.cpp" />
     <ClCompile Include="test_sln\src\generate_solution.cpp" />
     <ClCompile Include="test_sln\src\library\library.cpp" />
     <ClCompile Include="test_sln\src\test_sln.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\builder_local.h" />
     <ClInclude Include="test_sln\src\library\library.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

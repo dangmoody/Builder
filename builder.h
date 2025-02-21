@@ -176,7 +176,7 @@ struct BuilderOptions {
 	bool						generate_solution;
 };
 
-unsigned int builder_get_config_hash( BuildConfig* config, const unsigned int seed );
+static unsigned int builder_get_config_hash( BuildConfig* config, const unsigned int seed );
 
 static bool config_equals( BuildConfig* configA, BuildConfig* configB ) {
 	unsigned int hashA = builder_get_config_hash( configA, 0 );
@@ -252,7 +252,7 @@ static unsigned int builder_hash_string_array( const unsigned int seed, const st
 	return hash;
 };
 
-unsigned int builder_get_config_hash( BuildConfig* config, const unsigned int seed ) {
+static unsigned int builder_get_config_hash( BuildConfig* config, const unsigned int seed ) {
 	unsigned int hash = seed;
 
 	for ( size_t dependencyIndex = 0; dependencyIndex < config->depends_on.size(); dependencyIndex++ ) {

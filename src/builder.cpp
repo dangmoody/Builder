@@ -73,12 +73,6 @@ enum {
 	debug_break(); \
 	return 1
 
-#define CHECK_WRITE( func ) \
-	do { \
-		bool8 written = (func); \
-		assertf( written, "Failed to write a visual studio project/solution file..\n" ); \
-	} while ( 0 )
-
 struct trackedSourceFile_t {
 	u64						lastWriteTime;
 	char*					filename;
@@ -88,6 +82,19 @@ struct buildInfoConfig_t {
 	BuildConfig							config;
 	std::vector<trackedSourceFile_t>	files;
 	u64									lastBinaryWriteTime;
+};
+
+struct builderVersion_t {
+	s32								major;
+	s32								minor;
+	s32								patch;
+};
+
+struct buildInfoFileData_t {
+	std::vector<buildInfoConfig_t>	configs;
+	std::string						userConfigSourceFilename;
+	std::string						userConfigDLLFilename;
+	builderVersion_t				builderVersion;
 };
 
 errorCode_t GetLastErrorCode() {
@@ -170,31 +177,27 @@ static const char* BuildConfig_ToString( const BuildConfig* config ) {
 	string_builder_appendf( &builder, "%s: {\n", config->name.c_str() );
 
 	auto PrintCStringArray = [&builder]( const char* name, const std::vector<const char*>& array ) {
-		if ( array.size() > 0 ) {
-			string_builder_appendf( &builder, "\t%s: { ", name );
-			For( u64, i, 0, array.size() ) {
-				string_builder_appendf( &builder, "%s", array[i] );
+		string_builder_appendf( &builder, "\t%s: { ", name );
+		For ( u64, i, 0, array.size() ) {
+			string_builder_appendf( &builder, "%s", array[i] );
 
-				if ( i < array.size() - 1 ) {
-					string_builder_appendf( &builder, ", " );
-				}
+			if ( i < array.size() - 1 ) {
+				string_builder_appendf( &builder, ", " );
 			}
-			string_builder_appendf( &builder, " }\n" );
 		}
+		string_builder_appendf( &builder, " }\n" );
 	};
 
 	auto PrintSTDStringArray = [&builder]( const char* name, const std::vector<std::string>& array ) {
-		if ( array.size() > 0 ) {
-			string_builder_appendf( &builder, "\t%s: { ", name );
-			For( u64, i, 0, array.size() ) {
-				string_builder_appendf( &builder, "%s", array[i].c_str() );
+		string_builder_appendf( &builder, "\t%s: { ", name );
+		For ( u64, i, 0, array.size() ) {
+			string_builder_appendf( &builder, "%s", array[i].c_str() );
 
-				if ( i < array.size() - 1 ) {
-					string_builder_appendf( &builder, ", " );
-				}
+			if ( i < array.size() - 1 ) {
+				string_builder_appendf( &builder, ", " );
 			}
-			string_builder_appendf( &builder, " }\n" );
 		}
+		string_builder_appendf( &builder, " }\n" );
 	};
 
 	auto PrintField = [&builder]( const char* key, const char* value ) {
@@ -203,7 +206,7 @@ static const char* BuildConfig_ToString( const BuildConfig* config ) {
 
 	if ( config->depends_on.size() > 0 ) {
 		string_builder_appendf( &builder, "\tdepends_on: { " );
-		For( u64, dependencyIndex, 0, config->depends_on.size() ) {
+		For ( u64, dependencyIndex, 0, config->depends_on.size() ) {
 			string_builder_appendf( &builder, "%s", config->depends_on[dependencyIndex].name.c_str() );
 
 			if ( dependencyIndex < config->depends_on.size() - 1 ) {
@@ -975,7 +978,7 @@ static void GetAllIncludedFiles( const buildContext_t* context, const BuildConfi
 
 					u64 filenameLength = cast( u64, includeEnd ) - cast( u64, includeStart );
 
-					char* filename = cast( char*, mem_temp_alloc( ( filenameLength + 1 ) * sizeof( char ) ) );
+					char* filename = cast( char*, mem_temp_alloc( ( filenameLength + 1 ) * sizeof( char ) ) );	// + 1 for null terminator
 					strncpy( filename, includeStart, filenameLength * sizeof( char ) );
 					filename[filenameLength] = 0;
 
@@ -1050,306 +1053,196 @@ static void GetAllIncludedFiles( const buildContext_t* context, const BuildConfi
 	}
 }
 
-static void Serialize_Bool8( File* file, const bool8 x ) {
-	CHECK_WRITE( file_write( file, &x, sizeof( bool8 ) ) );
-}
-
-static void Serialize_S32( File* file, const s32 x ) {
-	CHECK_WRITE( file_write( file, &x, sizeof( s32 ) ) );
-}
-
-static void Serialize_U64( File* file, const u64 x ) {
-	CHECK_WRITE( file_write( file, &x, sizeof( u64 ) ) );
-}
-
-static void Serialize_StringField( File* file, const char* key, const char* value ) {
-	assert( key );
-	assert( value );
-
-	CHECK_WRITE( file_write( file, tprintf( "%s: %s", key, value ) ) );
-	CHECK_WRITE( file_write( file, "\n" ) );
-}
-
-static void Serialize_CStringArray( File* file, const std::vector<const char*>& array, const char* name ) {
-	assert( name );
-
-	CHECK_WRITE( file_write( file, name ) );
-	CHECK_WRITE( file_write( file, "\n" ) );
-	Serialize_U64( file, array.size() );
-
-	For ( u64, i, 0, array.size() ) {
-		CHECK_WRITE( file_write( file, array[i] ) );
-		CHECK_WRITE( file_write( file, "\n" ) );
-	}
-}
-
-static void Serialize_STDStringArray( File* file, const std::vector<std::string>& array, const char* name ) {
-	assert( name );
-
-	CHECK_WRITE( file_write( file, name ) );
-	CHECK_WRITE( file_write( file, "\n" ) );
-	Serialize_U64( file, array.size() );
-
-	For ( u64, i, 0, array.size() ) {
-		CHECK_WRITE( file_write( file, array[i].c_str() ) );
-		CHECK_WRITE( file_write( file, "\n" ) );
-	}
-}
-
-void Serialize_BuildInfo( const buildContext_t* context, const std::vector<BuildConfig>& configs, const char* userConfigSourceFilename, const char* userConfigDLLFilename, const bool8 verbose ) {
-	File file = file_open_or_create( context->buildInfoFilename );
-	defer( file_close( &file ) );
-
-	CHECK_WRITE( file_write( &file, "builder_version:\n" ) );
-	Serialize_S32( &file, BUILDER_VERSION_MAJOR );
-	Serialize_S32( &file, BUILDER_VERSION_MINOR );
-	Serialize_S32( &file, BUILDER_VERSION_PATCH );
-
-	Serialize_StringField( &file, "build_source_file", userConfigSourceFilename );
-	Serialize_StringField( &file, "DLL", userConfigDLLFilename );
-
-	Serialize_U64( &file, configs.size() );
-
-	For ( u64, builderOptionsIndex, 0, configs.size() ) {
-		const BuildConfig* config = &configs[builderOptionsIndex];
-
-		Serialize_StringField( &file, "config", config->name.c_str() );
-
-		u64 configNameHash = hash_string( config->name.c_str(), 0 );
-		Serialize_U64( &file, configNameHash );
-
-		// serialize names of all build dependencies
-		{
-			CHECK_WRITE( file_write( &file, "depends_on\n" ) );
-			Serialize_U64( &file, config->depends_on.size() );
-
-			For ( u64, dependencyIndex, 0, config->depends_on.size() ) {
-				CHECK_WRITE( file_write( &file, tprintf( "%s\n", config->depends_on[dependencyIndex].name.c_str() ) ) );
-			}
-		}
-
-		Serialize_CStringArray( &file, config->source_files, "source_files" );
-		Serialize_CStringArray( &file, config->defines, "defines" );
-		Serialize_STDStringArray( &file, config->additional_includes, "additional_includes" );
-		Serialize_STDStringArray( &file, config->additional_lib_paths, "additional_lib_paths" );
-		Serialize_CStringArray( &file, config->additional_libs, "additional_libs" );
-		Serialize_CStringArray( &file, config->ignore_warnings, "ignore_warnings" );
-
-		Serialize_StringField( &file, "binary_name", config->binary_name.c_str() );
-		Serialize_StringField( &file, "binary_folder", config->binary_folder.c_str() );
-
-		// write the last write time of the binary
-		// if the binary doesnt exist (we havent built it yet) then just write 0
-		{
-			CHECK_WRITE( file_write( &file, "last_binary_write_time\n" ) );
-
-			const char* binaryFullName = tprintf( "%s\\%s", context->inputFilePath, BuildConfig_GetFullBinaryName( config ) );
-
-			FileInfo fileInfo;
-			File binaryFile = file_find_first( binaryFullName, &fileInfo );
-
-			if ( binaryFile.ptr != INVALID_HANDLE_VALUE ) {
-				Serialize_U64( &file, fileInfo.last_write_time );
-			} else {
-				Serialize_U64( &file, 0 );
-			}
-		}
-
-		Serialize_S32( &file, config->binary_type );
-		Serialize_S32( &file, config->optimization_level );
-		Serialize_Bool8( &file, config->remove_symbols );
-		Serialize_Bool8( &file, config->remove_file_extension );
-
-		// serialize all included files and their last write time
-		{
-			Array<const char*> buildInfoFiles;
-			GetAllIncludedFiles( context, config, verbose, &buildInfoFiles );
-
-			CHECK_WRITE( file_write( &file, "tracked_source_files\n" ) );
-			Serialize_U64( &file, buildInfoFiles.count );
-
-			For ( u64, buildInfoFileIndex, 0, buildInfoFiles.count ) {
-				const char* buildInfoFile = buildInfoFiles[buildInfoFileIndex];
-
-				const char* buildInfoFileAndPath = buildInfoFile;
-				if ( !paths_is_path_absolute( buildInfoFileAndPath ) ) {
-					buildInfoFileAndPath = tprintf( "%s\\%s", context->inputFilePath, buildInfoFile );
-				}
-
-				FileInfo fileInfo;
-				File foundFile = file_find_first( buildInfoFileAndPath, &fileInfo );
-
-				assert( foundFile.ptr != INVALID_HANDLE_VALUE );
-
-				// dont write full path of the filename
-				// the path to the source file can change depending on whether we are building from visual studio or the command line
-				// so just write the filename relative to the source folder and let Builder reconstruct the appropriate path as and when it needs to
-				CHECK_WRITE( file_write( &file, buildInfoFile ) );
-				CHECK_WRITE( file_write( &file, "\n" ) );
-				Serialize_U64( &file, fileInfo.last_write_time );
-			}
-		}
-
-		CHECK_WRITE( file_write( &file, "\n" ) );
-
-		mem_reset_temp_storage();
-	}
-}
-
-struct parser_t {
-	u64		fileLength;
-	char*	bufferStart;
-	char*	bufferPos;
+struct byteBuffer_t {
+	Array<u8>	data;
+	u64			readOffset;
 };
 
-static bool8 Parser_Init( parser_t* parser, const char* filename ) {
-	memset( parser, 0, sizeof( parser_t ) );
-
-	bool8 read = file_read_entire( filename, &parser->bufferStart, &parser->fileLength );
-
-	parser->bufferPos = parser->bufferStart;
-
-	return read;
-}
-
-static void Parser_Shutdown( parser_t* parser ) {
-	file_free_buffer( &parser->bufferStart );
-}
-
-static void Parser_SkipTo( parser_t* parser, const char c ) {
-	while ( *parser->bufferPos != c ) {
-		parser->bufferPos++;
+static void ByteBuffer_SkipReadTo( byteBuffer_t* buffer, const char c ) {
+	while ( buffer->data[buffer->readOffset] != c ) {
+		buffer->readOffset++;
 	}
 }
 
-static void Parser_SkipPast( parser_t* parser, const char c ) {
-	Parser_SkipTo( parser, c );
-	parser->bufferPos++;
+static void ByteBuffer_SkipReadPast( byteBuffer_t* buffer, const char c ) {
+	ByteBuffer_SkipReadTo( buffer, c );
+	buffer->readOffset++;
 }
 
-static bool8 Parser_ParseBool( parser_t* parser ) {
-	bool8* x = cast( bool8*, parser->bufferPos );
+static bool8 ByteBuffer_Read_Bool8( byteBuffer_t* buffer ) {
+	bool8* result = cast( bool8*, &buffer->data[buffer->readOffset] );
 
-	parser->bufferPos += sizeof( bool8 );
+	buffer->readOffset += sizeof( bool8 );
 
-	return *x;
+	return *result;
 }
 
-static s32 Parser_ParseS32( parser_t* parser ) {
-	s32* x = cast( s32*, parser->bufferPos );
-
-	parser->bufferPos += sizeof( s32 );
-
-	return *x;
+static void ByteBuffer_Write_Bool8( byteBuffer_t* buffer, const bool8 x ) {
+	buffer->data.add( x );
 }
 
-static u64 Parser_ParseU64( parser_t* parser ) {
-	u64* x = cast( u64*, parser->bufferPos );
+static s32 ByteBuffer_Read_S32( byteBuffer_t* buffer ) {
+	s32* result = cast( s32*, &buffer->data[buffer->readOffset] );
 
-	parser->bufferPos += sizeof( u64 );
+	buffer->readOffset += sizeof( s32 );
 
-	return *x;
+	return *result;
 }
 
-static char* Parser_ParseLine( parser_t* parser ) {
-	const char* lineEnd = cast( const char*, memchr( parser->bufferPos, '\n', parser->fileLength ) );
-	u64 stringLength = cast( u64, lineEnd ) - cast( u64, parser->bufferPos );
+static void ByteBuffer_Write_S32( byteBuffer_t* buffer, const s32 x ) {
+	buffer->data.reserve( buffer->data.alloced + sizeof( s32 ) );
 
-	char* string = cast( char*, mem_alloc( ( stringLength + 1 ) * sizeof( char ) ) );
-	memcpy( string, parser->bufferPos, stringLength * sizeof( char ) );
+	buffer->data.add( ( x ) & 0xFF );
+	buffer->data.add( ( x >> 8 ) & 0xFF );
+	buffer->data.add( ( x >> 16 ) & 0xFF );
+	buffer->data.add( ( x >> 24 ) & 0xFF );
+}
+
+static u64 ByteBuffer_Read_U64( byteBuffer_t* buffer ) {
+	u64* result = cast( u64*, &buffer->data[buffer->readOffset] );
+
+	buffer->readOffset += sizeof( u64 );
+
+	return *result;
+}
+
+static void ByteBuffer_Write_U64( byteBuffer_t* buffer, const u64 x ) {
+	buffer->data.reserve( buffer->data.alloced + sizeof( u64 ) );
+
+	buffer->data.add( ( x ) & 0xFF );
+	buffer->data.add( ( x >> 8 ) & 0xFF );
+	buffer->data.add( ( x >> 16 ) & 0xFF );
+	buffer->data.add( ( x >> 24 ) & 0xFF );
+	buffer->data.add( ( x >> 32 ) & 0xFF );
+	buffer->data.add( ( x >> 40 ) & 0xFF );
+	buffer->data.add( ( x >> 48 ) & 0xFF );
+	buffer->data.add( ( x >> 56 ) & 0xFF );
+}
+
+static char* ByteBuffer_Read_CString( byteBuffer_t* buffer ) {
+	u8* bufferPos = &buffer->data[buffer->readOffset];
+
+	const char* lineEnd = cast( const char*, memchr( bufferPos, '\n', buffer->data.count - buffer->readOffset ) );
+	u64 stringLength = cast( u64, lineEnd ) - cast( u64, bufferPos );
+
+	char* string = cast( char*, mem_alloc( ( stringLength + 1 ) * sizeof( char ) ) );	// + 1 for null terminator
+	memcpy( string, bufferPos, stringLength * sizeof( char ) );
 	string[stringLength] = 0;
 
-	Parser_SkipPast( parser, '\n' );
+	ByteBuffer_SkipReadPast( buffer, '\n' );
 
 	return string;
 }
 
-// a "string field" is just a key value pair and is laid out like this:
-//
-//	key: value
-//
-// where "key" and "value" are both strings
-static void Parser_ParseStringField( parser_t* parser, char** outKey, std::string* outValue ) {
-	const char* colon = cast( const char*, memchr( parser->bufferPos, ':', parser->fileLength ) );
-	u64 keyLength = cast( u64, colon ) - cast( u64, parser->bufferPos );
+static void ByteBuffer_Write_CString( byteBuffer_t* buffer, const char* str ) {
+	assert( str );
+
+	u64 length = strlen( str );
+
+	buffer->data.add_range( cast( const u8*, str ), length );
+}
+
+static void ByteBuffer_Read_StringField( byteBuffer_t* buffer, char** outKey, std::string* outValue ) {
+	assertf( outKey || outValue, "When reading a string field, you must take either the key or the value otherwise you will take no data and what's the point of that?" );
+
+	const char* colon = cast( const char*, memchr( &buffer->data[buffer->readOffset], ':', buffer->data.count - buffer->readOffset ) );
+	u64 keyLength = cast( u64, colon ) - cast( u64, &buffer->data[buffer->readOffset] );
 
 	if ( outKey ) {
-		*outKey = cast( char*, mem_alloc( ( keyLength + 1 ) * sizeof( char ) ) );
-		memcpy( *outKey, parser->bufferPos, keyLength * sizeof( char ) );
+		*outKey = cast( char*, mem_alloc( ( keyLength + 1 ) * sizeof( char ) ) );	// + 1 for null terminator
+		memcpy( *outKey, &buffer->data[buffer->readOffset], keyLength * sizeof( char ) );
 		*outKey[keyLength] = 0;
 	}
 
-	parser->bufferPos += keyLength;	// skip to the colon
-	parser->bufferPos += 1;			// skip past the colon
-	parser->bufferPos += 1;			// skip past following whitespace
+	buffer->readOffset += keyLength;	// skip to the colon
+	buffer->readOffset += 1;			// skip past the colon
+	buffer->readOffset += 1;			// skip past following whitespace
 
-	char* value = Parser_ParseLine( parser );
+	char* value = ByteBuffer_Read_CString( buffer );
 
 	if ( outValue ) {
 		*outValue = value;
 	}
 }
 
-static std::vector<const char*> Parser_ParseCStringArray( parser_t* parser ) {
-	Parser_SkipPast( parser, '\n' );	// skip the name of the array
+static void ByteBuffer_Write_StringField( byteBuffer_t* buffer, const char* key, const char* value ) {
+	assert( key );
+	assert( value );
 
-	u64 arrayCount = Parser_ParseU64( parser );
+	ByteBuffer_Write_CString( buffer, key );
+	ByteBuffer_Write_CString( buffer, ": " );
+	ByteBuffer_Write_CString( buffer, value );
+	ByteBuffer_Write_CString( buffer, "\n" );
+}
+
+static std::vector<const char*> ByteBuffer_Read_CStringArray( byteBuffer_t* buffer ) {
+	ByteBuffer_SkipReadPast( buffer, '\n' );	// skip the name of the array
+
+	u64 arrayCount = ByteBuffer_Read_U64( buffer );
 	std::vector<const char*> result( arrayCount );
 
 	For ( u64, i, 0, result.size() ) {
-		result[i] = Parser_ParseLine( parser );
+		result[i] = ByteBuffer_Read_CString( buffer );
 	}
 
 	return result;
 }
 
-static std::vector<std::string> Parser_ParseSTDStringArray( parser_t* parser ) {
-	Parser_SkipPast( parser, '\n' );	// skip the name of the array
+static void ByteBuffer_Write_CStringArray( byteBuffer_t* buffer, const std::vector<const char*>& array, const char* name ) {
+	ByteBuffer_Write_CString( buffer, name );
+	ByteBuffer_Write_CString( buffer, "\n" );
+	ByteBuffer_Write_U64( buffer, array.size() );
 
-	u64 arrayCount = Parser_ParseU64( parser );
+	For ( u64, i, 0, array.size() ) {
+		ByteBuffer_Write_CString( buffer, array[i] );
+		ByteBuffer_Write_CString( buffer, "\n" );
+	}
+}
+
+static std::vector<std::string> ByteBuffer_Read_STDStringArray( byteBuffer_t* buffer ) {
+	ByteBuffer_SkipReadPast( buffer, '\n' );	// skip the name of the array
+
+	u64 arrayCount = ByteBuffer_Read_U64( buffer );
 	std::vector<std::string> result( arrayCount );
 
 	For ( u64, i, 0, result.size() ) {
-		result[i] = Parser_ParseLine( parser );
+		result[i] = ByteBuffer_Read_CString( buffer );
 	}
 
 	return result;
 }
 
-struct builderVersion_t {
-	s32								major;
-	s32								minor;
-	s32								patch;
-};
+static void ByteBuffer_Write_STDStringArray( byteBuffer_t* buffer, const std::vector<std::string>& array, const char* name ) {
+	ByteBuffer_Write_CString( buffer, name );
+	ByteBuffer_Write_CString( buffer, "\n" );
+	ByteBuffer_Write_U64( buffer, array.size() );
 
-struct buildInfoFileData_t {
-	std::vector<buildInfoConfig_t>	configs;
-	std::string						userConfigSourceFilename;
-	std::string						userConfigDLLFilename;
-	builderVersion_t				builderVersion;
-};
+	For ( u64, i, 0, array.size() ) {
+		ByteBuffer_Write_CString( buffer, array[i].c_str() );
+		ByteBuffer_Write_CString( buffer, "\n" );
+	}
+}
 
-static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, buildInfoFileData_t* outData ) {
-	parser_t parser = {};
-	bool8 read = Parser_Init( &parser, buildInfoFilename );
+static bool8 BuildInfo_Read( const char* buildInfoFilename, buildInfoFileData_t* outData ) {
+	byteBuffer_t buffer = {};
+
+	bool8 read = file_read_entire( buildInfoFilename, cast( char**, &buffer.data.data ), &buffer.data.count );
 
 	if ( !read ) {
 		return false;
 	}
 
-	defer( Parser_Shutdown( &parser ) );
+	ByteBuffer_Read_CString( &buffer );	// "builder_version" tag, skip
+	outData->builderVersion.major = ByteBuffer_Read_S32( &buffer );
+	outData->builderVersion.minor = ByteBuffer_Read_S32( &buffer );
+	outData->builderVersion.patch = ByteBuffer_Read_S32( &buffer );
 
-	Parser_ParseLine( &parser );	// "builder_version" tag, skip
-	outData->builderVersion.major = Parser_ParseS32( &parser );
-	outData->builderVersion.minor = Parser_ParseS32( &parser );
-	outData->builderVersion.patch = Parser_ParseS32( &parser );
-
-	Parser_ParseStringField( &parser, NULL, &outData->userConfigSourceFilename );
-	Parser_ParseStringField( &parser, NULL, &outData->userConfigDLLFilename );
+	ByteBuffer_Read_StringField( &buffer, NULL, &outData->userConfigSourceFilename );
+	ByteBuffer_Read_StringField( &buffer, NULL, &outData->userConfigDLLFilename );
 
 	// parse all BuilderOptions
 	{
-		u64 totalNumConfigs = Parser_ParseU64( &parser );
+		u64 totalNumConfigs = ByteBuffer_Read_U64( &buffer );
 
 		outData->configs.resize( totalNumConfigs );
 
@@ -1360,11 +1253,11 @@ static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, buildInfoFile
 			{
 				BuildConfig* config = &buildInfoConfig->config;
 
-				Parser_ParseStringField( &parser, NULL, &config->name );
-				Parser_ParseU64( &parser );	// name hash, skip
+				ByteBuffer_Read_StringField( &buffer, NULL, &config->name );
+				ByteBuffer_Read_U64( &buffer );	// name hash, skip
 
 				{
-					std::vector<const char*> dependencyNames = Parser_ParseCStringArray( &parser );
+					std::vector<const char*> dependencyNames = ByteBuffer_Read_CStringArray( &buffer );
 
 					config->depends_on.resize( dependencyNames.size() );
 
@@ -1373,45 +1266,45 @@ static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, buildInfoFile
 					}
 				}
 
-				config->source_files = Parser_ParseCStringArray( &parser );
-				config->defines = Parser_ParseCStringArray( &parser );
-				config->additional_includes = Parser_ParseSTDStringArray( &parser );
-				config->additional_lib_paths = Parser_ParseSTDStringArray( &parser );
-				config->additional_libs = Parser_ParseCStringArray( &parser );
-				config->ignore_warnings = Parser_ParseCStringArray( &parser );
+				config->source_files = ByteBuffer_Read_CStringArray( &buffer );
+				config->defines = ByteBuffer_Read_CStringArray( &buffer );
+				config->additional_includes = ByteBuffer_Read_STDStringArray( &buffer );
+				config->additional_lib_paths = ByteBuffer_Read_STDStringArray( &buffer );
+				config->additional_libs = ByteBuffer_Read_CStringArray( &buffer );
+				config->ignore_warnings = ByteBuffer_Read_CStringArray( &buffer );
 
-				Parser_ParseStringField( &parser, NULL, &config->binary_name );
-				Parser_ParseStringField( &parser, NULL, &config->binary_folder );
+				ByteBuffer_Read_StringField( &buffer, NULL, &config->binary_name );
+				ByteBuffer_Read_StringField( &buffer, NULL, &config->binary_folder );
 
-				Parser_SkipPast( &parser, '\n' );	// binary_last_write_time, skip
-				buildInfoConfig->lastBinaryWriteTime = Parser_ParseU64( &parser );
+				ByteBuffer_SkipReadPast( &buffer, '\n' );	// binary_last_write_time, skip
+				buildInfoConfig->lastBinaryWriteTime = ByteBuffer_Read_U64( &buffer );
 
-				config->binary_type = cast( BinaryType, Parser_ParseS32( &parser ) );
-				config->optimization_level = cast( OptimizationLevel, Parser_ParseS32( &parser ) );
-				config->remove_symbols = Parser_ParseBool( &parser );
-				config->remove_file_extension = Parser_ParseBool( &parser );
+				config->binary_type = cast( BinaryType, ByteBuffer_Read_S32( &buffer ) );
+				config->optimization_level = cast( OptimizationLevel, ByteBuffer_Read_S32( &buffer ) );
+				config->remove_symbols = ByteBuffer_Read_Bool8( &buffer );
+				config->remove_file_extension = ByteBuffer_Read_Bool8( &buffer );
 			}
 
 			// parse tracked source files
 			{
-				Parser_SkipPast( &parser, '\n' );
+				ByteBuffer_SkipReadPast( &buffer, '\n' );
 
-				u64 count = Parser_ParseU64( &parser );
+				u64 count = ByteBuffer_Read_U64( &buffer );
 				buildInfoConfig->files.reserve( count );
 
 				For ( u64, fileIndex, 0, count ) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wreorder-init-list"
 					trackedSourceFile_t buildInfoFile = {};
-					buildInfoFile.filename = Parser_ParseLine( &parser );
-					buildInfoFile.lastWriteTime = Parser_ParseU64( &parser );
+					buildInfoFile.filename = ByteBuffer_Read_CString( &buffer );
+					buildInfoFile.lastWriteTime = ByteBuffer_Read_U64( &buffer );
 #pragma clang diagnostic pop
 
 					buildInfoConfig->files.push_back( buildInfoFile );
 				}
 			}
 
-			Parser_SkipPast( &parser, '\n' );
+			ByteBuffer_SkipReadPast( &buffer, '\n' );
 		}
 	}
 
@@ -1442,6 +1335,109 @@ static bool8 Parser_ParseBuildInfo( const char* buildInfoFilename, buildInfoFile
 	}
 
 	return true;
+}
+
+void BuildInfo_Write( const buildContext_t* context, const std::vector<BuildConfig>& configs, const char* userConfigSourceFilename, const char* userConfigDLLFilename, const bool8 verbose ) {
+	byteBuffer_t buffer = {};
+
+	ByteBuffer_Write_CString( &buffer, "builder_version:\n" );
+	ByteBuffer_Write_S32( &buffer, BUILDER_VERSION_MAJOR );
+	ByteBuffer_Write_S32( &buffer, BUILDER_VERSION_MINOR );
+	ByteBuffer_Write_S32( &buffer, BUILDER_VERSION_PATCH );
+
+	ByteBuffer_Write_StringField( &buffer, "build_source_file", userConfigSourceFilename );
+	ByteBuffer_Write_StringField( &buffer, "DLL", userConfigDLLFilename );
+
+	ByteBuffer_Write_U64( &buffer, configs.size() );
+
+	For ( u64, builderOptionsIndex, 0, configs.size() ) {
+		const BuildConfig* config = &configs[builderOptionsIndex];
+
+		ByteBuffer_Write_StringField( &buffer, "config", config->name.c_str() );
+
+		u64 configNameHash = hash_string( config->name.c_str(), 0 );
+		ByteBuffer_Write_U64( &buffer, configNameHash );
+
+		// serialize names of all build dependencies
+		{
+			ByteBuffer_Write_CString( &buffer, "depends_on\n" );
+			ByteBuffer_Write_U64( &buffer, config->depends_on.size() );
+
+			For ( u64, dependencyIndex, 0, config->depends_on.size() ) {
+				ByteBuffer_Write_CString( &buffer, config->depends_on[dependencyIndex].name.c_str() );
+				ByteBuffer_Write_CString( &buffer, "\n" );
+			}
+		}
+
+		ByteBuffer_Write_CStringArray( &buffer, config->source_files, "source_files" );
+		ByteBuffer_Write_CStringArray( &buffer, config->defines, "defines" );
+		ByteBuffer_Write_STDStringArray( &buffer, config->additional_includes, "additional_includes" );
+		ByteBuffer_Write_STDStringArray( &buffer, config->additional_lib_paths, "additional_lib_paths" );
+		ByteBuffer_Write_CStringArray( &buffer, config->additional_libs, "additional_libs" );
+		ByteBuffer_Write_CStringArray( &buffer, config->ignore_warnings, "ignore_warnings" );
+
+		ByteBuffer_Write_StringField( &buffer, "binary_name", config->binary_name.c_str() );
+		ByteBuffer_Write_StringField( &buffer, "binary_folder", config->binary_folder.c_str() );
+
+		// write the last write time of the binary
+		// if the binary doesnt exist (we havent built it yet) then just write 0
+		{
+			ByteBuffer_Write_CString( &buffer, "last_binary_write_time\n" );
+
+			const char* binaryFullName = tprintf( "%s\\%s", context->inputFilePath, BuildConfig_GetFullBinaryName( config ) );
+
+			FileInfo fileInfo;
+			File binaryFile = file_find_first( binaryFullName, &fileInfo );
+
+			if ( binaryFile.ptr != INVALID_HANDLE_VALUE ) {
+				ByteBuffer_Write_U64( &buffer, fileInfo.last_write_time );
+			} else {
+				ByteBuffer_Write_U64( &buffer, 0 );
+			}
+		}
+
+		ByteBuffer_Write_S32( &buffer, config->binary_type );
+		ByteBuffer_Write_S32( &buffer, config->optimization_level );
+		ByteBuffer_Write_Bool8( &buffer, config->remove_symbols );
+		ByteBuffer_Write_Bool8( &buffer, config->remove_file_extension );
+
+		// serialize all included files and their last write time
+		{
+			Array<const char*> buildInfoFiles;
+			GetAllIncludedFiles( context, config, verbose, &buildInfoFiles );
+
+			ByteBuffer_Write_CString( &buffer, "tracked_source_files\n" );
+			ByteBuffer_Write_U64( &buffer, buildInfoFiles.count );
+
+			For ( u64, buildInfoFileIndex, 0, buildInfoFiles.count ) {
+				const char* buildInfoFile = buildInfoFiles[buildInfoFileIndex];
+
+				const char* buildInfoFileAndPath = buildInfoFile;
+				if ( !paths_is_path_absolute( buildInfoFileAndPath ) ) {
+					buildInfoFileAndPath = tprintf( "%s\\%s", context->inputFilePath, buildInfoFile );
+				}
+
+				FileInfo fileInfo;
+				File foundFile = file_find_first( buildInfoFileAndPath, &fileInfo );
+
+				assert( foundFile.ptr != INVALID_HANDLE_VALUE );
+
+				// dont write full path of the filename
+				// the path to the source file can change depending on whether we are building from visual studio or the command line
+				// so just write the filename relative to the source folder and let Builder reconstruct the appropriate path as and when it needs to
+				ByteBuffer_Write_CString( &buffer, buildInfoFile );
+				ByteBuffer_Write_CString( &buffer, "\n" );
+				ByteBuffer_Write_U64( &buffer, fileInfo.last_write_time );
+			}
+		}
+
+		ByteBuffer_Write_CString( &buffer, "\n" );
+
+		mem_reset_temp_storage();
+	}
+
+	// write to the file
+	file_write_entire( context->buildInfoFilename, buffer.data.data, buffer.data.count );
 }
 
 static void AddBuildConfigAndDependencies( BuildConfig* config, std::vector<BuildConfig>& outConfigs ) {
@@ -1746,7 +1742,7 @@ int main( int argc, char** argv ) {
 		context.dotBuilderFolder = context.inputFilePath;
 		context.buildInfoFilename = context.inputFile;
 
-		u64 inputFilePathLength = strlen( context.inputFilePath ) + 2 + 2;	// 2 for '\\', 2 for '..'
+		u64 inputFilePathLength = strlen( context.inputFilePath ) + strlen( "\\.." );
 		char* inputFilePath = cast( char*, mem_alloc( ( inputFilePathLength + 1 ) * sizeof( char ) ) );	// + 1 for null terminator
 		sprintf( inputFilePath, "%s\\..", context.inputFilePath );
 		inputFilePath[inputFilePathLength] = 0;
@@ -1756,13 +1752,13 @@ int main( int argc, char** argv ) {
 		const char* inputFileNoPath = paths_remove_path_from_file( context.inputFile );
 		const char* inputFileNoPathOrExtension = paths_remove_file_extension( inputFileNoPath );
 
-		u64 dotBuilderFolderLength = strlen( context.inputFilePath ) + 2 + strlen( ".builder" );	// + 2 for '\\'
+		u64 dotBuilderFolderLength = strlen( context.inputFilePath ) + strlen( "\\.builder" );
 		char* dotBuilderFolder = cast( char*, mem_alloc( ( dotBuilderFolderLength + 1 ) * sizeof( char ) ) );	// + 1 for null terminator
 		sprintf( dotBuilderFolder, "%s\\.builder", context.inputFilePath );
 		dotBuilderFolder[dotBuilderFolderLength] = 0;
 
-		u64 buildInfoFilenameLength = strlen( dotBuilderFolder ) + 2 + strlen( inputFileNoPathOrExtension ) + strlen( BUILD_INFO_FILE_EXTENSION );	// + 2 for '\\'
-		char* buildInfoFilename = cast( char*, mem_alloc( ( buildInfoFilenameLength + 1 ) * sizeof( char ) ) );
+		u64 buildInfoFilenameLength = strlen( dotBuilderFolder ) + strlen( "\\" ) + strlen( inputFileNoPathOrExtension ) + strlen( BUILD_INFO_FILE_EXTENSION );
+		char* buildInfoFilename = cast( char*, mem_alloc( ( buildInfoFilenameLength + 1 ) * sizeof( char ) ) );	// + 1 for null terminator
 		sprintf( buildInfoFilename, "%s\\%s%s", dotBuilderFolder, inputFileNoPathOrExtension, BUILD_INFO_FILE_EXTENSION );
 		buildInfoFilename[buildInfoFilenameLength] = 0;
 
@@ -1775,7 +1771,7 @@ int main( int argc, char** argv ) {
 	BuilderOptions options = {};
 
 	buildInfoFileData_t parsedBuildInfoData = {};
-	bool8 readBuildInfo = Parser_ParseBuildInfo( context.buildInfoFilename, &parsedBuildInfoData );
+	bool8 readBuildInfo = BuildInfo_Read( context.buildInfoFilename, &parsedBuildInfoData );
 
 	if ( doingBuildFromBuildInfo ) {
 		if ( !readBuildInfo ) {
@@ -2235,7 +2231,7 @@ int main( int argc, char** argv ) {
 	// only dont want to write the .build_info if all the builds skipped or if a build failed
 	bool8 shouldSerializeBuildInfo = ( numSuccessfulBuilds > 0 ) && ( numFailedBuilds == 0 );
 	if ( shouldSerializeBuildInfo ) {
-		Serialize_BuildInfo( &context, options.configs, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
+		BuildInfo_Write( &context, options.configs, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
 	}
 
 	return 0;

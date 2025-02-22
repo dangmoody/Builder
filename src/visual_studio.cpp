@@ -119,8 +119,18 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 	assert( context->buildInfoFilename );
 	assert( options );
 
-	// TODO(DM): 18/11/2024: dont use abs path here
-	context->buildInfoFilename = tprintf( "%s\\.builder\\%s%s", context->inputFilePath, options->solution.name, BUILD_INFO_FILE_EXTENSION );
+	// TODO(DM):
+	//	18/11/2024: dont use abs path here
+	//	22/02/2024: when Core gets a string data structure use that here, because this is just as horrible as the other times you do this
+	{
+		u64 buildInfoFilenameLength = strlen( context->inputFilePath ) + strlen( "\\.builder\\" ) + strlen( options->solution.name ) + strlen( BUILD_INFO_FILE_EXTENSION );
+
+		char* buildInfoFilename = cast( char*, mem_alloc( buildInfoFilenameLength + 1 ) );	// + 1 for null terminator
+		sprintf( buildInfoFilename, "%s\\.builder\\%s%s", context->inputFilePath, options->solution.name, BUILD_INFO_FILE_EXTENSION );
+		buildInfoFilename[buildInfoFilenameLength] = 0;
+
+		context->buildInfoFilename = buildInfoFilename;
+	}
 
 	// validate the solution
 	{
@@ -298,8 +308,6 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 						otherFiles.add( *fileFilter );
 					}
 				}
-
-				assert( sourceFiles.count + headerFiles.count + otherFiles.count == filterFiles.count );
 			}
 		}
 
@@ -757,7 +765,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 			BuildConfig_AddDefaults( &options->configs[configIndex] );
 		}
 
-		Serialize_BuildInfo( context, options->configs, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
+		BuildInfo_Write( context, options->configs, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
 	}
 
 	return true;

@@ -88,6 +88,6 @@ void		GetAllSubfolders_r( const char* basePath, const char* folder, Array<const 
 const char*	BuildConfig_GetFullBinaryName( const BuildConfig* config );
 void		BuildConfig_AddDefaults( BuildConfig* outConfig );
 
-void		Serialize_BuildInfo( const buildContext_t* context, const std::vector<BuildConfig>& configs, const char* userConfigSourceFilename, const char* userConfigDLLFilename, const bool8 verbose );
+void		BuildInfo_Write( const buildContext_t* context, const std::vector<BuildConfig>& configs, const char* userConfigSourceFilename, const char* userConfigDLLFilename, const bool8 verbose );
 
 bool8		GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* options, const char* userConfigSourceFilename, const char* userConfigBuildDLLFilename, const bool8 verbose );

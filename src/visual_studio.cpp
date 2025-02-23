@@ -211,6 +211,12 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 	const char* solutionFilename = tprintf( "%s\\%s.sln", visualStudioProjectFilesPath, options->solution.name );
 
+	// get relative path from visual studio to the input file
+	char* pathFromSolutionToInputFile = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
+	memset( pathFromSolutionToInputFile, 0, MAX_PATH * sizeof( char ) );
+	PathRelativePathTo( pathFromSolutionToInputFile, solutionFilename, FILE_ATTRIBUTE_NORMAL, paths_fix_slashes( context->inputFilePath ), FILE_ATTRIBUTE_DIRECTORY );
+	assert( pathFromSolutionToInputFile != NULL || !string_equals( pathFromSolutionToInputFile, "" ) );
+
 	// give each project a guid
 	Array<const char*> projectGuids;
 	projectGuids.resize( options->solution.projects.size() );
@@ -287,6 +293,8 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 			}
 		}
 
+		const char* projectNameNoFolder = paths_remove_path_from_file( project->name );
+
 		// if the project name has a slash in it then the user wants that project to be in a folder
 		// for example a project with the name "projects/games/shooter" means the user wants a project called "shooter" inside a folder called "games", which is in turn inside a folder called "projects"
 		// so split the string between slashes, and create project folders for each unique folder name that we find
@@ -360,12 +368,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 			For ( u64, folderIndex, 0, project->code_folders.size() ) {
 				const char* folder = project->code_folders[folderIndex];
 
-				// get relative path from visual studio to this code folder
-				const char* inputFilePathAndCodePath = paths_fix_slashes( tprintf( "%s\\%s", context->inputFilePath, folder ) );
-				char* pathFromSolutionToCode = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
-				memset( pathFromSolutionToCode, 0, MAX_PATH * sizeof( char ) );
-				PathRelativePathTo( pathFromSolutionToCode, solutionFilename, FILE_ATTRIBUTE_NORMAL, inputFilePathAndCodePath, FILE_ATTRIBUTE_DIRECTORY );
-				assert( pathFromSolutionToCode != NULL || !string_equals( pathFromSolutionToCode, "" ) );
+				const char* pathFromSolutionToCode = tprintf( "%s\\%s", pathFromSolutionToInputFile, folder );
 
 				Array<visualStudioFileFilter_t> filterFiles;
 				GetAllVisualStudioFiles_r( tprintf( "%s\\%s", context->inputFilePath, folder ), NULL, project->file_extensions, filterFiles );
@@ -388,7 +391,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 		// .vcxproj
 		{
-			const char* projectPath = tprintf( "%s\\%s.vcxproj", visualStudioProjectFilesPath, paths_remove_path_from_file( project->name ) );
+			const char* projectPath = tprintf( "%s\\%s.vcxproj", visualStudioProjectFilesPath, projectNameNoFolder );
 
 			printf( "Generating %s ... ", projectPath );
 
@@ -503,7 +506,13 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 					// external include paths
 					string_builder_appendf( &vcxprojContent, "\t\t<ExternalIncludePath>" );
 					For ( u64, includePathIndex, 0, config->options.additional_includes.size() ) {
-						string_builder_appendf( &vcxprojContent, "%s;", config->options.additional_includes[includePathIndex].c_str() );
+						const char* additionalInclude = config->options.additional_includes[includePathIndex].c_str();
+
+						if ( paths_is_path_absolute( additionalInclude ) ) {
+							string_builder_appendf( &vcxprojContent, "%s;", config->options.additional_includes[includePathIndex].c_str() );
+						} else {
+							string_builder_appendf( &vcxprojContent, "%s\\%s;", pathFromSolutionToInputFile, config->options.additional_includes[includePathIndex].c_str() );
+						}
 					}
 					string_builder_appendf( &vcxprojContent, "$(ExternalIncludePath)" );
 					string_builder_appendf( &vcxprojContent, "</ExternalIncludePath>\n" );
@@ -511,7 +520,13 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 					// external library paths
 					string_builder_appendf( &vcxprojContent, "\t\t<LibraryPath>" );
 					For ( u64, libPathIndex, 0, config->options.additional_lib_paths.size() ) {
-						string_builder_appendf( &vcxprojContent, "%s;", config->options.additional_lib_paths[libPathIndex].c_str() );
+						const char* additionalLibPath = config->options.additional_lib_paths[libPathIndex].c_str();
+
+						if ( paths_is_path_absolute( additionalLibPath ) ) {
+							string_builder_appendf( &vcxprojContent, "%s;", additionalLibPath );
+						} else {
+							string_builder_appendf( &vcxprojContent, "%s\\%s;", pathFromSolutionToInputFile, additionalLibPath );
+						}
 					}
 					string_builder_appendf( &vcxprojContent, "$(LibraryPath)" );
 					string_builder_appendf( &vcxprojContent, "</LibraryPath>\n" );
@@ -519,26 +534,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 					// output path
 					string_builder_appendf( &vcxprojContent, "\t\t<NMakeOutput>%s</NMakeOutput>\n", config->options.binary_folder.c_str() );
 
-					const char* inputFileAndPath = NULL;
-					if ( PathHasSlash( context->inputFile ) ) {
-						inputFileAndPath = context->inputFile;
-					} else {
-						const char* inputFileNoPath = paths_remove_path_from_file( context->inputFile );
-						inputFileAndPath = tprintf( "%s\\%s", context->inputFilePath, inputFileNoPath );
-					}
-
-					char* pathFromSolutionToCode = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
-					memset( pathFromSolutionToCode, 0, MAX_PATH * sizeof( char ) );
-					PathRelativePathTo( pathFromSolutionToCode, solutionFilename, FILE_ATTRIBUTE_NORMAL, paths_fix_slashes( inputFileAndPath ), FILE_ATTRIBUTE_DIRECTORY );
-
-					assert( pathFromSolutionToCode != NULL );
-
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wcast-qual"
-					pathFromSolutionToCode = cast( char*, paths_remove_file_from_path( pathFromSolutionToCode ) );
-#pragma clang diagnostic pop
-
-					const char* buildInfoFileRelative = tprintf( "%s\\.builder\\%s%s", pathFromSolutionToCode, options->solution.name, BUILD_INFO_FILE_EXTENSION );
+					const char* buildInfoFileRelative = tprintf( "%s\\.builder\\%s%s", pathFromSolutionToInputFile, options->solution.name, BUILD_INFO_FILE_EXTENSION );
 
 					const char* fullConfigName = config->options.name.c_str();
 
@@ -607,7 +603,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 		// .vcxproj.user
 		{
-			const char* projectPath = tprintf( "%s\\%s.vcxproj.user", visualStudioProjectFilesPath, paths_remove_path_from_file( project->name ) );
+			const char* projectPath = tprintf( "%s\\%s.vcxproj.user", visualStudioProjectFilesPath, projectNameNoFolder );
 
 			printf( "Generating %s ... ", projectPath );
 
@@ -671,7 +667,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 		// .vcxproj.filter
 		{
-			const char* projectPath = tprintf( "%s\\%s.vcxproj.filters", visualStudioProjectFilesPath, paths_remove_path_from_file( project->name ) );
+			const char* projectPath = tprintf( "%s\\%s.vcxproj.filters", visualStudioProjectFilesPath, projectNameNoFolder );
 
 			printf( "Generating %s ... ", projectPath );
 

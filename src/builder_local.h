@@ -81,6 +81,8 @@ struct buildContext_t {
 errorCode_t	GetLastErrorCode();
 
 bool8		PathHasSlash( const char* path );
+const char*	GetSlashInPath( const char* path );
+
 bool8		FileIsSourceFile( const char* filename );
 bool8		FileIsHeaderFile( const char* filename );
 void		GetAllSubfolders_r( const char* basePath, const char* folder, Array<const char*>* outSubfolders );

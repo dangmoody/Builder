@@ -1,8 +1,13 @@
 v0.6.0, <RELEASE DATE HERE>:
 
+* Visual Studio:
+	* Added support for project folders.  Projects that now have slashes in their names will cause Builder to put that project inside a project folder in the Solution Explorer.
+		* For example: If you set a VisualStudioProject::name to be "games/shooter" then Builder will create a project called "shooter" that is inside a project folder called "games".
+	* Fixed top-level files and some subfolders inside VisualStudioProject::code_folders not getting added to the Visual Studio project.
 * on_pre_build() and on_post_build() now always use the path of the input file as the CWD.
-	* This is to mirror functionality of other parts of Builder.
-* Fixed top-level files and some subfolders inside VisualStudioProject::code_folders not getting added to the Visual Studio project.
+* Refactored the system that reads and writes .build_info files.
+	* The old way used to be one system for reading the files and another for writing, but now it's one unified system that does both.
+	* This new system works with pre-existing .build_info files.
 
 ----------------------------------------------------------------
 

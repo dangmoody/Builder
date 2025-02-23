@@ -92,12 +92,6 @@ const char* paths_get_absolute_path( const char* file ) {
 }
 
 const char* paths_remove_file_from_path( const char* path ) {
-	const char* dot = strrchr( path, '.' );
-
-	if ( !dot ) {
-		return NULL;
-	}
-
 	const char* last_slash = get_last_slash( path );
 
 	if ( !last_slash ) {

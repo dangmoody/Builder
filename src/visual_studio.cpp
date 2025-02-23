@@ -36,6 +36,7 @@ SOFTWARE.
 #include "core/include/paths.h"
 #include "core/include/typecast.inl"
 #include "core/include/temp_storage.h"
+#include "core/include/hash.h"
 
 #ifdef _WIN64
 #include <Shlwapi.h>
@@ -43,7 +44,8 @@ SOFTWARE.
 
 
 // some project type guids are pre-determined by visual studio
-#define VISUAL_STUDIO_CPP_PROJECT_TYPE_GUID	"8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942"	// c++ project
+#define VISUAL_STUDIO_CPP_PROJECT_TYPE_GUID		"8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942"	// c++ project
+#define VISUAL_STUDIO_FOLDER_PROJECT_TYPE_GUID	"2150E333-8FDC-42A3-9474-1A3956D46DE8"	// project folder
 
 struct visualStudioFileFilter_t {
 	const char* pathFromVisualStudioToRootFolder;
@@ -119,9 +121,19 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 	assert( context->buildInfoFilename );
 	assert( options );
 
+	Array<const char*> projectFolders;
+	Array<u64> projectFoldersHashes;
+
+	struct projectParentMapping_t {
+		u64	projectIndex;
+		u64	parentIndex;
+	};
+
+	Array<projectParentMapping_t> projectParentMappings;
+
 	// TODO(DM):
 	//	18/11/2024: dont use abs path here
-	//	22/02/2024: when Core gets a string data structure use that here, because this is just as horrible as the other times you do this
+	//	22/02/2025: when Core gets a string data structure use that here, because this is just as horrible as the other times you do this
 	{
 		u64 buildInfoFilenameLength = strlen( context->inputFilePath ) + strlen( "\\.builder\\" ) + strlen( options->solution.name ) + strlen( BUILD_INFO_FILE_EXTENSION );
 
@@ -275,6 +287,69 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 			}
 		}
 
+		// if the project name has a slash in it then the user wants that project to be in a folder
+		// for example a project with the name "projects/games/shooter" means the user wants a project called "shooter" inside a folder called "games", which is in turn inside a folder called "projects"
+		// so split the string between slashes, and create project folders for each unique folder name that we find
+		{
+			const char* fullFolderPath = paths_remove_file_from_path( project->name );
+
+			if ( fullFolderPath ) {
+				u64 fullFolderPathHash = hash_string( fullFolderPath, 0 );
+
+				u64 folderIndex = U64_MAX;
+
+				For ( u64, folderHashIndex, 0, projectFoldersHashes.count ) {
+					if ( projectFoldersHashes[folderHashIndex] == fullFolderPathHash ) {
+						folderIndex = folderHashIndex;
+						break;
+					}
+				}
+
+				if ( folderIndex == U64_MAX ) {
+					projectFoldersHashes.add( fullFolderPathHash );
+
+					const char* folderStart = fullFolderPath;
+					const char* previousFolder = NULL;
+
+					u64 numFolders = 0;
+
+					while ( folderStart ) {
+						numFolders++;
+
+						const char* folderEnd = GetSlashInPath( folderStart );
+
+						if ( !folderEnd ) {
+							folderEnd = folderStart + strlen( folderStart );
+						}
+
+						u64 folderNameLength = cast( u64, folderEnd ) - cast( u64, folderStart );
+
+						char* folderName = cast( char*, mem_temp_alloc( ( folderNameLength ) + 1 * sizeof( char ) ) );	// + 1 for null terminator
+						strncpy( folderName, folderStart, folderNameLength );
+						folderName[folderNameLength] = 0;
+
+						projectFolders.add( folderName );
+						projectGuids.add( CreateVisualStudioGuid() );
+
+						folderIndex = projectFolders.count - 1;
+
+						// if there was a previous folder then add a mapping from this folder to that parent
+						if ( previousFolder ) {
+							u64 mappingIndex = options->solution.projects.size() + folderIndex;
+
+							projectParentMappings.add( { .projectIndex = mappingIndex, .parentIndex = mappingIndex - 1, } );
+						}
+
+						previousFolder = folderName;
+
+						folderStart = GetSlashInPath( folderEnd );
+					}
+				}
+
+				projectParentMappings.add( { .projectIndex = projectIndex, .parentIndex = options->solution.projects.size() + folderIndex } );
+			}
+		}
+
 		// get all the files that the project will know about
 		// the arrays in here get referred to multiple times throughout generating the files for the project
 		Array<visualStudioFileFilter_t> sourceFiles;
@@ -313,7 +388,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 		// .vcxproj
 		{
-			const char* projectPath = tprintf( "%s\\%s.vcxproj", visualStudioProjectFilesPath, project->name );
+			const char* projectPath = tprintf( "%s\\%s.vcxproj", visualStudioProjectFilesPath, paths_remove_path_from_file( project->name ) );
 
 			printf( "Generating %s ... ", projectPath );
 
@@ -532,7 +607,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 		// .vcxproj.user
 		{
-			const char* projectPath = tprintf( "%s\\%s.vcxproj.user", visualStudioProjectFilesPath, project->name );
+			const char* projectPath = tprintf( "%s\\%s.vcxproj.user", visualStudioProjectFilesPath, paths_remove_path_from_file( project->name ) );
 
 			printf( "Generating %s ... ", projectPath );
 
@@ -596,7 +671,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 		// .vcxproj.filter
 		{
-			const char* projectPath = tprintf( "%s\\%s.vcxproj.filters", visualStudioProjectFilesPath, project->name );
+			const char* projectPath = tprintf( "%s\\%s.vcxproj.filters", visualStudioProjectFilesPath, paths_remove_path_from_file( project->name ) );
 
 			printf( "Generating %s ... ", projectPath );
 
@@ -685,15 +760,23 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 		string_builder_appendf( &slnContent, "VisualStudioVersion = 17.7.34202.233\n" );		// TODO(DM): how do we query windows for this?
 		string_builder_appendf( &slnContent, "MinimunVisualStudioVersion = 10.0.40219.1\n" );	// TODO(DM): how do we query windows for this?
 
-		// generate project dependencies
+		// project GUIDs
 		For ( u64, projectIndex, 0, options->solution.projects.size() ) {
 			VisualStudioProject* project = &options->solution.projects[projectIndex];
 
-			string_builder_appendf( &slnContent, "Project(\"{%s}\") = \"%s\", \"%s.vcxproj\", \"{%s}\"\n", VISUAL_STUDIO_CPP_PROJECT_TYPE_GUID, project->name, project->name, projectGuids[projectIndex] );
-			// TODO: project dependencies go here and look like this:
-			//	ProjectSection(ProjectDependencies) = postProject
-			//		{NAME_GUID} = {NAME_GUID}
-			//	EndProjectSection
+			const char* projectName = paths_remove_path_from_file( project->name );
+
+			string_builder_appendf( &slnContent, "Project(\"{%s}\") = \"%s\", \"%s.vcxproj\", \"{%s}\"\n", VISUAL_STUDIO_CPP_PROJECT_TYPE_GUID, projectName, projectName, projectGuids[projectIndex] );
+			string_builder_appendf( &slnContent, "EndProject\n" );
+		}
+
+		// project folder GUIDs
+		For ( u64, projectFolderIndex, 0, projectFolders.count ) {
+			const char* folderName = projectFolders[projectFolderIndex];
+
+			u64 folderGuidIndex = options->solution.projects.size() + projectFolderIndex;
+
+			string_builder_appendf( &slnContent, "Project(\"{%s}\") = \"%s\", \"%s\", \"{%s}\"\n", VISUAL_STUDIO_FOLDER_PROJECT_TYPE_GUID, folderName, folderName, projectGuids[folderGuidIndex] );
 			string_builder_appendf( &slnContent, "EndProject\n" );
 		}
 
@@ -727,10 +810,12 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 					For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
 						const char* platform = options->solution.platforms[platformIndex];
 
+						const char* projectGuid = projectGuids[projectIndex];
+
 						// TODO: the first config and platform in this line are actually the ones that the PROJECT has, not the SOLUTION
 						// but we dont use those, and we should
-						string_builder_appendf( &slnContent, "\t\t{%s}.%s|%s.ActiveCfg = %s|%s\n", projectGuids[projectIndex], config->name, platform, config->name, platform );
-						string_builder_appendf( &slnContent, "\t\t{%s}.%s|%s.Build.0 = %s|%s\n", projectGuids[projectIndex], config->name, platform, config->name, platform );
+						string_builder_appendf( &slnContent, "\t\t{%s}.%s|%s.ActiveCfg = %s|%s\n", projectGuid, config->name, platform, config->name, platform );
+						string_builder_appendf( &slnContent, "\t\t{%s}.%s|%s.Build.0 = %s|%s\n", projectGuid, config->name, platform, config->name, platform );
 					}
 				}
 			}
@@ -740,6 +825,15 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 			// why would you ever want it to be hidden?
 			string_builder_appendf( &slnContent, "\tGlobalSection(SolutionProperties) = preSolution\n" );
 			string_builder_appendf( &slnContent, "\t\tHideSolutionNode = FALSE\n" );
+			string_builder_appendf( &slnContent, "\tEndGlobalSection\n" );
+
+			// which projects are in which project folders (if any)?
+			string_builder_appendf( &slnContent, "\tGlobalSection(NestedProjects) = preSolution\n" );
+			For ( u64, projectIndex, 0, projectParentMappings.count ) {
+				projectParentMapping_t* mapping = &projectParentMappings[projectIndex];
+
+				string_builder_appendf( &slnContent, "\t\t{%s} = {%s}\n", projectGuids[mapping->projectIndex], projectGuids[mapping->parentIndex] );
+			}
 			string_builder_appendf( &slnContent, "\tEndGlobalSection\n" );
 
 			//const char* solutionGUID = CreateVisualStudioGuid();

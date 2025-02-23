@@ -2225,6 +2225,11 @@ int main( int argc, char** argv ) {
 
 	if ( postBuildFunc ) {
 		printf( "Running post-build code...\n" );
+
+		const char* oldCWD = paths_get_current_working_directory();
+		SetCurrentDirectory( context.inputFilePath );
+		defer( SetCurrentDirectory( oldCWD ) );
+
 		postBuildFunc();
 	}
 

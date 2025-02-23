@@ -1,4 +1,4 @@
-v0.6.0, <RELEASE DATE HERE>:
+v0.6.0, 23/02/2025:
 
 * Visual Studio:
 	* Added support for project folders.  Projects that now have slashes in their names will cause Builder to put that project inside a project folder in the Solution Explorer.

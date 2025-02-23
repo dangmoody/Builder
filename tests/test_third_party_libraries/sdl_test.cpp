@@ -10,7 +10,7 @@ int main( int argc, char** argv ) {
 	( (void) argc );
 	( (void) argv );
 
-	SDL_Window* window = SDL_CreateWindow( "This window will destroy itself in 3 seconds", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, SDL_WINDOW_SHOWN );
+	SDL_Window* window = SDL_CreateWindow( "SDL (window will destroy itself in 3 seconds)", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, SDL_WINDOW_SHOWN );
 
 	if ( !window ) {
 		printf( "Failed to create Window: %s\n", SDL_GetError() );

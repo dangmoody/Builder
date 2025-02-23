@@ -25,5 +25,5 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 }
 
 BUILDER_CALLBACK void on_post_build() {
-	copy_file( "tests\\test_third_party_libraries\\SDL2\\lib\\SDL2.dll", "tests\\test_third_party_libraries\\bin\\SDL2.dll" );
+	copy_file( "SDL2\\lib\\SDL2.dll", "bin\\SDL2.dll" );
 }

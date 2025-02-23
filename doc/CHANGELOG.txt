@@ -1,5 +1,7 @@
 v0.6.0, <RELEASE DATE HERE>:
 
+* on_pre_build() and on_post_build() now always use the path of the input file as the CWD.
+	* This is to mirror functionality of other parts of Builder.
 * Fixed top-level files and some subfolders inside VisualStudioProject::code_folders not getting added to the Visual Studio project.
 
 ----------------------------------------------------------------

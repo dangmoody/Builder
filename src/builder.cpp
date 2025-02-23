@@ -2018,6 +2018,11 @@ int main( int argc, char** argv ) {
 
 	if ( preBuildFunc ) {
 		printf( "Running pre-build code...\n" );
+
+		const char* oldCWD = paths_get_current_working_directory();
+		SetCurrentDirectory( context.inputFilePath );
+		defer( SetCurrentDirectory( oldCWD ) );
+
 		preBuildFunc();
 	}
 

@@ -6,7 +6,8 @@ int main( int argc, char** argv ) {
 	( (void) argc );
 	( (void) argv );
 
-	printf( "Hello world.\n" );
+	Library1_SayHello();
+	Library2_SayHello();
 
 	return 69420;
 }

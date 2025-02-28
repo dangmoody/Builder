@@ -93,3 +93,7 @@ void		BuildConfig_AddDefaults( BuildConfig* outConfig );
 void		BuildInfo_Write( const buildContext_t* context, const std::vector<BuildConfig>& configs, const char* userConfigSourceFilename, const char* userConfigDLLFilename, const bool8 verbose );
 
 bool8		GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* options, const char* userConfigSourceFilename, const char* userConfigBuildDLLFilename, const bool8 verbose );
+
+inline u64 minull( const u64 x, const u64 y ) {
+	return ( x < y ) ? x : y;
+}

@@ -60,7 +60,7 @@ SOFTWARE.
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
 	BUILDER_VERSION_MINOR	= 6,
-	BUILDER_VERSION_PATCH	= 0,
+	BUILDER_VERSION_PATCH	= 1,
 };
 
 #define CLANG_VERSION	"18.1.8"
@@ -103,10 +103,6 @@ errorCode_t GetLastErrorCode() {
 #else
 #error Unrecognised platform!
 #endif
-}
-
-static u64 maxull( const u64 x, const u64 y ) {
-	return ( x < y ) ? x : y;
 }
 
 static const char* GetFileExtensionFromBinaryType( BinaryType type ) {

@@ -37,6 +37,7 @@ SOFTWARE.
 #include "core/include/typecast.inl"
 #include "core/include/temp_storage.h"
 #include "core/include/hash.h"
+#include "core/include/debug.h"
 
 #ifdef _WIN64
 #include <Shlwapi.h>
@@ -48,12 +49,11 @@ SOFTWARE.
 #define VISUAL_STUDIO_FOLDER_PROJECT_TYPE_GUID	"2150E333-8FDC-42A3-9474-1A3956D46DE8"	// project folder
 
 struct visualStudioFileFilter_t {
-	const char* pathFromVisualStudioToRootFolder;
-	const char* folder;	// relative from the root code folder that it was found in
-	const char* filename;
+	const char* filenameAndPathFromRoot;
+	const char* folderInFilter;	// relative from the root code folder that it was found in
 };
 
-static void GetAllVisualStudioFiles_r( const char* basePath, const char* subfolder, const std::vector<const char*> fileExtensions, Array<visualStudioFileFilter_t>& outFilterFiles ) {
+static void GetAllVisualStudioFiles_r( buildContext_t* context, const char* solutionFilename, const char* basePath, const char* subfolder, const std::vector<const char*> fileExtensions, Array<visualStudioFileFilter_t>& outFilterFiles ) {
 	const char* fullSearchPath = NULL;
 
 	if ( string_ends_with( basePath, "\\" ) || string_ends_with( basePath, "/" ) ) {
@@ -90,13 +90,23 @@ static void GetAllVisualStudioFiles_r( const char* basePath, const char* subfold
 				folderName = tprintf( "%s", fileInfo.filename );
 			}
 
-			GetAllVisualStudioFiles_r( basePath, folderName, fileExtensions, outFilterFiles );
+			GetAllVisualStudioFiles_r( context, solutionFilename, basePath, folderName, fileExtensions, outFilterFiles );
 		} else {
-			const char* filename = tprintf( "%s", fileInfo.filename );
-
 			For ( u64, fileExtensionIndex, 0, fileExtensions.size() ) {
-				if ( string_ends_with( filename, fileExtensions[fileExtensionIndex] ) ) {
-					outFilterFiles.add( { NULL, subfolder, filename } );
+				if ( string_ends_with( fileInfo.filename, fileExtensions[fileExtensionIndex] ) ) {
+					const char* filenameAndPathFromRoot = NULL;
+					if ( subfolder ) {
+						filenameAndPathFromRoot = tprintf( "%s\\%s", subfolder, fileInfo.filename );
+					} else {
+						filenameAndPathFromRoot = tprintf( "%s", fileInfo.filename );
+					}
+
+					visualStudioFileFilter_t filterFile = {
+						.filenameAndPathFromRoot	= filenameAndPathFromRoot,
+						.folderInFilter				= subfolder,
+					};
+
+					outFilterFiles.add( filterFile );
 					break;
 				}
 			}
@@ -364,23 +374,74 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 		Array<visualStudioFileFilter_t> headerFiles;
 		Array<visualStudioFileFilter_t> otherFiles;
 
-		{
-			For ( u64, folderIndex, 0, project->code_folders.size() ) {
-				const char* folder = project->code_folders[folderIndex];
+		Array<const char*> filterPaths;
 
-				const char* pathFromSolutionToCode = tprintf( "%s\\%s", pathFromSolutionToInputFile, folder );
+		// get every single file from all the code_folder entries that the user specified
+		// only get the ones that have the file extensions the user asked for
+		// also get the folder that the file lives in relative to the code_folder and add that to a list which we will use for generating the .vcxproj.filter file later on
+		{
+			auto AddUniquePath = [&filterPaths]( const char* path ) {
+				bool8 found = false;
+
+				For ( u64, filterPathIndex, 0, filterPaths.count ) {
+					if ( string_equals( path, filterPaths[filterPathIndex] ) ) {
+						found = true;
+						break;
+					}
+				}
+
+				if ( !found ) {
+					filterPaths.add( path );
+				}
+			};
+
+			const char* pathFromSolutionToCode = pathFromSolutionToInputFile;
+
+			For ( u64, folderIndex, 0, project->code_folders.size() ) {
+				const char* codeFolder = project->code_folders[folderIndex];
 
 				Array<visualStudioFileFilter_t> filterFiles;
-				GetAllVisualStudioFiles_r( tprintf( "%s\\%s", context->inputFilePath, folder ), NULL, project->file_extensions, filterFiles );
+				GetAllVisualStudioFiles_r( context, solutionFilename, context->inputFilePath, codeFolder, project->file_extensions, filterFiles );
 
-				For ( u64, i, 0, filterFiles.count ) {
-					visualStudioFileFilter_t* fileFilter = &filterFiles[i];
+				For ( u64, filterFileIndex, 0, filterFiles.count ) {
+					visualStudioFileFilter_t* fileFilter = &filterFiles[filterFileIndex];
 
-					fileFilter->pathFromVisualStudioToRootFolder = pathFromSolutionToCode;
+					// go through every subfolder, add to unique list of filter paths
+					{
+						const char* folder = fileFilter->folderInFilter;
+						folder = paths_fix_slashes( folder );
 
-					if ( FileIsSourceFile( fileFilter->filename ) ) {
+						u64 pathLength = strlen( folder );
+
+						const char* currentSlash = strchr( folder, '\\' );
+
+						/*if ( !currentSlash ) {
+							AddUniquePath( folder );
+						}*/
+
+						while ( currentSlash ) {
+							u64 filterPathLength = cast( u64, currentSlash ) - cast( u64, folder );
+							char* filterPath = cast( char*, mem_alloc( ( filterPathLength + 1 ) * sizeof( char ) ) );
+							memcpy( filterPath, folder, filterPathLength );
+							filterPath[filterPathLength] = 0;
+
+							AddUniquePath( filterPath );
+
+							const char* lastSlash = currentSlash + 1;
+							currentSlash = strchr( lastSlash, '\\' );
+
+							/*if ( !currentSlash ) {
+								AddUniquePath( folder );
+							}*/
+						}
+
+						// add whatever is left after the last slash we found
+						AddUniquePath( folder );
+					}
+
+					if ( FileIsSourceFile( fileFilter->filenameAndPathFromRoot ) ) {
 						sourceFiles.add( *fileFilter );
-					} else if ( FileIsHeaderFile( fileFilter->filename ) ) {
+					} else if ( FileIsHeaderFile( fileFilter->filenameAndPathFromRoot ) ) {
 						headerFiles.add( *fileFilter );
 					} else {
 						otherFiles.add( *fileFilter );
@@ -561,7 +622,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 			// tell visual studio what files we have in this project
 			// this is typically done via a filter (E.G: src/*.cpp)
 			{
-				auto WriteFilterFilesToVcxproj = []( StringBuilder* stringBuilder, const Array<visualStudioFileFilter_t>& files, const char* tag ) {
+				auto WriteFilterFilesToVcxproj = [pathFromSolutionToInputFile]( StringBuilder* stringBuilder, const Array<visualStudioFileFilter_t>& files, const char* tag ) {
 					if ( files.count == 0 ) {
 						return;
 					}
@@ -571,11 +632,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 					For ( u64, fileIndex, 0, files.count ) {
 						const visualStudioFileFilter_t* file = &files[fileIndex];
 
-						if ( file->folder ) {
-							string_builder_appendf( stringBuilder, "\t\t<%s Include=\"%s\\%s\\%s\" />\n", tag, file->pathFromVisualStudioToRootFolder, file->folder, file->filename );
-						} else {
-							string_builder_appendf( stringBuilder, "\t\t<%s Include=\"%s\\%s\" />\n", tag, file->pathFromVisualStudioToRootFolder, file->filename );
-						}
+						string_builder_appendf( stringBuilder, "\t\t<%s Include=\"%s\\%s\" />\n", tag, pathFromSolutionToInputFile, file->filenameAndPathFromRoot );
 					}
 
 					string_builder_appendf( stringBuilder, "\t</ItemGroup>\n" );
@@ -680,25 +737,15 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 			string_builder_appendf( &vcxprojContent, "\t<ItemGroup>\n" );
 
 			// write all filter guids
-			For ( u64, folderIndex, 0, project->code_folders.size() ) {
-				const char* folder = project->code_folders[folderIndex];
+			For ( u64, filterPathIndex, 0, filterPaths.count ) {
+				const char* filterPath = filterPaths[filterPathIndex];
+				filterPath = paths_fix_slashes( filterPath );
 
-				Array<const char*> subfolders;
-				GetAllSubfolders_r( tprintf( "%s\\%s", context->inputFilePath, folder ), NULL, &subfolders );
+				const char* guid = CreateVisualStudioGuid();
 
-				For ( u64, subfolderIndex, 0, subfolders.count ) {
-					subfolders[subfolderIndex] = paths_fix_slashes( subfolders[subfolderIndex] );
-				}
-
-				For ( u64, subfolderIndex, 0, subfolders.count ) {
-					const char* subfolder = subfolders[subfolderIndex];
-
-					const char* guid = CreateVisualStudioGuid();
-
-					string_builder_appendf( &vcxprojContent, "\t\t<Filter Include=\"%s\">\n", subfolder );
-					string_builder_appendf( &vcxprojContent, "\t\t\t<UniqueIdentifier>{%s}</UniqueIdentifier>\n", guid );
-					string_builder_appendf( &vcxprojContent, "\t\t</Filter>\n" );
-				}
+				string_builder_appendf( &vcxprojContent, "\t\t<Filter Include=\"%s\">\n", filterPath );
+				string_builder_appendf( &vcxprojContent, "\t\t\t<UniqueIdentifier>{%s}</UniqueIdentifier>\n", guid );
+				string_builder_appendf( &vcxprojContent, "\t\t</Filter>\n" );
 			}
 
 			string_builder_appendf( &vcxprojContent, "\t</ItemGroup>\n" );
@@ -706,7 +753,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 			// now put all files in the filter
 			// visual studio requires that we list each file by type
 			{
-				auto WriteFileFilters = []( StringBuilder* stringBuilder, const Array<visualStudioFileFilter_t>& fileFilters, const char* tag ) {
+				auto WriteFileFilters = [pathFromSolutionToInputFile]( StringBuilder* stringBuilder, const Array<visualStudioFileFilter_t>& fileFilters, const char* tag ) {
 					if ( fileFilters.count == 0 ) {
 						return;
 					}
@@ -716,11 +763,11 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 					For ( u64, fileIndex, 0, fileFilters.count ) {
 						const visualStudioFileFilter_t* file = &fileFilters[fileIndex];
 
-						if ( file->folder == NULL ) {
-							string_builder_appendf( stringBuilder, "\t\t<%s Include=\"%s\\%s\" />\n", tag, file->pathFromVisualStudioToRootFolder, file->filename );
+						if ( file->folderInFilter == NULL ) {
+							string_builder_appendf( stringBuilder, "\t\t<%s Include=\"%s\\%s\" />\n", tag, pathFromSolutionToInputFile, file->filenameAndPathFromRoot );
 						} else {
-							string_builder_appendf( stringBuilder, "\t\t<%s Include=\"%s\\%s\\%s\">\n", tag, file->pathFromVisualStudioToRootFolder, file->folder, file->filename );
-							string_builder_appendf( stringBuilder, "\t\t\t<Filter>%s</Filter>\n", file->folder );
+							string_builder_appendf( stringBuilder, "\t\t<%s Include=\"%s\\%s\">\n", tag, pathFromSolutionToInputFile, file->filenameAndPathFromRoot );
+							string_builder_appendf( stringBuilder, "\t\t\t<Filter>%s</Filter>\n", paths_fix_slashes( file->folderInFilter ) );
 							string_builder_appendf( stringBuilder, "\t\t</%s>\n", tag );
 						}
 					}
@@ -824,13 +871,15 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 			string_builder_appendf( &slnContent, "\tEndGlobalSection\n" );
 
 			// which projects are in which project folders (if any)?
-			string_builder_appendf( &slnContent, "\tGlobalSection(NestedProjects) = preSolution\n" );
-			For ( u64, projectIndex, 0, projectParentMappings.count ) {
-				projectParentMapping_t* mapping = &projectParentMappings[projectIndex];
+			if ( projectParentMappings.count > 0 ) {
+				string_builder_appendf( &slnContent, "\tGlobalSection(NestedProjects) = preSolution\n" );
+				For ( u64, projectIndex, 0, projectParentMappings.count ) {
+					projectParentMapping_t* mapping = &projectParentMappings[projectIndex];
 
-				string_builder_appendf( &slnContent, "\t\t{%s} = {%s}\n", projectGuids[mapping->projectIndex], projectGuids[mapping->parentIndex] );
+					string_builder_appendf( &slnContent, "\t\t{%s} = {%s}\n", projectGuids[mapping->projectIndex], projectGuids[mapping->parentIndex] );
+				}
+				string_builder_appendf( &slnContent, "\tEndGlobalSection\n" );
 			}
-			string_builder_appendf( &slnContent, "\tEndGlobalSection\n" );
 
 			//const char* solutionGUID = CreateVisualStudioGuid();
 

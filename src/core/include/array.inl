@@ -101,7 +101,7 @@ Array<T>::Array( const Array<T>& other )
 	, alloced( 0 )
 	, allocator( NULL )
 {
-	copy( other );
+	copy( &other );
 }
 
 template<class T>

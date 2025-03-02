@@ -53,7 +53,7 @@ struct visualStudioFileFilter_t {
 	const char* folderInFilter;	// relative from the root code folder that it was found in
 };
 
-static void GetAllVisualStudioFiles_r( buildContext_t* context, const char* solutionFilename, const char* basePath, const char* subfolder, const std::vector<const char*> fileExtensions, Array<visualStudioFileFilter_t>& outFilterFiles ) {
+static void GetAllVisualStudioFiles_r( buildContext_t* context, const char* solutionFilename, const char* basePath, const char* subfolder, const std::vector<std::string>& fileExtensions, Array<visualStudioFileFilter_t>& outFilterFiles ) {
 	const char* fullSearchPath = NULL;
 
 	if ( string_ends_with( basePath, "\\" ) || string_ends_with( basePath, "/" ) ) {
@@ -93,7 +93,7 @@ static void GetAllVisualStudioFiles_r( buildContext_t* context, const char* solu
 			GetAllVisualStudioFiles_r( context, solutionFilename, basePath, folderName, fileExtensions, outFilterFiles );
 		} else {
 			For ( u64, fileExtensionIndex, 0, fileExtensions.size() ) {
-				if ( string_ends_with( fileInfo.filename, fileExtensions[fileExtensionIndex] ) ) {
+				if ( string_ends_with( fileInfo.filename, fileExtensions[fileExtensionIndex].c_str() ) ) {
 					const char* filenameAndPathFromRoot = NULL;
 					if ( subfolder ) {
 						filenameAndPathFromRoot = tprintf( "%s\\%s", subfolder, fileInfo.filename );
@@ -145,10 +145,10 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 	//	18/11/2024: dont use abs path here
 	//	22/02/2025: when Core gets a string data structure use that here, because this is just as horrible as the other times you do this
 	{
-		u64 buildInfoFilenameLength = strlen( context->inputFilePath ) + strlen( "\\.builder\\" ) + strlen( options->solution.name ) + strlen( BUILD_INFO_FILE_EXTENSION );
+		u64 buildInfoFilenameLength = strlen( context->inputFilePath ) + strlen( "\\.builder\\" ) + options->solution.name.size() + strlen( BUILD_INFO_FILE_EXTENSION );
 
 		char* buildInfoFilename = cast( char*, mem_alloc( buildInfoFilenameLength + 1 ) );	// + 1 for null terminator
-		sprintf( buildInfoFilename, "%s\\.builder\\%s%s", context->inputFilePath, options->solution.name, BUILD_INFO_FILE_EXTENSION );
+		sprintf( buildInfoFilename, "%s\\.builder\\%s%s", context->inputFilePath, options->solution.name.c_str(), BUILD_INFO_FILE_EXTENSION );
 		buildInfoFilename[buildInfoFilenameLength] = 0;
 
 		context->buildInfoFilename = buildInfoFilename;
@@ -156,7 +156,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 	// validate the solution
 	{
-		if ( options->solution.name == NULL ) {
+		if ( options->solution.name.empty() ) {
 			error( "You never set the name of the solution.  I need that.\n" );
 			return false;
 		}
@@ -183,7 +183,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 			};
 
 			For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
-				const char* platform = options->solution.platforms[platformIndex];
+				const char* platform = options->solution.platforms[platformIndex].c_str();
 
 				For ( u64, defaultPlatformIndex, 0, count_of( defaultPlatformNames ) ) {
 					const char* defaultPlatformName = defaultPlatformNames[defaultPlatformIndex];
@@ -212,14 +212,14 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 	}
 
 	const char* visualStudioProjectFilesPath = NULL;
-	if ( options->solution.path ) {
-		visualStudioProjectFilesPath = tprintf( "%s\\%s", context->inputFilePath, options->solution.path );
+	if ( !options->solution.path.empty() ) {
+		visualStudioProjectFilesPath = tprintf( "%s\\%s", context->inputFilePath, options->solution.path.c_str() );
 	} else {
 		visualStudioProjectFilesPath = context->inputFilePath;
 	}
 	visualStudioProjectFilesPath = paths_canonicalise_path( visualStudioProjectFilesPath );
 
-	const char* solutionFilename = tprintf( "%s\\%s.sln", visualStudioProjectFilesPath, options->solution.name );
+	const char* solutionFilename = tprintf( "%s\\%s.sln", visualStudioProjectFilesPath, options->solution.name.c_str() );
 
 	// get relative path from visual studio to the input file
 	char* pathFromSolutionToInputFile = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
@@ -263,18 +263,18 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 		// validate the project
 		{
-			if ( project->name == NULL ) {
+			if ( project->name.empty() ) {
 				error( "There is a Visual Studio Project that doesn't have a name here.  You need to fill that in.\n" );
 				return false;
 			}
 
 			if ( project->code_folders.size() == 0 ) {
-				error( "No code folders were provided for project \"%s\".  You need at least one.\n", project->name );
+				error( "No code folders were provided for project \"%s\".  You need at least one.\n", project->name.c_str() );
 				return false;
 			}
 
 			if ( project->file_extensions.size() == 0 ) {
-				error( "No file extensions/file types were provided for project \"%s\".  You need at least one.\n", project->name );
+				error( "No file extensions/file types were provided for project \"%s\".  You need at least one.\n", project->name.c_str() );
 				return false;
 			}
 
@@ -282,13 +282,13 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 			For ( u64, configIndex, 0, project->configs.size() ) {
 				VisualStudioConfig* config = &project->configs[configIndex];
 
-				if ( config->name == NULL ) {
-					error( "There is a config for project \"%s\" that doesn't have a name here.  You need to fill that in.\n", project->name );
+				if ( config->name.empty() ) {
+					error( "There is a config for project \"%s\" that doesn't have a name here.  You need to fill that in.\n", project->name.c_str() );
 					return false;
 				}
 
 				if ( config->options.name.empty() ) {
-					error( "There is a config for project \"%s\" that doesn't have a name set in it's BuildConfig.  You need to fill that in.\n", project->name );
+					error( "There is a config for project \"%s\" that doesn't have a name set in it's BuildConfig.  You need to fill that in.\n", project->name.c_str() );
 					return false;
 				}
 
@@ -296,20 +296,20 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 					error(
 						"Build config \"%s\" is an executable, but you never specified an output directory when generating the Visual Studio project \"%s\", config \"%s\".\n"
 						"Visual Studio needs this in order to know where to run the executable from when debugging.  You need to set this.\n"
-						, config->options.name.c_str(), project->name, config->name
+						, config->options.name.c_str(), project->name.c_str(), config->name.c_str()
 					);
 					return false;
 				}
 			}
 		}
 
-		const char* projectNameNoFolder = paths_remove_path_from_file( project->name );
+		const char* projectNameNoFolder = paths_remove_path_from_file( project->name.c_str() );
 
 		// if the project name has a slash in it then the user wants that project to be in a folder
 		// for example a project with the name "projects/games/shooter" means the user wants a project called "shooter" inside a folder called "games", which is in turn inside a folder called "projects"
 		// so split the string between slashes, and create project folders for each unique folder name that we find
 		{
-			const char* fullFolderPath = paths_remove_file_from_path( project->name );
+			const char* fullFolderPath = paths_remove_file_from_path( project->name.c_str() );
 
 			if ( fullFolderPath ) {
 				u64 fullFolderPathHash = hash_string( fullFolderPath, 0 );
@@ -398,7 +398,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 			const char* pathFromSolutionToCode = pathFromSolutionToInputFile;
 
 			For ( u64, folderIndex, 0, project->code_folders.size() ) {
-				const char* codeFolder = project->code_folders[folderIndex];
+				const char* codeFolder = project->code_folders[folderIndex].c_str();
 
 				Array<visualStudioFileFilter_t> filterFiles;
 				GetAllVisualStudioFiles_r( context, solutionFilename, context->inputFilePath, codeFolder, project->file_extensions, filterFiles );
@@ -469,11 +469,11 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 					VisualStudioConfig* config = &project->configs[configIndex];
 
 					For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
-						const char* platform = options->solution.platforms[platformIndex];
+						const char* platform = options->solution.platforms[platformIndex].c_str();
 
 						// TODO: Alternative targets
-						string_builder_appendf( &vcxprojContent, "\t\t<ProjectConfiguration Include=\"%s|%s\">\n", config->name, platform );
-						string_builder_appendf( &vcxprojContent, "\t\t\t<Configuration>%s</Configuration>\n", config->name );
+						string_builder_appendf( &vcxprojContent, "\t\t<ProjectConfiguration Include=\"%s|%s\">\n", config->name.c_str(), platform );
+						string_builder_appendf( &vcxprojContent, "\t\t\t<Configuration>%s</Configuration>\n", config->name.c_str() );
 						string_builder_appendf( &vcxprojContent, "\t\t\t<Platform>%s</Platform>\n", platform );
 						string_builder_appendf( &vcxprojContent, "\t\t</ProjectConfiguration>\n" );
 					}
@@ -513,9 +513,9 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 #pragma clang diagnostic pop
 
 				For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
-					const char* platform = options->solution.platforms[platformIndex];
+					const char* platform = options->solution.platforms[platformIndex].c_str();
 
-					string_builder_appendf( &vcxprojContent, "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\" Label=\"Configuration\">\n", config->name, platform );
+					string_builder_appendf( &vcxprojContent, "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\" Label=\"Configuration\">\n", config->name.c_str(), platform );
 					string_builder_appendf( &vcxprojContent, "\t\t<ConfigurationType>Makefile</ConfigurationType>\n" );
 					string_builder_appendf( &vcxprojContent, "\t\t<UseDebugLibraries>false</UseDebugLibraries>\n" );
 					string_builder_appendf( &vcxprojContent, "\t\t<PlatformToolset>v143</PlatformToolset>\n" );
@@ -537,9 +537,9 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 				VisualStudioConfig* config = &project->configs[configIndex];
 
 				For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
-					const char* platform = options->solution.platforms[platformIndex];
+					const char* platform = options->solution.platforms[platformIndex].c_str();
 
-					string_builder_appendf( &vcxprojContent, "\t<ImportGroup Label=\"PropertySheets\" Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">\n", config->name, platform );
+					string_builder_appendf( &vcxprojContent, "\t<ImportGroup Label=\"PropertySheets\" Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">\n", config->name.c_str(), platform );
 					string_builder_appendf( &vcxprojContent, "\t\t<Import Project=\"$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props\" Condition=\"exists(\'$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props\')\" Label=\"LocalAppDataPlatform\" />\n" );
 					string_builder_appendf( &vcxprojContent, "\t</ImportGroup>\n" );
 				}
@@ -560,9 +560,9 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 				VisualStudioConfig* config = &project->configs[configIndex];
 
 				For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
-					const char* platform = options->solution.platforms[platformIndex];
+					const char* platform = options->solution.platforms[platformIndex].c_str();
 
-					string_builder_appendf( &vcxprojContent, "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">\n", config->name, platform );
+					string_builder_appendf( &vcxprojContent, "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">\n", config->name.c_str(), platform );
 
 					// external include paths
 					string_builder_appendf( &vcxprojContent, "\t\t<ExternalIncludePath>" );
@@ -595,7 +595,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 					// output path
 					string_builder_appendf( &vcxprojContent, "\t\t<NMakeOutput>%s</NMakeOutput>\n", config->options.binary_folder.c_str() );
 
-					const char* buildInfoFileRelative = tprintf( "%s\\.builder\\%s%s", pathFromSolutionToInputFile, options->solution.name, BUILD_INFO_FILE_EXTENSION );
+					const char* buildInfoFileRelative = tprintf( "%s\\.builder\\%s%s", pathFromSolutionToInputFile, options->solution.name.c_str(), BUILD_INFO_FILE_EXTENSION );
 
 					const char* fullConfigName = config->options.name.c_str();
 
@@ -607,7 +607,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 					// preprocessor definitions
 					string_builder_appendf( &vcxprojContent, "\t\t<NMakePreprocessorDefinitions>" );
 					For ( u64, definitionIndex, 0, config->options.defines.size() ) {
-						string_builder_appendf( &vcxprojContent, tprintf( "%s;", config->options.defines[definitionIndex] ) );
+						string_builder_appendf( &vcxprojContent, tprintf( "%s;", config->options.defines[definitionIndex].c_str() ) );
 					}
 					string_builder_appendf( &vcxprojContent, "$(NMakePreprocessorDefinitions)" );
 					string_builder_appendf( &vcxprojContent, "</NMakePreprocessorDefinitions>\n" );
@@ -690,9 +690,9 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 					PathRelativePathTo( pathFromSolutionToBinary, from, FILE_ATTRIBUTE_NORMAL, to, FILE_ATTRIBUTE_DIRECTORY );
 
 					For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
-						const char* platform = options->solution.platforms[platformIndex];
+						const char* platform = options->solution.platforms[platformIndex].c_str();
 
-						string_builder_appendf( &vcxprojContent, "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">\n", config->name, platform );
+						string_builder_appendf( &vcxprojContent, "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">\n", config->name.c_str(), platform );
 						string_builder_appendf( &vcxprojContent, "\t\t<DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>\n" );	// TODO(DM): do want to include the other debugger types?
 						string_builder_appendf( &vcxprojContent, "\t\t<LocalDebuggerDebuggerType>Auto</LocalDebuggerDebuggerType>\n" );
 						string_builder_appendf( &vcxprojContent, "\t\t<LocalDebuggerAttach>false</LocalDebuggerAttach>\n" );
@@ -703,7 +703,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 						if ( config->debugger_arguments.size() > 0 ) {
 							string_builder_appendf( &vcxprojContent, "\t\t<LocalDebuggerCommandArguments>\n" );
 							For ( u64, argIndex, 0, config->debugger_arguments.size() ) {
-								string_builder_appendf( &vcxprojContent, "%s ", config->debugger_arguments[argIndex] );
+								string_builder_appendf( &vcxprojContent, "%s ", config->debugger_arguments[argIndex].c_str() );
 							}
 							string_builder_appendf( &vcxprojContent, "</LocalDebuggerCommandArguments>\n" );
 						}
@@ -807,7 +807,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 		For ( u64, projectIndex, 0, options->solution.projects.size() ) {
 			VisualStudioProject* project = &options->solution.projects[projectIndex];
 
-			const char* projectName = paths_remove_path_from_file( project->name );
+			const char* projectName = paths_remove_path_from_file( project->name.c_str() );
 
 			string_builder_appendf( &slnContent, "Project(\"{%s}\") = \"%s\", \"%s.vcxproj\", \"{%s}\"\n", VISUAL_STUDIO_CPP_PROJECT_TYPE_GUID, projectName, projectName, projectGuids[projectIndex] );
 			string_builder_appendf( &slnContent, "EndProject\n" );
@@ -834,9 +834,9 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 					VisualStudioConfig* config = &project->configs[configIndex];
 
 					For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
-						const char* platform = options->solution.platforms[platformIndex];
+						const char* platform = options->solution.platforms[platformIndex].c_str();
 
-						string_builder_appendf( &slnContent, tprintf( "\t\t%s|%s = %s|%s\n", config->name, platform, config->name, platform ) );
+						string_builder_appendf( &slnContent, tprintf( "\t\t%s|%s = %s|%s\n", config->name.c_str(), platform, config->name.c_str(), platform ) );
 					}
 				}
 			}
@@ -851,14 +851,14 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 					VisualStudioConfig* config = &project->configs[configIndex];
 
 					For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
-						const char* platform = options->solution.platforms[platformIndex];
+						const char* platform = options->solution.platforms[platformIndex].c_str();
 
 						const char* projectGuid = projectGuids[projectIndex];
 
 						// TODO: the first config and platform in this line are actually the ones that the PROJECT has, not the SOLUTION
 						// but we dont use those, and we should
-						string_builder_appendf( &slnContent, "\t\t{%s}.%s|%s.ActiveCfg = %s|%s\n", projectGuid, config->name, platform, config->name, platform );
-						string_builder_appendf( &slnContent, "\t\t{%s}.%s|%s.Build.0 = %s|%s\n", projectGuid, config->name, platform, config->name, platform );
+						string_builder_appendf( &slnContent, "\t\t{%s}.%s|%s.ActiveCfg = %s|%s\n", projectGuid, config->name.c_str(), platform, config->name.c_str(), platform );
+						string_builder_appendf( &slnContent, "\t\t{%s}.%s|%s.Build.0 = %s|%s\n", projectGuid, config->name.c_str(), platform, config->name.c_str(), platform );
 					}
 				}
 			}

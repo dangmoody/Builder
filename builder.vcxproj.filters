@@ -41,5 +41,8 @@
     <ClInclude Include="src\builder_local.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="builder.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

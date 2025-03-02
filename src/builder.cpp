@@ -60,7 +60,7 @@ SOFTWARE.
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
 	BUILDER_VERSION_MINOR	= 6,
-	BUILDER_VERSION_PATCH	= 1,
+	BUILDER_VERSION_PATCH	= 2,
 };
 
 #define CLANG_VERSION	"18.1.8"
@@ -212,12 +212,12 @@ static const char* BuildConfig_ToString( const BuildConfig* config ) {
 		string_builder_appendf( &builder, " }\n" );
 	}
 
-	PrintCStringArray( "source_files", config->source_files );
-	PrintCStringArray( "defines", config->defines );
+	PrintSTDStringArray( "source_files", config->source_files );
+	PrintSTDStringArray( "defines", config->defines );
 	PrintSTDStringArray( "additional_includes", config->additional_includes );
 	PrintSTDStringArray( "additional_lib_paths", config->additional_lib_paths );
-	PrintCStringArray( "additional_libs", config->additional_libs );
-	PrintCStringArray( "ignore_warnings", config->ignore_warnings );
+	PrintSTDStringArray( "additional_libs", config->additional_libs );
+	PrintSTDStringArray( "ignore_warnings", config->ignore_warnings );
 
 	PrintField( "binary_name", config->binary_name.c_str() );
 	PrintField( "binary_folder", config->binary_folder.c_str() );
@@ -380,7 +380,7 @@ static s32 BuildEXE( buildContext_t* context ) {
 	args.add( tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() ) );
 
 	For ( u64, sourceFileIndex, 0, context->config.source_files.size() ) {
-		if ( string_ends_with( context->config.source_files[sourceFileIndex], ".cpp" ) ) {
+		if ( string_ends_with( context->config.source_files[sourceFileIndex].c_str(), ".cpp" ) ) {
 			args.add( "-std=c++20" );
 			break;
 		}
@@ -395,10 +395,12 @@ static s32 BuildEXE( buildContext_t* context ) {
 	args.add( "-o" );
 	args.add( context->fullBinaryName );
 
-	args.add_range( context->config.source_files.data(), context->config.source_files.size() );
+	For ( u64, sourceFileIndex, 0, context->config.source_files.size() ) {
+		args.add( context->config.source_files[sourceFileIndex].c_str() );
+	}
 
 	For ( u32, defineIndex, 0, context->config.defines.size() ) {
-		args.add( tprintf( "-D%s", context->config.defines[defineIndex] ) );
+		args.add( tprintf( "-D%s", context->config.defines[defineIndex].c_str() ) );
 	}
 
 	For ( u32, includeIndex, 0, context->config.additional_includes.size() ) {
@@ -410,7 +412,7 @@ static s32 BuildEXE( buildContext_t* context ) {
 	}
 
 	For ( u32, libIndex, 0, context->config.additional_libs.size() ) {
-		args.add( tprintf( "-l%s", context->config.additional_libs[libIndex] ) );
+		args.add( tprintf( "-l%s", context->config.additional_libs[libIndex].c_str() ) );
 	}
 
 	// must come before ignored warnings
@@ -423,8 +425,8 @@ static s32 BuildEXE( buildContext_t* context ) {
 	args.add( "-Wextra" );
 	args.add( "-Wpedantic" );
 
-	if ( context->config.ignore_warnings.size() > 0 ) {
-		args.add_range( context->config.ignore_warnings.data(), context->config.ignore_warnings.size() );
+	For ( u64, ignoreWarningIndex, 0, context->config.ignore_warnings.size() ) {
+		args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
 	}
 
 	//args.add( NULL );
@@ -463,7 +465,7 @@ static s32 BuildDynamicLibrary( buildContext_t* context ) {
 	args.add( "-shared" );
 
 	For ( u64, sourceFileIndex, 0, context->config.source_files.size() ) {
-		if ( string_ends_with( context->config.source_files[sourceFileIndex], ".cpp" ) ) {
+		if ( string_ends_with( context->config.source_files[sourceFileIndex].c_str(), ".cpp" ) ) {
 			args.add( "-std=c++20" );
 			break;
 		}
@@ -478,10 +480,12 @@ static s32 BuildDynamicLibrary( buildContext_t* context ) {
 	args.add( "-o" );
 	args.add( context->fullBinaryName );
 
-	args.add_range( context->config.source_files.data(), context->config.source_files.size() );
+	For ( u64, sourceFileIndex, 0, context->config.source_files.size() ) {
+		args.add( context->config.source_files[sourceFileIndex].c_str() );
+	}
 
 	For ( u32, defineIndex, 0, context->config.defines.size() ) {
-		args.add( tprintf( "-D%s", context->config.defines[defineIndex] ) );
+		args.add( tprintf( "-D%s", context->config.defines[defineIndex].c_str() ) );
 	}
 
 	For ( u32, includeIndex, 0, context->config.additional_includes.size() ) {
@@ -493,7 +497,7 @@ static s32 BuildDynamicLibrary( buildContext_t* context ) {
 	}
 
 	For ( u32, libIndex, 0, context->config.additional_libs.size() ) {
-		args.add( tprintf( "-l%s", context->config.additional_libs[libIndex] ) );
+		args.add( tprintf( "-l%s", context->config.additional_libs[libIndex].c_str() ) );
 	}
 
 	// must come before ignored warnings
@@ -506,8 +510,8 @@ static s32 BuildDynamicLibrary( buildContext_t* context ) {
 	args.add( "-Wextra" );
 	args.add( "-Wpedantic" );
 
-	if ( context->config.ignore_warnings.size() > 0 ) {
-		args.add_range( context->config.ignore_warnings.data(), context->config.ignore_warnings.size() );
+	For ( u64, ignoreWarningIndex, 0, context->config.ignore_warnings.size() ) {
+		args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
 	}
 
 	bool8 showArgs = context->flags & BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS;
@@ -549,16 +553,16 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 
 	// build .o files of all compilation units
 	For ( u64, sourceFileIndex, 0, context->config.source_files.size() ) {
-		const char* sourceFile = context->config.source_files[sourceFileIndex];
+		const char* sourceFile = context->config.source_files[sourceFileIndex].c_str();
 
 		args.reset();
 
 		args.add( tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() ) );
 		args.add( "-c" );
 
-		if ( string_ends_with( context->config.source_files[sourceFileIndex], ".cpp" ) ) { // TODO(DM): 04/01/2025: IsSourceFile( sourceFile )
+		if ( string_ends_with( sourceFile, ".cpp" ) ) { // TODO(DM): 04/01/2025: IsSourceFile( sourceFile )
 			args.add( "-std=c++20" );
-		} else if ( string_ends_with( context->config.source_files[sourceFileIndex], ".c" ) ) {
+		} else if ( string_ends_with( sourceFile, ".c" ) ) {
 			args.add( "-std=c99" );
 		} else {
 			assertf( false, "Something went really wrong.\n" );
@@ -572,7 +576,7 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 		args.add( OptimizationLevelToString( context->config.optimization_level ) );
 
 		{
-			const char* sourceFileTrimmed = context->config.source_files[sourceFileIndex];
+			const char* sourceFileTrimmed = sourceFile;
 			sourceFileTrimmed = strrchr( sourceFileTrimmed, '\\' ) + 1;
 
 			const char* outArg = tprintf( "%s\\%s.o", context->config.binary_folder.c_str(), sourceFileTrimmed );
@@ -585,7 +589,7 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 		args.add( sourceFile );
 
 		For ( u32, defineIndex, 0, context->config.defines.size() ) {
-			args.add( tprintf( "-D%s", context->config.defines[defineIndex] ) );
+			args.add( tprintf( "-D%s", context->config.defines[defineIndex].c_str() ) );
 		}
 
 		For ( u32, includeIndex, 0, context->config.additional_includes.size() ) {
@@ -602,8 +606,8 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 		args.add( "-Wextra" );
 		args.add( "-Wpedantic" );
 
-		if ( context->config.ignore_warnings.size() > 0 ) {
-			args.add_range( context->config.ignore_warnings.data(), context->config.ignore_warnings.size() );
+		For ( u64, ignoreWarningIndex, 0, context->config.ignore_warnings.size() ) {
+			args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
 		}
 
 		exitCode = RunProc( &args, NULL, showArgs, showStdout );
@@ -774,7 +778,7 @@ static void FindAllFilesInFolder_r( const char* basePath, const char* folder, co
 	} while ( file_find_next( &file, &fileInfo ) );
 }
 
-static void GetAllSourceFiles_r( const char* basePath, const char* folder, const char* searchFilter, std::vector<const char*>* outSourceFiles ) {
+static void GetAllSourceFiles_r( const char* basePath, const char* folder, const char* searchFilter, std::vector<std::string>& outSourceFiles ) {
 	// find all files in current directory
 	{
 		const char* fullSearchPath = NULL;
@@ -800,7 +804,7 @@ static void GetAllSourceFiles_r( const char* basePath, const char* folder, const
 					fullName = tprintf( "%s", fileInfo.filename );
 				}
 
-				outSourceFiles->push_back( fullName );
+				outSourceFiles.push_back( fullName );
 			} while ( file_find_next( &firstFile, &fileInfo ) );
 		}
 	}
@@ -886,22 +890,22 @@ void GetAllSubfolders_r( const char* basePath, const char* folder, Array<const c
 	} while ( file_find_next( &file, &fileInfo ) );
 }
 
-static std::vector<const char*> BuildConfig_GetAllSourceFiles( const buildContext_t* context, const BuildConfig* config ) {
-	std::vector<const char*> sourceFiles;
+static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContext_t* context, const BuildConfig* config ) {
+	std::vector<std::string> sourceFiles;
 
 	For ( u64, sourceFileIndex, 0, config->source_files.size() ) {
-		const char* sourceFile = config->source_files[sourceFileIndex];
+		const char* sourceFile = config->source_files[sourceFileIndex].c_str();
 
 		bool8 inputFileIsSameAsSourceFile = string_equals( sourceFile, context->inputFile );
 
 		const char* sourceFileNoPath = paths_remove_path_from_file( sourceFile );
 
 		if ( inputFileIsSameAsSourceFile ) {
-			GetAllSourceFiles_r( context->inputFilePath, NULL, sourceFileNoPath, &sourceFiles );
+			GetAllSourceFiles_r( context->inputFilePath, NULL, sourceFileNoPath, sourceFiles );
 		} else {
 			const char* sourceFilePath = paths_remove_file_from_path( sourceFile );
 
-			GetAllSourceFiles_r( context->inputFilePath, sourceFilePath, sourceFileNoPath, &sourceFiles );
+			GetAllSourceFiles_r( context->inputFilePath, sourceFilePath, sourceFileNoPath, sourceFiles );
 		}
 	}
 
@@ -910,25 +914,26 @@ static std::vector<const char*> BuildConfig_GetAllSourceFiles( const buildContex
 
 // include paths can be wrong and therefore those files cant be resolved (the user writes a path to an include that doesnt exist) but we shouldnt crash if thats the case
 // that should be handled by the compiler which throws the proper error
-static void GetAllIncludedFiles( const buildContext_t* context, const BuildConfig* config, const bool8 verbose, Array<const char*>* outBuildInfoFiles ) {
-	std::vector<const char*> sourceFiles = BuildConfig_GetAllSourceFiles( context, config );
+static void GetAllIncludedFiles( const buildContext_t* context, const BuildConfig* config, const bool8 verbose, std::vector<std::string>& outBuildInfoFiles ) {
+	std::vector<std::string> sourceFiles = BuildConfig_GetAllSourceFiles( context, config );
 
-	outBuildInfoFiles->reserve( sourceFiles.size() );
+	Array<std::string> buildInfoFiles;
+	buildInfoFiles.reserve( sourceFiles.size() );
 
 	// for each file, open it and get every include inside it
 	// then go through _those_ included files
 	For ( u64, sourceFileIndex, 0, sourceFiles.size() ) {
-		const char* sourceFile = sourceFiles[sourceFileIndex];
+		const std::string& sourceFile = sourceFiles[sourceFileIndex];
 
 		const char* sourceFileWithInputFilePath = NULL;
-		if ( paths_is_path_absolute( sourceFile ) ) {
-			sourceFileWithInputFilePath = sourceFile;
+		if ( paths_is_path_absolute( sourceFile.c_str() ) ) {
+			sourceFileWithInputFilePath = sourceFile.c_str();
 		} else {
-			sourceFileWithInputFilePath = tprintf( "%s\\%s", context->inputFilePath, sourceFile );
+			sourceFileWithInputFilePath = tprintf( "%s\\%s", context->inputFilePath, sourceFile.c_str() );
 		}
 
 		//const char* sourceFilePath = paths_remove_file_from_path( sourceFileWithInputFilePath );
-		const char* sourceFilePath = paths_remove_file_from_path( sourceFile );
+		const char* sourceFilePath = paths_remove_file_from_path( sourceFile.c_str() );
 		const char* sourceFileNoPath = paths_remove_path_from_file( sourceFileWithInputFilePath );
 
 		char* fileBuffer = NULL;
@@ -937,14 +942,14 @@ static void GetAllIncludedFiles( const buildContext_t* context, const BuildConfi
 
 		if ( !read ) {
 			if ( verbose ) {
-				warning( "Tried to read the file \"%s\", but I couldn't.  Therefore I can't resolve includes for this file.\n", sourceFile );
+				warning( "Tried to read the file \"%s\", but I couldn't.  Therefore I can't resolve includes for this file.\n", sourceFile.c_str() );
 			}
 			continue;
 		}
 
 		defer( file_free_buffer( &fileBuffer ) );
 
-		outBuildInfoFiles->add( sourceFile );
+		outBuildInfoFiles.push_back( sourceFile );
 
 		char* seek = fileBuffer;
 
@@ -993,7 +998,7 @@ static void GetAllIncludedFiles( const buildContext_t* context, const BuildConfi
 
 					bool8 found = false;
 					For ( u64, fileIndex, 0, sourceFiles.size() ) {
-						if ( string_equals( sourceFiles[fileIndex], filename ) ) {
+						if ( string_equals( sourceFiles[fileIndex].c_str(), filename ) ) {
 							found = true;
 							break;
 						}
@@ -1031,7 +1036,7 @@ static void GetAllIncludedFiles( const buildContext_t* context, const BuildConfi
 					if ( fullFilename ) {
 						bool8 found = false;
 						For ( u64, fileIndex, 0, sourceFiles.size() ) {
-							if ( string_equals( sourceFiles[fileIndex], fullFilename ) ) {
+							if ( string_equals( sourceFiles[fileIndex].c_str(), fullFilename ) ) {
 								found = true;
 								break;
 							}
@@ -1266,12 +1271,12 @@ static bool8 BuildInfo_Read( const char* buildInfoFilename, buildInfoFileData_t*
 					}
 				}
 
-				config->source_files = ByteBuffer_Read_CStringArray( &buffer );
-				config->defines = ByteBuffer_Read_CStringArray( &buffer );
+				config->source_files = ByteBuffer_Read_STDStringArray( &buffer );
+				config->defines = ByteBuffer_Read_STDStringArray( &buffer );
 				config->additional_includes = ByteBuffer_Read_STDStringArray( &buffer );
 				config->additional_lib_paths = ByteBuffer_Read_STDStringArray( &buffer );
-				config->additional_libs = ByteBuffer_Read_CStringArray( &buffer );
-				config->ignore_warnings = ByteBuffer_Read_CStringArray( &buffer );
+				config->additional_libs = ByteBuffer_Read_STDStringArray( &buffer );
+				config->ignore_warnings = ByteBuffer_Read_STDStringArray( &buffer );
 
 				ByteBuffer_Read_StringField( &buffer, NULL, &config->binary_name );
 				ByteBuffer_Read_StringField( &buffer, NULL, &config->binary_folder );
@@ -1338,6 +1343,8 @@ static bool8 BuildInfo_Read( const char* buildInfoFilename, buildInfoFileData_t*
 }
 
 void BuildInfo_Write( const buildContext_t* context, const std::vector<BuildConfig>& configs, const char* userConfigSourceFilename, const char* userConfigDLLFilename, const bool8 verbose ) {
+	printf( "Writing \"%s\"...\n", context->buildInfoFilename );
+
 	byteBuffer_t buffer = {};
 
 	ByteBuffer_Write_CString( &buffer, "builder_version:\n" );
@@ -1369,12 +1376,12 @@ void BuildInfo_Write( const buildContext_t* context, const std::vector<BuildConf
 			}
 		}
 
-		ByteBuffer_Write_CStringArray( &buffer, config->source_files, "source_files" );
-		ByteBuffer_Write_CStringArray( &buffer, config->defines, "defines" );
+		ByteBuffer_Write_STDStringArray( &buffer, config->source_files, "source_files" );
+		ByteBuffer_Write_STDStringArray( &buffer, config->defines, "defines" );
 		ByteBuffer_Write_STDStringArray( &buffer, config->additional_includes, "additional_includes" );
 		ByteBuffer_Write_STDStringArray( &buffer, config->additional_lib_paths, "additional_lib_paths" );
-		ByteBuffer_Write_CStringArray( &buffer, config->additional_libs, "additional_libs" );
-		ByteBuffer_Write_CStringArray( &buffer, config->ignore_warnings, "ignore_warnings" );
+		ByteBuffer_Write_STDStringArray( &buffer, config->additional_libs, "additional_libs" );
+		ByteBuffer_Write_STDStringArray( &buffer, config->ignore_warnings, "ignore_warnings" );
 
 		ByteBuffer_Write_StringField( &buffer, "binary_name", config->binary_name.c_str() );
 		ByteBuffer_Write_StringField( &buffer, "binary_folder", config->binary_folder.c_str() );
@@ -1403,14 +1410,14 @@ void BuildInfo_Write( const buildContext_t* context, const std::vector<BuildConf
 
 		// serialize all included files and their last write time
 		{
-			Array<const char*> buildInfoFiles;
-			GetAllIncludedFiles( context, config, verbose, &buildInfoFiles );
+			std::vector<std::string> buildInfoFiles;
+			GetAllIncludedFiles( context, config, verbose, buildInfoFiles );
 
 			ByteBuffer_Write_CString( &buffer, "tracked_source_files\n" );
-			ByteBuffer_Write_U64( &buffer, buildInfoFiles.count );
+			ByteBuffer_Write_U64( &buffer, buildInfoFiles.size() );
 
-			For ( u64, buildInfoFileIndex, 0, buildInfoFiles.count ) {
-				const char* buildInfoFile = buildInfoFiles[buildInfoFileIndex];
+			For ( u64, buildInfoFileIndex, 0, buildInfoFiles.size() ) {
+				const char* buildInfoFile = buildInfoFiles[buildInfoFileIndex].c_str();
 
 				const char* buildInfoFileAndPath = buildInfoFile;
 				if ( !paths_is_path_absolute( buildInfoFileAndPath ) ) {
@@ -2184,7 +2191,7 @@ int main( int argc, char** argv ) {
 		} else {
 			// otherwise the user told us to build other source files, so go find and build those instead
 			// keep this as a std::vector because this gets fed back into BuilderOptions::source_files
-			std::vector<const char*> finalSourceFilesToBuild = BuildConfig_GetAllSourceFiles( &context, &context.config );
+			std::vector<std::string> finalSourceFilesToBuild = BuildConfig_GetAllSourceFiles( &context, &context.config );
 
 			// at this point its totally acceptable for finalSourceFilesToBuild to be empty
 			// this is because the compiler should be the one that tells the user they specified no valid source files to build with
@@ -2193,7 +2200,7 @@ int main( int argc, char** argv ) {
 			// the .build_info file wont store the full paths to the source files because the input path can change depending on whether we're building via visual studio or from the command line
 			// so we need to reconstruct the full paths to the source files ourselves
 			For ( u64, sourceFileIndex, 0, finalSourceFilesToBuild.size() ) {
-				finalSourceFilesToBuild[sourceFileIndex] = tprintf( "%s\\%s", context.inputFilePath, finalSourceFilesToBuild[sourceFileIndex] );
+				finalSourceFilesToBuild[sourceFileIndex] = tprintf( "%s\\%s", context.inputFilePath, finalSourceFilesToBuild[sourceFileIndex].c_str() );
 			}
 
 			context.config.source_files = finalSourceFilesToBuild;

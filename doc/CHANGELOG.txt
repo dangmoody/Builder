@@ -1,3 +1,11 @@
+v0.6.2, 02/03/2025:
+
+* Change all std::vector<const char*> in builder.h to std::vector<std::string>.
+	* It's totally feasible that users want to set those fields dynamically, so that necessitated this change.
+* Log when writing to .build_info file.
+
+----------------------------------------------------------------
+
 v0.6.1, 28/02/2025:
 
 * Fixed Visual Studio filters still not showing correctly.

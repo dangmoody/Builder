@@ -61,11 +61,11 @@ struct BuildConfig {
 	// The source files that you want to build.
 	// Any files/paths you add to this will be made relative to the .cpp file you passed in via the command line.
 	// Supports paths and wildcards.
-	std::vector<const char*>	source_files;
+	std::vector<std::string>	source_files;
 
 	// Additional #defines to set for Clang.
 	// Example: IS_AWESOME=1.
-	std::vector<const char*>	defines;
+	std::vector<std::string>	defines;
 
 	// Additional include paths to set for Clang.
 	std::vector<std::string>	additional_includes;
@@ -74,11 +74,11 @@ struct BuildConfig {
 	std::vector<std::string>	additional_lib_paths;
 
 	// Additional libraries to set for Clang.
-	std::vector<const char*>	additional_libs;
+	std::vector<std::string>	additional_libs;
 
 	// Additional warnings to tell Clang to ignore.
 	// Uses the Clang syntax (E.G.: -Wno-newline-eof).
-	std::vector<const char*>	ignore_warnings;
+	std::vector<std::string>	ignore_warnings;
 
 	// The name that the built binary is going to have.
 	// This will be placed inside binary_folder, if you set that.
@@ -119,11 +119,11 @@ struct VisualStudioConfig {
 	// The name of the config as it appears in Visual Studio.
 	// This is different from BuildConfig::name because this one doesn't have to be unique.
 	// You can have lots of VisualStudioConfigs with a name of "Debug", for instance.
-	const char*					name;
+	std::string					name;
 
 	BuildConfig					options;
 
-	std::vector<const char*>	debugger_arguments;
+	std::vector<std::string>	debugger_arguments;
 };
 
 struct VisualStudioProject {
@@ -136,29 +136,29 @@ struct VisualStudioProject {
 	// This is a separate list to the build options as you likely want the superset of all files in your Solution, but may conditionally exclude a subset of files based on config/target etc.
 	// This folders you include here are relative to your build script.
 	// This list must NOT contain any search filters.
-	std::vector<const char*>		code_folders;
+	std::vector<std::string>		code_folders;
 
 	// All files that have any of these extensions will be included in your project.
 	// These must NOT start with a dot.  Only the extension is required (Examples: cpp, h, inl).
-	std::vector<const char*>		file_extensions;
+	std::vector<std::string>		file_extensions;
 
 	// Visual Studio project name.
-	const char*						name;
+	std::string						name;
 };
 
 struct VisualStudioSolution {
 	std::vector<VisualStudioProject>	projects;
 
-	std::vector<const char*>			platforms;
+	std::vector<std::string>			platforms;
 
 	// The name of the solution.
 	// For the sake of simplicity we keep the name of the Solution in Visual Studio and the Solution's filename the same.
-	const char*							name;
+	std::string							name;
 
 	// The folder where the solution (and it's projects) are going to live.
 	// If you don't set this then the solution is generated in the same path as the build file.
 	// This is relative to the source file that you specify at the command line.
-	const char*							path;
+	std::string							path;
 };
 
 struct BuilderOptions {
@@ -259,12 +259,12 @@ static unsigned int builder_get_config_hash( BuildConfig* config, const unsigned
 		hash = builder_get_config_hash( &config->depends_on[dependencyIndex], hash );
 	}
 
-	hash = builder_hash_c_string_array( hash, config->source_files );
-	hash = builder_hash_c_string_array( hash, config->defines );
+	hash = builder_hash_string_array( hash, config->source_files );
+	hash = builder_hash_string_array( hash, config->defines );
 	hash = builder_hash_string_array( hash, config->additional_includes );
 	hash = builder_hash_string_array( hash, config->additional_lib_paths );
-	hash = builder_hash_c_string_array( hash, config->additional_libs );
-	hash = builder_hash_c_string_array( hash, config->ignore_warnings );
+	hash = builder_hash_string_array( hash, config->additional_libs );
+	hash = builder_hash_string_array( hash, config->ignore_warnings );
 
 	hash = builder_hash_c_string( hash, config->binary_name.c_str(), config->binary_name.length() );
 	hash = builder_hash_c_string( hash, config->binary_folder.c_str(), config->binary_folder.length() );

@@ -97,6 +97,7 @@
     <ClCompile Include="test_sln\src\test_sln.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="builder.h" />
     <ClInclude Include="src\builder_local.h" />
     <ClInclude Include="test_sln\src\library\library.h" />
   </ItemGroup>

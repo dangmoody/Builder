@@ -60,7 +60,7 @@ SOFTWARE.
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
 	BUILDER_VERSION_MINOR	= 6,
-	BUILDER_VERSION_PATCH	= 2,
+	BUILDER_VERSION_PATCH	= 3,
 };
 
 #define CLANG_VERSION	"18.1.8"
@@ -649,7 +649,7 @@ static bool8 FileExists( const char* filename ) {
 	return file.ptr != INVALID_HANDLE_VALUE;
 }
 
-static void NukeFolder( const char* folder, const bool8 verbose ) {
+void NukeFolder_r( const char* folder, const bool8 verbose ) {
 	const char* searchPattern = tprintf( "%s\\*", folder );
 
 	FileInfo fileInfo = {};
@@ -665,7 +665,7 @@ static void NukeFolder( const char* folder, const bool8 verbose ) {
 		if ( fileInfo.is_directory ) {
 			if ( verbose ) printf( "Found folder %s\n", fileFullPath );
 
-			NukeFolder( fileFullPath, verbose );
+			NukeFolder_r( fileFullPath, verbose );
 
 			if ( verbose ) printf( "Deleting folder %s\n", fileFullPath );
 
@@ -914,7 +914,7 @@ static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContex
 
 // include paths can be wrong and therefore those files cant be resolved (the user writes a path to an include that doesnt exist) but we shouldnt crash if thats the case
 // that should be handled by the compiler which throws the proper error
-static void GetAllIncludedFiles( const buildContext_t* context, const BuildConfig* config, const bool8 verbose, std::vector<std::string>& outBuildInfoFiles ) {
+static void GetAllIncludedFiles( const buildContext_t* context, const BuildConfig* config, std::vector<std::string>& outBuildInfoFiles ) {
 	std::vector<std::string> sourceFiles = BuildConfig_GetAllSourceFiles( context, config );
 
 	Array<std::string> buildInfoFiles;
@@ -941,7 +941,7 @@ static void GetAllIncludedFiles( const buildContext_t* context, const BuildConfi
 		bool8 read = file_read_entire( sourceFileWithInputFilePath, &fileBuffer, &fileLength );
 
 		if ( !read ) {
-			if ( verbose ) {
+			if ( context->verbose ) {
 				warning( "Tried to read the file \"%s\", but I couldn't.  Therefore I can't resolve includes for this file.\n", sourceFile.c_str() );
 			}
 			continue;
@@ -1046,7 +1046,7 @@ static void GetAllIncludedFiles( const buildContext_t* context, const BuildConfi
 							sourceFiles.push_back( fullFilename );
 						}
 					} else {
-						if ( verbose ) {
+						if ( context->verbose ) {
 							warning( "Tried to find external include \"%s\" from any of the additional include directories, but couldn't.  This file won't be tracked in the %s file.\n", filename, BUILD_INFO_FILE_EXTENSION );
 						}
 					}
@@ -1342,7 +1342,7 @@ static bool8 BuildInfo_Read( const char* buildInfoFilename, buildInfoFileData_t*
 	return true;
 }
 
-void BuildInfo_Write( const buildContext_t* context, const std::vector<BuildConfig>& configs, const char* userConfigSourceFilename, const char* userConfigDLLFilename, const bool8 verbose ) {
+void BuildInfo_Write( const buildContext_t* context, const std::vector<BuildConfig>& configs, const char* userConfigSourceFilename, const char* userConfigDLLFilename ) {
 	printf( "Writing \"%s\"...\n", context->buildInfoFilename );
 
 	byteBuffer_t buffer = {};
@@ -1411,7 +1411,7 @@ void BuildInfo_Write( const buildContext_t* context, const std::vector<BuildConf
 		// serialize all included files and their last write time
 		{
 			std::vector<std::string> buildInfoFiles;
-			GetAllIncludedFiles( context, config, verbose, buildInfoFiles );
+			GetAllIncludedFiles( context, config, buildInfoFiles );
 
 			ByteBuffer_Write_CString( &buffer, "tracked_source_files\n" );
 			ByteBuffer_Write_U64( &buffer, buildInfoFiles.size() );
@@ -1469,6 +1469,11 @@ int main( int argc, char** argv ) {
 
 	buildContext_t context = {};
 	context.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS | BUILD_CONTEXT_FLAG_SHOW_STDOUT;
+#ifdef _DEBUG
+	context.verbose = true;
+#else
+	context.verbose = false;
+#endif
 
 	// check if we need to perform first time setup
 	{
@@ -1589,7 +1594,7 @@ int main( int argc, char** argv ) {
 			{
 				printf( "Cleaning up ... " );
 
-				NukeFolder( "temp", true );
+				NukeFolder_r( "temp", true );
 				if ( !folder_delete( "temp" ) ) {
 					errorCode_t errorCode = GetLastErrorCode();
 					warning( "Failed to fully delete the temp folder after installing Clang.  You are safe to delete this yourself.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
@@ -1607,12 +1612,6 @@ int main( int argc, char** argv ) {
 	const char* inputConfigName = NULL;
 	u64 inputConfigNameHash = 0;
 
-#ifdef _DEBUG
-	bool8 verbose = true;
-#else
-	bool8 verbose = false;
-#endif
-
 	// TODO(DM): 23/10/2024: feel like we shouldnt need these
 	// I think this is just hiding the fact that we dont use builder.exes or the input files CWD when we need to
 	bool8 doingBuildFromSourceFile = false;
@@ -1627,7 +1626,7 @@ int main( int argc, char** argv ) {
 		}
 
 		if ( string_equals( arg, ARG_VERBOSE_SHORT ) || string_equals( arg, ARG_HELP_LONG ) ) {
-			verbose = true;
+			context.verbose = true;
 			continue;
 		}
 
@@ -1690,7 +1689,7 @@ int main( int argc, char** argv ) {
 
 			float64 startTime = time_ms();
 
-			NukeFolder( folderToNuke, true );
+			NukeFolder_r( folderToNuke, true );
 
 			float64 endTime = time_ms();
 
@@ -1829,7 +1828,7 @@ int main( int argc, char** argv ) {
 		BuildConfig_AddDefaults( &userConfigBuildContext.config );
 		userConfigBuildContext.flags = BUILD_CONTEXT_FLAG_SHOW_STDOUT;
 
-		if ( verbose ) {
+		if ( context.verbose ) {
 			userConfigBuildContext.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS;
 		}
 
@@ -1917,7 +1916,7 @@ int main( int argc, char** argv ) {
 
 					printf( "Generating Visual Studio files\n" );
 
-					bool8 generated = GenerateVisualStudioSolution( &context, &options, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
+					bool8 generated = GenerateVisualStudioSolution( &context, &options, userConfigSourceFilename, userConfigBuildDLLFilename );
 
 					if ( !generated ) {
 						error( "Failed to generate Visual Studio solution.\n" );	// TODO(DM): better error message
@@ -2248,7 +2247,7 @@ int main( int argc, char** argv ) {
 	// only dont want to write the .build_info if all the builds skipped or if a build failed
 	bool8 shouldSerializeBuildInfo = ( numSuccessfulBuilds > 0 ) && ( numFailedBuilds == 0 );
 	if ( shouldSerializeBuildInfo ) {
-		BuildInfo_Write( &context, options.configs, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
+		BuildInfo_Write( &context, options.configs, userConfigSourceFilename, userConfigBuildDLLFilename );
 	}
 
 	return 0;

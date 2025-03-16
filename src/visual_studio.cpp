@@ -123,7 +123,7 @@ static const char* CreateVisualStudioGuid() {
 	return tprintf( "%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X", guid.Data1, guid.Data2, guid.Data3, guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3], guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7] );
 }
 
-bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* options, const char* userConfigSourceFilename, const char* userConfigBuildDLLFilename, const bool8 verbose ) {
+bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* options, const char* userConfigSourceFilename, const char* userConfigBuildDLLFilename ) {
 	assert( context );
 	assert( context->inputFile );
 	assert( context->inputFilePath );
@@ -218,6 +218,8 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 		visualStudioProjectFilesPath = context->inputFilePath;
 	}
 	visualStudioProjectFilesPath = paths_canonicalise_path( visualStudioProjectFilesPath );
+
+	NukeFolder_r( visualStudioProjectFilesPath, context->verbose );	// delete old VS files if they exist
 
 	const char* solutionFilename = tprintf( "%s\\%s.sln", visualStudioProjectFilesPath, options->solution.name.c_str() );
 
@@ -904,7 +906,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 			BuildConfig_AddDefaults( &options->configs[configIndex] );
 		}
 
-		BuildInfo_Write( context, options->configs, userConfigSourceFilename, userConfigBuildDLLFilename, verbose );
+		BuildInfo_Write( context, options->configs, userConfigSourceFilename, userConfigBuildDLLFilename );
 	}
 
 	return true;

@@ -1,3 +1,10 @@
+v0.6.3, 08/03/2025:
+
+* Old Visual Studio files now get deleted when generating a Solution.
+	* If a user renamed a project, for example, then the project under the old name would get kept around causing subtle storage bloat.  This change fixes that.
+
+----------------------------------------------------------------
+
 v0.6.2, 02/03/2025:
 
 * Change all std::vector<const char*> in builder.h to std::vector<std::string>.

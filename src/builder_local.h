@@ -76,12 +76,16 @@ struct buildContext_t {
 
 	const char*			dotBuilderFolder;
 	const char*			buildInfoFilename;
+
+	bool8				verbose;
 };
 
 errorCode_t	GetLastErrorCode();
 
-bool8		PathHasSlash( const char* path );
+void		NukeFolder_r( const char* folder, const bool8 verbose );
+
 const char*	GetSlashInPath( const char* path );
+bool8		PathHasSlash( const char* path );
 
 bool8		FileIsSourceFile( const char* filename );
 bool8		FileIsHeaderFile( const char* filename );
@@ -90,9 +94,10 @@ void		GetAllSubfolders_r( const char* basePath, const char* folder, Array<const 
 const char*	BuildConfig_GetFullBinaryName( const BuildConfig* config );
 void		BuildConfig_AddDefaults( BuildConfig* outConfig );
 
-void		BuildInfo_Write( const buildContext_t* context, const std::vector<BuildConfig>& configs, const char* userConfigSourceFilename, const char* userConfigDLLFilename, const bool8 verbose );
 
-bool8		GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* options, const char* userConfigSourceFilename, const char* userConfigBuildDLLFilename, const bool8 verbose );
+void		BuildInfo_Write( const buildContext_t* context, const std::vector<BuildConfig>& configs, const char* userConfigSourceFilename, const char* userConfigDLLFilename );
+
+bool8		GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* options, const char* userConfigSourceFilename, const char* userConfigBuildDLLFilename );
 
 inline u64 minull( const u64 x, const u64 y ) {
 	return ( x < y ) ? x : y;

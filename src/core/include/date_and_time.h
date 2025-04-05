@@ -29,6 +29,7 @@ SOFTWARE.
 #pragma once
 
 #include "core_types.h"
+#include "dll_export.h"
 
 struct DateAndTime {
 	u32	second;
@@ -40,4 +41,4 @@ struct DateAndTime {
 	u32	year;
 };
 
-extern  void	date_and_time_get( DateAndTime* out_date_and_time );
+CORE_API void	date_and_time_get( DateAndTime* out_date_and_time );

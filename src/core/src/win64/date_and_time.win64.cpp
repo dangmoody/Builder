@@ -26,7 +26,7 @@ SOFTWARE.
 ===========================================================================
 */
 
-#ifdef _WIN64
+#ifdef _WIN32
 
 #include <date_and_time.h>
 #include <debug.h>
@@ -57,4 +57,4 @@ void date_and_time_get( DateAndTime* out_date_and_time ) {
 	out_date_and_time->year = system_time.wYear;
 }
 
-#endif // _WIN64
+#endif // _WIN32

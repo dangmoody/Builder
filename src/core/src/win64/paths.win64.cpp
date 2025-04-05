@@ -26,7 +26,7 @@ SOFTWARE.
 ===========================================================================
 */
 
-#ifdef _WIN64
+#ifdef _WIN32
 
 #include <paths.h>
 
@@ -179,4 +179,4 @@ const char* paths_fix_slashes( const char* path ) {
 	return result;
 }
 
-#endif // _WIN64
+#endif // _WIN32

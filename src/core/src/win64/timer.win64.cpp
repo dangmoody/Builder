@@ -26,7 +26,7 @@ SOFTWARE.
 ===========================================================================
 */
 
-#ifdef _WIN64
+#ifdef _WIN32
 
 #include <timer.h>
 #include <typecast.inl>
@@ -75,4 +75,4 @@ float64 time_ns( void ) {
 
 #pragma clang diagnostic pop
 
-#endif // _WIN64
+#endif // _WIN32

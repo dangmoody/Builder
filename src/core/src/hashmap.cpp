@@ -44,8 +44,8 @@ SOFTWARE.
 
 Hashmap* hashmap_create( const u32 starting_capacity, float32 normalized_max_utilisation, bool8 should_grow ) {
 	assert( starting_capacity );
-	assert( normalized_max_utilisation < 0.f );
-	assert( normalized_max_utilisation <= 1.f );
+	assert( normalized_max_utilisation > 0.0f );
+	assert( normalized_max_utilisation <= 1.0f );
 
 	Hashmap* map = cast( Hashmap*, mem_alloc( sizeof( Hashmap ) ) );
 	map->capacity = starting_capacity;
@@ -142,7 +142,7 @@ void hashmap_set_value( Hashmap* map, const u64 key, const u32 value ) {
 				defer( mem_free( old_buckets ) );
 
 				u32 old_capacity = map->capacity;
-				map->capacity = cast( u32, cast( float32, map->capacity ) * 1.5f );
+				map->capacity = max( 2U, cast( u32, cast( float32, map->capacity ) * 1.5f ) );
 				map->buckets = cast( HashmapBucket*, mem_alloc( map->capacity * sizeof( HashmapBucket ) ) );
 				// Note(Tom): I don't love that this isn't a memset anymore. this isn's possible if we keep caring about values of unused buckets: unused value != empty bucket.
 				// I suggest we start leaving them untouched. Yes they have stale old data in them, but so long as people are using set that should never be an issue

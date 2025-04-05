@@ -30,15 +30,16 @@ SOFTWARE.
 
 #include "core_types.h"
 #include "memory_units.h"
+#include "dll_export.h"
 
 
-void							mem_reset_temp_storage( void );
-u64								mem_tell_temp_storage( void );
-void							mem_rewind_temp_storage( const u64 position );
+CORE_API void	mem_reset_temp_storage( void );
+CORE_API u64	mem_tell_temp_storage( void );
+CORE_API void	mem_rewind_temp_storage( const u64 position );
 
 // DONT CALL THESE DIRECTLY
-void*							mem_temp_alloc_internal( const u64 size );
-void*							mem_temp_alloc_aligned_internal( const u64 size, const MemoryAlignment alignment );
+CORE_API void*	mem_temp_alloc_internal( const u64 size );
+CORE_API void*	mem_temp_alloc_aligned_internal( const u64 size, const MemoryAlignment alignment );
 
 // call these instead
 #define mem_temp_alloc( size )						mem_temp_alloc_internal( size )

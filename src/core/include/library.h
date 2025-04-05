@@ -29,12 +29,13 @@ SOFTWARE.
 #pragma once
 
 #include "core_types.h"
+#include "dll_export.h"
 
 struct Library {
 	void* ptr;
 };
 
-Library	library_load( const char* name );
-void	library_unload( Library* library );
+CORE_API Library	library_load( const char* name );
+CORE_API void		library_unload( Library* library );
 
-void*	library_get_proc_address( const Library library, const char* func_name );
+CORE_API void*		library_get_proc_address( const Library library, const char* func_name );

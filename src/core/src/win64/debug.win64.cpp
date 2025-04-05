@@ -26,7 +26,7 @@ SOFTWARE.
 ===========================================================================
 */
 
-#ifdef _WIN64
+#ifdef _WIN32
 
 #include <debug.h>
 
@@ -235,4 +235,4 @@ void fatal_error_internal( const char* file, const int line, const char* prefix,
 	va_end( args );
 }
 
-#endif // _WIN64
+#endif // _WIN32

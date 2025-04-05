@@ -26,7 +26,7 @@ SOFTWARE.
 ===========================================================================
 */
 
-#include <process.h>
+#include <core_process.h>
 
 #include <debug.h>
 #include <allocation_context.h>

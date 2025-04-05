@@ -27,19 +27,17 @@ SOFTWARE.
 */
 
 #include <allocation_context.h>
+#include <allocator.h>
 #include <allocator_malloc.h>
 #include <allocator_linear.h>
-#include <debug.h>
 #include <cmd_line_args.h>
+#include <debug.h>
+#include <hashmap.h>
+#include <typecast.inl>
 
 #include "core_local.h"
 
 #include <memory.h>	// memcpy
-#include <hashmap.h>
-
-#include <type_traits>
-
-#include <allocator.h>
 
 /*
 ================================================================================================
@@ -86,11 +84,14 @@ static Allocator get_bottom_allocator() {
 	return malloc_allocator;
 }
 
-void core_init( const u64 allocator_size, const u64 temp_storage_size ) {
-	assert( allocator_size );
-	assert( temp_storage_size );
-	//Note(TOM) unused for now. My thoughts are that perhaps you configure your programs element 1 allocator youself
-	unused( allocator_size );
+void core_init() {
+	constexpr u64 default_temp_storage_size = MEM_MEGABYTES( 64 );
+
+	core_init( default_temp_storage_size );
+}
+
+void core_init( const u64 temp_storage_size ) {
+	assert( temp_storage_size > 0 );
 
 	g_core_ptr = &g_core_context;
 
@@ -117,6 +118,10 @@ void core_init( const u64 allocator_size, const u64 temp_storage_size ) {
 void mem_push_allocator( Allocator* allocator ) {
 	assert( g_core_ptr );
 
+#ifdef CORE_MEMORY_TRACKING
+	check_allocator_is_active(allocator);
+#endif
+
 	assert( g_core_ptr->current_stack_size + 1 < MAX_ALLOCATOR_STACK_SIZE );
 	g_core_ptr->allocator_stack[g_core_ptr->current_stack_size++] = allocator;
 }
@@ -126,6 +131,10 @@ void mem_pop_allocator() {
 	assertf( g_core_ptr->current_stack_size > 1, "Cannot pop passed the bottom allocator" );
 	g_core_ptr->current_stack_size--;
 	g_core_ptr->allocator_stack[g_core_ptr->current_stack_size] = nullptr;
+}
+
+Allocator* mem_get_current_allocator() {
+	return g_core_ptr->allocator_stack[g_core_ptr->current_stack_size - 1];
 }
 
 void core_shutdown() {

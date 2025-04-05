@@ -28,6 +28,8 @@ SOFTWARE.
 
 #pragma once
 
+#include "dll_export.h"
+
 // TODO(DM): the only reason this exists is because we call IsDebuggerPresent() and __debugbreak() in this file
 // that probably wants to be moved into a .inl in that case
 #ifdef _WIN32
@@ -52,20 +54,20 @@ enum LogVerbosity {
 };
 
 // logging
-void							info_internal( const char* function, const char* fmt, ... );
-void							warning_internal( const char* function, const char* fmt, ... );
-void							error_internal( const char* function, const char* fmt, ... );
+CORE_API void					info_internal( const char* function, const char* fmt, ... );
+CORE_API void					warning_internal( const char* function, const char* fmt, ... );
+CORE_API void					error_internal( const char* function, const char* fmt, ... );
 
 #define info( fmt, ... )		info_internal( __FUNCTION__, fmt, __VA_ARGS__ )
 #define warning( fmt, ... )		warning_internal( __FUNCTION__, fmt, __VA_ARGS__ )
 #define error( fmt, ... )		error_internal( __FUNCTION__, fmt, __VA_ARGS__ )
 
-void							set_log_verbosity( LogVerbosity verbosity );
-LogVerbosity					get_log_verbosity();
-void							dump_callstack( void );
+CORE_API void					set_log_verbosity( LogVerbosity verbosity );
+CORE_API LogVerbosity			get_log_verbosity();
+CORE_API void					dump_callstack( void );
 
 // DO NOT CALL THESE FUNCTIONS DIRECTLY
-void							fatal_error_internal( const char* file, const int line, const char* prefix, const char* fmt, ... );
+CORE_API void					fatal_error_internal( const char* file, const int line, const char* prefix, const char* fmt, ... );
 
 
 #ifndef fatal_error

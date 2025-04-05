@@ -26,7 +26,7 @@ SOFTWARE.
 ===========================================================================
 */
 
-#ifdef _WIN64
+#ifdef _WIN32
 
 #include <library.h>
 
@@ -76,4 +76,4 @@ void* library_get_proc_address( const Library library, const char* func_name ) {
 	return cast( void*, proc_addr );
 }
 
-#endif // _WIN64
+#endif // _WIN32

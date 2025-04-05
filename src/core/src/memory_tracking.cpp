@@ -74,8 +74,18 @@ static void set_memory_tracking_flag( MemoryTrackingFlag flag, bool active ) {
 	}
 }
 
-static bool is_memeory_tracking_flag_active( MemoryTrackingFlag flag ) {
+bool is_memeory_tracking_flag_active( MemoryTrackingFlag flag ) {
 	return ( g_core_ptr->memory_tracking->flags & flag ) != 0;
+}
+
+CORE_API void	check_allocator_is_active(Allocator* allocator)
+{
+	MemoryTracking* memory_tracking = g_core_ptr->memory_tracking;
+	if (memory_tracking && !is_memeory_tracking_flag_active(MTF_IGNORE))
+	{
+		assertf(hashmap_get_value(memory_tracking->allocator_tracking_lookup, cast(u64, allocator)) != HASHMAP_INVALID_VALUE,
+			"The allocator needs to to be active. Either it's not been initialized or has been cleaned up");
+	}
 }
 
 void start_tracking_allocator( Allocator* allocator ) {
@@ -104,6 +114,13 @@ static AllocatorTrackingData* get_current_tracking_data() {
 	assert( index != HASHMAP_INVALID_VALUE );
 
 	return &memory_tracking->allocator_tracking_data[index];
+}
+
+void* track_reallocation_internal(void* new_allocation, void* old_allocation, const char* function, const u32 line_number)
+{
+	track_allocation_internal(new_allocation, function, line_number);
+	track_free_internal(old_allocation);
+	return new_allocation;
 }
 
 void* track_allocation_internal( void* allocation, const char* function, const u32 line_number ) {
@@ -166,7 +183,7 @@ static void recursively_track_frees( AllocatorTrackingData* allocator_data, void
 	}
 
 	allocator_data->allocations.swap_remove_at( index );
-
+	hashmap_remove_key(allocator_data->allocation_lookup, cast(u64, allocation));
 	// Patch up the allocators lookup info that got swaped into index's place
 	if ( index < allocator_data->allocations.count ) {
 		hashmap_set_value( allocator_data->allocation_lookup, cast( u64, allocator_data->allocations[index].ptr ), index );
@@ -174,7 +191,7 @@ static void recursively_track_frees( AllocatorTrackingData* allocator_data, void
 }
 
 void track_free_internal( void* free ) {
-	if ( is_memeory_tracking_flag_active( MTF_IGNORE ) ) {
+	if ( is_memeory_tracking_flag_active( MTF_IGNORE ) || free == nullptr) {
 		return;
 	}
 

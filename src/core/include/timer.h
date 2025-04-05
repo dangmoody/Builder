@@ -29,19 +29,20 @@ SOFTWARE.
 #pragma once
 
 #include "core_types.h"
+#include "dll_export.h"
 
 
 // returns a timestamp in clock cycles
-s64		time_cycles( void );
+CORE_API s64		time_cycles( void );
 
 // returns a timestamp in seconds
-float64	time_seconds( void );
+CORE_API float64	time_seconds( void );
 
 // returns a timestamp in milliseconds
-float64	time_ms( void );
+CORE_API float64	time_ms( void );
 
 // returns a timestamp in microseconds
-float64	time_us( void );
+CORE_API float64	time_us( void );
 
 // returns a timestamp in nanoseconds
-float64	time_ns( void );
+CORE_API float64	time_ns( void );

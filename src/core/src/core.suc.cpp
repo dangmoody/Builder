@@ -42,6 +42,7 @@ SOFTWARE.
 #include "allocator_malloc.cpp"
 #include "allocator_linear.cpp"
 #include "cmd_line_args.cpp"
+#include "core_string.cpp"
 #include "hashmap.cpp"
 #include "math.cpp"
 #include "random.cpp"
@@ -50,8 +51,7 @@ SOFTWARE.
 #include "temp_storage.cpp"
 
 // things we use external libraries for
-#include "process.subprocess.cpp"
+#include "core_process.subprocess.cpp"
 #include "hash.xxhash.cpp"
-#include "profiler.null.cpp"
 
 #endif // CORE_SUC

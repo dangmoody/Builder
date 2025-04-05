@@ -33,6 +33,7 @@ SOFTWARE.
 #include "core_types.h"
 
 struct Allocator;
+
 template<class T, u64 N>
 struct StaticArray {
 	T			data[N];

@@ -28,6 +28,8 @@ SOFTWARE.
 
 #pragma once
 
+#include "dll_export.h"
+
 struct StringBuilderBuffer {
 	char*					data;
 	StringBuilderBuffer*	next;
@@ -38,10 +40,10 @@ struct StringBuilder {
 	StringBuilderBuffer*	tail;
 };
 
-void						string_builder_reset( StringBuilder* builder );
-void						string_builder_destroy( StringBuilder* builder );
+CORE_API void				string_builder_reset( StringBuilder* builder );
+CORE_API void				string_builder_destroy( StringBuilder* builder );
 
-// void						string_builder_appendfv( StringBuilder* builder, const char* fmt, va_list args );
-void						string_builder_appendf( StringBuilder* builder, const char* fmt, ... );
+// CORE_API void				string_builder_appendfv( StringBuilder* builder, const char* fmt, va_list args );
+CORE_API void				string_builder_appendf( StringBuilder* builder, const char* fmt, ... );
 
-const char*					string_builder_to_string( StringBuilder* builder );
+CORE_API const char*		string_builder_to_string( StringBuilder* builder );

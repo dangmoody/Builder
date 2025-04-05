@@ -30,6 +30,7 @@ SOFTWARE.
 
 #include "core_types.h"
 #include "memory_units.h"
+#include "dll_export.h"
 
 struct Allocator;
 
@@ -43,15 +44,15 @@ struct Allocator;
 ================================================================================================
 */
 
-void*	malloc_allocator_create( const u64 size );
-void	malloc_allocator_destroy( void* allocator_data );
+CORE_API void*	malloc_allocator_create( const u64 size );
+CORE_API void	malloc_allocator_destroy( void* allocator_data );
 
-void*	malloc_allocator_alloc( void* allocator_data, const u64 size, const MemoryAlignment alignment );
-void*	malloc_allocator_realloc( void* allocator_data, void* ptr, const u64 new_size, const MemoryAlignment alignment );
+CORE_API void*	malloc_allocator_alloc( void* allocator_data, const u64 size, const MemoryAlignment alignment );
+CORE_API void*	malloc_allocator_realloc( void* allocator_data, void* ptr, const u64 new_size, const MemoryAlignment alignment );
 
-void	malloc_allocator_free( void* allocator_data, void* ptr );
+CORE_API void	malloc_allocator_free( void* allocator_data, void* ptr );
 
 // Not allowed.
-void	malloc_allocator_reset( void* allocator_data );
+CORE_API void	malloc_allocator_reset( void* allocator_data );
 
-void 	malloc_allocator_create_generic_interface( Allocator& out_interface );
+CORE_API void 	malloc_allocator_create_generic_interface( Allocator& out_interface );

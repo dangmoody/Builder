@@ -28,7 +28,7 @@ SOFTWARE.
 
 #ifdef CORE_SUC
 
-#ifdef _WIN64
+#ifdef _WIN32
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -43,6 +43,6 @@ SOFTWARE.
 #include "win64/library.win64.cpp"
 #include "win64/paths.win64.cpp"
 
-#endif // _WIN64
+#endif // _WIN32
 
 #endif // CORE_SUC

@@ -29,17 +29,13 @@ SOFTWARE.
 #pragma once
 
 #include "core_types.h"
+#include "dll_export.h"
 
 #ifdef CORE_MEMORY_TRACKING
 #include "memory_tracking.h"
 #endif // CORE_MEMORY_TRACKING
 
 #include "allocator.h" //TODO(Tom): Move if temp turns back to linear
-
-struct AllocatorGeneric;
-struct AllocatorLinearData;
-
-struct Paths;
 
 //TODO: Maybe you should put in on the stack like shutdown?
 void mem_allocator_intitialize( Allocator* allocator, u64 total_size );
@@ -51,47 +47,47 @@ constexpr u32 MAX_ALLOCATOR_STACK_SIZE		= 32;
 constexpr u32 MAX_ALLOCATOR_RELATIONSHIPS	= 32;
 
 struct CoreContext {
-	Allocator*									allocator_stack[MAX_ALLOCATOR_STACK_SIZE];
-	u32											current_stack_size;
-	Allocator									temp_storage;
-
-	Paths*										paths;
+	Allocator*		allocator_stack[MAX_ALLOCATOR_STACK_SIZE];
+	u32				current_stack_size;
+	Allocator		temp_storage;
 
 #ifdef CORE_MEMORY_TRACKING
-	MemoryTracking*								memory_tracking;
+	MemoryTracking*	memory_tracking;
 #endif
 };
 
-extern CoreContext*								g_core_ptr;
+extern CoreContext*	g_core_ptr;
 
-void											core_init( const u64 allocator_size, const u64 temp_storage_size );
-void											core_shutdown( void );
 
-void											core_hook( CoreContext* context );
+CORE_API void										core_init();
+CORE_API void										core_init( const u64 temp_storage_size );
+CORE_API void										core_shutdown();
 
-void											mem_set_allocator( Allocator* allocator, void* allocator_data );
+CORE_API void										core_hook( CoreContext* context );
+
+CORE_API void										mem_set_allocator( Allocator* allocator, void* allocator_data );
 
 // DO NOT CALL THE INTERNAL FUNCTIONS!
 // CALL THE NON _INTERNAL ONES BELOW!
-void*											mem_alloc_internal( const u64 size );
-void*											mem_alloc_aligned_internal( const u64 size, const MemoryAlignment alignment );
-void*											mem_realloc_internal( void* ptr, const u64 size );
-void*											mem_realloc_aligned_internal( void* ptr, const u64 size, const MemoryAlignment alignment );
-void											mem_free_internal( void* ptr );
+CORE_API void*										mem_alloc_internal( const u64 size );
+CORE_API void*										mem_alloc_aligned_internal( const u64 size, const MemoryAlignment alignment );
+CORE_API void*										mem_realloc_internal( void* ptr, const u64 size );
+CORE_API void*										mem_realloc_aligned_internal( void* ptr, const u64 size, const MemoryAlignment alignment );
+CORE_API void										mem_free_internal( void* ptr );
 
-void											mem_reset_allocator_internal( void );
-void											mem_shutdown_allocator_internal( void );
+CORE_API void										mem_reset_allocator_internal();
+CORE_API void										mem_shutdown_allocator_internal();
 
-void											mem_push_allocator( Allocator* allocator );
-void											mem_pop_allocator();
+CORE_API void										mem_push_allocator( Allocator* allocator );
+CORE_API void										mem_pop_allocator();
 
 #ifdef CORE_MEMORY_TRACKING
 
 // call these ones!
 #define mem_alloc( size )							track_allocation_internal( mem_alloc_internal( (size) ), __FUNCTION__, __LINE__ )
 #define mem_alloc_aligned( size, alignment )		track_allocation_internal( mem_alloc_aligned_internal( (size), cast( MemoryAlignment, (alignment) ) ), __FUNCTION__, __LINE__ )
-#define mem_realloc( ptr, size )					track_allocation_internal( mem_realloc_internal( (ptr), (size) ), __FUNCTION__, __LINE__ ); track_free_internal( (ptr) )
-#define mem_realloc_aligned( ptr, size, alignment )	track_allocation_internal( mem_realloc_aligned_internal( (ptr), (size), cast( MemoryAlignment, (alignment) ) ), __FUNCTION__, __LINE__ ); track_free_internal( (ptr) )
+#define mem_realloc( ptr, size )					track_reallocation_internal( mem_realloc_internal( (ptr), (size) ), (ptr), __FUNCTION__, __LINE__ )
+#define mem_realloc_aligned( ptr, size, alignment )	track_reallocation_internal( mem_realloc_aligned_internal( (ptr), (size), cast( MemoryAlignment, (alignment) ) ), (ptr),  __FUNCTION__, __LINE__ )
 #define mem_free( ptr )								mem_free_internal( (ptr) ); track_free_internal( (ptr) ); ptr = NULL
 
 // Resets the current allocator
@@ -99,7 +95,7 @@ void											mem_pop_allocator();
 // Shuts down the current allocator
 #define mem_shutdown()								mem_shutdown_allocator_internal(); track_free_whole_allocator_internal( /*stop_tracking*/true )
 
-void 												mem_allow_allocator_nuking( bool allow );
+CORE_API void										mem_allow_allocator_nuking( bool allow );
 
 #else
 
@@ -114,8 +110,9 @@ void 												mem_allow_allocator_nuking( bool allow );
 #define mem_reset()									mem_reset_allocator_internal()
 // Shuts down the current allocator
 #define mem_shutdown()								mem_shutdown_allocator_internal()
-static void 										mem_allow_allocator_nuking( bool allow ) { unused( allow ); }
+
+CORE_API inline void 								mem_allow_allocator_nuking( bool allow ) { unused( allow ); }
 
 #endif
 
-inline Allocator*									mem_get_current_allocator() { return g_core_ptr->allocator_stack[g_core_ptr->current_stack_size - 1]; }
+CORE_API Allocator*									mem_get_current_allocator();

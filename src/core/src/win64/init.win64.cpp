@@ -26,7 +26,7 @@ SOFTWARE.
 ===========================================================================
 */
 
-#ifdef _WIN64
+#ifdef _WIN32
 
 #include "../core_local.h"
 
@@ -47,4 +47,4 @@ void core_shutdown_platform() {
 	SymCleanup( process );
 }
 
-#endif // _WIN64
+#endif // _WIN32

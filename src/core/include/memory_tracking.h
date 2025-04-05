@@ -4,6 +4,7 @@
 
 #include "core_types.h"
 #include "array.h"
+#include "dll_export.h"
 
 struct Hashmap;
 
@@ -32,12 +33,15 @@ struct MemoryTracking {
 	u32								flags;
 };
 
-void			init_memory_tracking();
-void			start_tracking_allocator( Allocator* allocator );
+CORE_API void	init_memory_tracking();
+CORE_API void	start_tracking_allocator( Allocator* allocator );
 
-void*			track_allocation_internal( void* allocation, const char* function, u32 line_number );
-void			track_free_internal( void* free );
-void			track_free_whole_allocator_internal( bool stop_tracking );
+CORE_API void*	track_allocation_internal( void* allocation, const char* function, u32 line_number );
+CORE_API void*	track_reallocation_internal(void* new_allocation, void* old_allocation, const char* function, const u32 line_number);
+CORE_API void	track_free_internal( void* free );
+CORE_API void	track_free_whole_allocator_internal( bool stop_tracking );
+
+CORE_API void	check_allocator_is_active(Allocator* allocator);
 
 struct ScopedFlags {
 		ScopedFlags( u32 new_flags, u32 remove_flags = 0 );

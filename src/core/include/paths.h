@@ -29,29 +29,48 @@ SOFTWARE.
 #pragma once
 
 #include "core_types.h"
+#include "dll_export.h"
+
+/*
+================================================================================================
+
+	File path helper functions
+
+	A series of helper functions for OS-dependent API calls for things like getting the CWD, as
+	well as some non OS-dependent things.
+
+================================================================================================
+*/
+
+#ifdef _WIN32
+	#define PATH_SEPARATOR "\\"
+#else
+	#define PATH_SEPARATOR "/"
+#endif
 
 // Returns the absolute path of where the current program is running from.
-const char*	paths_get_app_path();
+CORE_API const char*	paths_get_app_path();
 
 // Returns the path that your program is currently running from.
-const char*	paths_get_current_working_directory();
+CORE_API const char*	paths_get_current_working_directory();
 
 // Returns the absolute path of 'file'.
-const char*	paths_get_absolute_path( const char* file );
+CORE_API const char*	paths_get_absolute_path( const char* file );
 
 // Given a file path that also includes a filename, will remove the filename part, leaving just the path.
-const char*	paths_remove_file_from_path( const char* path );
+CORE_API const char*	paths_remove_file_from_path( const char* path );
 
 // Given a file path that also includes a filename, will remove the path part, leaving just the filename.
-const char*	paths_remove_path_from_file( const char* path );
+CORE_API const char*	paths_remove_path_from_file( const char* path );
 
 // Returns the name of a file without its file extension, if there is one.
-const char*	paths_remove_file_extension( const char* filename );
+CORE_API const char*	paths_remove_file_extension( const char* filename );
 
 // On Windows:   Returns true if the path starts with a letter followed by a colon, otherwise returns false.
 // On Mac/Linux: Returns true if the path starts with two backslashes or a single forward slash, otherwise returns false.
-bool8		paths_is_path_absolute( const char* path );
+CORE_API bool8			paths_is_path_absolute( const char* path );
 
-const char*	paths_canonicalise_path( const char* path );
+CORE_API const char*	paths_canonicalise_path( const char* path );
 
-const char*	paths_fix_slashes( const char* path );
+// Make sure that any slashes found in 'path' are what the OS expects them to be.
+CORE_API const char*	paths_fix_slashes( const char* path );

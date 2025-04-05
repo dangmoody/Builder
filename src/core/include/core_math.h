@@ -29,6 +29,7 @@ SOFTWARE.
 #pragma once
 
 #include "core_types.h"
+#include "dll_export.h"
 
 #define HLML_ASSERT assert
 #if 1
@@ -109,16 +110,16 @@ SOFTWARE.
 
 
 // Returns the number of zeros on the left hand side of 'number' when viewed in base 2.
-s32	get_num_leading_zeros( const u64 number );
+CORE_API s32	get_num_leading_zeros( const u64 number );
 
 // Returns the number of zeros on the right hand side of 'number' when viewed in base 2.
-s32	get_num_trailing_zeros( const u64 number );
+CORE_API s32	get_num_trailing_zeros( const u64 number );
 
 // Returns the number of bits inside 'number' that are set to 1 when viewed in base 2.
-s32	get_num_set_bits( const u64 number );
+CORE_API s32	get_num_set_bits( const u64 number );
 
 // Returns the next power of two that is higher than 'number'.
-u64	next_power_of_2_up( const u64 number );
+CORE_API u64	next_power_of_2_up( const u64 number );
 
 // Returns the next multiple of 4 that is higher than or equal to 'number'.
-u64 next_multiple_of_4_up( const u64 number );
+CORE_API u64	next_multiple_of_4_up( const u64 number );

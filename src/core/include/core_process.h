@@ -28,9 +28,17 @@ SOFTWARE.
 
 #pragma once
 
-#define PROFILER_FRAME_MARKER()			profiler_frame_marker_internal()
-#define PROFILER_SCOPE()				profiler_scope_named_internal( __FUNCTION__ )
-#define PROFILER_SCOPE_NAMED( name )	profiler_scope_named_internal( name )
+#include "core_types.h"
+#include "array.h"
+#include "dll_export.h"
 
-void profiler_frame_marker_internal();
-void profiler_scope_named_internal( const char* name );
+struct Process;
+
+
+CORE_API Process*	process_create( Array<const char*>* args, Array<const char*>* environment_variables );
+
+CORE_API void		process_destroy( Process* process );
+
+CORE_API s32		process_join( Process** process );
+
+CORE_API u64		process_read_stdout( Process* process, char* out_buffer, const u32 count );

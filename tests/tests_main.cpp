@@ -254,7 +254,7 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 }
 
 int main( int argc, char** argv ) {
-	core_init( MEM_KILOBYTES( 64 ), MEM_KILOBYTES( 64 ) );
+	core_init( MEM_KILOBYTES( 64 ) );
 	defer( core_shutdown() );
 
 	TEMPER_RUN( argc, argv );

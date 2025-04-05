@@ -31,6 +31,11 @@ SOFTWARE.
 #include <vector>
 #include <string>
 
+// The version of Clang that Builder is using.
+#define BUILDER_CLANG_VERSION_MAJOR	18
+#define BUILDER_CLANG_VERSION_MINOR	1
+#define BUILDER_CLANG_VERSION_PATCH	8
+
 // If you override set_builder_options() you will need preface the function with the BUILDER_CALLBACK #define.
 // This is because when Builder does its user config build stage it will search your code for the function set_builder_options() and BUILDER_DOING_USER_CONFIG_BUILD will be defined.
 // This means that you need to have set_builder_options() exposed so that Builder can find the function and call it, hence it gets exported as a symbol in the binary.

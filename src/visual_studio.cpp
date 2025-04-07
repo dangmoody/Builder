@@ -37,6 +37,7 @@ SOFTWARE.
 #include "core/include/typecast.inl"
 #include "core/include/temp_storage.h"
 #include "core/include/hash.h"
+#include "core/include/hashmap.h"
 #include "core/include/debug.h"
 
 #ifdef _WIN64
@@ -123,36 +124,28 @@ static const char* CreateVisualStudioGuid() {
 	return tprintf( "%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X", guid.Data1, guid.Data2, guid.Data3, guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3], guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7] );
 }
 
-bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* options, const char* userConfigSourceFilename, const char* userConfigBuildDLLFilename ) {
+bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* options ) {
 	assert( context );
 	assert( context->inputFile );
-	assert( context->inputFilePath );
-	assert( context->dotBuilderFolder );
-	assert( context->buildInfoFilename );
+	assert( context->inputFilePath.data );
+	assert( context->dotBuilderFolder.data );
+	assert( context->buildInfoFilename.data );
 	assert( options );
 
-	Array<const char*> projectFolders;
-	Array<u64> projectFoldersHashes;
+	Array<char*> projectFolders;
 
-	struct projectParentMapping_t {
-		u64	projectIndex;
-		u64	parentIndex;
+	Hashmap* projectFolderIndices = hashmap_create( 1 );
+	defer( hashmap_destroy( projectFolderIndices ) );
+
+	struct guidParentMapping_t {
+		u64	guidIndex;
+		u64	guidParentIndex;
 	};
 
-	Array<projectParentMapping_t> projectParentMappings;
+	Array<guidParentMapping_t> guidParentMappings;
 
-	// TODO(DM):
-	//	18/11/2024: dont use abs path here
-	//	22/02/2025: when Core gets a string data structure use that here, because this is just as horrible as the other times you do this
-	{
-		u64 buildInfoFilenameLength = strlen( context->inputFilePath ) + strlen( "\\.builder\\" ) + options->solution.name.size() + strlen( BUILD_INFO_FILE_EXTENSION );
-
-		char* buildInfoFilename = cast( char*, mem_alloc( buildInfoFilenameLength + 1 ) );	// + 1 for null terminator
-		sprintf( buildInfoFilename, "%s\\.builder\\%s%s", context->inputFilePath, options->solution.name.c_str(), BUILD_INFO_FILE_EXTENSION );
-		buildInfoFilename[buildInfoFilenameLength] = 0;
-
-		context->buildInfoFilename = buildInfoFilename;
-	}
+	// TODO(DM): 18/11/2024: dont use abs path here
+	string_printf( &context->buildInfoFilename, "%s\\.builder\\%s%s", context->inputFilePath.data, options->solution.name.c_str(), BUILD_INFO_FILE_EXTENSION );
 
 	// validate the solution
 	{
@@ -213,20 +206,22 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 	const char* visualStudioProjectFilesPath = NULL;
 	if ( !options->solution.path.empty() ) {
-		visualStudioProjectFilesPath = tprintf( "%s\\%s", context->inputFilePath, options->solution.path.c_str() );
+		visualStudioProjectFilesPath = tprintf( "%s\\%s", context->inputFilePath.data, options->solution.path.c_str() );
 	} else {
-		visualStudioProjectFilesPath = context->inputFilePath;
+		visualStudioProjectFilesPath = cast( char*, context->inputFilePath.data );
 	}
 	visualStudioProjectFilesPath = paths_canonicalise_path( visualStudioProjectFilesPath );
 
-	NukeFolder_r( visualStudioProjectFilesPath, context->verbose );	// delete old VS files if they exist
+	// delete old VS files if they exist
+	// but keep the root because we're about to re-populate it
+	NukeFolder_r( visualStudioProjectFilesPath, false, context->verbose );
 
 	const char* solutionFilename = tprintf( "%s\\%s.sln", visualStudioProjectFilesPath, options->solution.name.c_str() );
 
 	// get relative path from visual studio to the input file
 	char* pathFromSolutionToInputFile = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
 	memset( pathFromSolutionToInputFile, 0, MAX_PATH * sizeof( char ) );
-	PathRelativePathTo( pathFromSolutionToInputFile, solutionFilename, FILE_ATTRIBUTE_NORMAL, paths_fix_slashes( context->inputFilePath ), FILE_ATTRIBUTE_DIRECTORY );
+	PathRelativePathTo( pathFromSolutionToInputFile, solutionFilename, FILE_ATTRIBUTE_NORMAL, paths_fix_slashes( cast( char*, context->inputFilePath.data ) ), FILE_ATTRIBUTE_DIRECTORY );
 	assert( pathFromSolutionToInputFile != NULL || !string_equals( pathFromSolutionToInputFile, "" ) );
 
 	// give each project a guid
@@ -305,8 +300,6 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 			}
 		}
 
-		const char* projectNameNoFolder = paths_remove_path_from_file( project->name.c_str() );
-
 		// if the project name has a slash in it then the user wants that project to be in a folder
 		// for example a project with the name "projects/games/shooter" means the user wants a project called "shooter" inside a folder called "games", which is in turn inside a folder called "projects"
 		// so split the string between slashes, and create project folders for each unique folder name that we find
@@ -314,59 +307,60 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 			const char* fullFolderPath = paths_remove_file_from_path( project->name.c_str() );
 
 			if ( fullFolderPath ) {
-				u64 fullFolderPathHash = hash_string( fullFolderPath, 0 );
+				u32 guidIndex =  HASHMAP_INVALID_VALUE;
+				u32 guidParentIndex = HASHMAP_INVALID_VALUE;
 
-				u64 folderIndex = U64_MAX;
+				const char* folderStart = fullFolderPath;
 
-				For ( u64, folderHashIndex, 0, projectFoldersHashes.count ) {
-					if ( projectFoldersHashes[folderHashIndex] == fullFolderPathHash ) {
-						folderIndex = folderHashIndex;
-						break;
+				while ( *folderStart ) {
+					// get the end of the folder
+					const char* folderEnd = GetSlashInPath( folderStart );
+
+					if ( !folderEnd ) {
+						folderEnd = folderStart + strlen( folderStart );
 					}
-				}
 
-				if ( folderIndex == U64_MAX ) {
-					projectFoldersHashes.add( fullFolderPathHash );
+					// make a string from that the start and the end
+					u64 folderNameLength = cast( u64, folderEnd ) - cast( u64, folderStart );
 
-					const char* folderStart = fullFolderPath;
-					const char* previousFolder = NULL;
+					char* folderName = cast( char*, mem_temp_alloc( ( folderNameLength + 1 ) * sizeof( char ) ) );
+					strncpy( folderName, folderStart, folderNameLength * sizeof( char ) );
+					folderName[folderNameLength] = 0;
 
-					u64 numFolders = 0;
+					u64 folderNameHash = hash_string( folderName, 0 );
 
-					while ( folderStart ) {
-						numFolders++;
+					guidIndex = hashmap_get_value( projectFolderIndices, folderNameHash );
 
-						const char* folderEnd = GetSlashInPath( folderStart );
-
-						if ( !folderEnd ) {
-							folderEnd = folderStart + strlen( folderStart );
-						}
-
-						u64 folderNameLength = cast( u64, folderEnd ) - cast( u64, folderStart );
-
-						char* folderName = cast( char*, mem_temp_alloc( ( folderNameLength ) + 1 * sizeof( char ) ) );	// + 1 for null terminator
-						strncpy( folderName, folderStart, folderNameLength );
-						folderName[folderNameLength] = 0;
-
+					if ( guidIndex == HASHMAP_INVALID_VALUE ) {
+						// not found this folder at this path before so create a GUID for it now
 						projectFolders.add( folderName );
 						projectGuids.add( CreateVisualStudioGuid() );
 
-						folderIndex = projectFolders.count - 1;
+						guidIndex = trunc_cast( u32, projectGuids.count - 1 );
 
-						// if there was a previous folder then add a mapping from this folder to that parent
-						if ( previousFolder ) {
-							u64 mappingIndex = options->solution.projects.size() + folderIndex;
+						printf( "%d = %s (parent = %d)\n", guidIndex, folderName, guidParentIndex );
 
-							projectParentMappings.add( { .projectIndex = mappingIndex, .parentIndex = mappingIndex - 1, } );
+						hashmap_set_value( projectFolderIndices, folderNameHash, guidIndex );
+
+						if ( guidParentIndex != HASHMAP_INVALID_VALUE ) {
+							guidParentMappings.add( { guidIndex, guidParentIndex } );
 						}
+					} else {
+						// we have found this folder at this path before
+						// if we have other folders/projects to go we will use this index as the parent index
+						guidParentIndex = guidIndex;
+					}
 
-						previousFolder = folderName;
+					folderStart = folderEnd;
 
-						folderStart = GetSlashInPath( folderEnd );
+					if ( *folderStart == '\\' || *folderStart == '/' ) {
+						folderStart++;
 					}
 				}
 
-				projectParentMappings.add( { .projectIndex = projectIndex, .parentIndex = options->solution.projects.size() + folderIndex } );
+				guidParentIndex = guidIndex;
+
+				guidParentMappings.add( { .guidIndex = projectIndex, .guidParentIndex = guidParentIndex } );
 			}
 		}
 
@@ -403,7 +397,17 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 				const char* codeFolder = project->code_folders[folderIndex].c_str();
 
 				Array<visualStudioFileFilter_t> filterFiles;
-				GetAllVisualStudioFiles_r( context, solutionFilename, context->inputFilePath, codeFolder, project->file_extensions, filterFiles );
+				GetAllVisualStudioFiles_r( context, solutionFilename, cast( char*, context->inputFilePath.data ), codeFolder, project->file_extensions, filterFiles );
+
+				if ( filterFiles.count == 0 ) {
+					error(
+						"Project \"%s\" is trying to find the source file path \"%s\" but it doesn't exist (full path it's trying to find is: \"%s\\%s\").\n",
+						project->name.c_str(), codeFolder,
+						context->inputFilePath.data, codeFolder
+					);
+
+					return false;
+				}
 
 				For ( u64, filterFileIndex, 0, filterFiles.count ) {
 					visualStudioFileFilter_t* fileFilter = &filterFiles[filterFileIndex];
@@ -423,7 +427,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 						while ( currentSlash ) {
 							u64 filterPathLength = cast( u64, currentSlash ) - cast( u64, folder );
-							char* filterPath = cast( char*, mem_alloc( ( filterPathLength + 1 ) * sizeof( char ) ) );
+							char* filterPath = cast( char*, mem_temp_alloc( ( filterPathLength + 1 ) * sizeof( char ) ) );
 							memcpy( filterPath, folder, filterPathLength );
 							filterPath[filterPathLength] = 0;
 
@@ -451,6 +455,8 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 				}
 			}
 		}
+
+		const char* projectNameNoFolder = paths_remove_path_from_file( project->name.c_str() );
 
 		// .vcxproj
 		{
@@ -502,7 +508,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 				const char* fullBinaryName = BuildConfig_GetFullBinaryName( &config->options );
 
 				const char* from = solutionFilename;
-				const char* to = tprintf( "%s\\%s", context->inputFilePath, fullBinaryName );
+				const char* to = tprintf( "%s\\%s", context->inputFilePath.data, fullBinaryName );
 				to = paths_canonicalise_path( to );
 
 				char* pathFromSolutionToBinary = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
@@ -684,7 +690,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 					const char* fullBinaryName = BuildConfig_GetFullBinaryName( &config->options );
 
 					const char* from = solutionFilename;
-					const char* to = tprintf( "%s\\%s", context->inputFilePath, fullBinaryName );
+					const char* to = tprintf( "%s\\%s", context->inputFilePath.data, fullBinaryName );
 					to = paths_canonicalise_path( to );
 
 					char* pathFromSolutionToBinary = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
@@ -873,12 +879,12 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 			string_builder_appendf( &slnContent, "\tEndGlobalSection\n" );
 
 			// which projects are in which project folders (if any)?
-			if ( projectParentMappings.count > 0 ) {
+			if ( guidParentMappings.count > 0 ) {
 				string_builder_appendf( &slnContent, "\tGlobalSection(NestedProjects) = preSolution\n" );
-				For ( u64, projectIndex, 0, projectParentMappings.count ) {
-					projectParentMapping_t* mapping = &projectParentMappings[projectIndex];
+				For ( u64, projectIndex, 0, guidParentMappings.count ) {
+					guidParentMapping_t* mapping = &guidParentMappings[projectIndex];
 
-					string_builder_appendf( &slnContent, "\t\t{%s} = {%s}\n", projectGuids[mapping->projectIndex], projectGuids[mapping->parentIndex] );
+					string_builder_appendf( &slnContent, "\t\t{%s} = {%s}\n", projectGuids[mapping->guidIndex], projectGuids[mapping->guidParentIndex] );
 				}
 				string_builder_appendf( &slnContent, "\tEndGlobalSection\n" );
 			}
@@ -898,15 +904,6 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 		}
 
 		printf( "Done\n\n" );
-	}
-
-	// generate .build_info file
-	{
-		For ( u64, configIndex, 0, options->configs.size() ) {
-			BuildConfig_AddDefaults( &options->configs[configIndex] );
-		}
-
-		BuildInfo_Write( context, options->configs, userConfigSourceFilename, userConfigBuildDLLFilename );
 	}
 
 	return true;

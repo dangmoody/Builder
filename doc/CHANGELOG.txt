@@ -1,3 +1,16 @@
+v0.6.4, 07/04/2025:
+
+* Reduced build times!
+	* #include dependency resolution is now done through Clang's -MD arg, which is faster than the custom solution Builder had for this.
+	* This will produce .d files that get put into the .builder folder.
+* Fixed Builder hanging if a Visual Studio project had multiple folders in its name.
+* Fixed BuildConfig::warnings_as_errors not being read from/written to the .build_info file.
+* Better and more accurate documentation.
+* Moved Clang version into builder.h so that users can see and check what version of Clang Builder uses, if they need to.
+* Refactored a bunch of things internally that will mean nothing to the end-user, but internally things are a lot cleaner now.
+
+----------------------------------------------------------------
+
 v0.6.3, 08/03/2025:
 
 * Old Visual Studio files now get deleted when generating a Solution.

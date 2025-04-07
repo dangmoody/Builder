@@ -32,6 +32,7 @@ SOFTWARE.
 
 #include "core/include/core_types.h"
 #include "core/include/array.h"
+#include "core/include/core_string.h"
 
 #ifdef _WIN64
 #define NOMINMAX
@@ -56,14 +57,20 @@ typedef DWORD errorCode_t;
 #error Unrecognised platform!
 #endif
 
+struct Hashmap;
+struct buildInfoData_t;
+
 enum buildContextFlagBits_t {
-	BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS	= bit( 0 ),
-	BUILD_CONTEXT_FLAG_SHOW_STDOUT			= bit( 1 ),
+	BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS					= bit( 0 ),
+	BUILD_CONTEXT_FLAG_SHOW_STDOUT							= bit( 1 ),
+	BUILD_CONTEXT_FLAG_GENERATING_VISUAL_STUDIO_SOLUTION	= bit( 2 ),
 };
 typedef u32 buildContextFlags_t;
 
 struct buildContext_t {
 	BuildConfig			config;
+
+	Hashmap*			configIndices;
 
 	// TODO(DM): 10/08/2024: does this want to be inside BuilderOptions?
 	// it would give users more control over their build
@@ -72,17 +79,17 @@ struct buildContext_t {
 	const char*			fullBinaryName;
 
 	const char*			inputFile;
-	const char*			inputFilePath;
+	String				inputFilePath;
 
-	const char*			dotBuilderFolder;
-	const char*			buildInfoFilename;
+	String				dotBuilderFolder;
+	String				buildInfoFilename;
 
 	bool8				verbose;
 };
 
 errorCode_t	GetLastErrorCode();
 
-void		NukeFolder_r( const char* folder, const bool8 verbose );
+void		NukeFolder_r( const char* folder, const bool8 deleteRoot, const bool8 verbose );
 
 const char*	GetSlashInPath( const char* path );
 bool8		PathHasSlash( const char* path );
@@ -95,9 +102,7 @@ const char*	BuildConfig_GetFullBinaryName( const BuildConfig* config );
 void		BuildConfig_AddDefaults( BuildConfig* outConfig );
 
 
-void		BuildInfo_Write( const buildContext_t* context, const std::vector<BuildConfig>& configs, const char* userConfigSourceFilename, const char* userConfigDLLFilename );
-
-bool8		GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* options, const char* userConfigSourceFilename, const char* userConfigBuildDLLFilename );
+bool8		GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* options );
 
 inline u64 minull( const u64 x, const u64 y ) {
 	return ( x < y ) ? x : y;

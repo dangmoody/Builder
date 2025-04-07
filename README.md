@@ -55,6 +55,10 @@ And then at a command line, do this:
 builder build.cpp
 ```
 
+On the first run, Builder will detect if you have the version of Clang installed that it requires.  If you don't then Builder will download and install it for you (it will go in the `clang` folder).  It will install it in the same folder that `builder.exe` lives.  This requires an internet connection (but only for the first time setup).
+
+You'll also probably want to add the `clang` folder that Builder creates to your Version Control's list of ignored files.
+
 Builder will now build your program.
 
 **NOTE: BUILDER IS NOT A COMPILER.**  Builder will just call Clang under the hood.  Builder just figures out what to tell Clang to do based on your build source file that you specify.

@@ -1,3 +1,9 @@
+v0.6.5, <RELEASE DATE HERE>:
+
+* Moved some extraneous logging to only show when verbose logging (-v) argument is specified.
+
+----------------------------------------------------------------
+
 v0.6.4, 07/04/2025:
 
 * Reduced build times!

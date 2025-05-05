@@ -1,6 +1,7 @@
 v0.6.5, <RELEASE DATE HERE>:
 
-* Moved some extraneous logging to only show when verbose logging (-v) argument is specified.
+* Moved some extraneous logging when generating a Visual Studio solution to only show when verbose logging (-v) argument is specified.
+* Hide unecessary warning that gets fired when doing a hashmap lookup.
 
 ----------------------------------------------------------------
 

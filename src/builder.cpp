@@ -237,7 +237,7 @@ static const char* BuildConfig_ToString( const BuildConfig* config ) {
 void BuildConfig_AddDefaults( BuildConfig* outConfig ) {
 	// add the folder that builder lives in as an additional include path
 	// so that people can just include builder.h without having to add the include path manually every time
-	outConfig->additional_includes.push_back( paths_get_app_path() );
+	outConfig->additional_includes.push_back( path_app_path() );
 
 	outConfig->additional_includes.push_back( "." );
 
@@ -371,7 +371,7 @@ static const char* GetDepFilename( const buildContext_t* context, const BuildCon
 	assert( context );
 	assert( config );
 
-	const char* configNameNoPath = paths_remove_path_from_file( config->name.c_str() );
+	const char* configNameNoPath = path_remove_path_from_file( config->name.c_str() );
 
 	return tprintf( "%s\\%s.d", context->dotBuilderFolder.data, configNameNoPath );
 }
@@ -395,7 +395,7 @@ static s32 BuildEXE( buildContext_t* context ) {
 		context->config.ignore_warnings.size()
 	);
 
-	args.add( tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() ) );
+	args.add( tprintf( "%s\\clang\\bin\\clang.exe", path_app_path() ) );
 
 	if ( !context->config.name.empty() ) {
 		args.add( "-MD" );											// generate the dependency file
@@ -484,7 +484,7 @@ static s32 BuildDynamicLibrary( buildContext_t* context ) {
 		context->config.ignore_warnings.size()
 	);
 
-	args.add( tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() ) );
+	args.add( tprintf( "%s\\clang\\bin\\clang.exe", path_app_path() ) );
 	args.add( "-shared" );
 
 	if ( !context->config.name.empty() ) {
@@ -587,7 +587,7 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 
 		args.reset();
 
-		args.add( tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() ) );
+		args.add( tprintf( "%s\\clang\\bin\\clang.exe", path_app_path() ) );
 
 		if ( !context->config.name.empty() ) {
 			args.add( "-MD" );											// generate the dependency file
@@ -748,7 +748,7 @@ static const char* TryFindFile_r( const char* filename, const char* folder ) {
 
 	const char* searchPath = tprintf( "%s\\*", folder );
 
-	const char* filenamePath = paths_remove_file_from_path( filename );
+	const char* filenamePath = path_remove_file_from_path( filename );
 
 	FileInfo fileInfo;
 	File firstFile = file_find_first( searchPath, &fileInfo );
@@ -946,12 +946,12 @@ static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContex
 
 		bool8 inputFileIsSameAsSourceFile = string_equals( sourceFile, context->inputFile );
 
-		const char* sourceFileNoPath = paths_remove_path_from_file( sourceFile );
+		const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
 
 		if ( inputFileIsSameAsSourceFile ) {
 			GetAllSourceFiles_r( cast( char*, context->inputFilePath.data ), NULL, sourceFileNoPath, sourceFiles );
 		} else {
-			const char* sourceFilePath = paths_remove_file_from_path( sourceFile );
+			const char* sourceFilePath = path_remove_file_from_path( sourceFile );
 
 			GetAllSourceFiles_r( cast( char*, context->inputFilePath.data ), sourceFilePath, sourceFileNoPath, sourceFiles );
 		}
@@ -1498,14 +1498,14 @@ int main( int argc, char** argv ) {
 		bool8 doFirstTimeSetup = false;
 
 		// on exit set the CWD back to what we had before
-		const char* oldCWD = paths_get_current_working_directory();
+		const char* oldCWD = path_current_working_directory();
 		defer( SetCurrentDirectory( oldCWD ) );
 
 		// set CWD to whereever builder lives for first time setup
-		SetCurrentDirectory( paths_get_app_path() );
+		SetCurrentDirectory( path_app_path() );
 
 		{
-			const char* clangAbsolutePath = tprintf( "%s\\clang\\bin\\clang.exe", paths_get_app_path() );
+			const char* clangAbsolutePath = tprintf( "%s\\clang\\bin\\clang.exe", path_app_path() );
 
 			// if we cant find our copy of clang then we definitely need to run first time setup
 			if ( !FileExists( clangAbsolutePath ) ) {
@@ -1593,7 +1593,7 @@ int main( int argc, char** argv ) {
 				args.reserve( 4 );
 				args.add( ".\\temp\\clang_installer.exe" );
 				args.add( "/S" );		// install in silent mode
-				args.add( tprintf( "/D=%s\\%s", paths_get_app_path(), clangInstallFolder ) );	// set the install directory, absolute paths only
+				args.add( tprintf( "/D=%s\\%s", path_app_path(), clangInstallFolder ) );	// set the install directory, absolute paths only
 
 				Array<const char*> envVars;
 				envVars.add( "__compat_layer=RunAsInvoker" );	// this tricks the subprocess into thinking we are running with elevation
@@ -1732,10 +1732,10 @@ int main( int argc, char** argv ) {
 	// the default binary folder is the same folder as the source file
 	// if the file doesnt have a path then assume its in the same path as the current working directory (where we are calling builder from)
 	{
-		const char* inputFilePath = paths_remove_file_from_path( context.inputFile );
+		const char* inputFilePath = path_remove_file_from_path( context.inputFile );
 
 		if ( !inputFilePath ) {
-			inputFilePath = paths_get_current_working_directory();
+			inputFilePath = path_current_working_directory();
 		}
 
 		if ( doingBuildFrom == DOING_BUILD_FROM_BUILD_INFO_FILE ) {
@@ -1744,8 +1744,8 @@ int main( int argc, char** argv ) {
 			context.dotBuilderFolder = inputFilePath;
 			context.buildInfoFilename = context.inputFile;
 		} else {
-			const char* inputFileNoPath = paths_remove_path_from_file( context.inputFile );
-			const char* inputFileNoPathOrExtension = paths_remove_file_extension( inputFileNoPath );
+			const char* inputFileNoPath = path_remove_path_from_file( context.inputFile );
+			const char* inputFileNoPathOrExtension = path_remove_file_extension( inputFileNoPath );
 
 			context.inputFilePath = inputFilePath;
 
@@ -1754,7 +1754,7 @@ int main( int argc, char** argv ) {
 		}
 	}
 
-	const char* defaultBinaryName = paths_remove_file_extension( paths_remove_path_from_file( context.inputFile ) );
+	const char* defaultBinaryName = path_remove_file_extension( path_remove_path_from_file( context.inputFile ) );
 
 	buildInfoData_t buildInfoData = {};
 	bool8 readBuildInfo = BuildInfo_Read( cast( char*, context.buildInfoFilename.data ), &buildInfoData );
@@ -1804,7 +1804,7 @@ int main( int argc, char** argv ) {
 
 		userConfigBuildContext.config.source_files.push_back( buildInfoData.userConfigSourceFilename );
 
-		userConfigBuildContext.config.binary_name = tprintf( "%s.dll", paths_remove_path_from_file( paths_remove_file_extension( buildInfoData.userConfigSourceFilename.c_str() ) ) );
+		userConfigBuildContext.config.binary_name = tprintf( "%s.dll", path_remove_path_from_file( path_remove_file_extension( buildInfoData.userConfigSourceFilename.c_str() ) ) );
 		userConfigBuildContext.config.binary_folder = cast( char*, context.dotBuilderFolder.data );
 		userConfigBuildContext.config.defines = {
 			"_CRT_SECURE_NO_WARNINGS",
@@ -1997,7 +1997,7 @@ int main( int argc, char** argv ) {
 		if ( preBuildFunc ) {
 			printf( "Running pre-build code...\n" );
 
-			const char* oldCWD = paths_get_current_working_directory();
+			const char* oldCWD = path_current_working_directory();
 			SetCurrentDirectory( cast( char*, context.inputFilePath.data ) );
 			defer( SetCurrentDirectory( oldCWD ) );
 
@@ -2073,7 +2073,7 @@ int main( int argc, char** argv ) {
 					const trackedSourceFile_t* trackedSourceFile = &trackedSourceFiles[sourceFileIndex];
 
 					const char* trackedSourceFileAndPath = trackedSourceFile->filename.c_str();
-					if ( !paths_is_path_absolute( trackedSourceFile->filename.c_str() ) ) {
+					if ( !path_is_absolute( trackedSourceFile->filename.c_str() ) ) {
 						trackedSourceFileAndPath = tprintf( "%s\\%s", buildContext->inputFilePath.data, trackedSourceFile->filename.c_str() );
 					}
 
@@ -2116,7 +2116,7 @@ int main( int argc, char** argv ) {
 			For ( u64, includeIndex, 0, context.config.additional_includes.size() ) {
 				const char* additionalInclude = context.config.additional_includes[includeIndex].c_str();
 
-				if ( paths_is_path_absolute( additionalInclude ) ) {
+				if ( path_is_absolute( additionalInclude ) ) {
 					context.config.additional_includes[includeIndex] = additionalInclude;
 				} else {
 					context.config.additional_includes[includeIndex] = tprintf( "%s\\%s", context.inputFilePath.data, additionalInclude );
@@ -2127,7 +2127,7 @@ int main( int argc, char** argv ) {
 			For ( u64, libPathIndex, 0, context.config.additional_lib_paths.size() ) {
 				const char* additionalLibPath = context.config.additional_lib_paths[libPathIndex].c_str();
 
-				if ( paths_is_path_absolute( additionalLibPath ) ) {
+				if ( path_is_absolute( additionalLibPath ) ) {
 					context.config.additional_lib_paths[libPathIndex] = additionalLibPath;
 				} else {
 					context.config.additional_lib_paths[libPathIndex] = tprintf( "%s\\%s", context.inputFilePath.data, additionalLibPath );
@@ -2191,7 +2191,7 @@ int main( int argc, char** argv ) {
 		if ( postBuildFunc ) {
 			printf( "Running post-build code...\n" );
 
-			const char* oldCWD = paths_get_current_working_directory();
+			const char* oldCWD = path_current_working_directory();
 			SetCurrentDirectory( cast( char*, context.inputFilePath.data ) );
 			defer( SetCurrentDirectory( oldCWD ) );
 

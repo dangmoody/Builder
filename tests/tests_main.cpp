@@ -36,7 +36,7 @@ static void DoBuildInfoPreTest( const char* buildInfoFilename ) {
 }
 
 static void DoBuildInfoPostTest( const char* testName, const char* buildSourceFile ) {
-	const char* buildSourceFileNoExtension = paths_remove_file_extension( buildSourceFile );
+	const char* buildSourceFileNoExtension = path_remove_file_extension( buildSourceFile );
 
 	TEMPER_CHECK_TRUE( folder_exists( tprintf( "tests\\%s\\.builder", testName ) ) );
 	TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests\\%s\\.builder\\%s.build_info", testName, buildSourceFileNoExtension ) ) );
@@ -216,6 +216,10 @@ TEMPER_TEST( Compile_DynamicLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 
 		TEMPER_CHECK_TRUE( FileExists( testDynamicLibDLLPath ) );
 	}
+}
+
+TEMPER_TEST( RebuildSkipping, TEMPER_FLAG_SHOULD_RUN ) {
+
 }
 
 TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {

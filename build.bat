@@ -43,7 +43,7 @@ if /I [%config%]==[release] (
 
 set source_files=src\\builder.cpp src\\visual_studio.cpp src\\core\\src\\core.suc.cpp
 
-set defines=-D_CRT_SECURE_NO_WARNINGS -DCORE_USE_XXHASH -DCORE_SUC
+set defines=-D_CRT_SECURE_NO_WARNINGS -DCORE_USE_XXHASH -DCORE_SUC -DHASHMAP_HIDE_MISSING_KEY_WARNING
 if /I [%config%]==[debug] (
 	set defines=!defines! -D_DEBUG
 )

@@ -40,18 +40,16 @@ struct Allocator;
 
 	Container type used to represent text.
 
-	Unlike C++'s std::string, this string type doesn't allow for appending additional data on
-	the end of it.  If you want to do that, use StringBuilder.
-
-	This string type only calls realloc() when making the string hold a larger piece of text.
+	This string type only calls realloc() when making the string hold a larger piece of text,
+	but unlike std::string this string type doesn't allow for appending additional data on the
+	end of it.  If you want to do that, use StringBuilder.
 
 ================================================================================================
 */
 
-struct String {
-	u8*			data = NULL;
+struct CORE_API String {
+	char*		data = NULL;
 	u64			count = 0;
-	u64			alloced = 0;
 	Allocator*	allocator = NULL;
 
 				String() {}
@@ -62,9 +60,11 @@ struct String {
 	String&		operator=( const char* str );
 	String&		operator=( const String& str );
 
-	u8			operator[]( const u64 index );
-	u8			operator[]( const u64 index ) const;
+	char		operator[]( const u64 index );
+	char		operator[]( const u64 index ) const;
 };
+
+CORE_API bool8	string_equals( const String* lhs, const String* rhs );
 
 CORE_API void	string_copy_from_c_string( String* dst, const char* src, const u64 src_length );
 CORE_API void	string_printf( String* dst, const char* fmt, ... );

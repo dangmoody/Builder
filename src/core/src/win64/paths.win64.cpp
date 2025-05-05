@@ -65,19 +65,19 @@ static const char* get_last_slash( const char* path ) {
 ================================================================================================
 */
 
-const char* paths_get_app_path() {
+const char* path_app_path() {
 	char* app_full_path = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
 	DWORD length = GetModuleFileNameA( NULL, app_full_path, MAX_PATH );
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcast-qual"
-	app_full_path = cast( char*, paths_remove_file_from_path( app_full_path ) );
+	app_full_path = cast( char*, path_remove_file_from_path( app_full_path ) );
 #pragma clang diagnostic pop
 
 	return app_full_path;
 }
 
-const char* paths_get_current_working_directory() {
+const char* path_current_working_directory() {
 	char* cwd = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
 	DWORD length = GetCurrentDirectory( MAX_PATH, cwd );
 	cwd[length] = 0;
@@ -85,13 +85,13 @@ const char* paths_get_current_working_directory() {
 	return cwd;
 }
 
-const char* paths_get_absolute_path( const char* file ) {
+const char* path_absolute_path( const char* file ) {
 	char* absolute_path = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
 	GetFullPathName( file, MAX_PATH, absolute_path, NULL );
 	return absolute_path;
 }
 
-const char* paths_remove_file_from_path( const char* path ) {
+const char* path_remove_file_from_path( const char* path ) {
 	const char* last_slash = get_last_slash( path );
 
 	if ( !last_slash ) {
@@ -107,7 +107,7 @@ const char* paths_remove_file_from_path( const char* path ) {
 	return result;
 }
 
-const char* paths_remove_path_from_file( const char* path ) {
+const char* path_remove_path_from_file( const char* path ) {
 	const char* last_slash = get_last_slash( path );
 
 	if ( !last_slash ) {
@@ -119,7 +119,7 @@ const char* paths_remove_path_from_file( const char* path ) {
 	return last_slash;
 }
 
-const char* paths_remove_file_extension( const char* filename ) {
+const char* path_remove_file_extension( const char* filename ) {
 	const char* dot = strrchr( filename, '.' );
 
 	if ( !dot ) {
@@ -135,7 +135,7 @@ const char* paths_remove_file_extension( const char* filename ) {
 	return result;
 }
 
-bool8 paths_is_path_absolute( const char* path ) {
+bool8 path_is_absolute( const char* path ) {
 	if ( !path || strlen( path ) < 3 ) {
 		return false;
 	}
@@ -143,8 +143,8 @@ bool8 paths_is_path_absolute( const char* path ) {
 	return isalpha( path[0] ) && path[1] == ':' && ( path[2] == '\\' || path[2] == '/' );
 }
 
-const char* paths_canonicalise_path( const char* path ) {
-	const char* path_copy = paths_fix_slashes( path );
+const char* path_canonicalise( const char* path ) {
+	const char* path_copy = path_fix_slashes( path );
 
 	u64 max_path_length = ( strlen( path_copy ) + 1 ) * sizeof( char );
 
@@ -164,15 +164,15 @@ const char* paths_canonicalise_path( const char* path ) {
 	return result;
 }
 
-const char* paths_fix_slashes( const char* path ) {
+const char* path_fix_slashes( const char* path ) {
 	u64 path_length = strlen( path );
 	char* result = cast( char*, mem_temp_alloc( ( path_length + 1 ) * sizeof( char ) ) );
 	memcpy( result, path, path_length * sizeof( char ) );
 	result[path_length] = 0;
 
-	For ( u64, i, 0, path_length ) {
-		if ( result[i] == '/' ) {
-			result[i] = '\\';
+	For ( u64, char_index, 0, path_length ) {
+		if ( result[char_index] == '/' ) {
+			result[char_index] = '\\';
 		}
 	}
 

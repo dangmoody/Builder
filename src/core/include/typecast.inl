@@ -49,6 +49,8 @@ SOFTWARE.
 // DO NOT CALL THESE ONES!
 template<class OutType, class InType>
 OutType trunc_cast_internal( const InType in ) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wfloat-equal"
 	bool8 is_input_floating_point = cast( InType, 0.5 ) != 0;
 	bool8 is_output_floating_point = cast( OutType, 0.5 ) != 0;
 
@@ -78,4 +80,5 @@ OutType trunc_cast_internal( const InType in ) {
 	assert( in <= cast( OutType, max_output_value ) );
 
 	return cast( OutType, in );
+#pragma clang diagnostic pop
 }

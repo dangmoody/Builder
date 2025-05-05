@@ -31,6 +31,8 @@ SOFTWARE.
 #include <debug.h>
 #include <allocation_context.h>
 #include <typecast.inl>
+#define NOMINMAX
+#include <core_math.h>
 
 #include <memory.h>	// memset
 
@@ -81,7 +83,7 @@ inline void set_key_at_index( Hashmap* map, u32 index, u64 key ) {
 
 void hashmap_reset( Hashmap* map ) {
 	For ( u32, i, 0, map->capacity ) {
-		set_key_at_index( map, i, HASHMAP_UNUSED_BUCKET );
+		set_key_at_index( map, trunc_cast( u32, i ), HASHMAP_UNUSED_BUCKET );
 		map->buckets[i].value = HASHMAP_INVALID_VALUE;
 	}
 
@@ -113,7 +115,9 @@ u32 hashmap_get_value( const Hashmap* map, const u64 key ) {
 	u32 i = try_get_index_of_hash( map, key );
 
 	if ( hashmap_internal_combine_at_index( map, i ) != key ) {
+#ifndef HASHMAP_HIDE_MISSING_KEY_WARNING
 		warning( "GET: Key %llu not found in hashmap\n", key );
+#endif
 		return HASHMAP_INVALID_VALUE;
 	}
 
@@ -142,7 +146,7 @@ void hashmap_set_value( Hashmap* map, const u64 key, const u32 value ) {
 				defer( mem_free( old_buckets ) );
 
 				u32 old_capacity = map->capacity;
-				map->capacity = max( 2U, cast( u32, cast( float32, map->capacity ) * 1.5f ) );
+				map->capacity = max( cast( u32, cast( float32, map->capacity ) * 1.5f ), 2U );
 				map->buckets = cast( HashmapBucket*, mem_alloc( map->capacity * sizeof( HashmapBucket ) ) );
 				// Note(Tom): I don't love that this isn't a memset anymore. this isn's possible if we keep caring about values of unused buckets: unused value != empty bucket.
 				// I suggest we start leaving them untouched. Yes they have stale old data in them, but so long as people are using set that should never be an issue

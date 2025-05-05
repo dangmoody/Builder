@@ -74,7 +74,7 @@ static void set_memory_tracking_flag( MemoryTrackingFlag flag, bool active ) {
 	}
 }
 
-bool is_memeory_tracking_flag_active( MemoryTrackingFlag flag ) {
+static bool is_memeory_tracking_flag_active( MemoryTrackingFlag flag ) {
 	return ( g_core_ptr->memory_tracking->flags & flag ) != 0;
 }
 
@@ -153,7 +153,7 @@ static void recursively_track_frees( AllocatorTrackingData* allocator_data, void
 
 		bool allocator_found = false;
 
-		For ( u32, track_index, 0, memory_tracking->allocator_tracking_data.count ) {
+		For ( u64, track_index, 0, memory_tracking->allocator_tracking_data.count ) {
 			if ( memory_tracking->allocator_tracking_data[track_index].allocator == allocator ) {
 				assertf( is_memeory_tracking_flag_active( MTF_ALLOW_ALLOCATOR_NUKING ), "Not safe to remove this allocator: you need to call mem_allow_allocator_nuking if you're sure you're not leaving dangling allocators" );
 
@@ -166,7 +166,7 @@ static void recursively_track_frees( AllocatorTrackingData* allocator_data, void
 				//Recursively check all the allocators allocations
 				AllocatorTrackingData* allocator_data_from_child_allocation = &memory_tracking->allocator_tracking_data[track_index];
 
-				For ( u32, allocation_index, 0, allocator_data_from_child_allocation->allocations.count ) {
+				For ( u64, allocation_index, 0, allocator_data_from_child_allocation->allocations.count ) {
 					recursively_track_frees( allocator_data_from_child_allocation, allocator_data_from_child_allocation->allocations[allocation_index].ptr );
 				}
 
@@ -217,7 +217,7 @@ void track_free_whole_allocator_internal( bool stop_tracking ) {
 	AllocatorTrackingData* allocator_data = get_current_tracking_data();
 	assert( allocator_data );
 
-	For ( u32, i, 0, allocator_data->allocations.count ) {
+	For ( u64, i, 0, allocator_data->allocations.count ) {
 		recursively_track_frees( allocator_data, allocator_data->allocations[i].ptr );
 	}
 

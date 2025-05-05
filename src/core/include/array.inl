@@ -25,6 +25,7 @@ SOFTWARE.
 
 ===========================================================================
 */
+
 // Include this file in your source files.
 
 #pragma once
@@ -34,6 +35,7 @@ SOFTWARE.
 #include "debug.h"
 #include "allocation_context.h"
 #include "core_math.h"
+#include "typecast.inl"
 
 #include <memory.h>
 
@@ -83,28 +85,30 @@ Array<T>::Array()
 	, alloced( 0 )
 	, allocator( NULL )
 {
-
-}
-
-template<class T>
-Array<T>::~Array() {
-	if ( data ) {
-		assert(allocator);
-		mem_push_allocator(allocator);
-		mem_free( data );
-		data = NULL;
-		mem_pop_allocator();
-	}
 }
 
 template<class T>
 Array<T>::Array( const Array<T>& other )
-: data( NULL )
+	: data( NULL )
 	, count( 0 )
 	, alloced( 0 )
 	, allocator( NULL )
 {
 	copy( &other );
+}
+
+template<class T>
+Array<T>::~Array() {
+	if ( data ) {
+		assert( allocator );
+
+		mem_push_allocator( allocator );
+
+		mem_free( data );
+		data = NULL;
+
+		mem_pop_allocator();
+	}
 }
 
 template<class T>
@@ -127,14 +131,21 @@ void Array<T>::add_range( const T* ptr, const u64 num_items ) {
 }
 
 template<class T>
-inline void Array<T>::remove_at( const u64 index ) {
+void Array<T>::add_range( const Array<T>* array ) {
+	if ( array->count > 0 ) {
+		add_range( array->data, array->count );
+	}
+}
+
+template<class T>
+void Array<T>::remove_at( const u64 index ) {
 	assert( index < count );
 	memcpy( data + index, data + index + 1, ( count - index ) * sizeof( T ) );
 	count--;
 }
 
 template<class T>
-inline void	Array<T>::swap_remove_at( const u64 index ) {
+void	Array<T>::swap_remove_at( const u64 index ) {
 	assert( index < count );
 	data[index] = data[count-1];
 	count--;
@@ -155,13 +166,7 @@ void Array<T>::reserve( const u64 bytes ) {
 		allocator = ( allocator == nullptr ) ? mem_get_current_allocator() : allocator;
 
 		mem_push_allocator( allocator );
-		// TODO(DM): 07/02/2025: using our own cast( T, x ) function doesnt work here when we enable CORE_MEMORY_TRACKING
-		// this is because in that instance mem_realloc calls track_allocation_internal() followed immediately by track_free_internal(), which the compiler wont like if we were to do the following:
-		//
-		//	data = cast( T*, mem_realloc( data, alloced * sizeof( T ) ) );
-		//
-		// therefore we need to make the mem_realloc() define call just the one function instead of one after the other
-		data = (T*) mem_realloc( data, alloced * sizeof( T ) );
+		data = cast( T*, mem_realloc( data, alloced * sizeof( T ) ) );
 		mem_pop_allocator();
 	}
 }

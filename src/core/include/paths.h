@@ -49,28 +49,32 @@ SOFTWARE.
 #endif
 
 // Returns the absolute path of where the current program is running from.
-CORE_API const char*	paths_get_app_path();
+CORE_API const char*	path_app_path();
 
 // Returns the path that your program is currently running from.
-CORE_API const char*	paths_get_current_working_directory();
+CORE_API const char*	path_current_working_directory();
 
 // Returns the absolute path of 'file'.
-CORE_API const char*	paths_get_absolute_path( const char* file );
+CORE_API const char*	path_absolute_path( const char* file );
 
 // Given a file path that also includes a filename, will remove the filename part, leaving just the path.
-CORE_API const char*	paths_remove_file_from_path( const char* path );
+CORE_API const char*	path_remove_file_from_path( const char* path );
 
 // Given a file path that also includes a filename, will remove the path part, leaving just the filename.
-CORE_API const char*	paths_remove_path_from_file( const char* path );
+CORE_API const char*	path_remove_path_from_file( const char* path );
 
 // Returns the name of a file without its file extension, if there is one.
-CORE_API const char*	paths_remove_file_extension( const char* filename );
+CORE_API const char*	path_remove_file_extension( const char* filename );
 
-// On Windows:   Returns true if the path starts with a letter followed by a colon, otherwise returns false.
+// On Windows:   Returns true if the path starts with a letter followed by a colon (for example: "C:"), otherwise returns false.
 // On Mac/Linux: Returns true if the path starts with two backslashes or a single forward slash, otherwise returns false.
-CORE_API bool8			paths_is_path_absolute( const char* path );
+CORE_API bool8			path_is_absolute( const char* path );
 
-CORE_API const char*	paths_canonicalise_path( const char* path );
+CORE_API const char*	path_canonicalise( const char* path );
 
 // Make sure that any slashes found in 'path' are what the OS expects them to be.
-CORE_API const char*	paths_fix_slashes( const char* path );
+CORE_API const char*	path_fix_slashes( const char* path );
+
+// Takes a potentially-infinite infinite number of strings and separates each one with a slash (back slash on Windows, forward slash on all other platforms).
+// template<class... Args>
+// CORE_API const char*	path_join( const char* first, const Args*... args );

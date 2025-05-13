@@ -21,14 +21,14 @@ echo Building config "%config%"...
 pushd %~dp0
 
 set bin_folder="bin\\win64\\"%config%
-set intermediate_path=%bin_folder%"\\intermediate"
+set intermediate_folder=%bin_folder%"\\intermediate"
 
 if not exist %bin_folder% (
 	mkdir %bin_folder%
 )
 
-if not exist %intermediate_path% (
-	mkdir %intermediate_path%
+if not exist %intermediate_folder% (
+	mkdir %intermediate_folder%
 )
 
 set symbols=-g

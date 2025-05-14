@@ -1,7 +1,16 @@
-v0.6.5, <RELEASE DATE HERE>:
+v0.7.0, <RELEASE DATE HERE>:
 
 * Moved some extraneous logging when generating a Visual Studio solution to only show when verbose logging (-v) argument is specified.
 * Hide unecessary warning that gets fired when doing a hashmap lookup.
+* Time more than just the total time taken to run Builder.exe from start to finish.
+	* We're doing this to get a better idea of where build time is being spent when using Builder and therefore how we can make Builder faster.
+	* We now also log:
+		* User config build.
+		* Visual Studio solution generation time.
+		* The time taken to just run the compiler subprocess.
+		* .build_info file read and write time.
+		* Dependency file read time.
+		* Maybe more, in future.
 
 ----------------------------------------------------------------
 

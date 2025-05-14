@@ -329,7 +329,7 @@ static s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVar
 		}
 	}
 
-	s32 exitCode = process_join( &process );
+	s32 exitCode = process_join( process );
 
 	process_destroy( process );
 	process = NULL;
@@ -1473,11 +1473,12 @@ static void AddBuildConfigAndDependenciesUnique( buildContext_t* context, BuildC
 }
 
 int main( int argc, char** argv ) {
-	float64 buildStart = time_ms();
-	defer(
-		float64 buildEnd = time_ms();
-		printf( "Build finished: %f ms\n\n", buildEnd - buildStart );
-	);
+	float64 totalTimeStart = time_ms();
+
+	float64 userConfigBuildTimeMS = -1.0f;
+	float64 visualStudioGenerationTimeMS = -1.0f;
+	float64 buildInfoReadTimeMS = -1.0f;
+	float64 buildInfoWriteTimeMS = -1.0f;
 
 	core_init( MEM_MEGABYTES( 128 ) );	// TODO(DM): 26/03/2025: can we just use defaults for this now?
 	defer( core_shutdown() );
@@ -1492,6 +1493,15 @@ int main( int argc, char** argv ) {
 #else
 	context.verbose = false;
 #endif
+
+	/*{
+		Array<const char*> args;
+		args.add( "\"%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\vswhere.exe\"" );
+		args.add( "-property" );
+		args.add( "installationPath" );
+
+		RunProc( &args, NULL, false, true );
+	}*/
 
 	// check if we need to perform first time setup
 	{
@@ -1532,7 +1542,7 @@ int main( int argc, char** argv ) {
 					}
 				}
 
-				s32 exitCode = process_join( &clangVersionCheck );
+				s32 exitCode = process_join( clangVersionCheck );
 				assertf( exitCode == 0, "Something went terribly wrong..\n" );
 
 				if ( !correctClangVersion ) {
@@ -1756,8 +1766,18 @@ int main( int argc, char** argv ) {
 
 	const char* defaultBinaryName = path_remove_file_extension( path_remove_path_from_file( context.inputFile ) );
 
+	// read .build_info file
 	buildInfoData_t buildInfoData = {};
-	bool8 readBuildInfo = BuildInfo_Read( cast( char*, context.buildInfoFilename.data ), &buildInfoData );
+	bool8 readBuildInfo = false;
+	{
+		float64 start = time_ms();
+
+		readBuildInfo = BuildInfo_Read( cast( char*, context.buildInfoFilename.data ), &buildInfoData );
+
+		float64 end = time_ms();
+
+		buildInfoReadTimeMS = end - start;
+	}
 
 	if ( !readBuildInfo ) {
 		if ( doingBuildFrom == DOING_BUILD_FROM_BUILD_INFO_FILE ) {
@@ -1794,6 +1814,8 @@ int main( int argc, char** argv ) {
 	// see if they have set_builder_options() overridden
 	// if they do, then build a DLL first and call that function to set some more build options
 	if ( doUserConfigBuild ) {
+		float64 userConfigBuildTimeStart = time_ms();
+
 		buildContext_t userConfigBuildContext = {};
 		BuildConfig_AddDefaults( &userConfigBuildContext.config );
 		userConfigBuildContext.flags = BUILD_CONTEXT_FLAG_SHOW_STDOUT;
@@ -1839,9 +1861,15 @@ int main( int argc, char** argv ) {
 			error( "Pre-build failed!\n" );
 			QUIT_ERROR();
 		}
+
+		float64 userConfigBuildTimeEnd = time_ms();
+
+		userConfigBuildTimeMS = userConfigBuildTimeEnd - userConfigBuildTimeStart;
 	}
 
 	printf( "\n" );
+
+	BuilderOptions options = {};
 
 	{
 		if ( library.ptr == INVALID_HANDLE_VALUE || library.ptr == NULL ) {
@@ -1856,7 +1884,6 @@ int main( int argc, char** argv ) {
 			// now get the user-specified options
 			setBuilderOptionsFunc_t setBuilderOptionsFunc = cast( setBuilderOptionsFunc_t, library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME ) );
 			if ( setBuilderOptionsFunc ) {
-				BuilderOptions options = {};
 				setBuilderOptionsFunc( &options );
 
 				buildInfoData.configs = options.configs;
@@ -1894,7 +1921,12 @@ int main( int argc, char** argv ) {
 
 					printf( "Generating Visual Studio files\n" );
 
+					float64 start = time_ms();
+
 					bool8 generated = GenerateVisualStudioSolution( &context, &options );
+
+					float64 end = time_ms();
+					visualStudioGenerationTimeMS = end - start;
 
 					if ( !generated ) {
 						error( "Failed to generate Visual Studio solution.\n" );	// TODO(DM): better error message
@@ -2156,34 +2188,55 @@ int main( int argc, char** argv ) {
 				context.config.source_files = finalSourceFilesToBuild;
 			}
 
+			float64 buildTimeStart = 0.0f;
+			float64 buildTimeEnd = 0.0f;
+
 			// now do the actual build
 			switch ( config->binary_type ) {
 				case BINARY_TYPE_EXE:
+					buildTimeStart = time_ms();
+
 					exitCode = BuildEXE( &context );
+
+					buildTimeEnd = time_ms();
 					break;
 
 				case BINARY_TYPE_DYNAMIC_LIBRARY:
+					buildTimeStart = time_ms();
+
 					exitCode = BuildDynamicLibrary( &context );
+
+					buildTimeEnd = time_ms();
 					break;
 
 				case BINARY_TYPE_STATIC_LIBRARY:
+					buildTimeStart = time_ms();
+
 					exitCode = BuildStaticLibrary( &context );
+
+					buildTimeEnd = time_ms();
 					break;
 			}
 
 			if ( exitCode == 0 ) {
 				numSuccessfulBuilds++;
 
+				float64 depFileReadStart = time_ms();
+
 				// get the updated list of dependency files from the .d file and put those into the .build_info file data
 				ReadDependencyFile( &context, config, buildInfoData.trackedSourceFiles[actualConfigIndex] );
+
+				float64 depFileReadEnd = time_ms();
+
+				printf( "Finished building \"%s\":\n", context.fullBinaryName );
+				printf( "    Read .d file: %f ms\n", depFileReadEnd - depFileReadStart );
+				printf( "    Build time:   %f ms\n", buildTimeEnd - buildTimeStart );
 			} else {
 				numFailedBuilds++;
 
 				error( "Build failed.\n" );
 				QUIT_ERROR();
 			}
-
-			printf( "\n" );
 
 			mem_reset_temp_storage();
 		}
@@ -2203,8 +2256,30 @@ int main( int argc, char** argv ) {
 	}
 
 	if ( shouldWriteBuildInfo ) {
+		float64 start = time_ms();
+
 		BuildInfo_Write( &context, &buildInfoData );
+
+		float64 end = time_ms();
+		buildInfoWriteTimeMS = end - start;
 	}
+
+	float64 totalTimeEnd = time_ms();
+	printf( "Build finished:\n" );
+	if ( doUserConfigBuild ) {
+		printf( "    User config build: %f ms\n", userConfigBuildTimeMS );
+	}
+	if ( options.generate_solution ) {
+		printf( "    Generate solution: %f ms\n", visualStudioGenerationTimeMS );
+	}
+	if ( readBuildInfo ) {
+		printf( "    Read .build_info:  %f ms\n", buildInfoReadTimeMS );
+	}
+	if ( shouldWriteBuildInfo ) {
+		printf( "    Write .build_info: %f ms\n", buildInfoWriteTimeMS );
+	}
+	printf( "    Total time:        %f ms\n", totalTimeEnd - totalTimeStart );
+	printf( "\n" );
 
 	return 0;
 }

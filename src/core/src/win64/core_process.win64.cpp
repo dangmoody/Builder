@@ -69,7 +69,8 @@ Process* process_create( Array<const char*>* args, Array<const char*>* environme
 
 	// stdout
 	if ( !CreatePipe( &process->stdout_read, &process->stdout_write, &sec_attr, 0 ) ) {
-		fatal_error( "CreatePipe call failed: 0x%X.\n", GetLastError() );
+		error( "CreatePipe call failed: 0x%X.\n", GetLastError() );
+		return NULL;
 	}
 
 	STARTUPINFO start_info = { sizeof( start_info ) };
@@ -120,22 +121,40 @@ Process* process_create( Array<const char*>* args, Array<const char*>* environme
 	);
 
 	if ( !created ) {
-		fatal_error( "CreateProcess() failed: 0x%X.\n", GetLastError() );
+		error( "CreateProcess() failed: 0x%X.\n", GetLastError() );
+		return NULL;
 	}
 
 	CloseHandle( start_info.hStdOutput );
+	start_info.hStdOutput = NULL;
 
 	return process;
 }
 
 void process_destroy( Process* process ) {
-	CloseHandle( process->stdout_read );
-	CloseHandle( process->process_info.hProcess );
-	CloseHandle( process->process_info.hThread );
+	if ( process->stdout_read ) {
+		CloseHandle( process->stdout_read );
+		process->stdout_read = NULL;
+	}
+
+	if ( process->process_info.hProcess ) {
+		CloseHandle( process->process_info.hProcess );
+		process->process_info.hProcess = NULL;
+	}
+
+	if ( process->process_info.hThread ) {
+		CloseHandle( process->process_info.hThread );
+		process->process_info.hThread = NULL;
+	}
+
+	free( process );
+	process = NULL;
 }
 
 s32 process_join( Process* process ) {
 	CloseHandle( process->stdout_read );
+	process->stdout_read = NULL;
+
 	WaitForSingleObject( process->process_info.hProcess, INFINITE );
 
 	DWORD exit_code = 0;
@@ -153,7 +172,12 @@ u32 process_read_stdout( Process* process, char* out_buffer, const u32 count ) {
 	DWORD bytes_read = 0;
 	BOOL read = ReadFile( process->stdout_read, out_buffer, count, &bytes_read, /*&overlapped*/NULL );
 
-	return read ? bytes_read : 0;
+	if ( !read ) {
+		error( "Failed to read stdout of subprocess: 0x%X.\n", GetLastError() );
+		return 0;
+	}
+
+	return bytes_read;
 }
 
 #endif // defined( _WIN32 ) && !defined( CORE_USE_SUBPROCESS )

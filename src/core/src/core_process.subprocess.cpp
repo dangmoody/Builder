@@ -116,10 +116,9 @@ void process_destroy( Process* process ) {
 
 s32 process_join( Process* process ) {
 	assert( process );
-	assert( *process );
 
 	int exit_code = -1;
-	int result = subprocess_join( process->proc, &exit_code );
+	int result = subprocess_join( &process->proc, &exit_code );
 
 	assert( result == 0 );
 	unused( result );
@@ -127,7 +126,7 @@ s32 process_join( Process* process ) {
 	return exit_code;
 }
 
-u64 process_read_stdout( Process* process, char* out_buffer, const u32 count ) {
+u32 process_read_stdout( Process* process, char* out_buffer, const u32 count ) {
 	assert( process );
 	assert( out_buffer );
 

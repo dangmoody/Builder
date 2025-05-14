@@ -41,6 +41,7 @@ SOFTWARE.
 #include "win64/debug.win64.cpp"
 #include "win64/file.win64.cpp"
 #include "win64/library.win64.cpp"
+#include "win64/core_process.win64.cpp"
 #include "win64/paths.win64.cpp"
 
 #endif // _WIN32

@@ -179,3 +179,16 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 ```
 
 Every project that Builder generates is a Makefile project.  Therefore, changes that you make to any of the project properties in Visual Studio will not actually do anything (this is a Visual Studio problem).  If you want to change your project properties you must re-generate your Visual Studio solution.
+
+## Contributing
+
+Yes!
+
+Please see [Contributing.md](docs/Contributing.md).
+
+## Credits
+
+Builder would not have been possible without the following people who deserve, at the very least, a special thanks:
+
+* Tom Whitcombe (Visual Studio project generation)
+* Mike Young (Linux port)

@@ -339,7 +339,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 						guidIndex = trunc_cast( u32, projectGuids.count - 1 );
 
 						if ( context->verbose ) {
-							printf( "%d = %s (parent = %d)\n", guidIndex, folderName, guidParentIndex );
+							printf( "%u = %s (parent = %u)\n", guidIndex, folderName, guidParentIndex );
 						}
 
 						hashmap_set_value( projectFolderIndices, folderNameHash, guidIndex );

@@ -1613,9 +1613,12 @@ int main( int argc, char** argv ) {
 				printf( "Cleaning up ... " );
 
 				NukeFolder_r( "temp", true, true );
+
 				if ( folder_exists( "temp" ) ) {
 					warning( "Failed to fully delete the temp folder after installing Clang.  You are safe to delete this yourself.\n" );
 				}
+
+				printf( "\n" );
 			}
 
 			doFirstTimeSetup = false;

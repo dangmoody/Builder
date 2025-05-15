@@ -184,7 +184,7 @@ Every project that Builder generates is a Makefile project.  Therefore, changes 
 
 Yes!
 
-Please see [Contributing.md](docs/Contributing.md).
+Please see [Contributing.md](doc/Contributing.md).
 
 ## Credits
 

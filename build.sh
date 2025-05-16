@@ -51,14 +51,9 @@ if [[ "$config" != "release" ]]; then
 	defines="$defines -DNDEBUG"
 fi
 
-set includes="-I$project_folder/src/core/include"
+includes="-I$project_folder/src/core/include"
 
-libraries="-luser32.lib -lShlwapi.lib -lDbgHelp.lib -lOle32.lib"
-if [[ "$config" != "debug" ]]; then
-	libraries="$libraries -lmsvcrtd.lib"
-else
-	libraries="$libraries -lmsvcrt.lib"
-fi
+libraries=""
 
 warning_levels="-Werror -Wall -Wextra -Weverything -Wpedantic"
 ignore_warnings="-Wno-newline-eof -Wno-format-nonliteral -Wno-gnu-zero-variadic-macro-arguments -Wno-declaration-after-statement -Wno-unsafe-buffer-usage -Wno-zero-as-null-pointer-constant -Wno-c++98-compat-pedantic -Wno-old-style-cast -Wno-missing-field-initializers -Wno-switch-default -Wno-covered-switch-default -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-cast-align -Wno-double-promotion"

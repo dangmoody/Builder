@@ -272,7 +272,7 @@ void BuildConfig_AddDefaults( BuildConfig* outConfig ) {
 	outConfig->ignore_warnings.push_back( "-Wno-unused-macros" );
 
 #if BUILDER_CLANG_VERSION_MAJOR >= 17
-	outConfig->ignore_warnings.push_back( "-Wno-unsafe-buffer-usage" );			// LLVM 17.0.1
+	outConfig->ignore_warnings.push_back( "-Wno-unsafe-buffer-usage" );			// basically any time you access a ptr as an array, which is dumb
 	outConfig->ignore_warnings.push_back( "-Wno-reorder-init-list" );			// C++: "designated initializers must be in order"
 	outConfig->ignore_warnings.push_back( "-Wno-old-style-cast" );				// C++: "C-style casts are banned"
 	outConfig->ignore_warnings.push_back( "-Wno-global-constructors" );			// C++: "declaration requires a global destructor"
@@ -280,7 +280,11 @@ void BuildConfig_AddDefaults( BuildConfig* outConfig ) {
 #endif
 
 #if BUILDER_CLANG_VERSION_MAJOR >= 18
-	outConfig->ignore_warnings.push_back( "-Wno-missing-field-initializers" );	// LLVM 18.1.8
+	outConfig->ignore_warnings.push_back( "-Wno-missing-field-initializers" );
+#endif
+
+#if BUILDER_CLANG_VERSION_MAJOR >= 20
+	outConfig->ignore_warnings.push_back( "-Wno-nontrivial-memcall" );			// basically any time you try to use ptr arithmetic
 #endif
 }
 
@@ -391,7 +395,7 @@ static s32 BuildEXE( buildContext_t* context ) {
 		context->config.additional_includes.size() +
 		context->config.additional_lib_paths.size() +
 		context->config.additional_libs.size() +
-		5 +	// warning levels
+		context->config.warning_levels.size() +
 		context->config.ignore_warnings.size()
 	);
 
@@ -444,10 +448,35 @@ static s32 BuildEXE( buildContext_t* context ) {
 		args.add( "-Werror" );
 	}
 
-	args.add( "-Weverything" );
-	args.add( "-Wall" );
-	args.add( "-Wextra" );
-	args.add( "-Wpedantic" );
+	// warning levels
+	{
+		std::vector<std::string> allowedWarningLevels = {
+			"-Weverything",
+			"-Wall",
+			"-Wextra",
+			"-Wpedantic",
+		};
+
+		For ( u64, warningLevelIndex, 0, context->config.warning_levels.size() ) {
+			const std::string& warningLevel = context->config.warning_levels[warningLevelIndex];
+
+			bool8 found = false;
+
+			For ( u64, allowedWarningLevelIndex, 0, allowedWarningLevels.size() ) {
+				if ( allowedWarningLevels[allowedWarningLevelIndex] == warningLevel ) {
+					found = true;
+					break;
+				}
+			}
+
+			if ( !found ) {
+				error( "\"%s\" is not allowed as a warning level.\n", warningLevel.c_str() );
+				return 1;
+			}
+
+			args.add( warningLevel.c_str() );
+		}
+	}
 
 	For ( u64, ignoreWarningIndex, 0, context->config.ignore_warnings.size() ) {
 		args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
@@ -480,7 +509,7 @@ static s32 BuildDynamicLibrary( buildContext_t* context ) {
 		context->config.additional_includes.size() +
 		context->config.additional_lib_paths.size() +
 		context->config.additional_libs.size() +
-		5 +	// warning levels
+		context->config.warning_levels.size() +
 		context->config.ignore_warnings.size()
 	);
 
@@ -534,10 +563,35 @@ static s32 BuildDynamicLibrary( buildContext_t* context ) {
 		args.add( "-Werror" );
 	}
 
-	args.add( "-Weverything" );
-	args.add( "-Wall" );
-	args.add( "-Wextra" );
-	args.add( "-Wpedantic" );
+	// warning levels
+	{
+		std::vector<std::string> allowedWarningLevels = {
+			"-Weverything",
+			"-Wall",
+			"-Wextra",
+			"-Wpedantic",
+		};
+
+		For ( u64, warningLevelIndex, 0, context->config.warning_levels.size() ) {
+			const std::string& warningLevel = context->config.warning_levels[warningLevelIndex];
+
+			bool8 found = false;
+
+			For ( u64, allowedWarningLevelIndex, 0, allowedWarningLevels.size() ) {
+				if ( allowedWarningLevels[allowedWarningLevelIndex] == warningLevel ) {
+					found = true;
+					break;
+				}
+			}
+
+			if ( !found ) {
+				error( "\"%s\" is not allowed as a warning level.\n", warningLevel.c_str() );
+				return 1;
+			}
+
+			args.add( warningLevel.c_str() );
+		}
+	}
 
 	For ( u64, ignoreWarningIndex, 0, context->config.ignore_warnings.size() ) {
 		args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
@@ -577,7 +631,7 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 		context->config.additional_includes.size() +
 		context->config.additional_lib_paths.size() +
 		context->config.additional_libs.size() +
-		5 +	// warning levels
+		context->config.warning_levels.size() +
 		context->config.ignore_warnings.size()
 	);
 
@@ -638,10 +692,35 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 			args.add( "-Werror" );
 		}
 
-		args.add( "-Weverything" );
-		args.add( "-Wall" );
-		args.add( "-Wextra" );
-		args.add( "-Wpedantic" );
+		// warning levels
+		{
+			std::vector<std::string> allowedWarningLevels = {
+				"-Weverything",
+				"-Wall",
+				"-Wextra",
+				"-Wpedantic",
+			};
+
+			For ( u64, warningLevelIndex, 0, context->config.warning_levels.size() ) {
+				const std::string& warningLevel = context->config.warning_levels[warningLevelIndex];
+
+				bool8 found = false;
+
+				For ( u64, allowedWarningLevelIndex, 0, allowedWarningLevels.size() ) {
+					if ( allowedWarningLevels[allowedWarningLevelIndex] == warningLevel ) {
+						found = true;
+						break;
+					}
+				}
+
+				if ( !found ) {
+					error( "\"%s\" is not allowed as a warning level.\n", warningLevel.c_str() );
+					return 1;
+				}
+
+				args.add( warningLevel.c_str() );
+			}
+		}
 
 		For ( u64, ignoreWarningIndex, 0, context->config.ignore_warnings.size() ) {
 			args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
@@ -1356,7 +1435,7 @@ static bool8 BuildInfo_Read( const char* buildInfoFilename, buildInfoData_t* out
 	return true;
 }
 
-static void BuildInfo_Write( const buildContext_t* context, const buildInfoData_t* buildInfoData ) {
+static bool8 BuildInfo_Write( const buildContext_t* context, const buildInfoData_t* buildInfoData ) {
 	assert( context );
 	assert( buildInfoData );
 	assert( !buildInfoData->configs.empty() );
@@ -1454,7 +1533,14 @@ static void BuildInfo_Write( const buildContext_t* context, const buildInfoData_
 	}
 
 	// write to the file
-	file_write_entire( cast( char*, context->buildInfoFilename.data ), buffer.data.data, buffer.data.count );
+	bool8 written = file_write_entire( cast( char*, context->buildInfoFilename.data ), buffer.data.data, buffer.data.count );
+
+	if ( !written ) {
+		error( "Failed to write %s!\n", context->buildInfoFilename.data );
+		return false;
+	}
+
+	return true;
 }
 
 static void AddBuildConfigAndDependenciesUnique( buildContext_t* context, BuildConfig* config, std::vector<BuildConfig>& outConfigs ) {
@@ -1493,15 +1579,6 @@ int main( int argc, char** argv ) {
 #else
 	context.verbose = false;
 #endif
-
-	/*{
-		Array<const char*> args;
-		args.add( "\"%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\vswhere.exe\"" );
-		args.add( "-property" );
-		args.add( "installationPath" );
-
-		RunProc( &args, NULL, false, true );
-	}*/
 
 	// check if we need to perform first time setup
 	{
@@ -2234,6 +2311,7 @@ int main( int argc, char** argv ) {
 				printf( "Finished building \"%s\":\n", context.fullBinaryName );
 				printf( "    Read .d file: %f ms\n", depFileReadEnd - depFileReadStart );
 				printf( "    Build time:   %f ms\n", buildTimeEnd - buildTimeStart );
+				printf( "\n" );
 			} else {
 				numFailedBuilds++;
 
@@ -2261,7 +2339,9 @@ int main( int argc, char** argv ) {
 	if ( shouldWriteBuildInfo ) {
 		float64 start = time_ms();
 
-		BuildInfo_Write( &context, &buildInfoData );
+		if ( !BuildInfo_Write( &context, &buildInfoData ) ) {
+			QUIT_ERROR();
+		}
 
 		float64 end = time_ms();
 		buildInfoWriteTimeMS = end - start;

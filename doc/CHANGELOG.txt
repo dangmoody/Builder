@@ -1,8 +1,11 @@
 v0.7.0, <RELEASE DATE HERE>:
 
-* Moved some extraneous logging when generating a Visual Studio solution to only show when verbose logging (-v) argument is specified.
-* Hide unecessary warning that gets fired when doing a hashmap lookup.
-* Time more than just the total time taken to run Builder.exe from start to finish.
+* Added BuildConfig::warning_levels.
+	* Before we used to add all Clang warning levels to builds by default, but now we enable none of them by default.
+	* This is to let people decide how strict they want the compiler to be (we already offered options like this with BuildConfig::warnings_as_errors).
+	* Clang can be quite strict as it is, so let's not annoy people unnecessarily.
+* Added some more timing metrics when doing builds.
+	* We now time more than just the total time taken to run Builder.exe from start to finish.
 	* We're doing this to get a better idea of where build time is being spent when using Builder and therefore how we can make Builder faster.
 	* We now also log:
 		* User config build.
@@ -11,6 +14,11 @@ v0.7.0, <RELEASE DATE HERE>:
 		* .build_info file read and write time.
 		* Dependency file read time.
 		* Maybe more, in future.
+* Added -Wno-nontrivial-memcall to the list of default ignored warnings.
+	* This warning seems to fire every time we do pointer arithmetic, which is tedious.
+* Added some more error checking that we weren't doing, but should have.
+* Moved some extraneous logging when generating a Visual Studio solution to only show when verbose logging (-v) argument is specified.
+* Hide unecessary warning that gets fired when doing a hashmap lookup.
 
 ----------------------------------------------------------------
 

@@ -39,9 +39,9 @@ SOFTWARE.
 #endif //__linux__
 
 // The version of Clang that Builder is using.
-#define BUILDER_CLANG_VERSION_MAJOR	18
+#define BUILDER_CLANG_VERSION_MAJOR	20
 #define BUILDER_CLANG_VERSION_MINOR	1
-#define BUILDER_CLANG_VERSION_PATCH	8
+#define BUILDER_CLANG_VERSION_PATCH	5
 
 // If you override set_builder_options() you will need preface the function with the BUILDER_CALLBACK #define.
 // This is because when Builder does its user config build stage it will search your code for the function set_builder_options() and BUILDER_DOING_USER_CONFIG_BUILD will be defined.

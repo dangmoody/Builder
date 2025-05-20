@@ -39,6 +39,6 @@ CORE_API Process*	process_create( Array<const char*>* args, Array<const char*>* 
 
 CORE_API void		process_destroy( Process* process );
 
-CORE_API s32		process_join( Process** process );
+CORE_API s32		process_join( Process* process );
 
-CORE_API u64		process_read_stdout( Process* process, char* out_buffer, const u32 count );
+CORE_API u32		process_read_stdout( Process* process, char* out_buffer, const u32 count );

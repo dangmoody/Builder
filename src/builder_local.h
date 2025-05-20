@@ -53,9 +53,17 @@ SOFTWARE.
 #ifdef _WIN64
 #define ERROR_CODE_FORMAT "0x%X"
 typedef DWORD errorCode_t;
+#elif __linux__
+#define ERROR_CODE_FORMAT "0x%d"
+typedef s32 errorCode_t;
 #else
 #error Unrecognised platform!
 #endif
+
+#if __linux__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpadded"
+#endif //__linux__
 
 struct Hashmap;
 struct buildInfoData_t;
@@ -107,3 +115,7 @@ bool8		GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* op
 inline u64 minull( const u64 x, const u64 y ) {
 	return ( x < y ) ? x : y;
 }
+
+#if __linux__
+#pragma clang diagnostic pop
+#endif //__linux__

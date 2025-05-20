@@ -31,6 +31,13 @@ SOFTWARE.
 #include <vector>
 #include <string>
 
+#if __linux__
+#include <cstring> // ctring is not a part of std string on linux and needs a manual include
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpadded"
+#define INVALID_HANDLE_VALUE ((void*)((u64)-1)) // TODO (MY) - cloned from the windows MSDN docs, you will need to replace this but for now you can use this to reduce compiler noise
+#endif //__linux__
+
 // The version of Clang that Builder is using.
 #define BUILDER_CLANG_VERSION_MAJOR	18
 #define BUILDER_CLANG_VERSION_MINOR	1
@@ -284,3 +291,7 @@ static unsigned int builder_get_config_hash( BuildConfig* config, const unsigned
 
 	return hash;
 }
+
+#if __linux__
+#pragma clang diagnostic pop
+#endif //__linux__

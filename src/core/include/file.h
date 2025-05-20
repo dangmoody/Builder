@@ -42,6 +42,11 @@ SOFTWARE.
 ================================================================================================
 */
 
+#if __linux__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpadded"
+#endif
+
 struct File {
 	void*	ptr;
 	u64		offset;
@@ -132,3 +137,7 @@ CORE_API bool8	folder_exists( const char* path );
 // Returns the number of files that are found in 'path'.
 // TODO(DM): add recursive search
 CORE_API u64	folder_get_num_files( const char* path );
+
+#if __linux__
+#pragma clang diagnostic pop
+#endif //__linux__

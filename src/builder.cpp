@@ -45,6 +45,8 @@ SOFTWARE.
 
 #ifdef _WIN64
 #include <Shlwapi.h>
+#elif __linux__
+#include <errno.h>
 #endif
 
 #include <stdio.h>
@@ -78,6 +80,11 @@ enum doingBuildFrom_t {
 	debug_break(); \
 	return 1
 
+#if __linux__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpadded"
+#endif
+
 struct trackedSourceFile_t {
 	u64						lastWriteTime;
 	std::string				filename;
@@ -102,6 +109,13 @@ struct buildInfoData_t {
 errorCode_t GetLastErrorCode() {
 #ifdef _WIN64
 	return GetLastError();
+#elif __linux__
+	s32 capturedError = errno;
+	if(capturedError != 0)
+	{
+		printf("Linux error: %s\n", strerror(capturedError));
+	}
+	return capturedError;
 #else
 #error Unrecognised platform!
 #endif
@@ -1043,7 +1057,7 @@ static void ReadDependencyFile( const buildContext_t* context, const BuildConfig
 		u64 lastWriteTime = fileInfo.last_write_time;
 
 		if ( context->verbose ) {
-			printf( "Parsing dependency %s, last write time = %llu\n", dependencyFilename.c_str(), lastWriteTime );
+			printf( "Parsing dependency %s, last write time = %lu\n", dependencyFilename.c_str(), lastWriteTime );
 		}
 
 		outBuildInfoFiles.push_back( { lastWriteTime, dependencyFilename.c_str() } );
@@ -2208,3 +2222,7 @@ int main( int argc, char** argv ) {
 
 	return 0;
 }
+
+#if __linux__
+#pragma clang diagnostic pop
+#endif //__linux__

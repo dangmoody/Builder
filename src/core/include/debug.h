@@ -58,9 +58,9 @@ CORE_API void					info_internal( const char* function, const char* fmt, ... );
 CORE_API void					warning_internal( const char* function, const char* fmt, ... );
 CORE_API void					error_internal( const char* function, const char* fmt, ... );
 
-#define info( fmt, ... )		info_internal( __FUNCTION__, fmt, __VA_ARGS__ )
-#define warning( fmt, ... )		warning_internal( __FUNCTION__, fmt, __VA_ARGS__ )
-#define error( fmt, ... )		error_internal( __FUNCTION__, fmt, __VA_ARGS__ )
+#define info( fmt, ... )		info_internal( __FUNCTION__, fmt, ##__VA_ARGS__ )
+#define warning( fmt, ... )		warning_internal( __FUNCTION__, fmt, ##__VA_ARGS__ )
+#define error( fmt, ... )		error_internal( __FUNCTION__, fmt, ##__VA_ARGS__ )
 
 CORE_API void					set_log_verbosity( LogVerbosity verbosity );
 CORE_API LogVerbosity			get_log_verbosity();
@@ -73,7 +73,7 @@ CORE_API void					fatal_error_internal( const char* file, const int line, const 
 #ifndef fatal_error
 	#define fatal_error( fmt, ... )	\
 		do { \
-			fatal_error_internal( __FILE__, __LINE__, "FATAL ERROR", fmt, __VA_ARGS__ ); \
+			fatal_error_internal( __FILE__, __LINE__, "FATAL ERROR", fmt, ##__VA_ARGS__ ); \
 			debug_break(); \
 		} while ( 0 )
 #endif

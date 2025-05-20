@@ -37,6 +37,11 @@ constexpr u64 HASHMAP_UNUSED_BUCKET 	= 0U;
 constexpr u64 HASHMAP_TOMBSTONE_BUCKET 	= 0xffffffffffffffffU;
 constexpr u32 HASHMAP_INVALID_VALUE 	= 0xffffffffU;
 
+#if __linux__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpadded"
+#endif
+
 struct HashmapBucket {
 	u32		key_hi;
 	u32		key_lo;
@@ -69,3 +74,7 @@ CORE_API u64		hashmap_internal_combine( const u32 hi, const u32 lo );
 CORE_API u64		hashmap_internal_combine_at_index( const Hashmap* map, const u32 index );
 CORE_API u32		hashmap_internal_get_lo_part( const u64 key );
 CORE_API u32		hashmap_internal_get_hi_part( const u64 key );
+
+#if __linux__
+#pragma clang diagnostic pop
+#endif //__linux__

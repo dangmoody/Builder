@@ -45,7 +45,7 @@ SOFTWARE.
 
 #ifdef _WIN64
 #include <Shlwapi.h>
-#elif __linux__
+#elif defined(__linux__)
 #include <errno.h>
 #endif
 
@@ -80,9 +80,18 @@ enum doingBuildFrom_t {
 	debug_break(); \
 	return 1
 
-#if __linux__
+#ifdef __linux__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wpadded"
+#endif
+
+// TODO (MY) - Discuss with DM - on windows a 64bit integer is a "long long", but on posix it's "long". This changes the syntax of what's needed for printf. This is something core should probably handle in core_types.h
+#if defined(_WIN32)
+#define PRIu64 "llu"
+#elif defined(__linux__)
+#define PRIu64 "lu"
+#else
+#error Unrecognised platform
 #endif
 
 struct trackedSourceFile_t {
@@ -109,7 +118,7 @@ struct buildInfoData_t {
 errorCode_t GetLastErrorCode() {
 #ifdef _WIN64
 	return GetLastError();
-#elif __linux__
+#elif defined(__linux__)
 	s32 capturedError = errno;
 	if(capturedError != 0)
 	{
@@ -1057,7 +1066,7 @@ static void ReadDependencyFile( const buildContext_t* context, const BuildConfig
 		u64 lastWriteTime = fileInfo.last_write_time;
 
 		if ( context->verbose ) {
-			printf( "Parsing dependency %s, last write time = %lu\n", dependencyFilename.c_str(), lastWriteTime );
+			printf( "Parsing dependency %s, last write time = %" PRIu64 "\n", dependencyFilename.c_str(), lastWriteTime );
 		}
 
 		outBuildInfoFiles.push_back( { lastWriteTime, dependencyFilename.c_str() } );
@@ -2301,6 +2310,6 @@ int main( int argc, char** argv ) {
 	return 0;
 }
 
-#if __linux__
+#ifdef __linux__
 #pragma clang diagnostic pop
 #endif //__linux__

@@ -26,16 +26,50 @@ SOFTWARE.
 ===========================================================================
 */
 
-#ifdef CORE_SUC
-
 #ifdef __linux__
-// TODO(MY) - put all the linux files in here once you make them
-#include "linux/allocator_malloc.linux.cpp"
-#include "linux/debug.linux.cpp"
-#include "linux/paths.linux.cpp"
-#include "linux/file.linux.cpp"
-#include "linux/init.linux.cpp"
-#include "linux/timer.linux.cpp"
-#endif // __linux__
 
-#endif // CORE_SUC
+#include <timer.h>
+
+#include <time.h>
+
+/*
+================================================================================================
+
+	Timer
+
+================================================================================================
+*/
+
+// TODO(DM): how do we get clock cycles on linux?
+// this isnt it!
+s64 time_cycles( void ) {
+	struct timespec now;
+	clock_gettime( CLOCK_MONOTONIC, &now );
+
+	int64_t clocks = cast( int64_t, now.tv_sec * 1000000000 + now.tv_nsec );
+
+	return clocks;
+}
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wimplicit-int-float-conversion"
+
+float64 time_seconds( void ) {
+	return cast( float64, time_cycles() / 1000000000.0 );
+}
+
+float64 time_ms( void ) {
+	return cast( float64, time_cycles() / 1000000.0 );
+}
+
+float64 time_us( void ) {
+	return cast( float64, time_cycles() / 1000.0 );
+}
+
+float64 time_ns( void ) {
+	return cast( float64, time_cycles() );
+}
+
+#pragma clang diagnostic pop
+
+#endif // __linux__

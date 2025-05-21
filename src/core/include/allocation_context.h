@@ -48,7 +48,7 @@ constexpr u32 MAX_ALLOCATOR_RELATIONSHIPS	= 32;
 
 struct CoreContext {
 	Allocator*		allocator_stack[MAX_ALLOCATOR_STACK_SIZE];
-	u32				current_stack_size;
+	u64				current_stack_size;
 	Allocator		temp_storage;
 
 #ifdef CORE_MEMORY_TRACKING

@@ -26,17 +26,33 @@ SOFTWARE.
 ===========================================================================
 */
 
-#ifdef CORE_SUC
-
 #ifdef __linux__
-// TODO(MY) - put all the linux files in here once you make them
-#include "linux/allocator_malloc.linux.cpp"
-#include "linux/debug.linux.cpp"
-#include "linux/paths.linux.cpp"
-#include "linux/file.linux.cpp"
-#include "linux/init.linux.cpp"
-#include "linux/timer.linux.cpp"
-#include "linux/library.linux.cpp"
-#endif // __linux__
 
-#endif // CORE_SUC
+#include <library.h>
+
+/*
+================================================================================================
+
+	Library
+
+================================================================================================
+*/
+
+Library library_load( const char* name ) {
+	unused( name );
+
+	return { NULL };
+}
+
+void library_unload( Library* library ) {
+	unused( library );
+}
+
+void* library_get_proc_address( const Library library, const char* func_name ) {
+	unused( library );
+	unused( func_name );
+
+	return NULL;
+}
+
+#endif // __linux__

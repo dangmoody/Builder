@@ -27,7 +27,7 @@ called_path=${0%/*}
 stripped=${called_path#[^/]*}
 project_folder=`pwd`$stripped
 
-bin_folder="$project_folder/bin/win64/$config"
+bin_folder="$project_folder/bin/linux/$config"
 intermediate_folder="$project_folder/intermediate"
 source_folder="$project_folder/src"
 

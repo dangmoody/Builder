@@ -28,6 +28,8 @@ SOFTWARE.
 
 #pragma once
 
+#include <stdarg.h>
+
 #include "core_types.h"
 #include "dll_export.h"
 
@@ -52,12 +54,12 @@ CORE_API void	string_substring( const char* str, const u64 offset, const u64 cou
 // and then people can just call sprintf instead of having to use these
 // I think that would be better
 CORE_API int	string_sprintf( char* buffer, const char* fmt, ... );
-CORE_API int	string_vsprintf( char* buffer, const char* fmt, const va_list args );
+CORE_API int	string_vsprintf( char* buffer, const char* fmt, va_list args );
 CORE_API int	string_snprintf( char* buffer, const s64 buffer_length, const char* fmt, ... );
-CORE_API int	string_vsnprintf( char* buffer, const s64 buffer_length, const char* fmt, const va_list args );
+CORE_API int	string_vsnprintf( char* buffer, const s64 buffer_length, const char* fmt, va_list args );
 
 // Returns a char* that is the result of calling sprintf with the given format string and var args, uses temp storage to allocate the result string.
 CORE_API char*	tprintf( const char* fmt, ... );
 
 // Returns a char* that is the result of calling sprintf with the given format string and args list, uses temp storage to allocate the result string.
-CORE_API char*	vtprintf( const char* fmt, const va_list args );
+CORE_API char*	vtprintf( const char* fmt, va_list args );

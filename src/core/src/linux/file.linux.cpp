@@ -26,12 +26,24 @@ SOFTWARE.
 ===========================================================================
 */
 
-#ifdef CORE_SUC
+#pragma once
 
-#ifdef __linux__
-// TODO(MY) - put all the linux files in here once you make them
-#include "linux/debug.linux.cpp"
-#include "linux/paths.linux.cpp"
-#endif // __linux__
-
-#endif // CORE_SUC
+//  #include <stdio.h>
+//  #include <unistd.h>
+//  
+//  #include "core_types.h"
+//  #include "debug.h"
+//  
+//  #ifdef __linux__
+//  
+//  bool8 SetCurrentDirectory(const char* path)
+//  {
+//      if(chdir(path) != 0)
+//      {
+//          get_last_error_code();
+//          return false;
+//      }
+//      return true;
+//  }
+//  
+//  #endif // __linux__

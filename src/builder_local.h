@@ -50,16 +50,6 @@ SOFTWARE.
 
 #define BUILD_INFO_FILE_EXTENSION	".build_info"
 
-#ifdef _WIN64
-#define ERROR_CODE_FORMAT "0x%X"
-typedef DWORD errorCode_t;
-#elif defined(__linux__)
-#define ERROR_CODE_FORMAT "0x%d"
-typedef s32 errorCode_t;
-#else
-#error Unrecognised platform!
-#endif
-
 #ifdef __linux__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wpadded"
@@ -94,8 +84,6 @@ struct buildContext_t {
 
 	bool8				verbose;
 };
-
-errorCode_t	GetLastErrorCode();
 
 void		NukeFolder_r( const char* folder, const bool8 deleteRoot, const bool8 verbose );
 

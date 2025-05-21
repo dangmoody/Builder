@@ -115,21 +115,6 @@ struct buildInfoData_t {
 	builderVersion_t								builderVersion;
 };
 
-errorCode_t GetLastErrorCode() {
-#ifdef _WIN64
-	return GetLastError();
-#elif defined(__linux__)
-	s32 capturedError = errno;
-	if(capturedError != 0)
-	{
-		printf("Linux error: %s\n", strerror(capturedError));
-	}
-	return capturedError;
-#else
-#error Unrecognised platform!
-#endif
-}
-
 static const char* GetFileExtensionFromBinaryType( BinaryType type ) {
 	switch ( type ) {
 		case BINARY_TYPE_EXE:				return "exe";
@@ -747,7 +732,7 @@ void NukeFolder_r( const char* folder, const bool8 deleteRoot, const bool8 verbo
 
 	if ( deleteRoot ) {
 		if ( !folder_delete( folder ) ) {
-			errorCode_t errorCode = GetLastErrorCode();
+			errorCode_t errorCode = get_last_error_code();
 			error( "Nuke failed to delete root folder \"%s\".  You'll have to do this manually.  Error code " ERROR_CODE_FORMAT "\n", folder, errorCode );
 		}
 	}
@@ -1532,10 +1517,10 @@ int main( int argc, char** argv ) {
 
 		// on exit set the CWD back to what we had before
 		const char* oldCWD = path_current_working_directory();
-		defer( SetCurrentDirectory( oldCWD ) );
+		defer( path_set_current_directory( oldCWD ) );
 
 		// set CWD to whereever builder lives for first time setup
-		SetCurrentDirectory( path_app_path() );
+		path_set_current_directory( path_app_path() );
 
 		{
 			const char* clangAbsolutePath = tprintf( "%s\\clang\\bin\\clang.exe", path_app_path() );
@@ -1581,7 +1566,7 @@ int main( int argc, char** argv ) {
 			const char* clangInstallerFilename = tprintf( "LLVM-%d.%d.%d-win64.exe", BUILDER_CLANG_VERSION_MAJOR, BUILDER_CLANG_VERSION_MINOR, BUILDER_CLANG_VERSION_PATCH );
 
 			if ( !folder_create_if_it_doesnt_exist( ".\\temp" ) ) {
-				errorCode_t errorCode = GetLastErrorCode();
+				errorCode_t errorCode = get_last_error_code();
 				error( "Failed to create the temp folder that the Clang install uses.  Is it possible you have whacky user permissions? Error code: " ERROR_CODE_FORMAT "\n", errorCode );
 				QUIT_ERROR();
 			}
@@ -1615,7 +1600,7 @@ int main( int argc, char** argv ) {
 				const char* clangInstallFolder = "clang";
 
 				if ( !folder_create_if_it_doesnt_exist( clangInstallFolder ) ) {
-					errorCode_t errorCode = GetLastErrorCode();
+					errorCode_t errorCode = get_last_error_code();
 					error( "Failed to create the clang install folder \"%s\".  Is it possible you have some whacky user permissions? Error code: " ERROR_CODE_FORMAT "\n", clangInstallFolder, errorCode );
 					QUIT_ERROR();
 				}
@@ -1876,7 +1861,7 @@ int main( int argc, char** argv ) {
 		buildInfoData.userConfigDLLFilename = userConfigBuildContext.fullBinaryName;
 
 		if ( !folder_create_if_it_doesnt_exist( userConfigBuildContext.config.binary_folder.c_str() ) ) {
-			errorCode_t errorCode = GetLastErrorCode();
+			errorCode_t errorCode = get_last_error_code();
 			error( "Failed to create the .builder folder.  Error code " ERROR_CODE_FORMAT "\n", userConfigBuildContext.config.binary_folder.c_str(), errorCode );
 			QUIT_ERROR();
 		}
@@ -2056,8 +2041,8 @@ int main( int argc, char** argv ) {
 			printf( "Running pre-build code...\n" );
 
 			const char* oldCWD = path_current_working_directory();
-			SetCurrentDirectory( cast( char*, context.inputFilePath.data ) );
-			defer( SetCurrentDirectory( oldCWD ) );
+			path_set_current_directory( cast( char*, context.inputFilePath.data ) );
+			defer( path_set_current_directory( oldCWD ) );
 
 			preBuildFunc();
 		}
@@ -2165,7 +2150,7 @@ int main( int argc, char** argv ) {
 			}
 
 			if ( !folder_create_if_it_doesnt_exist( context.config.binary_folder.c_str() ) ) {
-				errorCode_t errorCode = GetLastErrorCode();
+				errorCode_t errorCode = get_last_error_code();
 				fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".  Error code: " ERROR_CODE_FORMAT "\n", SET_BUILDER_OPTIONS_FUNC_NAME, context.config.binary_folder.c_str(), errorCode );
 				return 1;
 			}
@@ -2271,8 +2256,8 @@ int main( int argc, char** argv ) {
 			printf( "Running post-build code...\n" );
 
 			const char* oldCWD = path_current_working_directory();
-			SetCurrentDirectory( cast( char*, context.inputFilePath.data ) );
-			defer( SetCurrentDirectory( oldCWD ) );
+			path_set_current_directory( cast( char*, context.inputFilePath.data ) );
+			defer( path_set_current_directory( oldCWD ) );
 
 			postBuildFunc();
 		}

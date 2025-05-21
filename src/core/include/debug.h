@@ -29,6 +29,7 @@ SOFTWARE.
 #pragma once
 
 #include "dll_export.h"
+#include "core_types.h"
 
 // TODO(DM): the only reason this exists is because we call IsDebuggerPresent() and __debugbreak() in this file
 // that probably wants to be moved into a .inl in that case
@@ -36,6 +37,16 @@ SOFTWARE.
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#endif
+
+#ifdef _WIN32
+#define ERROR_CODE_FORMAT "0x%X"
+typedef DWORD errorCode_t;
+#elif defined(__linux__)
+#define ERROR_CODE_FORMAT "0x%d"
+typedef s32 errorCode_t;
+#else
+#error Unrecognised platform!
 #endif
 
 /*
@@ -53,6 +64,24 @@ enum LogVerbosity {
 	LOG_VERBOSITY_INFO
 };
 
+#ifdef _WIN32
+#define CONSOLE_COLOR_DEFAULT		0x07
+#define CONSOLE_COLOR_RED			0x0C
+#define CONSOLE_COLOR_YELLOW		0x0E
+#define CONSOLE_COLOR_BLUE			0x01
+#define CONSOLE_COLOR_BRIGHT_BLUE	0x09
+#define CONSOLE_COLOR_LIGHT_GRAY	0x07
+typedef s32 ConsoleColor;
+#elif defined(__linux__)
+#define CONSOLE_COLOR_DEFAULT		"\033[0m"
+#define CONSOLE_COLOR_RED			"\033[0;31m"
+#define CONSOLE_COLOR_YELLOW		"\033[0;32m"
+#define CONSOLE_COLOR_BLUE			"\033[1;34m"
+#define CONSOLE_COLOR_BRIGHT_BLUE	"\033[1;94m"
+#define CONSOLE_COLOR_LIGHT_GRAY	"\033[1;37m"
+typedef const char* ConsoleColor;
+#endif
+
 // logging
 CORE_API void					info_internal( const char* function, const char* fmt, ... );
 CORE_API void					warning_internal( const char* function, const char* fmt, ... );
@@ -66,9 +95,10 @@ CORE_API void					set_log_verbosity( LogVerbosity verbosity );
 CORE_API LogVerbosity			get_log_verbosity();
 CORE_API void					dump_callstack( void );
 
+CORE_API errorCode_t			get_last_error_code();
+
 // DO NOT CALL THESE FUNCTIONS DIRECTLY
 CORE_API void					fatal_error_internal( const char* file, const int line, const char* prefix, const char* fmt, ... );
-
 
 #ifndef fatal_error
 	#define fatal_error( fmt, ... )	\

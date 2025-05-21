@@ -44,6 +44,11 @@ SOFTWARE.
 #include <Shlwapi.h>
 #endif
 
+#ifndef MAX_PATH
+	// Windows has the shortest filepaths - builder is cross platform, let's lock it down for all platforms to the min
+	#define MAX_PATH 260
+#endif
+
 
 // some project type guids are pre-determined by visual studio
 #define VISUAL_STUDIO_CPP_PROJECT_TYPE_GUID		"8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942"	// c++ project
@@ -221,7 +226,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 	// get relative path from visual studio to the input file
 	char* pathFromSolutionToInputFile = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
 	memset( pathFromSolutionToInputFile, 0, MAX_PATH * sizeof( char ) );
-	PathRelativePathTo( pathFromSolutionToInputFile, solutionFilename, FILE_ATTRIBUTE_NORMAL, path_fix_slashes( cast( char*, context->inputFilePath.data ) ), FILE_ATTRIBUTE_DIRECTORY );
+	pathFromSolutionToInputFile = path_relative_path_to(solutionFilename, path_fix_slashes( cast( char*, context->inputFilePath.data ) ) );
 	assert( pathFromSolutionToInputFile != NULL || !string_equals( pathFromSolutionToInputFile, "" ) );
 
 	// give each project a guid
@@ -233,7 +238,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 	}
 
 	if ( !folder_create_if_it_doesnt_exist( visualStudioProjectFilesPath ) ) {
-		errorCode_t errorCode = GetLastErrorCode();
+		errorCode_t errorCode = get_last_error_code();
 		error( "Failed to create the Visual Studio Solution folder.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
 
 		return false;
@@ -245,7 +250,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 		bool8 written = file_write_entire( filename, msg, msgLength );
 
 		if ( !written ) {
-			errorCode_t errorCode = GetLastErrorCode();
+			errorCode_t errorCode = get_last_error_code();
 			error( "Failed to write \"%s\": " ERROR_CODE_FORMAT ".\n", filename, errorCode );
 
 			return false;
@@ -515,7 +520,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 				char* pathFromSolutionToBinary = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
 				memset( pathFromSolutionToBinary, 0, MAX_PATH * sizeof( char ) );
-				PathRelativePathTo( pathFromSolutionToBinary, from, FILE_ATTRIBUTE_NORMAL, to, FILE_ATTRIBUTE_DIRECTORY );
+				pathFromSolutionToBinary = path_relative_path_to(from, to);
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcast-qual"
@@ -697,7 +702,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 					char* pathFromSolutionToBinary = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
 					memset( pathFromSolutionToBinary, 0, MAX_PATH * sizeof( char ) );
-					PathRelativePathTo( pathFromSolutionToBinary, from, FILE_ATTRIBUTE_NORMAL, to, FILE_ATTRIBUTE_DIRECTORY );
+					pathFromSolutionToBinary = path_relative_path_to(from, to);
 
 					For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
 						const char* platform = options->solution.platforms[platformIndex].c_str();

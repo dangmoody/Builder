@@ -35,6 +35,7 @@ SOFTWARE.
 #include <Windows.h>
 #include <DbgHelp.h>
 
+#include "win64/allocator_malloc.win64.cpp"
 #include "win64/init.win64.cpp"
 #include "win64/timer.win64.cpp"
 #include "win64/date_and_time.win64.cpp"

@@ -37,10 +37,21 @@ SOFTWARE.
 #include <stdlib.h>	// malloc, free
 #include <string.h>	// memcpy
 
+static void* aligned_malloc_internal( const size_t size, const MemoryAlignment alignment ) {
+	unused( size );
+	unused( alignment );
+}
+
+static void* aligned_realloc_internal( void* ptr, const size_t size, MemoryAlignment alignment ) {
+	unused( ptr );
+	unused( size );
+	unused( alignment );
+}
+
 /*
 ================================================================================================
 
-	AllocatorMalloc: wraps malloc and free
+	Malloc Allocator: Linux implementations for wrapping malloc and free
 
 ================================================================================================
 */
@@ -68,7 +79,7 @@ void* malloc_allocator_alloc( void* allocator_data, const u64 size, const Memory
 
 	unused( allocator_data );
 
-	void* ptr = _aligned_malloc( size, cast( size_t, alignment ) );
+	void* ptr = aligned_malloc_internal( size, alignment );
 
 	if ( !ptr ) {
 		error( "malloc failed to allocate" );
@@ -88,7 +99,7 @@ void* malloc_allocator_realloc( void* allocator_data, void* ptr, const u64 new_s
 	// 	return nullptr;
 	// }
 
-	return _aligned_realloc( ptr, new_size, alignment );
+	return aligned_realloc_internal( ptr, new_size, alignment );
 }
 
 #pragma clang diagnostic pop
@@ -98,7 +109,7 @@ void malloc_allocator_free( void* allocator_data, void* ptr ){
 
 	unused( allocator_data );
 
-	_aligned_free( ptr );
+	free( ptr );
 }
 
 void malloc_allocator_reset( void* allocator_data ) {

@@ -179,19 +179,18 @@ const char* path_fix_slashes( const char* path ) {
 	return result;
 }
 
-char* path_relative_path_to(const char* path_from, const char* path_to)
-{
+char* path_relative_path_to( const char* path_from, const char* path_to ) {
 	const char* result;
-	if(PathRelativePathTo(result, path_from, FILE_ATTRIBUTE_NORMAL, path_to, FILE_ATTRIBUTE_NORMAL))
-	{
-		error("Unable to compute relative path, ensure provided paths exist.\nFrom Path: %s\nTo Path: %s", path_from, path_to);
+
+	if ( PathRelativePathTo( result, path_from, FILE_ATTRIBUTE_NORMAL, path_to, FILE_ATTRIBUTE_NORMAL ) ) {
+		error( "Unable to compute relative path, ensure provided paths exist.\nFrom Path: %s\nTo Path: %s", path_from, path_to );
 	}
+
 	return result;
 }
 
-bool8 path_set_current_directory(const char* path)
-{
-    return SetCurrentDirectory(path);
+bool8 path_set_current_directory( const char* path ) {
+	return SetCurrentDirectory(path);
 }
 
 #endif // _WIN32

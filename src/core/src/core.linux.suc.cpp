@@ -30,8 +30,10 @@ SOFTWARE.
 
 #ifdef __linux__
 // TODO(MY) - put all the linux files in here once you make them
+#include "linux/allocator_malloc.linux.cpp"
 #include "linux/debug.linux.cpp"
 #include "linux/paths.linux.cpp"
+#include "linux/file.linux.cpp"
 #endif // __linux__
 
 #endif // CORE_SUC

@@ -37,22 +37,28 @@ SOFTWARE.
 #include "debug.h"
 #include "paths.h"
 
-char* path_relative_path_to(const char* path_from, const char* path_to)
-{
+// TODO: most functions in this file
+
+const char* path_app_path() {
+	return NULL;
+}
+
+char* path_relative_path_to( const char* path_from, const char* path_to ) {
+	unused( path_from );
+	unused( path_to );
+
 	char* result = nullptr;
-    unused(path_from);
-	unused(path_to);
+
 	return result;
 }
 
-bool8 path_set_current_directory(const char* path)
-{
-    if(chdir(path) != 0)
-    {
-        get_last_error_code();
-        return false;
-    }
-    return true;
+bool8 path_set_current_directory( const char* path ) {
+	if ( chdir( path ) != 0 ) {
+		get_last_error_code();
+		return false;
+	}
+
+	return true;
 }
 
 #endif // __linux__

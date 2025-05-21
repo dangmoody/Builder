@@ -40,12 +40,16 @@ SOFTWARE.
 static void* aligned_malloc_internal( const size_t size, const MemoryAlignment alignment ) {
 	unused( size );
 	unused( alignment );
+
+	return NULL;
 }
 
 static void* aligned_realloc_internal( void* ptr, const size_t size, MemoryAlignment alignment ) {
 	unused( ptr );
 	unused( size );
 	unused( alignment );
+
+	return NULL;
 }
 
 /*

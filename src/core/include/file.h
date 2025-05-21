@@ -42,10 +42,10 @@ SOFTWARE.
 ================================================================================================
 */
 
-#if __linux__
+#ifdef __linux__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wpadded"
-#endif
+#endif // __linux__
 
 struct File {
 	void*	ptr;
@@ -138,6 +138,6 @@ CORE_API bool8	folder_exists( const char* path );
 // TODO(DM): add recursive search
 CORE_API u64	folder_get_num_files( const char* path );
 
-#if __linux__
+#ifdef __linux__
 #pragma clang diagnostic pop
 #endif //__linux__

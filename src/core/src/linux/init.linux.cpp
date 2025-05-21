@@ -26,15 +26,14 @@ SOFTWARE.
 ===========================================================================
 */
 
-#ifdef CORE_SUC
-
 #ifdef __linux__
-// TODO(MY) - put all the linux files in here once you make them
-#include "linux/allocator_malloc.linux.cpp"
-#include "linux/debug.linux.cpp"
-#include "linux/paths.linux.cpp"
-#include "linux/file.linux.cpp"
-#include "linux/init.linux.cpp"
-#endif // __linux__
 
-#endif // CORE_SUC
+#include "../core_local.h"
+
+void core_init_platform() {
+}
+
+void core_shutdown_platform() {
+}
+
+#endif // __linux__

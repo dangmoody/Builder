@@ -47,6 +47,7 @@ SOFTWARE.
 #include "hashmap.cpp"
 #include "math.cpp"
 #include "random.cpp"
+#include "paths.cpp"
 #include "string_helpers.cpp"
 #include "string_builder.cpp"
 #include "temp_storage.cpp"

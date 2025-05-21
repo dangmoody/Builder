@@ -37,9 +37,39 @@ SOFTWARE.
 #include "debug.h"
 #include "paths.h"
 
+/*
+================================================================================================
+
+	Paths
+
+	Linux-specific functionality
+
+================================================================================================
+*/
+
 // TODO: most functions in this file
 
 const char* path_app_path() {
+	return NULL;
+}
+
+const char* path_current_working_directory() {
+	return NULL;
+}
+
+const char* path_absolute_path( const char* file ) {
+	unused( file );
+
+	return NULL;
+}
+
+bool8 path_is_absolute( const char* path ) {
+	return path[0] == '/';
+}
+
+const char* path_canonicalise( const char* path ) {
+	unused( path );
+
 	return NULL;
 }
 

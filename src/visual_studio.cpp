@@ -40,8 +40,10 @@ SOFTWARE.
 #include "core/include/hashmap.h"
 #include "core/include/debug.h"
 
-#ifdef _WIN64
+#if defined( _WIN32 )
 #include <Shlwapi.h>
+#elif defined( __linux__ )
+#include <uuid/uuid.h>
 #endif
 
 #ifndef MAX_PATH
@@ -121,12 +123,24 @@ static void GetAllVisualStudioFiles_r( buildContext_t* context, const char* solu
 }
 
 // data layout comes from: https://learn.microsoft.com/en-us/windows/win32/api/guiddef/ns-guiddef-guid
+// DM: I don't see a good enough argument that this is common enough that we want this in Core, currently, so I'm leaving this here for now
 static const char* CreateVisualStudioGuid() {
+#if defined( _WIN32 )
 	GUID guid;
 	HRESULT hr = CoCreateGuid( &guid );
 	assert( hr == S_OK );
 
 	return tprintf( "%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X", guid.Data1, guid.Data2, guid.Data3, guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3], guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7] );
+#elif defined( __linux__ )
+	const u64 guidStringLength = 37;
+	char* guidString = cast( char*, mem_temp_alloc( guidStringLength * sizeof( char ) ) );
+
+	uuid_t uuid;
+	uuid_generate( uuid );
+	uuid_unparse_upper( uuid, guidString );
+
+	return guidString;
+#endif
 }
 
 bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* options ) {

@@ -46,70 +46,28 @@ SOFTWARE.
 /*
 ================================================================================================
 
-	Debug
+	Win64 debug
 
 ================================================================================================
 */
 
-//Note(Tom): Question for Dan: is this going to be a problem across lib divides like you found with core context?
-static LogVerbosity g_current_verbosity = LOG_VERBOSITY_INFO;
-
-static void log( LogVerbosity required_verbosity, ConsoleColor prefix_color, ConsoleColor message_color, const char* prefix, const char* function, const char* fmt, va_list args ) {
-	if ( g_current_verbosity < required_verbosity ) {
-		return;
-	}
-
+void set_console_text_color( const ConsoleTextColor color ) {
 	HANDLE handle = GetStdHandle( STD_OUTPUT_HANDLE );
 
-	SetConsoleTextAttribute( handle, prefix_color );
+	DWORD color_win64 = 0;
 
-#ifdef LOG_SHOW_FUNCTIONS
-	printf( "%s(%s):  ", prefix, function );
-#else
-	unused( function );
-	
-	printf( "%s:  ", prefix );
-#endif
+	switch ( color ) {
+		case CONSOLE_TEXT_COLOR_DEFAULT:		color_win64 = 0x07; break;
+		case CONSOLE_TEXT_COLOR_RED:			color_win64 = 0x0C; break;
+		case CONSOLE_TEXT_COLOR_YELLOW:			color_win64 = 0x0E; break;
+		case CONSOLE_TEXT_COLOR_BLUE:			color_win64 = 0x01; break;
+		case CONSOLE_TEXT_COLOR_BRIGHT_BLUE:	color_win64 = 0x09; break;
+		case CONSOLE_TEXT_COLOR_LIGHT_GRAY:		color_win64 = 0x07; break;
+	}
 
-	SetConsoleTextAttribute( handle, message_color );
+	assert( color_win64 != 0 );
 
-	vprintf( fmt, args );
-
-	SetConsoleTextAttribute( handle, CONSOLE_COLOR_DEFAULT );
-}
-
-void info_internal(const char* function, const char* fmt, ... ) {
-	va_list args;
-	va_start( args, fmt );
-	log( LOG_VERBOSITY_INFO, CONSOLE_COLOR_BRIGHT_BLUE, CONSOLE_COLOR_LIGHT_GRAY, "INFO", function, fmt, args );
-	va_end( args );
-}
-
-void warning_internal( const char* function, const char* fmt, ... ) {
-	va_list args;
-	va_start( args, fmt );
-	log( LOG_VERBOSITY_WARNING, CONSOLE_COLOR_RED, CONSOLE_COLOR_YELLOW, "WARNING", function, fmt, args );
-	va_end( args );
-}
-
-void error_internal( const char* function, const char* fmt, ... ) {
-	va_list args;
-	va_start( args, fmt );
-	log( LOG_VERBOSITY_ERROR, CONSOLE_COLOR_RED, CONSOLE_COLOR_YELLOW, "ERROR", function, fmt, args );
-	va_end( args );
-}
-
-void set_log_verbosity( LogVerbosity verbosity ) {
-	g_current_verbosity = verbosity;
-}
-
-LogVerbosity get_log_verbosity() {
-	return g_current_verbosity;
-}
-
-errorCode_t get_last_error_code()
-{
-	return GetLastError();
+	SetConsoleTextAttribute( handle, color_win64 );
 }
 
 #ifdef _DEBUG
@@ -208,27 +166,8 @@ static void assert_dialog_internal( const char* file, const int line, const char
 #endif
 }
 
-void fatal_error_internal( const char* file, const int line, const char* prefix, const char* fmt, ... ) {
-#ifdef _DEBUG
-	_CrtSetReportMode( _CRT_ASSERT, _CRTDBG_MODE_WNDW );
-#endif
-
-	va_list args;
-	va_start( args, fmt );
-
-	// build error msg
-	int len = string_vsnprintf( NULL, 0, fmt, args );
-	len++;	// + 1 for null terminator
-
-	s64 total_length = len;
-
-	char* error_msg = cast( char*, alloca( total_length ) );
-	string_vsnprintf( error_msg, total_length, fmt, args );
-	error_msg[total_length - 1] = 0;
-
-	assert_dialog_internal( file, line, prefix, error_msg );
-
-	va_end( args );
+errorCode_t get_last_error_code() {
+	return GetLastError();
 }
 
 #endif // _WIN32

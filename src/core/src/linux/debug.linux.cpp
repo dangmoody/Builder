@@ -26,8 +26,6 @@ SOFTWARE.
 ===========================================================================
 */
 
-#pragma once
-
 #ifdef __linux__
 
 #include <debug.h>
@@ -47,78 +45,49 @@ SOFTWARE.
 /*
 ================================================================================================
 
-	Debug
+	Linux debug
 
 ================================================================================================
 */
 
-//Note(Tom): Question for Dan: is this going to be a problem across lib divides like you found with core context?
-static LogVerbosity g_current_verbosity = LOG_VERBOSITY_INFO;
+void set_console_text_color( const ConsoleTextColor color ) {
+	const char* color_linux = NULL;
 
-static void log( LogVerbosity required_verbosity, ConsoleColor prefix_color, const char* message_color, const char* prefix, const char* function, const char* fmt, va_list args ) {
-	if ( g_current_verbosity < required_verbosity ) {
-		return;
+	switch ( color ) {
+		case CONSOLE_TEXT_COLOR_DEFAULT:		color_linux = "\033[0m"; break;
+		case CONSOLE_TEXT_COLOR_RED:			color_linux = "\033[0;31m"; break;
+		case CONSOLE_TEXT_COLOR_YELLOW:			color_linux = "\033[0;32m"; break;
+		case CONSOLE_TEXT_COLOR_BLUE:			color_linux = "\033[1;34m"; break;
+		case CONSOLE_TEXT_COLOR_BRIGHT_BLUE:	color_linux = "\033[1;94m"; break;
+		case CONSOLE_TEXT_COLOR_LIGHT_GRAY:		color_linux = "\033[1;37m"; break;
 	}
 
-	printf("%s", prefix_color);
+	assert( color_linux != NULL );
 
-	#ifdef LOG_SHOW_FUNCTIONS
-		printf( "%s(%s):  ", prefix, function );
-	#else
-		unused( function );
-		
-		printf( "%s:  ", prefix );
-	#endif
-
-	printf("%s", message_color);
-	vprintf( fmt, args );
-	printf("%s", CONSOLE_COLOR_DEFAULT);
-}
-
-void info_internal(const char* function, const char* fmt, ... ) {
-	va_list args;
-	va_start( args, fmt );
-	log( LOG_VERBOSITY_INFO, CONSOLE_COLOR_BRIGHT_BLUE, CONSOLE_COLOR_LIGHT_GRAY, "INFO", function, fmt, args );
-	va_end( args );
-}
-
-void warning_internal( const char* function, const char* fmt, ... ) {
-	va_list args;
-	va_start( args, fmt );
-	log( LOG_VERBOSITY_WARNING, CONSOLE_COLOR_RED, CONSOLE_COLOR_YELLOW, "WARNING", function, fmt, args );
-	va_end( args );
-}
-
-void error_internal( const char* function, const char* fmt, ... ) {
-	va_list args;
-	va_start( args, fmt );
-	log( LOG_VERBOSITY_ERROR, CONSOLE_COLOR_RED, CONSOLE_COLOR_YELLOW, "ERROR", function, fmt, args );
-	va_end( args );
-}
-
-void set_log_verbosity( LogVerbosity verbosity ) {
-	g_current_verbosity = verbosity;
-}
-
-LogVerbosity get_log_verbosity() {
-	return g_current_verbosity;
+	printf( "%s", color_linux );
 }
 
 #ifdef _DEBUG
 void dump_callstack( void ) {
+	assert( false && "TODO: write the linux impl of dump_callstack()!\n" );
 }
 #endif // _DEBUG
 
 static void assert_dialog_internal( const char* file, const int line, const char* prefix, const char* msg ) {
-	printf("%s", CONSOLE_COLOR_RED);
+	set_console_text_color( CONSOLE_TEXT_COLOR_RED );
+
 	printf( "%s: %s line %d: ", prefix, file, line );
-	printf("%s", CONSOLE_COLOR_YELLOW);
+
+	set_console_text_color( CONSOLE_TEXT_COLOR_YELLOW );
+
 	printf( "%s\n", msg );
 
 #ifdef _DEBUG
 	dump_callstack();
 #endif
-	printf("%s", CONSOLE_COLOR_DEFAULT);
+
+	set_console_text_color( CONSOLE_TEXT_COLOR_DEFAULT );
+
 #ifdef _DEBUG
 	_CrtDbgReport( _CRT_ASSERT, file, line, NULL, msg );
 #else
@@ -127,37 +96,14 @@ static void assert_dialog_internal( const char* file, const int line, const char
 #endif
 }
 
-errorCode_t get_last_error_code()
-{
-	errorCode_t capturedError = errno;
-	if(capturedError != 0)
-	{
-		printf("Linux error: %s\n", strerror(capturedError));
+errorCode_t get_last_error_code() {
+	errorCode_t captured_error = errno;
+
+	if ( captured_error != 0 ) {
+		printf( "Linux error: %s\n", strerror( captured_error ) );
 	}
-	return capturedError;
-}
 
-void fatal_error_internal( const char* file, const int line, const char* prefix, const char* fmt, ... ) {
-#ifdef _DEBUG
-	_CrtSetReportMode( _CRT_ASSERT, _CRTDBG_MODE_WNDW );
-#endif
-
-	va_list args;
-	va_start( args, fmt );
-
-	// build error msg
-	int len = string_vsnprintf( NULL, 0, fmt, args );
-	len++;	// + 1 for null terminator
-
-	s64 total_length = len;
-
-	char* error_msg = cast( char*, alloca( total_length ) );
-	string_vsnprintf( error_msg, total_length, fmt, args );
-	error_msg[total_length - 1] = 0;
-
-	assert_dialog_internal( file, line, prefix, error_msg );
-
-	va_end( args );
+	return captured_error;
 }
 
 #endif // __linux__

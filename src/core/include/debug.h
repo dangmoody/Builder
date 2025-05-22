@@ -64,23 +64,16 @@ enum LogVerbosity {
 	LOG_VERBOSITY_INFO
 };
 
-#ifdef _WIN32
-#define CONSOLE_COLOR_DEFAULT		0x07
-#define CONSOLE_COLOR_RED			0x0C
-#define CONSOLE_COLOR_YELLOW		0x0E
-#define CONSOLE_COLOR_BLUE			0x01
-#define CONSOLE_COLOR_BRIGHT_BLUE	0x09
-#define CONSOLE_COLOR_LIGHT_GRAY	0x07
-typedef s32 ConsoleColor;
-#elif defined(__linux__)
-#define CONSOLE_COLOR_DEFAULT		"\033[0m"
-#define CONSOLE_COLOR_RED			"\033[0;31m"
-#define CONSOLE_COLOR_YELLOW		"\033[0;32m"
-#define CONSOLE_COLOR_BLUE			"\033[1;34m"
-#define CONSOLE_COLOR_BRIGHT_BLUE	"\033[1;94m"
-#define CONSOLE_COLOR_LIGHT_GRAY	"\033[1;37m"
-typedef const char* ConsoleColor;
-#endif
+enum ConsoleTextColor {
+	CONSOLE_TEXT_COLOR_DEFAULT	= 0,
+	CONSOLE_TEXT_COLOR_RED,
+	CONSOLE_TEXT_COLOR_YELLOW,
+	CONSOLE_TEXT_COLOR_BLUE,
+	CONSOLE_TEXT_COLOR_BRIGHT_BLUE,
+	CONSOLE_TEXT_COLOR_LIGHT_GRAY,
+};
+
+CORE_API void					set_console_text_color( const ConsoleTextColor color );
 
 // logging
 CORE_API void					info_internal( const char* function, const char* fmt, ... );

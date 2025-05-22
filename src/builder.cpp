@@ -1502,15 +1502,6 @@ int main( int argc, char** argv ) {
 	context.verbose = false;
 #endif
 
-	/*{
-		Array<const char*> args;
-		args.add( "\"%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\vswhere.exe\"" );
-		args.add( "-property" );
-		args.add( "installationPath" );
-
-		RunProc( &args, NULL, false, true );
-	}*/
-
 	// check if we need to perform first time setup
 	{
 		bool8 doFirstTimeSetup = false;

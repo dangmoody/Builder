@@ -861,7 +861,7 @@ static const char* TryFindFile_r( const char* filename, const char* folder ) {
 	return NULL;
 }
 
-static void GetAllSourceFiles_r( const char* path, String searchFilter, std::vector<std::string>& outSourceFiles ) {
+static void GetAllSourceFiles_r( const char* path, const char* subfolder, String searchFilter, std::vector<std::string>& outSourceFiles ) {
 	unused( outSourceFiles );
 
 	const char* start = searchFilter.data;
@@ -876,8 +876,8 @@ static void GetAllSourceFiles_r( const char* path, String searchFilter, std::vec
 		if ( string_equals( subPath.data, "**" ) ) {
 			//printf( "Doing recursive file search\n" );
 
-			String newPath;
-			string_printf( &newPath, "%s/*", path );
+			//String newPath;
+			//string_printf( &newPath, "%s/*", path );
 
 			// + 1 to skip the slash as well
 			searchFilter.data += subPathLength + 1;
@@ -888,7 +888,7 @@ static void GetAllSourceFiles_r( const char* path, String searchFilter, std::vec
 			//printf( "\n" );
 
 			FileInfo fileInfo = {};
-			File file = file_find_first( tprintf( "%s/*", path ), &fileInfo );
+			File file = file_find_first( tprintf( "%s%s*", path, PATH_SEPARATOR ), &fileInfo );
 
 			do {
 				if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) ) {
@@ -899,15 +899,30 @@ static void GetAllSourceFiles_r( const char* path, String searchFilter, std::vec
 					continue;
 				}
 
-				const char* subfolder = tprintf( "%s\\%s", path, fileInfo.filename );
+				//const char* subfolder = tprintf( "%s\\%s", path, fileInfo.filename );
+				const char* newSubfolder = NULL;
+				if ( subfolder ) {
+					newSubfolder = tprintf( "%s\\%s", subfolder, fileInfo.filename );
+				} else {
+					newSubfolder = tprintf( "%s", fileInfo.filename );
+				}
+				assert( newSubfolder );
 
-				GetAllSourceFiles_r( subfolder, searchFilter.data, outSourceFiles );
+				GetAllSourceFiles_r( path, newSubfolder, searchFilter.data, outSourceFiles );
 			} while ( file_find_next( &file, &fileInfo ) );
 		} else if ( string_equals( subPath.data, "*" ) ) {
 			//printf( "Doing non-recursive file search\n" );
 
+			const char* fullSearchPath = NULL;
+			if ( subfolder ) {
+				fullSearchPath = tprintf( "%s%s%s%s%s", path, PATH_SEPARATOR, subfolder, PATH_SEPARATOR, subPath.data );
+			} else {
+				fullSearchPath = subPath.data;
+			}
+			assert( fullSearchPath );
+
 			FileInfo fileInfo = {};
-			File file = file_find_first( tprintf( "%s/%s", path, subPath.data ), &fileInfo );
+			File file = file_find_first( fullSearchPath, &fileInfo );
 
 			do {
 				if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) ) {
@@ -918,13 +933,20 @@ static void GetAllSourceFiles_r( const char* path, String searchFilter, std::vec
 					continue;
 				}
 
-				const char* foundFilename = tprintf( "%s/%s", path, fileInfo.filename );
+				const char* foundFilename = NULL;
+				if ( subfolder ) {
+					foundFilename = tprintf( "%s%s%s", subfolder, PATH_SEPARATOR, fileInfo.filename );
+				} else {
+					foundFilename = tprintf( "%s", fileInfo.filename );
+				}
+				assert( foundFilename );
 
 				//printf( "FOUND FILE \"%s\"\n", foundFilename );
 
 				outSourceFiles.push_back( foundFilename );
 			} while ( file_find_next( &file, &fileInfo ) );
 		} else {
+#if 0
 			// TODO(DM): replace with:
 			//
 			//	String newPath = path_join( path.data, subPath.data );
@@ -940,10 +962,21 @@ static void GetAllSourceFiles_r( const char* path, String searchFilter, std::vec
 			//printf( "\n" );
 
 			GetAllSourceFiles_r( newPath.data, searchFilter, outSourceFiles );
+#else
+			assert( false && "DM!!! gotta fill me in, I guess..." );
+#endif
 		}
 	} else {
+		const char* fullSearchPath = NULL;
+		if ( subfolder ) {
+			fullSearchPath = tprintf( "%s%s%s%s%s", path, PATH_SEPARATOR, subfolder, PATH_SEPARATOR, searchFilter.data );
+		} else {
+			fullSearchPath = tprintf( "%s%s%s", path, PATH_SEPARATOR, searchFilter.data );
+		}
+		assert( fullSearchPath );
+
 		FileInfo fileInfo = {};
-		File file = file_find_first( tprintf( "%s/%s", path, searchFilter.data ), &fileInfo );
+		File file = file_find_first( fullSearchPath, &fileInfo );
 
 		if ( file.ptr != INVALID_HANDLE_VALUE ) {
 			do {
@@ -955,7 +988,13 @@ static void GetAllSourceFiles_r( const char* path, String searchFilter, std::vec
 					continue;
 				}
 
-				const char* foundFilename = tprintf( "%s/%s", path, fileInfo.filename );
+				const char* foundFilename = NULL;
+				if ( subfolder ) {
+					foundFilename = tprintf( "%s%s%s", subfolder, PATH_SEPARATOR, fileInfo.filename );
+				} else {
+					foundFilename = tprintf( "%s", fileInfo.filename );
+				}
+				assert( foundFilename );
 
 				//printf( "FOUND FILE \"%s\"\n", foundFilename );
 
@@ -1023,9 +1062,8 @@ static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContex
 
 		const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
 
-		const char* searchPath = NULL;
 		if ( inputFileIsSameAsSourceFile ) {
-			searchPath = context->inputFilePath.data;
+			GetAllSourceFiles_r( context->inputFilePath.data, NULL, sourceFileNoPath, sourceFiles );
 		} else {
 			const char* sourceFilePath = path_remove_file_from_path( sourceFile );
 
@@ -1033,10 +1071,8 @@ static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContex
 				sourceFilePath = ".";
 			}
 
-			searchPath = tprintf( "%s\\%s", context->inputFilePath.data, sourceFilePath );
+			GetAllSourceFiles_r( context->inputFilePath.data, sourceFilePath, sourceFileNoPath, sourceFiles );
 		}
-
-		GetAllSourceFiles_r( searchPath, sourceFileNoPath, sourceFiles );
 	}
 
 	return sourceFiles;
@@ -1542,6 +1578,8 @@ static bool8 BuildInfo_Write( const buildContext_t* context, const buildInfoData
 		error( "Failed to write %s!\n", context->buildInfoFilename.data );
 		return false;
 	}
+
+	printf( "\n" );
 
 	return true;
 }

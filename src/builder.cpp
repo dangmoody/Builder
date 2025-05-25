@@ -902,7 +902,6 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, String
 				} else {
 					newSubfolder = tprintf( "%s", fileInfo.filename );
 				}
-				assert( newSubfolder );
 
 				GetAllSourceFiles_r( path, newSubfolder, searchFilter.data, outSourceFiles );
 			} while ( file_find_next( &file, &fileInfo ) );
@@ -915,7 +914,6 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, String
 			} else {
 				fullSearchPath = subPath.data;
 			}
-			assert( fullSearchPath );
 
 			FileInfo fileInfo = {};
 			File file = file_find_first( fullSearchPath, &fileInfo );
@@ -935,7 +933,6 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, String
 				} else {
 					foundFilename = tprintf( "%s", fileInfo.filename );
 				}
-				assert( foundFilename );
 
 				//printf( "FOUND FILE \"%s\"\n", foundFilename );
 
@@ -956,7 +953,6 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, String
 			} else {
 				newSubfolder = tprintf( "%s%s", path, PATH_SEPARATOR, searchFilter );
 			}
-			assert( newSubfolder );
 
 			GetAllSourceFiles_r( path, newSubfolder, searchFilter, outSourceFiles );
 		}
@@ -967,7 +963,6 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, String
 		} else {
 			fullSearchPath = tprintf( "%s%s%s", path, PATH_SEPARATOR, searchFilter.data );
 		}
-		assert( fullSearchPath );
 
 		FileInfo fileInfo = {};
 		File file = file_find_first( fullSearchPath, &fileInfo );
@@ -988,7 +983,6 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, String
 				} else {
 					foundFilename = tprintf( "%s", fileInfo.filename );
 				}
-				assert( foundFilename );
 
 				//printf( "FOUND FILE \"%s\"\n", foundFilename );
 

@@ -10,6 +10,8 @@ builder.exe
 builder_tests.exe
 
 tests/**/*.exe
+tests/**/*.ilk
+tests/**/*.pdb
 
 releases/**/*
 

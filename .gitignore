@@ -9,9 +9,16 @@ clang
 builder.exe
 builder_tests.exe
 
+# ignore test binaries
 tests/**/*.exe
 tests/**/*.ilk
 tests/**/*.pdb
+
+# ignore test-generated visual studio solutions
+tests/**/*.sln
+tests/**/*.vcxproj
+tests/**/*.vcxproj.user
+tests/**/*.vcxproj.filters
 
 releases/**/*
 

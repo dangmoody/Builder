@@ -38,7 +38,10 @@ CORE_API bool8	string_equals( const char* lhs, const char* rhs );
 // Returns true if the first characters of string 'str' are EXACTLY the same as string 'prefix'.  Case sensitive.
 CORE_API bool8	string_starts_with( const char* str, const char* prefix );
 
-// Returns true if the last characters of string 'str' are EXACTLY the same as string 'suffix'.  Case sensitive.
+// Returns true if the last character of 'str' is the valueo of 'end'.  Case sensitive.
+CORE_API bool8	string_ends_with( const char* str, const char end );
+
+// Returns true if the last characters of 'str' are EXACTLY the same as string 'suffix'.  Case sensitive.
 CORE_API bool8	string_ends_with( const char* str, const char* suffix );
 
 // Returns true if string 'str' has EXACTLY the contents of 'substring' somewhere in it.  Case sensitive.

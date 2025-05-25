@@ -295,7 +295,7 @@ const char* BuildConfig_GetFullBinaryName( const BuildConfig* config ) {
 	string_builder_reset( &builder );
 
 	if ( !config->binary_folder.empty() ) {
-		string_builder_appendf( &builder, "%s\\", config->binary_folder.c_str() );
+		string_builder_appendf( &builder, "%s%c", config->binary_folder.c_str(), PATH_SEPARATOR );
 	}
 
 	string_builder_appendf( &builder, "%s", config->binary_name.c_str() );
@@ -377,7 +377,7 @@ static const char* GetDepFilename( const buildContext_t* context, const BuildCon
 
 	const char* configNameNoPath = path_remove_path_from_file( config->name.c_str() );
 
-	return tprintf( "%s\\%s.d", context->dotBuilderFolder.data, configNameNoPath );
+	return tprintf( "%s%c%s.d", context->dotBuilderFolder.data, PATH_SEPARATOR, configNameNoPath );
 }
 
 static s32 BuildEXE( buildContext_t* context ) {
@@ -399,7 +399,7 @@ static s32 BuildEXE( buildContext_t* context ) {
 		context->config.ignore_warnings.size()
 	);
 
-	args.add( tprintf( "%s\\clang\\bin\\clang.exe", path_app_path() ) );
+	args.add( tprintf( "%s%cclang%cbin%cclang.exe", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR ) );
 
 	if ( !context->config.name.empty() ) {
 		args.add( "-MD" );											// generate the dependency file
@@ -513,7 +513,7 @@ static s32 BuildDynamicLibrary( buildContext_t* context ) {
 		context->config.ignore_warnings.size()
 	);
 
-	args.add( tprintf( "%s\\clang\\bin\\clang.exe", path_app_path() ) );
+	args.add( tprintf( "%s%cclang%cbin%cclang.exe", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR ) );
 	args.add( "-shared" );
 
 	if ( !context->config.name.empty() ) {
@@ -641,7 +641,7 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 
 		args.reset();
 
-		args.add( tprintf( "%s\\clang\\bin\\clang.exe", path_app_path() ) );
+		args.add( tprintf( "%s%cclang%cbin%cclang.exe", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR ) );
 
 		if ( !context->config.name.empty() ) {
 			args.add( "-MD" );											// generate the dependency file
@@ -668,9 +668,9 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 
 		{
 			const char* sourceFileTrimmed = sourceFile;
-			sourceFileTrimmed = strrchr( sourceFileTrimmed, '\\' ) + 1;
+			sourceFileTrimmed = strrchr( sourceFileTrimmed, PATH_SEPARATOR ) + 1;
 
-			const char* outArg = tprintf( "%s\\%s.o", context->config.binary_folder.c_str(), sourceFileTrimmed );
+			const char* outArg = tprintf( "%s%c%s.o", context->config.binary_folder.c_str(), PATH_SEPARATOR, sourceFileTrimmed );
 
 			args.add( "-o" );
 			args.add( outArg );
@@ -766,7 +766,7 @@ static bool8 FileExists( const char* filename ) {
 }
 
 static void NukeFolderInternal_r( const char* folder, const bool8 verbose ) {
-	const char* searchPattern = tprintf( "%s\\*", folder );
+	const char* searchPattern = tprintf( "%s%c*", folder, PATH_SEPARATOR );
 
 	FileInfo fileInfo = {};
 	File file = file_find_first( searchPattern, &fileInfo );
@@ -776,7 +776,7 @@ static void NukeFolderInternal_r( const char* folder, const bool8 verbose ) {
 			continue;
 		}
 
-		const char* fileFullPath = tprintf( "%s\\%s", folder, fileInfo.filename );
+		const char* fileFullPath = tprintf( "%s%c%s", folder, PATH_SEPARATOR, fileInfo.filename );
 
 		if ( fileInfo.is_directory ) {
 			if ( verbose ) printf( "Found folder %s\n", fileFullPath );
@@ -809,6 +809,8 @@ void NukeFolder_r( const char* folder, const bool8 deleteRoot, const bool8 verbo
 	}
 }
 
+// TODO(DM): redo this so that we get the next forward and backslash, then check which one comes first, and return that
+// if neither then return NULL
 const char* GetSlashInPath( const char* path ) {
 	const char* slash = NULL;
 
@@ -825,7 +827,7 @@ bool8 PathHasSlash( const char* path ) {
 static const char* TryFindFile_r( const char* filename, const char* folder ) {
 	const char* result = NULL;
 
-	const char* searchPath = tprintf( "%s\\*", folder );
+	const char* searchPath = tprintf( "%s%c*", folder, PATH_SEPARATOR );
 
 	const char* filenamePath = path_remove_file_from_path( filename );
 
@@ -839,9 +841,9 @@ static const char* TryFindFile_r( const char* filename, const char* folder ) {
 
 		const char* fullFilename = NULL;
 		if ( PathHasSlash( filename ) ) {
-			fullFilename = tprintf( "%s\\%s\\%s", folder, filenamePath, fileInfo.filename );
+			fullFilename = tprintf( "%s%c%s%c%s", folder, PATH_SEPARATOR, filenamePath, PATH_SEPARATOR, fileInfo.filename );
 		} else {
-			fullFilename = tprintf( "%s\\%s", folder, fileInfo.filename );
+			fullFilename = tprintf( "%s%c%s", folder, PATH_SEPARATOR, fileInfo.filename );
 		}
 
 		if ( fileInfo.is_directory ) {
@@ -864,6 +866,7 @@ static const char* TryFindFile_r( const char* filename, const char* folder ) {
 static void GetAllSourceFiles_r( const char* path, const char* subfolder, String searchFilter, std::vector<std::string>& outSourceFiles ) {
 	unused( outSourceFiles );
 
+	// TODO(DM): need a better way of finding the appropriate slash type here between platforms
 	const char* start = searchFilter.data;
 	const char* end = NULL;
 	if ( !end ) end = strchr( start, '/' );
@@ -885,7 +888,7 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, String
 			//printf( "\n" );
 
 			FileInfo fileInfo = {};
-			File file = file_find_first( tprintf( "%s%s*", path, PATH_SEPARATOR ), &fileInfo );
+			File file = file_find_first( tprintf( "%s%c*", path, PATH_SEPARATOR ), &fileInfo );
 
 			do {
 				if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) ) {
@@ -898,7 +901,7 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, String
 
 				const char* newSubfolder = NULL;
 				if ( subfolder ) {
-					newSubfolder = tprintf( "%s\\%s", subfolder, fileInfo.filename );
+					newSubfolder = tprintf( "%s%c%s", subfolder, PATH_SEPARATOR, fileInfo.filename );
 				} else {
 					newSubfolder = tprintf( "%s", fileInfo.filename );
 				}
@@ -910,7 +913,7 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, String
 
 			const char* fullSearchPath = NULL;
 			if ( subfolder ) {
-				fullSearchPath = tprintf( "%s%s%s%s%s", path, PATH_SEPARATOR, subfolder, PATH_SEPARATOR, subPath.data );
+				fullSearchPath = tprintf( "%s%c%s%c%s", path, PATH_SEPARATOR, subfolder, PATH_SEPARATOR, subPath.data );
 			} else {
 				fullSearchPath = subPath.data;
 			}
@@ -929,7 +932,7 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, String
 
 				const char* foundFilename = NULL;
 				if ( subfolder ) {
-					foundFilename = tprintf( "%s%s%s", subfolder, PATH_SEPARATOR, fileInfo.filename );
+					foundFilename = tprintf( "%s%c%s", subfolder, PATH_SEPARATOR, fileInfo.filename );
 				} else {
 					foundFilename = tprintf( "%s", fileInfo.filename );
 				}
@@ -949,9 +952,9 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, String
 
 			const char* newSubfolder = NULL;
 			if ( subfolder ) {
-				newSubfolder = tprintf( "%s%s%s%s", path, PATH_SEPARATOR, subfolder, PATH_SEPARATOR, searchFilter.data );
+				newSubfolder = tprintf( "%s%c%s%c%s", path, PATH_SEPARATOR, subfolder, PATH_SEPARATOR, searchFilter.data );
 			} else {
-				newSubfolder = tprintf( "%s%s", path, PATH_SEPARATOR, searchFilter.data );
+				newSubfolder = tprintf( "%s%c%s", path, PATH_SEPARATOR, searchFilter.data );
 			}
 
 			GetAllSourceFiles_r( path, newSubfolder, searchFilter, outSourceFiles );
@@ -959,9 +962,9 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, String
 	} else {
 		const char* fullSearchPath = NULL;
 		if ( subfolder ) {
-			fullSearchPath = tprintf( "%s%s%s%s%s", path, PATH_SEPARATOR, subfolder, PATH_SEPARATOR, searchFilter.data );
+			fullSearchPath = tprintf( "%s%c%s%c%s", path, PATH_SEPARATOR, subfolder, PATH_SEPARATOR, searchFilter.data );
 		} else {
-			fullSearchPath = tprintf( "%s%s%s", path, PATH_SEPARATOR, searchFilter.data );
+			fullSearchPath = tprintf( "%s%c%s", path, PATH_SEPARATOR, searchFilter.data );
 		}
 
 		FileInfo fileInfo = {};
@@ -979,7 +982,7 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, String
 
 				const char* foundFilename = NULL;
 				if ( subfolder ) {
-					foundFilename = tprintf( "%s%s%s", subfolder, PATH_SEPARATOR, fileInfo.filename );
+					foundFilename = tprintf( "%s%c%s", subfolder, PATH_SEPARATOR, fileInfo.filename );
 				} else {
 					foundFilename = tprintf( "%s", fileInfo.filename );
 				}
@@ -995,17 +998,17 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, String
 void GetAllSubfolders_r( const char* basePath, const char* folder, Array<const char*>* outSubfolders ) {
 	const char* fullSearchPath = NULL;
 
-	if ( string_ends_with( basePath, "\\" ) || string_ends_with( basePath, "/" ) ) {
+	if ( string_ends_with( basePath, PATH_SEPARATOR ) ) {
 		if ( folder ) {
-			fullSearchPath = tprintf( "%s%s\\*", basePath, folder );
+			fullSearchPath = tprintf( "%s%s%c*", basePath, folder, PATH_SEPARATOR );
 		} else {
 			fullSearchPath = tprintf( "%s*", basePath );
 		}
 	} else {
 		if ( folder ) {
-			fullSearchPath = tprintf( "%s\\%s\\*", basePath, folder );
+			fullSearchPath = tprintf( "%s%c%s%c*", basePath, PATH_SEPARATOR, folder, PATH_SEPARATOR );
 		} else {
-			fullSearchPath = tprintf( "%s\\*", basePath );
+			fullSearchPath = tprintf( "%s%c*", basePath, PATH_SEPARATOR );
 		}
 	}
 
@@ -1028,7 +1031,7 @@ void GetAllSubfolders_r( const char* basePath, const char* folder, Array<const c
 
 			const char* newPath = NULL;
 			if ( folder ) {
-				newPath = tprintf( "%s\\%s", folder, folderName );
+				newPath = tprintf( "%s%c%s", folder, PATH_SEPARATOR, folderName );
 			} else {
 				newPath = folderName;
 			}
@@ -1120,7 +1123,7 @@ static void ReadDependencyFile( const buildContext_t* context, const BuildConfig
 		assert( dependencyEnd );
 		// paths can have spaces in them, but they are preceded by a single backslash (\)
 		// so if we find a space but it has a single backslash just before it then keep searching for a space
-		while ( dependencyEnd && ( *( dependencyEnd - 1 ) == '\\' ) ) {
+		while ( dependencyEnd && ( *( dependencyEnd - 1 ) == PATH_SEPARATOR ) ) {
 			dependencyEnd = strchr( dependencyEnd + 1, ' ' );
 		}
 
@@ -1137,7 +1140,7 @@ static void ReadDependencyFile( const buildContext_t* context, const BuildConfig
 		// get the substring we actually need
 		std::string dependencyFilename( dependencyStart, dependencyFilenameLength );
 		For ( u64, i, 0, dependencyFilename.size() ) {
-			if ( dependencyFilename[i] == '\\' && dependencyFilename[i + 1] == ' ' ) {
+			if ( dependencyFilename[i] == PATH_SEPARATOR && dependencyFilename[i + 1] == ' ' ) {
 				dependencyFilename.erase( i, 1 );
 			}
 		}
@@ -1156,7 +1159,7 @@ static void ReadDependencyFile( const buildContext_t* context, const BuildConfig
 
 		current = dependencyEnd + 1;
 
-		while ( *current == '\\' ) {
+		while ( *current == PATH_SEPARATOR ) {
 			current++;
 		}
 
@@ -1517,7 +1520,7 @@ static bool8 BuildInfo_Write( const buildContext_t* context, const buildInfoData
 		{
 			ByteBuffer_Write_CString( &buffer, "last_binary_write_time\n" );
 
-			const char* binaryFullName = tprintf( "%s\\%s", context->inputFilePath.data, BuildConfig_GetFullBinaryName( config ) );
+			const char* binaryFullName = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, BuildConfig_GetFullBinaryName( config ) );
 
 			FileInfo fileInfo;
 			File binaryFile = file_find_first( binaryFullName, &fileInfo );
@@ -1621,7 +1624,7 @@ int main( int argc, char** argv ) {
 		SetCurrentDirectory( path_app_path() );
 
 		{
-			const char* clangAbsolutePath = tprintf( "%s\\clang\\bin\\clang.exe", path_app_path() );
+			const char* clangAbsolutePath = tprintf( "%s%cclang%cbin%cclang.exe", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
 
 			// if we cant find our copy of clang then we definitely need to run first time setup
 			if ( !FileExists( clangAbsolutePath ) ) {
@@ -1663,7 +1666,7 @@ int main( int argc, char** argv ) {
 
 			const char* clangInstallerFilename = tprintf( "LLVM-%d.%d.%d-win64.exe", BUILDER_CLANG_VERSION_MAJOR, BUILDER_CLANG_VERSION_MINOR, BUILDER_CLANG_VERSION_PATCH );
 
-			if ( !folder_create_if_it_doesnt_exist( ".\\temp" ) ) {
+			if ( !folder_create_if_it_doesnt_exist( tprintf( ".%ctemp", PATH_SEPARATOR ) ) ) {
 				errorCode_t errorCode = GetLastErrorCode();
 				error( "Failed to create the temp folder that the Clang install uses.  Is it possible you have whacky user permissions? Error code: " ERROR_CODE_FORMAT "\n", errorCode );
 				QUIT_ERROR();
@@ -1677,7 +1680,7 @@ int main( int argc, char** argv ) {
 				args.reserve( 4 );
 				args.add( "curl" );
 				args.add( "-o" );
-				args.add( "temp\\clang_installer.exe" );
+				args.add( tprintf( "temp%cclang_installer.exe", PATH_SEPARATOR ) );
 				args.add( "-L" );
 				args.add( tprintf( "https://github.com/llvm/llvm-project/releases/download/llvmorg-%d.%d.%d/%s", BUILDER_CLANG_VERSION_MAJOR, BUILDER_CLANG_VERSION_MINOR, BUILDER_CLANG_VERSION_PATCH, clangInstallerFilename ) );
 
@@ -1707,9 +1710,9 @@ int main( int argc, char** argv ) {
 				// taken from: https://discourse.llvm.org/t/using-clang-windows-installer-from-command-line/49698/2 which references https://nsis.sourceforge.io/Docs/Chapter3.html#installerusagecommon
 				Array<const char*> args;
 				args.reserve( 4 );
-				args.add( ".\\temp\\clang_installer.exe" );
+				args.add( tprintf( ".%ctemp%cclang_installer.exe", PATH_SEPARATOR, PATH_SEPARATOR ) );
 				args.add( "/S" );		// install in silent mode
-				args.add( tprintf( "/D=%s\\%s", path_app_path(), clangInstallFolder ) );	// set the install directory, absolute paths only
+				args.add( tprintf( "/D=%s%c%s", path_app_path(), PATH_SEPARATOR, clangInstallFolder ) );	// set the install directory, absolute paths only
 
 				Array<const char*> envVars;
 				envVars.add( "__compat_layer=RunAsInvoker" );	// this tricks the subprocess into thinking we are running with elevation
@@ -1858,7 +1861,7 @@ int main( int argc, char** argv ) {
 		}
 
 		if ( doingBuildFrom == DOING_BUILD_FROM_BUILD_INFO_FILE ) {
-			string_printf( &context.inputFilePath, "%s\\..", inputFilePath );
+			string_printf( &context.inputFilePath, "%s%c..", inputFilePath, PATH_SEPARATOR );
 
 			context.dotBuilderFolder = inputFilePath;
 			context.buildInfoFilename = context.inputFile;
@@ -1868,8 +1871,8 @@ int main( int argc, char** argv ) {
 
 			context.inputFilePath = inputFilePath;
 
-			string_printf( &context.dotBuilderFolder, "%s\\.builder", context.inputFilePath.data );
-			string_printf( &context.buildInfoFilename, "%s\\%s%s", context.dotBuilderFolder.data, inputFileNoPathOrExtension, BUILD_INFO_FILE_EXTENSION );
+			string_printf( &context.dotBuilderFolder, "%s%c.builder", context.inputFilePath.data, PATH_SEPARATOR );
+			string_printf( &context.buildInfoFilename, "%s%c%s%s", context.dotBuilderFolder.data, PATH_SEPARATOR, inputFileNoPathOrExtension, BUILD_INFO_FILE_EXTENSION );
 		}
 	}
 
@@ -1954,7 +1957,7 @@ int main( int argc, char** argv ) {
 
 		userConfigBuildContext.config.ignore_warnings.push_back( "-Wno-missing-prototypes" );	// otherwise the user has to forward declare functions like set_builder_options and thats annoying
 
-		userConfigBuildContext.fullBinaryName = tprintf( "%s\\%s", userConfigBuildContext.config.binary_folder.c_str(), userConfigBuildContext.config.binary_name.c_str() );
+		userConfigBuildContext.fullBinaryName = tprintf( "%s%c%s", userConfigBuildContext.config.binary_folder.c_str(), PATH_SEPARATOR, userConfigBuildContext.config.binary_name.c_str() );
 
 		buildInfoData.userConfigDLLFilename = userConfigBuildContext.fullBinaryName;
 
@@ -2161,7 +2164,7 @@ int main( int argc, char** argv ) {
 
 			// make sure that the binary folder and binary name are at least set to defaults
 			if ( !config->binary_folder.empty() ) {
-				config->binary_folder = tprintf( "%s\\%s", context.inputFilePath.data, config->binary_folder.c_str() );
+				config->binary_folder = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, config->binary_folder.c_str() );
 			} else {
 				config->binary_folder = cast( char*, context.inputFilePath.data );
 			}
@@ -2215,7 +2218,7 @@ int main( int argc, char** argv ) {
 
 					const char* trackedSourceFileAndPath = trackedSourceFile->filename.c_str();
 					if ( !path_is_absolute( trackedSourceFile->filename.c_str() ) ) {
-						trackedSourceFileAndPath = tprintf( "%s\\%s", buildContext->inputFilePath.data, trackedSourceFile->filename.c_str() );
+						trackedSourceFileAndPath = tprintf( "%s%c%s", buildContext->inputFilePath.data, PATH_SEPARATOR, trackedSourceFile->filename.c_str() );
 					}
 
 					FileInfo fileInfo = {};
@@ -2260,7 +2263,7 @@ int main( int argc, char** argv ) {
 				if ( path_is_absolute( additionalInclude ) ) {
 					context.config.additional_includes[includeIndex] = additionalInclude;
 				} else {
-					context.config.additional_includes[includeIndex] = tprintf( "%s\\%s", context.inputFilePath.data, additionalInclude );
+					context.config.additional_includes[includeIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalInclude );
 				}
 			}
 
@@ -2271,7 +2274,7 @@ int main( int argc, char** argv ) {
 				if ( path_is_absolute( additionalLibPath ) ) {
 					context.config.additional_lib_paths[libPathIndex] = additionalLibPath;
 				} else {
-					context.config.additional_lib_paths[libPathIndex] = tprintf( "%s\\%s", context.inputFilePath.data, additionalLibPath );
+					context.config.additional_lib_paths[libPathIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalLibPath );
 				}
 			}
 
@@ -2291,7 +2294,7 @@ int main( int argc, char** argv ) {
 				// the .build_info file wont store the full paths to the source files because the input path can change depending on whether we're building via visual studio or from the command line
 				// so we need to reconstruct the full paths to the source files ourselves
 				For ( u64, sourceFileIndex, 0, finalSourceFilesToBuild.size() ) {
-					finalSourceFilesToBuild[sourceFileIndex] = tprintf( "%s\\%s", context.inputFilePath.data, finalSourceFilesToBuild[sourceFileIndex].c_str() );
+					finalSourceFilesToBuild[sourceFileIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, finalSourceFilesToBuild[sourceFileIndex].c_str() );
 				}
 
 				context.config.source_files = finalSourceFilesToBuild;

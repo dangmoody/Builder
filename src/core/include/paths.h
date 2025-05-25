@@ -43,9 +43,9 @@ SOFTWARE.
 */
 
 #ifdef _WIN32
-	#define PATH_SEPARATOR "\\"
+	#define PATH_SEPARATOR '\\'
 #else
-	#define PATH_SEPARATOR "/"
+	#define PATH_SEPARATOR '/'
 #endif
 
 // Returns the absolute path of where the current program is running from.
@@ -75,6 +75,6 @@ CORE_API const char*	path_canonicalise( const char* path );
 // Make sure that any slashes found in 'path' are what the OS expects them to be.
 CORE_API const char*	path_fix_slashes( const char* path );
 
-// Takes a potentially-infinite infinite number of strings and separates each one with a slash (back slash on Windows, forward slash on all other platforms).
+// Takes a potentially-infinite number of strings and separates each one with a slash (back slash on Windows, forward slash on all other platforms).
 // template<class... Args>
 // CORE_API const char*	path_join( const char* first, const Args*... args );

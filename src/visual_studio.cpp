@@ -57,17 +57,17 @@ struct visualStudioFileFilter_t {
 static void GetAllVisualStudioFiles_r( buildContext_t* context, const char* solutionFilename, const char* basePath, const char* subfolder, const std::vector<std::string>& fileExtensions, Array<visualStudioFileFilter_t>& outFilterFiles ) {
 	const char* fullSearchPath = NULL;
 
-	if ( string_ends_with( basePath, "\\" ) || string_ends_with( basePath, "/" ) ) {
+	if ( string_ends_with( basePath, PATH_SEPARATOR ) ) {
 		if ( subfolder ) {
-			fullSearchPath = tprintf( "%s%s\\*", basePath, subfolder );
+			fullSearchPath = tprintf( "%s%s%c*", basePath, PATH_SEPARATOR, subfolder );
 		} else {
 			fullSearchPath = tprintf( "%s*", basePath );
 		}
 	} else {
 		if ( subfolder ) {
-			fullSearchPath = tprintf( "%s\\%s\\*", basePath, subfolder );
+			fullSearchPath = tprintf( "%s%c%s%c*", basePath, PATH_SEPARATOR, subfolder, PATH_SEPARATOR );
 		} else {
-			fullSearchPath = tprintf( "%s\\*", basePath );
+			fullSearchPath = tprintf( "%s%c*", basePath, PATH_SEPARATOR );
 		}
 	}
 
@@ -86,7 +86,7 @@ static void GetAllVisualStudioFiles_r( buildContext_t* context, const char* solu
 		if ( fileInfo.is_directory ) {
 			const char* folderName = NULL;
 			if ( subfolder ) {
-				folderName = tprintf( "%s\\%s", subfolder, fileInfo.filename );
+				folderName = tprintf( "%s%c%s", subfolder, PATH_SEPARATOR, fileInfo.filename );
 			} else {
 				folderName = tprintf( "%s", fileInfo.filename );
 			}
@@ -97,7 +97,7 @@ static void GetAllVisualStudioFiles_r( buildContext_t* context, const char* solu
 				if ( string_ends_with( fileInfo.filename, fileExtensions[fileExtensionIndex].c_str() ) ) {
 					const char* filenameAndPathFromRoot = NULL;
 					if ( subfolder ) {
-						filenameAndPathFromRoot = tprintf( "%s\\%s", subfolder, fileInfo.filename );
+						filenameAndPathFromRoot = tprintf( "%s%c%s", subfolder, PATH_SEPARATOR, fileInfo.filename );
 					} else {
 						filenameAndPathFromRoot = tprintf( "%s", fileInfo.filename );
 					}
@@ -145,7 +145,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 	Array<guidParentMapping_t> guidParentMappings;
 
 	// TODO(DM): 18/11/2024: dont use abs path here
-	string_printf( &context->buildInfoFilename, "%s\\.builder\\%s%s", context->inputFilePath.data, options->solution.name.c_str(), BUILD_INFO_FILE_EXTENSION );
+	string_printf( &context->buildInfoFilename, "%s%c.builder%c%s%s", context->inputFilePath.data, PATH_SEPARATOR, PATH_SEPARATOR, options->solution.name.c_str(), BUILD_INFO_FILE_EXTENSION );
 
 	// validate the solution
 	{
@@ -206,7 +206,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 	const char* visualStudioProjectFilesPath = NULL;
 	if ( !options->solution.path.empty() ) {
-		visualStudioProjectFilesPath = tprintf( "%s\\%s", context->inputFilePath.data, options->solution.path.c_str() );
+		visualStudioProjectFilesPath = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, options->solution.path.c_str() );
 	} else {
 		visualStudioProjectFilesPath = cast( char*, context->inputFilePath.data );
 	}
@@ -216,7 +216,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 	// but keep the root because we're about to re-populate it
 	NukeFolder_r( visualStudioProjectFilesPath, false, context->verbose );
 
-	const char* solutionFilename = tprintf( "%s\\%s.sln", visualStudioProjectFilesPath, options->solution.name.c_str() );
+	const char* solutionFilename = tprintf( "%s%c%s.sln", visualStudioProjectFilesPath, PATH_SEPARATOR, options->solution.name.c_str() );
 
 	// get relative path from visual studio to the input file
 	char* pathFromSolutionToInputFile = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
@@ -403,9 +403,9 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 				if ( filterFiles.count == 0 ) {
 					error(
-						"Project \"%s\" is trying to find the source file path \"%s\" but it doesn't exist (full path it's trying to find is: \"%s\\%s\").\n",
+						"Project \"%s\" is trying to find the source file path \"%s\" but it doesn't exist (full path it's trying to find is: \"%s%c%s\").\n",
 						project->name.c_str(), codeFolder,
-						context->inputFilePath.data, codeFolder
+						context->inputFilePath.data, PATH_SEPARATOR, codeFolder
 					);
 
 					return false;
@@ -462,7 +462,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 		// .vcxproj
 		{
-			const char* projectPath = tprintf( "%s\\%s.vcxproj", visualStudioProjectFilesPath, projectNameNoFolder );
+			const char* projectPath = tprintf( "%s%c%s.vcxproj", visualStudioProjectFilesPath, PATH_SEPARATOR, projectNameNoFolder );
 
 			printf( "Generating %s ... ", projectPath );
 
@@ -501,7 +501,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 				string_builder_appendf( &vcxprojContent, "\t</PropertyGroup>\n" );
 			}
 
-			string_builder_appendf( &vcxprojContent, "\t<Import Project=\"$(VCTargetsPath)\\Microsoft.Cpp.Default.props\" />\n" );
+			string_builder_appendf( &vcxprojContent, tprintf( "\t<Import Project=\"$(VCTargetsPath)%cMicrosoft.Cpp.Default.props\" />\n", PATH_SEPARATOR ) );
 
 			// for each config and platform, define config type, toolset, out dir, and intermediate dir
 			For ( u64, configIndex, 0, project->configs.size() ) {
@@ -510,7 +510,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 				const char* fullBinaryName = BuildConfig_GetFullBinaryName( &config->options );
 
 				const char* from = solutionFilename;
-				const char* to = tprintf( "%s\\%s", context->inputFilePath.data, fullBinaryName );
+				const char* to = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, fullBinaryName );
 				to = path_canonicalise( to );
 
 				char* pathFromSolutionToBinary = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
@@ -531,12 +531,12 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 					string_builder_appendf( &vcxprojContent, "\t\t<PlatformToolset>v143</PlatformToolset>\n" );
 
 					string_builder_appendf( &vcxprojContent, "\t\t<OutDir>%s</OutDir>\n", pathFromSolutionToBinary );
-					string_builder_appendf( &vcxprojContent, "\t\t<IntDir>%s\\intermediate</IntDir>\n", config->options.binary_folder.c_str() );
+					string_builder_appendf( &vcxprojContent, "\t\t<IntDir>%s%cintermediate</IntDir>\n", config->options.binary_folder.c_str(), PATH_SEPARATOR );
 					string_builder_appendf( &vcxprojContent, "\t</PropertyGroup>\n" );
 				}
 			}
 
-			string_builder_appendf( &vcxprojContent, "\t<Import Project=\"$(VCTargetsPath)\\Microsoft.Cpp.props\" />\n" );
+			string_builder_appendf( &vcxprojContent, tprintf( "\t<Import Project=\"$(VCTargetsPath)%cMicrosoft.Cpp.props\" />\n", PATH_SEPARATOR ) );
 
 			// not sure what this is or why we need this one but visual studio seems to want it
 			string_builder_appendf( &vcxprojContent, "\t<ImportGroup Label=\"ExtensionSettings\">\n" );
@@ -549,9 +549,9 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 				For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
 					const char* platform = options->solution.platforms[platformIndex].c_str();
 
-					string_builder_appendf( &vcxprojContent, "\t<ImportGroup Label=\"PropertySheets\" Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">\n", config->name.c_str(), platform );
-					string_builder_appendf( &vcxprojContent, "\t\t<Import Project=\"$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props\" Condition=\"exists(\'$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props\')\" Label=\"LocalAppDataPlatform\" />\n" );
-					string_builder_appendf( &vcxprojContent, "\t</ImportGroup>\n" );
+					string_builder_appendf( &vcxprojContent,          "\t<ImportGroup Label=\"PropertySheets\" Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">\n", config->name.c_str(), platform );
+					string_builder_appendf( &vcxprojContent, tprintf( "\t\t<Import Project=\"$(UserRootDir)%cMicrosoft.Cpp.$(Platform).user.props\" Condition=\"exists(\'$(UserRootDir)%cMicrosoft.Cpp.$(Platform).user.props\')\" Label=\"LocalAppDataPlatform\" />\n", PATH_SEPARATOR, PATH_SEPARATOR ) );
+					string_builder_appendf( &vcxprojContent,          "\t</ImportGroup>\n" );
 				}
 			}
 
@@ -582,7 +582,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 						if ( path_is_absolute( additionalInclude ) ) {
 							string_builder_appendf( &vcxprojContent, "%s;", config->options.additional_includes[includePathIndex].c_str() );
 						} else {
-							string_builder_appendf( &vcxprojContent, "%s\\%s;", pathFromSolutionToInputFile, config->options.additional_includes[includePathIndex].c_str() );
+							string_builder_appendf( &vcxprojContent, "%s%c%s;", pathFromSolutionToInputFile, PATH_SEPARATOR, config->options.additional_includes[includePathIndex].c_str() );
 						}
 					}
 					string_builder_appendf( &vcxprojContent, "$(ExternalIncludePath)" );
@@ -596,7 +596,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 						if ( path_is_absolute( additionalLibPath ) ) {
 							string_builder_appendf( &vcxprojContent, "%s;", additionalLibPath );
 						} else {
-							string_builder_appendf( &vcxprojContent, "%s\\%s;", pathFromSolutionToInputFile, additionalLibPath );
+							string_builder_appendf( &vcxprojContent, "%s%c%s;", pathFromSolutionToInputFile, PATH_SEPARATOR, additionalLibPath );
 						}
 					}
 					string_builder_appendf( &vcxprojContent, "$(LibraryPath)" );
@@ -605,14 +605,14 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 					// output path
 					string_builder_appendf( &vcxprojContent, "\t\t<NMakeOutput>%s</NMakeOutput>\n", config->options.binary_folder.c_str() );
 
-					const char* buildInfoFileRelative = tprintf( "%s\\.builder\\%s%s", pathFromSolutionToInputFile, options->solution.name.c_str(), BUILD_INFO_FILE_EXTENSION );
+					const char* buildInfoFileRelative = tprintf( "%s%c.builder%c%s%s", pathFromSolutionToInputFile, PATH_SEPARATOR, PATH_SEPARATOR, options->solution.name.c_str(), BUILD_INFO_FILE_EXTENSION );
 
 					const char* fullConfigName = config->options.name.c_str();
 
-					string_builder_appendf( &vcxprojContent, "\t\t<NMakeBuildCommandLine>%s\\builder.exe %s %s%s</NMakeBuildCommandLine>\n", path_app_path(), buildInfoFileRelative, ARG_CONFIG, fullConfigName );
-					string_builder_appendf( &vcxprojContent, "\t\t<NMakeReBuildCommandLine>%s\\builder.exe %s %s%s</NMakeReBuildCommandLine>\n", path_app_path(), buildInfoFileRelative, ARG_CONFIG, fullConfigName );
+					string_builder_appendf( &vcxprojContent, "\t\t<NMakeBuildCommandLine>%s%cbuilder.exe %s %s%s</NMakeBuildCommandLine>\n", path_app_path(), PATH_SEPARATOR, buildInfoFileRelative, ARG_CONFIG, fullConfigName );
+					string_builder_appendf( &vcxprojContent, "\t\t<NMakeReBuildCommandLine>%s%cbuilder.exe %s %s%s</NMakeReBuildCommandLine>\n", path_app_path(), PATH_SEPARATOR, buildInfoFileRelative, ARG_CONFIG, fullConfigName );
 
-					string_builder_appendf( &vcxprojContent, "\t\t<NMakeCleanCommandLine>%s\\builder.exe --nuke %s</NMakeCleanCommandLine>\n", path_app_path(), config->options.binary_folder.c_str() );
+					string_builder_appendf( &vcxprojContent, "\t\t<NMakeCleanCommandLine>%s%cbuilder.exe --nuke %s</NMakeCleanCommandLine>\n", path_app_path(), PATH_SEPARATOR, config->options.binary_folder.c_str() );
 
 					// preprocessor definitions
 					string_builder_appendf( &vcxprojContent, "\t\t<NMakePreprocessorDefinitions>" );
@@ -642,7 +642,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 					For ( u64, fileIndex, 0, files.count ) {
 						const visualStudioFileFilter_t* file = &files[fileIndex];
 
-						string_builder_appendf( stringBuilder, "\t\t<%s Include=\"%s\\%s\" />\n", tag, pathFromSolutionToInputFile, file->filenameAndPathFromRoot );
+						string_builder_appendf( stringBuilder, "\t\t<%s Include=\"%s%c%s\" />\n", tag, pathFromSolutionToInputFile, PATH_SEPARATOR, file->filenameAndPathFromRoot );
 					}
 
 					string_builder_appendf( stringBuilder, "\t</ItemGroup>\n" );
@@ -653,7 +653,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 				WriteFilterFilesToVcxproj( &vcxprojContent, otherFiles, "None" );
 			}
 
-			string_builder_appendf( &vcxprojContent, "\t<Import Project=\"$(VCTargetsPath)\\Microsoft.Cpp.targets\" />\n" );
+			string_builder_appendf( &vcxprojContent, tprintf( "\t<Import Project=\"$(VCTargetsPath)%cMicrosoft.Cpp.targets\" />\n", PATH_SEPARATOR ) );
 
 			// not sure what this is or why we need this one but visual studio seems to want it
 			string_builder_appendf( &vcxprojContent, "\t<ImportGroup Label=\"ExtensionTargets\">\n" );
@@ -670,7 +670,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 		// .vcxproj.user
 		{
-			const char* projectPath = tprintf( "%s\\%s.vcxproj.user", visualStudioProjectFilesPath, projectNameNoFolder );
+			const char* projectPath = tprintf( "%s%c%s.vcxproj.user", visualStudioProjectFilesPath, PATH_SEPARATOR, projectNameNoFolder );
 
 			printf( "Generating %s ... ", projectPath );
 
@@ -692,7 +692,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 					const char* fullBinaryName = BuildConfig_GetFullBinaryName( &config->options );
 
 					const char* from = solutionFilename;
-					const char* to = tprintf( "%s\\%s", context->inputFilePath.data, fullBinaryName );
+					const char* to = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, fullBinaryName );
 					to = path_canonicalise( to );
 
 					char* pathFromSolutionToBinary = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
@@ -734,7 +734,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 		// .vcxproj.filter
 		{
-			const char* projectPath = tprintf( "%s\\%s.vcxproj.filters", visualStudioProjectFilesPath, projectNameNoFolder );
+			const char* projectPath = tprintf( "%s%c%s.vcxproj.filters", visualStudioProjectFilesPath, PATH_SEPARATOR, projectNameNoFolder );
 
 			printf( "Generating %s ... ", projectPath );
 
@@ -774,9 +774,9 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 						const visualStudioFileFilter_t* file = &fileFilters[fileIndex];
 
 						if ( file->folderInFilter == NULL ) {
-							string_builder_appendf( stringBuilder, "\t\t<%s Include=\"%s\\%s\" />\n", tag, pathFromSolutionToInputFile, file->filenameAndPathFromRoot );
+							string_builder_appendf( stringBuilder, "\t\t<%s Include=\"%s%c%s\" />\n", tag, pathFromSolutionToInputFile, PATH_SEPARATOR, file->filenameAndPathFromRoot );
 						} else {
-							string_builder_appendf( stringBuilder, "\t\t<%s Include=\"%s\\%s\">\n", tag, pathFromSolutionToInputFile, file->filenameAndPathFromRoot );
+							string_builder_appendf( stringBuilder, "\t\t<%s Include=\"%s%c%s\">\n", tag, pathFromSolutionToInputFile, PATH_SEPARATOR, file->filenameAndPathFromRoot );
 							string_builder_appendf( stringBuilder, "\t\t\t<Filter>%s</Filter>\n", path_fix_slashes( file->folderInFilter ) );
 							string_builder_appendf( stringBuilder, "\t\t</%s>\n", tag );
 						}

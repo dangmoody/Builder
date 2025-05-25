@@ -1,5 +1,8 @@
 v0.7.0, <RELEASE DATE HERE>:
 
+* Added better support for wildcard file resolution so now it works more like Linux.
+	* Before, doing something like src/*.cpp would resolve ALL .cpp files in the src folder as well any found in subfolders.  Now it will not resolve files in subfolders.
+	* If you want subfolder file resolution you must follow the linux convention of doing src/**/*.cpp.
 * Added BuildConfig::warning_levels.
 	* Before we used to add all Clang warning levels to builds by default, but now we enable none of them by default.
 	* This is to let people decide how strict they want the compiler to be (we already offered options like this with BuildConfig::warnings_as_errors).

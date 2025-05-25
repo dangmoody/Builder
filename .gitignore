@@ -18,3 +18,8 @@ bug_reports/**/*
 #
 .vs
 x64
+
+#
+# rider stuff
+#
+.idea

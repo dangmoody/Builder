@@ -63,5 +63,8 @@ echo $args
 #echo -n -e $args
 $args
 
+echo "Copying $bin_folder/builder.exe -> ./builder.exe"
+cp $bin_folder/builder.exe ./builder.exe
+
 
 exit 0

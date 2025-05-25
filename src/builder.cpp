@@ -949,9 +949,9 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, String
 
 			const char* newSubfolder = NULL;
 			if ( subfolder ) {
-				newSubfolder = tprintf( "%s%s%s%s", path, PATH_SEPARATOR, subfolder, PATH_SEPARATOR, searchFilter );
+				newSubfolder = tprintf( "%s%s%s%s", path, PATH_SEPARATOR, subfolder, PATH_SEPARATOR, searchFilter.data );
 			} else {
-				newSubfolder = tprintf( "%s%s", path, PATH_SEPARATOR, searchFilter );
+				newSubfolder = tprintf( "%s%s", path, PATH_SEPARATOR, searchFilter.data );
 			}
 
 			GetAllSourceFiles_r( path, newSubfolder, searchFilter, outSourceFiles );

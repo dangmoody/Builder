@@ -30,12 +30,14 @@ SOFTWARE.
 
 #ifdef __linux__
 
+#include <core_types.h>
+#include <debug.h>
+#include <paths.h>
+#include <temp_storage.h>
+
 #include <stdio.h>
 #include <unistd.h>
-
-#include "core_types.h"
-#include "debug.h"
-#include "paths.h"
+#include <limits.h>
 
 /*
 ================================================================================================
@@ -50,11 +52,30 @@ SOFTWARE.
 // TODO: most functions in this file
 
 const char* path_app_path() {
-	return NULL;
+	char* result = cast( char*, mem_temp_alloc( PATH_MAX * sizeof( char ) ) );
+	s64 length = readlink( "/proc/self/exe", result, PATH_MAX );
+
+	if ( length == -1 ) {
+		int err = errno;
+		fatal_error( "Failed to get app path: %s.\n", strerror( err ) );
+	}
+
+	result[length] = 0;
+
+	return result;
 }
 
 const char* path_current_working_directory() {
-	return NULL;
+	char temp[PATH_MAX];
+
+	const char* cwd = getcwd( temp, sizeof( temp ) );
+
+	if ( !cwd ) {
+		int err = errno;
+		fatal_error( "Failed to get CWD: %s.\n", strerror( err ) );
+	}
+
+	return cwd;
 }
 
 const char* path_absolute_path( const char* file ) {
@@ -84,7 +105,9 @@ char* path_relative_path_to( const char* path_from, const char* path_to ) {
 
 bool8 path_set_current_directory( const char* path ) {
 	if ( chdir( path ) != 0 ) {
-		get_last_error_code();
+		int err = errno;
+		fatal_error( "Failed to set current directory: %s.\n", strerror( err ) );
+
 		return false;
 	}
 

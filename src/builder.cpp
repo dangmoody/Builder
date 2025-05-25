@@ -876,9 +876,6 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, String
 		if ( string_equals( subPath.data, "**" ) ) {
 			//printf( "Doing recursive file search\n" );
 
-			//String newPath;
-			//string_printf( &newPath, "%s/*", path );
-
 			// + 1 to skip the slash as well
 			searchFilter.data += subPathLength + 1;
 			searchFilter.count -= subPathLength + 1;
@@ -899,7 +896,6 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, String
 					continue;
 				}
 
-				//const char* subfolder = tprintf( "%s\\%s", path, fileInfo.filename );
 				const char* newSubfolder = NULL;
 				if ( subfolder ) {
 					newSubfolder = tprintf( "%s\\%s", subfolder, fileInfo.filename );
@@ -946,13 +942,6 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, String
 				outSourceFiles.push_back( foundFilename );
 			} while ( file_find_next( &file, &fileInfo ) );
 		} else {
-#if 0
-			// TODO(DM): replace with:
-			//
-			//	String newPath = path_join( path.data, subPath.data );
-			String newPath;
-			string_printf( &newPath, "%s/%s", path, subPath.data );
-
 			// + 1 to skip the slash as well
 			searchFilter.data += subPathLength + 1;
 			searchFilter.count -= subPathLength + 1;
@@ -961,10 +950,15 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, String
 			//printf( "'searchFilter' is now: %s\n", searchFilter.data );
 			//printf( "\n" );
 
-			GetAllSourceFiles_r( newPath.data, searchFilter, outSourceFiles );
-#else
-			assert( false && "DM!!! gotta fill me in, I guess..." );
-#endif
+			const char* newSubfolder = NULL;
+			if ( subfolder ) {
+				newSubfolder = tprintf( "%s%s%s%s", path, PATH_SEPARATOR, subfolder, PATH_SEPARATOR, searchFilter );
+			} else {
+				newSubfolder = tprintf( "%s%s", path, PATH_SEPARATOR, searchFilter );
+			}
+			assert( newSubfolder );
+
+			GetAllSourceFiles_r( path, newSubfolder, searchFilter, outSourceFiles );
 		}
 	} else {
 		const char* fullSearchPath = NULL;

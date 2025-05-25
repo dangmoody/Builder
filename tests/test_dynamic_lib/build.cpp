@@ -6,7 +6,7 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 		.binary_folder	= "bin",
 		.binary_name	= "test_dynamic_lib",
 		.binary_type	= BINARY_TYPE_DYNAMIC_LIBRARY,
-		.source_files	= { "lib/lib.cpp" },
+		.source_files	= { "lib/*.cpp" },
 		.defines		= { "DYNAMIC_LIBRARY_EXPORTS" },
 	};
 
@@ -15,7 +15,7 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 		.name					= "program",
 		.binary_folder			= "bin",
 		.binary_name			= "test_dynamic_library_program",
-		.source_files			= { "program/program.cpp" },
+		.source_files			= { "program/*.cpp" },
 		.additional_includes	= { "lib" },
 		.additional_lib_paths	= { "bin" },
 		.additional_libs		= { "test_dynamic_lib.lib" },

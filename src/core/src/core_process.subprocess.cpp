@@ -53,9 +53,23 @@ struct Process {
 	struct subprocess_s	proc;
 };
 
-Process* process_create( Array<const char*>* args, Array<const char*>* environment_variables ) {
+static int internal_get_subprocess_options( const ProcessFlags flags ) {
+	int options = 0;
+
+	if ( flags & PROCESS_FLAG_ASYNC ) {
+		options |= subprocess_option_enable_async;
+	}
+
+	if ( flags & PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR ) {
+		options |= subprocess_option_combined_stdout_stderr;
+	}
+
+	return options;
+}
+
+Process* process_create( Array<const char*>* args, Array<const char*>* environment_variables, const ProcessFlags flags ) {
 	assert( args );
-	assertf( args->count >= 1, "When calling \"%s\", the args array MUST have at least one element in it (which is the name of the process you want to call).\n" );
+	assert( args->count > 0 );
 	assert( args->data != NULL );
 
 	//TODO(TOM): Figure out how to configure the file IO allocator
@@ -69,8 +83,7 @@ Process* process_create( Array<const char*>* args, Array<const char*>* environme
 	Process* process = cast( Process*, mem_alloc( sizeof( Process ) ) );
 	process->proc = {};
 
-	// separate stdout and stderr doesnt work for some reason?
-	int options = subprocess_option_combined_stdout_stderr | subprocess_option_enable_async;
+	int options = internal_get_subprocess_options( flags );
 
 	if ( environment_variables == NULL ) {
 		options |= subprocess_option_inherit_environment;

@@ -319,7 +319,7 @@ static s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVar
 		printf( "\n" );
 	}
 
-	Process* process = process_create( args, environmentVariables );
+	Process* process = process_create( args, environmentVariables, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
 
 	// show stdout
 	if ( showStdout ) {
@@ -861,110 +861,106 @@ static const char* TryFindFile_r( const char* filename, const char* folder ) {
 	return NULL;
 }
 
-static void FindAllFilesInFolder_r( const char* basePath, const char* folder, const char* fileExtension, const bool8 recursive, Array<const char*>* outFiles ) {
-	const char* fullSearchPath = NULL;
-	if ( string_ends_with( basePath, "\\" ) || string_ends_with( basePath, "/" ) ) {
-		if ( folder ) {
-			fullSearchPath = tprintf( "%s%s*", basePath, folder );
-		} else {
-			fullSearchPath = tprintf( "%s*", basePath );
-		}
-	} else {
-		if ( folder ) {
-			fullSearchPath = tprintf( "%s\\%s\\*", basePath, folder );
-		} else {
-			fullSearchPath = tprintf( "%s\\*", basePath );
-		}
-	}
+static void GetAllSourceFiles_r( const char* path, String searchFilter, std::vector<std::string>& outSourceFiles ) {
+	unused( outSourceFiles );
 
-	FileInfo fileInfo;
-	File file = file_find_first( fullSearchPath, &fileInfo );
+	const char* start = searchFilter.data;
+	const char* end = NULL;
+	if ( !end ) end = strchr( start, '/' );
+	if ( !end ) end = strchr( start, '\\' );
+	if ( end ) {
+		u64 subPathLength = cast( u64, end ) - cast( u64, start );
+		String subPath;
+		string_copy_from_c_string( &subPath, start, subPathLength );
 
-	do {
-		// assume this means folder contains no files of this type
-		if ( file.ptr == INVALID_HANDLE_VALUE ) {
-			continue;
-		}
+		if ( string_equals( subPath.data, "**" ) ) {
+			//printf( "Doing recursive file search\n" );
 
-		if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) ) {
-			continue;
-		}
+			String newPath;
+			string_printf( &newPath, "%s/*", path );
 
-		if ( fileInfo.is_directory && recursive ) {
-			const char* subfolder = tprintf( "%s\\%s", folder, fileInfo.filename );
-			FindAllFilesInFolder_r( basePath, subfolder, fileExtension, recursive, outFiles );
-		}
+			// + 1 to skip the slash as well
+			searchFilter.data += subPathLength + 1;
+			searchFilter.count -= subPathLength + 1;
 
-		const char* fileExtension2 = tprintf( ".%s", fileExtension );
+			//printf( "'path' is now: %s\n", newPath.data );
+			//printf( "'searchFilter' is now: %s\n", searchFilter.data );
+			//printf( "\n" );
 
-		if ( string_ends_with( fileInfo.filename, fileExtension2 ) ) {
-			const char* fullName = tprintf( "%s\\%s", folder, fileInfo.filename );
+			FileInfo fileInfo = {};
+			File file = file_find_first( tprintf( "%s/*", path ), &fileInfo );
 
-			outFiles->add( fullName );
-		}
-	} while ( file_find_next( &file, &fileInfo ) );
-}
-
-static void GetAllSourceFiles_r( const char* basePath, const char* folder, const char* searchFilter, std::vector<std::string>& outSourceFiles ) {
-	// find all files in current directory
-	{
-		const char* fullSearchPath = NULL;
-		if ( folder ) {
-			fullSearchPath = tprintf( "%s\\%s\\%s", basePath, folder, searchFilter );
-		} else {
-			fullSearchPath = tprintf( "%s\\%s", basePath, searchFilter );
-		}
-
-		FileInfo fileInfo;
-		File firstFile = file_find_first( fullSearchPath, &fileInfo );
-
-		if ( firstFile.ptr != INVALID_HANDLE_VALUE ) {
 			do {
 				if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) ) {
 					continue;
 				}
 
-				const char* fullName = NULL;
-				if ( folder ) {
-					fullName = tprintf( "%s\\%s", folder, fileInfo.filename );
-				} else {
-					fullName = tprintf( "%s", fileInfo.filename );
+				if ( !fileInfo.is_directory ) {
+					continue;
 				}
 
-				outSourceFiles.push_back( fullName );
-			} while ( file_find_next( &firstFile, &fileInfo ) );
-		}
-	}
+				const char* subfolder = tprintf( "%s\\%s", path, fileInfo.filename );
 
-	// now go through all other directories
-	{
-		const char* fullSearchPath = NULL;
-		if ( folder ) {
-			fullSearchPath = tprintf( "%s\\%s\\*", basePath, folder );
-		} else {
-			fullSearchPath = tprintf( "%s\\*", basePath );
-		}
+				GetAllSourceFiles_r( subfolder, searchFilter.data, outSourceFiles );
+			} while ( file_find_next( &file, &fileInfo ) );
+		} else if ( string_equals( subPath.data, "*" ) ) {
+			//printf( "Doing non-recursive file search\n" );
 
-		FileInfo fileInfo;
-		File firstFile = file_find_first( fullSearchPath, &fileInfo );
+			FileInfo fileInfo = {};
+			File file = file_find_first( tprintf( "%s/%s", path, subPath.data ), &fileInfo );
 
-		if ( firstFile.ptr != INVALID_HANDLE_VALUE ) {
 			do {
 				if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) ) {
 					continue;
 				}
 
 				if ( fileInfo.is_directory ) {
-					const char* subfolder = NULL;
-					if ( folder ) {
-						subfolder = tprintf( "%s\\%s", folder, fileInfo.filename );
-					} else {
-						subfolder = tprintf( "%s", fileInfo.filename );
-					}
-
-					GetAllSourceFiles_r( basePath, subfolder, searchFilter, outSourceFiles );
+					continue;
 				}
-			} while ( file_find_next( &firstFile, &fileInfo ) );
+
+				const char* foundFilename = tprintf( "%s/%s", path, fileInfo.filename );
+
+				//printf( "FOUND FILE \"%s\"\n", foundFilename );
+
+				outSourceFiles.push_back( foundFilename );
+			} while ( file_find_next( &file, &fileInfo ) );
+		} else {
+			// TODO(DM): replace with:
+			//
+			//	String newPath = path_join( path.data, subPath.data );
+			String newPath;
+			string_printf( &newPath, "%s/%s", path, subPath.data );
+
+			// + 1 to skip the slash as well
+			searchFilter.data += subPathLength + 1;
+			searchFilter.count -= subPathLength + 1;
+
+			//printf( "'path' is now: %s\n", newPath.data );
+			//printf( "'searchFilter' is now: %s\n", searchFilter.data );
+			//printf( "\n" );
+
+			GetAllSourceFiles_r( newPath.data, searchFilter, outSourceFiles );
+		}
+	} else {
+		FileInfo fileInfo = {};
+		File file = file_find_first( tprintf( "%s/%s", path, searchFilter.data ), &fileInfo );
+
+		if ( file.ptr != INVALID_HANDLE_VALUE ) {
+			do {
+				if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) ) {
+					continue;
+				}
+
+				if ( fileInfo.is_directory ) {
+					continue;
+				}
+
+				const char* foundFilename = tprintf( "%s/%s", path, fileInfo.filename );
+
+				//printf( "FOUND FILE \"%s\"\n", foundFilename );
+
+				outSourceFiles.push_back( foundFilename );
+			} while ( file_find_next( &file, &fileInfo ) );
 		}
 	}
 }
@@ -1027,13 +1023,20 @@ static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContex
 
 		const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
 
+		const char* searchPath = NULL;
 		if ( inputFileIsSameAsSourceFile ) {
-			GetAllSourceFiles_r( cast( char*, context->inputFilePath.data ), NULL, sourceFileNoPath, sourceFiles );
+			searchPath = context->inputFilePath.data;
 		} else {
 			const char* sourceFilePath = path_remove_file_from_path( sourceFile );
 
-			GetAllSourceFiles_r( cast( char*, context->inputFilePath.data ), sourceFilePath, sourceFileNoPath, sourceFiles );
+			if ( !sourceFilePath ) {
+				sourceFilePath = ".";
+			}
+
+			searchPath = tprintf( "%s\\%s", context->inputFilePath.data, sourceFilePath );
 		}
+
+		GetAllSourceFiles_r( searchPath, sourceFileNoPath, sourceFiles );
 	}
 
 	return sourceFiles;
@@ -1605,7 +1608,7 @@ int main( int argc, char** argv ) {
 				args.add( clangAbsolutePath );
 				args.add( "-v" );
 
-				Process* clangVersionCheck = process_create( &args, NULL );
+				Process* clangVersionCheck = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
 				defer( process_destroy( clangVersionCheck ) );
 
 				// this string is at the very start of "clang -v"

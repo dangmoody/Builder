@@ -21,7 +21,7 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 		.additional_libs		= { "SDL2.lib", "SDL2main.lib" },
 	};
 
-	options->configs.push_back( config );
+	add_build_config( options, &config );
 }
 
 BUILDER_CALLBACK void on_post_build() {

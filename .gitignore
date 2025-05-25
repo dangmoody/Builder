@@ -9,6 +9,8 @@ clang
 builder.exe
 builder_tests.exe
 
+tests/**/*.exe
+
 releases/**/*
 
 bug_reports/**/*

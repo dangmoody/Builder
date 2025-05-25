@@ -85,6 +85,8 @@ const char* path_absolute_path( const char* file ) {
 }
 
 bool8 path_is_absolute( const char* path ) {
+	assert( path );
+
 	return path[0] == '/';
 }
 

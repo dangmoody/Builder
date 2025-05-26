@@ -863,7 +863,7 @@ static const char* TryFindFile_r( const char* filename, const char* folder ) {
 	return NULL;
 }
 
-static void GetAllSourceFiles_r( const char* path, const char* subfolder, String searchFilter, std::vector<std::string>& outSourceFiles ) {
+static void GetAllSourceFiles_r( const char* path, const char* subfolder, const String& searchFilter, std::vector<std::string>& outSourceFiles ) {
 	unused( outSourceFiles );
 
 	// TODO(DM): need a better way of finding the appropriate slash type here between platforms
@@ -880,15 +880,23 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, String
 			//printf( "Doing recursive file search\n" );
 
 			// + 1 to skip the slash as well
-			searchFilter.data += subPathLength + 1;
-			searchFilter.count -= subPathLength + 1;
+			String searchFilterCopy = searchFilter;
+			searchFilterCopy.data += subPathLength + 1;
+			searchFilterCopy.count -= subPathLength + 1;
 
 			//printf( "'path' is now: %s\n", newPath.data );
 			//printf( "'searchFilter' is now: %s\n", searchFilter.data );
 			//printf( "\n" );
 
+			const char* fullSearchPath = NULL;
+			if ( subfolder ) {
+				fullSearchPath = tprintf( "%s%c%s%c*", path, PATH_SEPARATOR, subfolder, PATH_SEPARATOR );
+			} else {
+				fullSearchPath = tprintf( "%s%c*", path, PATH_SEPARATOR );
+			}
+
 			FileInfo fileInfo = {};
-			File file = file_find_first( tprintf( "%s%c*", path, PATH_SEPARATOR ), &fileInfo );
+			File file = file_find_first( fullSearchPath, &fileInfo );
 
 			do {
 				if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) ) {
@@ -906,7 +914,7 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, String
 					newSubfolder = tprintf( "%s", fileInfo.filename );
 				}
 
-				GetAllSourceFiles_r( path, newSubfolder, searchFilter.data, outSourceFiles );
+				GetAllSourceFiles_r( path, newSubfolder, searchFilterCopy, outSourceFiles );
 			} while ( file_find_next( &file, &fileInfo ) );
 		} else if ( string_equals( subPath.data, "*" ) ) {
 			//printf( "Doing non-recursive file search\n" );
@@ -943,8 +951,9 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, String
 			} while ( file_find_next( &file, &fileInfo ) );
 		} else {
 			// + 1 to skip the slash as well
-			searchFilter.data += subPathLength + 1;
-			searchFilter.count -= subPathLength + 1;
+			String searchFilterCopy = searchFilter;
+			searchFilterCopy.data += subPathLength + 1;
+			searchFilterCopy.count -= subPathLength + 1;
 
 			//printf( "'path' is now: %s\n", newPath.data );
 			//printf( "'searchFilter' is now: %s\n", searchFilter.data );
@@ -952,12 +961,12 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, String
 
 			const char* newSubfolder = NULL;
 			if ( subfolder ) {
-				newSubfolder = tprintf( "%s%c%s%c%s", path, PATH_SEPARATOR, subfolder, PATH_SEPARATOR, searchFilter.data );
+				newSubfolder = tprintf( "%s%c%s", subfolder, PATH_SEPARATOR, subPath.data );
 			} else {
-				newSubfolder = tprintf( "%s%c%s", path, PATH_SEPARATOR, searchFilter.data );
+				newSubfolder = tprintf( "%s", subPath.data );
 			}
 
-			GetAllSourceFiles_r( path, newSubfolder, searchFilter, outSourceFiles );
+			GetAllSourceFiles_r( path, newSubfolder, searchFilterCopy, outSourceFiles );
 		}
 	} else {
 		const char* fullSearchPath = NULL;
@@ -1052,17 +1061,18 @@ static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContex
 		bool8 inputFileIsSameAsSourceFile = string_equals( sourceFile, context->inputFile );
 
 		const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
+		const char* sourceFilePath = NULL;
 
 		if ( inputFileIsSameAsSourceFile ) {
 			GetAllSourceFiles_r( context->inputFilePath.data, NULL, sourceFileNoPath, sourceFiles );
 		} else {
-			const char* sourceFilePath = path_remove_file_from_path( sourceFile );
+			sourceFilePath = path_remove_file_from_path( sourceFile );
 
 			if ( !sourceFilePath ) {
 				sourceFilePath = ".";
 			}
 
-			GetAllSourceFiles_r( context->inputFilePath.data, sourceFilePath, sourceFileNoPath, sourceFiles );
+			GetAllSourceFiles_r( context->inputFilePath.data, NULL, sourceFile, sourceFiles );
 		}
 	}
 

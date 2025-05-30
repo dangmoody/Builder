@@ -1605,6 +1605,7 @@ int main( int argc, char** argv ) {
 	float64 totalTimeStart = time_ms();
 
 	float64 userConfigBuildTimeMS = -1.0f;
+	float64 setBuilderOptionsTimeMS = -1.0f;
 	float64 visualStudioGenerationTimeMS = -1.0f;
 	float64 buildInfoReadTimeMS = -1.0f;
 	float64 buildInfoWriteTimeMS = -1.0f;
@@ -2007,7 +2008,13 @@ int main( int argc, char** argv ) {
 			// now get the user-specified options
 			setBuilderOptionsFunc_t setBuilderOptionsFunc = cast( setBuilderOptionsFunc_t, library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME ) );
 			if ( setBuilderOptionsFunc ) {
+				float64 setBuilderOptionsTimeStart = time_ms();
+
 				setBuilderOptionsFunc( &options );
+
+				float64 setBuilderOptionsTimeEnd = time_ms();
+
+				setBuilderOptionsTimeMS = setBuilderOptionsTimeEnd - setBuilderOptionsTimeStart;
 
 				buildInfoData.configs = options.configs;
 
@@ -2393,18 +2400,21 @@ int main( int argc, char** argv ) {
 	float64 totalTimeEnd = time_ms();
 	printf( "Build finished:\n" );
 	if ( doUserConfigBuild ) {
-		printf( "    User config build: %f ms\n", userConfigBuildTimeMS );
+		printf( "    User config build:   %f ms\n", userConfigBuildTimeMS );
+	}
+	if ( !doubleeq( setBuilderOptionsTimeMS, 1.0 ) ) {
+		printf( "    set_builder_options: %f ms\n", setBuilderOptionsTimeMS );
 	}
 	if ( options.generate_solution ) {
-		printf( "    Generate solution: %f ms\n", visualStudioGenerationTimeMS );
+		printf( "    Generate solution:   %f ms\n", visualStudioGenerationTimeMS );
 	}
 	if ( readBuildInfo ) {
-		printf( "    Read .build_info:  %f ms\n", buildInfoReadTimeMS );
+		printf( "    Read .build_info:    %f ms\n", buildInfoReadTimeMS );
 	}
 	if ( shouldWriteBuildInfo ) {
-		printf( "    Write .build_info: %f ms\n", buildInfoWriteTimeMS );
+		printf( "    Write .build_info:   %f ms\n", buildInfoWriteTimeMS );
 	}
-	printf( "    Total time:        %f ms\n", totalTimeEnd - totalTimeStart );
+	printf( "    Total time:          %f ms\n", totalTimeEnd - totalTimeStart );
 	printf( "\n" );
 
 	return 0;

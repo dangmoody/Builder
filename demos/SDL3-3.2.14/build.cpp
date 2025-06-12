@@ -3,9 +3,12 @@
 #include <builder.h>
 
 BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
-	BuildConfig common = {
-		.binary_name	= "SDL",
-		.binary_folder	= "bin/demos/SDL3",
+	const std::string sdlBinaryName = "SDL";
+	const std::string sdlBinaryFolder = "bin/demos/SDL3";
+
+	BuildConfig configSDLCommon = {
+		.binary_name	= sdlBinaryName,
+		.binary_folder	= sdlBinaryFolder,
 		.binary_type	= BINARY_TYPE_DYNAMIC_LIBRARY,
 		.source_files = {
 			"src/*.c",
@@ -57,62 +60,75 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	};
 
 	// windows
-	BuildConfig configWindows = common;
-	configWindows.name = "windows";
-	configWindows.source_files.push_back( "src/audio/dummy/*.c" );
-	configWindows.source_files.push_back( "src/audio/disk/*.c" );
-	configWindows.source_files.push_back( "src/audio/directsound/*.c" );
-	configWindows.source_files.push_back( "src/audio/wasapi/*.c" );
-	configWindows.source_files.push_back( "src/camera/dummy/*.c" );
-	configWindows.source_files.push_back( "src/core/windows/*.c" );
-	configWindows.source_files.push_back( "src/dialog/windows/*.c" );
-	configWindows.source_files.push_back( "src/filesystem/windows/*.c" );
-	configWindows.source_files.push_back( "src/gpu/vulkan/*.c" );
-	configWindows.source_files.push_back( "src/gpu/d3d12/*.c" );
-	configWindows.source_files.push_back( "src/haptic/windows/*.c" );
-	configWindows.source_files.push_back( "src/io/windows/*.c" );
-	configWindows.source_files.push_back( "src/joystick/gdk/*.c" );
-	configWindows.source_files.push_back( "src/joystick/windows/*.c" );
-	configWindows.source_files.push_back( "src/loadso/windows/*.c" );
-	configWindows.source_files.push_back( "src/locale/windows/*.c" );
-	configWindows.source_files.push_back( "src/main/windows/*.c" );
-	configWindows.source_files.push_back( "src/misc/windows/*.c" );
-	configWindows.source_files.push_back( "src/power/windows/*.c" );
-	configWindows.source_files.push_back( "src/process/windows/*.c" );
-	configWindows.source_files.push_back( "src/render/direct3d/*.c" );
-	configWindows.source_files.push_back( "src/render/direct3d11/*.c" );
-	configWindows.source_files.push_back( "src/render/direct3d12/*.c" );
-	configWindows.source_files.push_back( "src/render/gpu/*.c" );
-	configWindows.source_files.push_back( "src/render/opengl/*.c" );
-	configWindows.source_files.push_back( "src/render/opengles2/*.c" );
-	configWindows.source_files.push_back( "src/render/software/*.c" );
-	configWindows.source_files.push_back( "src/render/vulkan/*.c" );
-	configWindows.source_files.push_back( "src/sensor/windows/*.c" );
-	configWindows.source_files.push_back( "src/storage/generic/*.c" );
-	configWindows.source_files.push_back( "src/storage/steam/*.c" );
-	configWindows.source_files.push_back( "src/thread/generic/SDL_syscond.c" );
-	configWindows.source_files.push_back( "src/thread/generic/SDL_sysrwlock.c" );
-	configWindows.source_files.push_back( "src/thread/windows/*.c" );
-	configWindows.source_files.push_back( "src/time/windows/*.c" );
-	configWindows.source_files.push_back( "src/timer/windows/*.c" );
-	configWindows.source_files.push_back( "src/tray/windows/*.c" );
-	configWindows.source_files.push_back( "src/video/windows/*.c" );
-	// configWindows.source_files.push_back( "src/**/directsound/*.c" );
-	// configWindows.source_files.push_back( "src/**/gdk/*.c" );
-	// configWindows.source_files.push_back( "src/**/wasapi/*.c" );
-	// configWindows.source_files.push_back( "src/**/windows/*.c" );
-	configWindows.defines.push_back( "HAVE_MODF" );
-	configWindows.additional_libs.push_back( "Ole32.lib" );
-	configWindows.additional_libs.push_back( "OleAut32.lib" );
-	configWindows.additional_libs.push_back( "Winmm.lib" );
-	configWindows.additional_libs.push_back( "Imm32.lib" );
-	configWindows.additional_libs.push_back( "Advapi32.lib" );
-	configWindows.additional_libs.push_back( "Shell32.lib" );
-	configWindows.additional_libs.push_back( "Cfgmgr32.lib" );
-	configWindows.additional_libs.push_back( "Gdi32.lib" );
-	configWindows.additional_libs.push_back( "SetupAPI.lib" );
-	configWindows.additional_libs.push_back( "Version.lib" );
-	add_build_config( options, &configWindows );
+	BuildConfig configSDLWin64 = configSDLCommon;
+	configSDLWin64.name = "windows";
+	configSDLWin64.source_files.push_back( "src/audio/dummy/*.c" );
+	configSDLWin64.source_files.push_back( "src/audio/disk/*.c" );
+	configSDLWin64.source_files.push_back( "src/audio/directsound/*.c" );
+	configSDLWin64.source_files.push_back( "src/audio/wasapi/*.c" );
+	configSDLWin64.source_files.push_back( "src/camera/dummy/*.c" );
+	configSDLWin64.source_files.push_back( "src/core/windows/*.c" );
+	configSDLWin64.source_files.push_back( "src/dialog/windows/*.c" );
+	configSDLWin64.source_files.push_back( "src/filesystem/windows/*.c" );
+	configSDLWin64.source_files.push_back( "src/gpu/vulkan/*.c" );
+	configSDLWin64.source_files.push_back( "src/gpu/d3d12/*.c" );
+	configSDLWin64.source_files.push_back( "src/haptic/windows/*.c" );
+	configSDLWin64.source_files.push_back( "src/io/windows/*.c" );
+	configSDLWin64.source_files.push_back( "src/joystick/gdk/*.c" );
+	configSDLWin64.source_files.push_back( "src/joystick/windows/*.c" );
+	configSDLWin64.source_files.push_back( "src/loadso/windows/*.c" );
+	configSDLWin64.source_files.push_back( "src/locale/windows/*.c" );
+	configSDLWin64.source_files.push_back( "src/main/windows/*.c" );
+	configSDLWin64.source_files.push_back( "src/misc/windows/*.c" );
+	configSDLWin64.source_files.push_back( "src/power/windows/*.c" );
+	configSDLWin64.source_files.push_back( "src/process/windows/*.c" );
+	configSDLWin64.source_files.push_back( "src/render/direct3d/*.c" );
+	configSDLWin64.source_files.push_back( "src/render/direct3d11/*.c" );
+	configSDLWin64.source_files.push_back( "src/render/direct3d12/*.c" );
+	configSDLWin64.source_files.push_back( "src/render/gpu/*.c" );
+	configSDLWin64.source_files.push_back( "src/render/opengl/*.c" );
+	configSDLWin64.source_files.push_back( "src/render/opengles2/*.c" );
+	configSDLWin64.source_files.push_back( "src/render/software/*.c" );
+	configSDLWin64.source_files.push_back( "src/render/vulkan/*.c" );
+	configSDLWin64.source_files.push_back( "src/sensor/windows/*.c" );
+	configSDLWin64.source_files.push_back( "src/storage/generic/*.c" );
+	configSDLWin64.source_files.push_back( "src/storage/steam/*.c" );
+	configSDLWin64.source_files.push_back( "src/thread/generic/SDL_syscond.c" );
+	configSDLWin64.source_files.push_back( "src/thread/generic/SDL_sysrwlock.c" );
+	configSDLWin64.source_files.push_back( "src/thread/windows/*.c" );
+	configSDLWin64.source_files.push_back( "src/time/windows/*.c" );
+	configSDLWin64.source_files.push_back( "src/timer/windows/*.c" );
+	configSDLWin64.source_files.push_back( "src/tray/windows/*.c" );
+	configSDLWin64.source_files.push_back( "src/video/windows/*.c" );
+	// configSDLWin64.source_files.push_back( "src/**/directsound/*.c" );
+	// configSDLWin64.source_files.push_back( "src/**/gdk/*.c" );
+	// configSDLWin64.source_files.push_back( "src/**/wasapi/*.c" );
+	// configSDLWin64.source_files.push_back( "src/**/windows/*.c" );
+	configSDLWin64.defines.push_back( "HAVE_MODF" );
+	configSDLWin64.additional_libs.push_back( "Ole32.lib" );
+	configSDLWin64.additional_libs.push_back( "OleAut32.lib" );
+	configSDLWin64.additional_libs.push_back( "Winmm.lib" );
+	configSDLWin64.additional_libs.push_back( "Imm32.lib" );
+	configSDLWin64.additional_libs.push_back( "Advapi32.lib" );
+	configSDLWin64.additional_libs.push_back( "Shell32.lib" );
+	configSDLWin64.additional_libs.push_back( "Cfgmgr32.lib" );
+	configSDLWin64.additional_libs.push_back( "Gdi32.lib" );
+	configSDLWin64.additional_libs.push_back( "SetupAPI.lib" );
+	configSDLWin64.additional_libs.push_back( "Version.lib" );
+	add_build_config( options, &configSDLWin64 );
+
+	BuildConfig configDemoWindows = {
+		.name					= "sdl-demo-windows",
+		.depends_on				= { configSDLWin64 },
+		.binary_name			= sdlBinaryFolder,
+		.source_files			= { "demo-app/*.cpp" },
+		.additional_includes	= { "include" },
+		.additional_lib_paths	= { sdlBinaryFolder },
+		.additional_libs		= { sdlBinaryName },
+		.warnings_as_errors		= true,
+	};
+
+	add_build_config( options, &configDemoWindows );
 }
 
 #endif // BUILDER_DOING_USER_CONFIG_BUILD

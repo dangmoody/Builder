@@ -50,6 +50,7 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 			"src/video/yuv2rgb/*.c",
 		},
 		.defines = {
+			"DLL_EXPORT",
 			"SDL_PLATFORM_WIN32",
 		},
 		.additional_includes = {
@@ -61,7 +62,7 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 
 	// windows
 	BuildConfig configSDLWin64 = configSDLCommon;
-	configSDLWin64.name = "windows";
+	configSDLWin64.name = "sdl-windows";
 	configSDLWin64.source_files.push_back( "src/audio/dummy/*.c" );
 	configSDLWin64.source_files.push_back( "src/audio/disk/*.c" );
 	configSDLWin64.source_files.push_back( "src/audio/directsound/*.c" );
@@ -120,7 +121,8 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	BuildConfig configDemoWindows = {
 		.name					= "sdl-demo-windows",
 		.depends_on				= { configSDLWin64 },
-		.binary_name			= sdlBinaryFolder,
+		.binary_name			= "sdl-demo-app",
+		.binary_folder			= sdlBinaryFolder,
 		.source_files			= { "demo-app/*.cpp" },
 		.additional_includes	= { "include" },
 		.additional_lib_paths	= { sdlBinaryFolder },

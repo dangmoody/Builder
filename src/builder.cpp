@@ -1904,13 +1904,13 @@ int main( int argc, char** argv ) {
 		buildInfoReadTimeMS = end - start;
 	}
 
-	if ( !readBuildInfo ) {
-		if ( doingBuildFrom == DOING_BUILD_FROM_BUILD_INFO_FILE ) {
+	if ( doingBuildFrom == DOING_BUILD_FROM_BUILD_INFO_FILE ) {
+		if ( !readBuildInfo ) {
 			error( "Can't find \"%s\".  Does this file exist?\n", context.buildInfoFilename.data );
 			QUIT_ERROR();
-		} else {
-			buildInfoData.userConfigSourceFilename = context.inputFile;
 		}
+	} else {
+		buildInfoData.userConfigSourceFilename = context.inputFile;
 	}
 
 	s32 exitCode = 0;

@@ -865,7 +865,8 @@ static const char* TryFindFile_r( const char* filename, const char* folder ) {
 }
 
 static void GetAllSourceFiles_r( const char* path, const char* subfolder, const String& searchFilter, std::vector<std::string>& outSourceFiles ) {
-	unused( outSourceFiles );
+	assert( path );
+	assert( searchFilter.data );
 
 	// TODO(DM): need a better way of finding the appropriate slash type here between platforms
 	const char* start = searchFilter.data;

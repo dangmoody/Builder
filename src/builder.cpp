@@ -2243,7 +2243,7 @@ int main( int argc, char** argv ) {
 					FileInfo fileInfo = {};
 					File file = file_find_first( trackedSourceFileAndPath, &fileInfo );
 
-					bool8 cantFindFile = file.ptr != INVALID_HANDLE_VALUE;
+					bool8 cantFindFile = file.ptr == INVALID_HANDLE_VALUE;
 					bool8 fileWasOverwritten = fileInfo.last_write_time != trackedSourceFile->lastWriteTime;
 
 					if ( cantFindFile || fileWasOverwritten ) {

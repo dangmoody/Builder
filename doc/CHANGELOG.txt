@@ -23,7 +23,7 @@ v0.7.0, <RELEASE DATE HERE>:
 * Moved some extraneous logging when generating a Visual Studio solution to only show when verbose logging (-v) argument is specified.
 * Hide unecessary warning that gets fired when doing a hashmap lookup.
 * Fixed builds failing when building the same source file from a different folder location.
-* Fixed rebuild not skipping when binary has already been built.
+* Fixed builds not skipping when binary has already been built.
 
 ----------------------------------------------------------------
 

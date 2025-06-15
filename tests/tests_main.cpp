@@ -1,14 +1,25 @@
 #include "../src/core/src/core.suc.cpp"
 
+#ifdef __linux__
+//#include <assert.h>
+#endif // __linux__
+
 #define TEMPERDEV_ASSERT assert
 #define TEMPER_IMPLEMENTATION
 #include "temper/temper.h"
+
+// TODO (MY) - Ensure that we remove this and add an appropriate system agnostic null file handle later.
+#ifdef _WIN32
+#define DEAD_HANDLE INVALID_HANDLE_VALUE
+#elif defined(__linux__)
+#define DEAD_HANDLE ((void*)-1)
+#endif
 
 static bool8 FileExists( const char* filename ) {
 	FileInfo fileInfo;
 	File file = file_find_first( filename, &fileInfo );
 
-	return file.ptr != INVALID_HANDLE_VALUE;
+	return file.ptr != DEAD_HANDLE;
 }
 
 static s32 RunProc( Array<const char*>* args ) {
@@ -22,7 +33,7 @@ static s32 RunProc( Array<const char*>* args ) {
 		}
 	}
 
-	s32 exitCode = process_join( &process );
+	s32 exitCode = process_join( process );
 
 	return exitCode;
 }

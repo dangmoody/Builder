@@ -310,12 +310,27 @@ const char* BuildConfig_GetFullBinaryName( const BuildConfig* config ) {
 	return string_builder_to_string( &builder );
 }
 
-static s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVariables, const bool8 showArgs = false, const bool8 showStdout = false ) {
+enum procFlagBits_t {
+	PROC_FLAG_SHOW_ARGS		= bit( 0 ),
+	PROC_FLAG_SHOW_STDOUT	= bit( 1 ),
+};
+typedef u32 procFlags_t;
+
+static procFlags_t GetProcFlagsFromBuildContextFlags( const buildContextFlags_t buildContextFlags ) {
+	procFlags_t result = 0;
+
+	if ( buildContextFlags & BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS ) result |= PROC_FLAG_SHOW_ARGS;
+	if ( buildContextFlags & BUILD_CONTEXT_FLAG_SHOW_STDOUT )        result |= PROC_FLAG_SHOW_STDOUT;
+
+	return result;
+}
+
+static s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVariables, procFlags_t procFlags = 0 ) {
 	assert( args );
 	assert( args->data );
 	assert( args->count >= 1 );
 
-	if ( showArgs ) {
+	if ( procFlags & PROC_FLAG_SHOW_ARGS ) {
 		For ( u64, argIndex, 0, args->count ) {
 			printf( "%s ", ( *args )[argIndex] );
 		}
@@ -325,7 +340,7 @@ static s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVar
 	Process* process = process_create( args, environmentVariables, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
 
 	// show stdout
-	if ( showStdout ) {
+	if ( procFlags & PROC_FLAG_SHOW_STDOUT ) {
 		char buffer[1024] = { 0 };
 		u64 bytesRead = U64_MAX;
 
@@ -503,8 +518,7 @@ static s32 BuildEXE( buildContext_t* context ) {
 
 	const char* clangPath = tprintf( "%s%cclang%cbin%cclang.exe", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
 
-	bool8 showArgs = context->flags & BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS;
-	bool8 showStdout = context->flags & BUILD_CONTEXT_FLAG_SHOW_STDOUT;
+	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
 
 	// compile
 	{
@@ -602,7 +616,7 @@ static s32 BuildEXE( buildContext_t* context ) {
 			}
 		}
 
-		exitCode = RunProc( &args, NULL, showArgs, showStdout );
+		exitCode = RunProc( &args, NULL, procFlags );
 
 		if ( exitCode != 0 ) {
 			error( "Compile failed.\n" );
@@ -621,7 +635,7 @@ static s32 BuildEXE( buildContext_t* context ) {
 
 		args.add_range( &intermediateFiles );
 
-		exitCode = RunProc( &args, NULL, showArgs, showStdout );
+		exitCode = RunProc( &args, NULL, procFlags );
 
 		if ( exitCode != 0 ) {
 			error( "Link failed.\n" );
@@ -666,8 +680,7 @@ static s32 BuildDynamicLibrary( buildContext_t* context ) {
 
 	const char* clangPath = tprintf( "%s%cclang%cbin%cclang.exe", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
 
-	bool8 showArgs = context->flags & BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS;
-	bool8 showStdout = context->flags & BUILD_CONTEXT_FLAG_SHOW_STDOUT;
+	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
 
 	// compile
 	// make .o files for all compilation units
@@ -786,7 +799,7 @@ static s32 BuildDynamicLibrary( buildContext_t* context ) {
 			args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
 		}
 
-		exitCode = RunProc( &args, NULL, showArgs, showStdout );
+		exitCode = RunProc( &args, NULL, procFlags );
 
 		if ( exitCode != 0 ) {
 			error( "Compile failed.\n" );
@@ -814,7 +827,7 @@ static s32 BuildDynamicLibrary( buildContext_t* context ) {
 			args.add( tprintf( "-l%s", context->config.additional_libs[libIndex].c_str() ) );
 		}
 
-		exitCode = RunProc( &args, NULL, showArgs, showStdout );
+		exitCode = RunProc( &args, NULL, procFlags );
 
 		if ( exitCode != 0 ) {
 			error( "Link failed.\n" );
@@ -826,9 +839,6 @@ static s32 BuildDynamicLibrary( buildContext_t* context ) {
 }
 
 static s32 BuildStaticLibrary( buildContext_t* context ) {
-	bool8 showArgs = context->flags & BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS;
-	bool8 showStdout = context->flags & BUILD_CONTEXT_FLAG_SHOW_STDOUT;
-
 	s32 exitCode = 0;
 
 	Array<const char*> intermediateFiles;
@@ -851,6 +861,8 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 		context->config.warning_levels.size() +
 		context->config.ignore_warnings.size()
 	);
+
+	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
 
 	// build .o files for all compilation units
 	For ( u64, sourceFileIndex, 0, context->config.source_files.size() ) {
@@ -943,7 +955,7 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 			args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
 		}
 
-		exitCode = RunProc( &args, NULL, showArgs, showStdout );
+		exitCode = RunProc( &args, NULL, procFlags );
 
 		if ( exitCode != 0 ) {
 			error( "Compile failed.\n" );
@@ -962,7 +974,7 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 
 		args.add_range( intermediateFiles.data, intermediateFiles.count );
 
-		exitCode = RunProc( &args, NULL, showArgs, showStdout );
+		exitCode = RunProc( &args, NULL, procFlags );
 
 		if ( exitCode != 0 ) {
 			error( "Link failed.\n" );
@@ -1807,7 +1819,7 @@ int main( int argc, char** argv ) {
 				args.add( "-L" );
 				args.add( tprintf( "https://github.com/llvm/llvm-project/releases/download/llvmorg-%d.%d.%d/%s", BUILDER_CLANG_VERSION_MAJOR, BUILDER_CLANG_VERSION_MINOR, BUILDER_CLANG_VERSION_PATCH, clangInstallerFilename ) );
 
-				s32 exitCode = RunProc( &args, NULL, false, true );
+				s32 exitCode = RunProc( &args, NULL, PROC_FLAG_SHOW_STDOUT );
 
 				if ( exitCode == 0 ) {
 					printf( "Done.\n" );

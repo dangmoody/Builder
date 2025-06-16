@@ -79,6 +79,7 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 		"src/haptic/windows/*.c",
 		"src/hidapi/windows/hid.c",
 		"src/io/windows/*.c",
+		"src/joystick/gdk/*.c",
 		"src/joystick/windows/*.c",
 		"src/gpu/vulkan/*.c",
 		"src/gpu/d3d12/*.c",

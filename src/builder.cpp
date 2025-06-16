@@ -109,6 +109,15 @@ errorCode_t GetLastErrorCode() {
 #endif
 }
 
+static u64 GetLastFileWriteTime( const char* filename ) {
+	FileInfo fileInfo;
+	File file = file_find_first( filename, &fileInfo );
+
+	assert( file.ptr != INVALID_HANDLE_VALUE );
+
+	return fileInfo.last_write_time;
+}
+
 static const char* GetFileExtensionFromBinaryType( BinaryType type ) {
 	switch ( type ) {
 		case BINARY_TYPE_EXE:				return "exe";
@@ -684,56 +693,36 @@ static s32 BuildDynamicLibrary( buildContext_t* context ) {
 
 	// compile
 	// make .o files for all compilation units
-	// TODO(DM): 14/06/2025: we can and should parallelise this
+	// TODO(DM): 14/06/2025: embarrassingly parallel
 	For ( u64, sourceFileIndex, 0, context->config.source_files.size() ) {
 		const char* sourceFile = context->config.source_files[sourceFileIndex].c_str();
 		const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
 
-		const char* intermediateFileName = tprintf( "%s%c%s%c%s.o", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH, PATH_SEPARATOR, sourceFileNoPath );
-		intermediateFiles.add( intermediateFileName );
+		const char* intermediateFilename = tprintf( "%s%c%s%c%s.o", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH, PATH_SEPARATOR, sourceFileNoPath );
+		intermediateFiles.add( intermediateFilename );
 
-		const char* depFilename = tprintf( "%s%c%s.d", context->dotBuilderFolder.data, PATH_SEPARATOR, sourceFileNoPath );
+		// only rebuild the .o file if the source file was written to more recently or it doesnt exist
+		{
+			FileInfo intermediateFileInfo;
+			File intermediateFile = file_find_first( intermediateFilename, &intermediateFileInfo );
 
-		// DM!!! turns out this is incredibly slow because that loop where we check for every files last write time is very slow
-		// and we are doing that a lot here
-		// I think we need to add all dependency files to a hashmap where the key is the filename and the value is the last write time
-
-		// check if we even need to rebuild this source file
-		//if ( !context->config.name.empty() ) {
-		//	bool8 shouldRebuild = false;
-
-		//	// get all dependency source files that this source file relies on
-		//	std::vector<trackedSourceFile_t> depFiles;
-		//	ReadDependencyFile( depFilename, depFiles );
-
-		//	For ( u64, depFileIndex, 0, depFiles.size() ) {
-		//		FileInfo fileInfo = {};
-		//		File file = file_find_first( depFiles[depFileIndex].filename.c_str(), &fileInfo );
-
-		//		assert( file.ptr != INVALID_HANDLE_VALUE );
-
-		//		// if none of those files that this .o file depends on have changed then we dont need to recompile
-		//		if ( fileInfo.last_write_time != depFiles[depFileIndex].lastWriteTime ) {
-		//			shouldRebuild = true;
-		//			break;
-		//		}
-		//	}
-
-		//	if ( !shouldRebuild ) {
-		//		continue;
-		//	}
-		//}
+			if ( ( intermediateFile.ptr != INVALID_HANDLE_VALUE ) && ( GetLastFileWriteTime( sourceFile ) <= intermediateFileInfo.last_write_time ) ) {
+				continue;
+			}
+		}
 
 		args.reset();
 
 		args.add( clangPath );
 		args.add( "-c" );
 
-		if ( !context->config.name.empty() ) {
-			args.add( "-MD" );			// generate the dependency file
-			args.add( "-MF" );			// set the name of the dependency file to...
-			args.add( depFilename );	// ...this
-		}
+		//if ( !context->config.name.empty() ) {
+		//	const char* depFilename = tprintf( "%s%c%s.d", context->dotBuilderFolder.data, PATH_SEPARATOR, sourceFileNoPath );
+
+		//	args.add( "-MD" );			// generate the dependency file
+		//	args.add( "-MF" );			// set the name of the dependency file to...
+		//	args.add( depFilename );	// ...this
+		//}
 
 		if ( string_ends_with( sourceFile, ".cpp" ) || string_ends_with( sourceFile, ".cxx" ) || string_ends_with( sourceFile, ".cc" ) ) {
 			args.add( "-std=c++20" );
@@ -748,7 +737,7 @@ static s32 BuildDynamicLibrary( buildContext_t* context ) {
 		args.add( OptimizationLevelToString( context->config.optimization_level ) );
 
 		args.add( "-o" );
-		args.add( intermediateFileName );
+		args.add( intermediateFilename );
 
 		args.add( sourceFile );
 
@@ -2378,12 +2367,13 @@ int main( int argc, char** argv ) {
 				return false;
 			};
 
-			if ( !ShouldRebuild( &context ) ) {
+			/*if ( !ShouldRebuild( &context ) ) {
 				numSkippedBuilds++;
 
 				printf( "Skipped \"%s\".\n", context.config.binary_name.c_str() );
 				continue;
-			} else {
+			} else*/
+			{
 				printf( "Building \"%s\"", context.config.binary_name.c_str() );
 
 				if ( !context.config.name.empty() ) {

@@ -398,108 +398,108 @@ static s32 ShowUsage( const s32 exitCode ) {
 	return exitCode;
 }
 
-static const char* GetDepFilename( const buildContext_t* context, const BuildConfig* config ) {
-	assert( context );
-	assert( config );
-
-	const char* configNameNoPath = path_remove_path_from_file( config->name.c_str() );
-
-	return tprintf( "%s%c%s.d", context->dotBuilderFolder.data, PATH_SEPARATOR, configNameNoPath );
-}
+//static const char* GetDepFilename( const buildContext_t* context, const BuildConfig* config ) {
+//	assert( context );
+//	assert( config );
+//
+//	const char* configNameNoPath = path_remove_path_from_file( config->name.c_str() );
+//
+//	return tprintf( "%s%c%s.d", context->dotBuilderFolder.data, PATH_SEPARATOR, configNameNoPath );
+//}
 
 // only call this after compilation has finished successfully
 // parse the dependency file that we generated for every dependency thats in there
 // add those to a list - we need to put those in the .build_info file
-static void ReadDependencyFile( const char* depFilename, std::vector<trackedSourceFile_t>& outBuildInfoFiles ) {
-	char* depFileBuffer = NULL;
-	bool8 read = file_read_entire( depFilename, &depFileBuffer );
-
-	if ( !read ) {
-		fatal_error( "Failed to read \"%s\".  This should never happen!\n", depFilename );
-		return;
-	}
-
-	defer( file_free_buffer( &depFileBuffer ) );
-
-	outBuildInfoFiles.clear();
-
-	char* current = depFileBuffer;
-
-	// .d files start with the name of the binary followed by a colon
-	// so skip past that first
-	current = strchr( depFileBuffer, ':' );
-	assert( current );
-	current += 1;	// skip past the colon
-	current += 1;	// skip past the following whitespace
-
-	// skip past the newline after
-	current = strchr( current, '\n' );
-	assert( current );
-	current += 1;
-
-	while ( *current ) {
-		// get start of the filename
-		char* dependencyStart = current;
-
-		while ( *dependencyStart == ' ' ) {
-			dependencyStart += 1;
-		}
-
-		// get end of the filename
-		char* dependencyEnd = NULL;
-		// filenames are separated by either new line or space
-		if ( !dependencyEnd ) dependencyEnd = strchr( dependencyStart, ' ' );
-		if ( !dependencyEnd ) dependencyEnd = strchr( dependencyStart, '\n' );
-		assert( dependencyEnd );
-		// paths can have spaces in them, but they are preceded by a single backslash (\)
-		// so if we find a space but it has a single backslash just before it then keep searching for a space
-		while ( dependencyEnd && ( *( dependencyEnd - 1 ) == PATH_SEPARATOR ) ) {
-			dependencyEnd = strchr( dependencyEnd + 1, ' ' );
-		}
-
-		if ( !dependencyEnd ) {
-			break;
-		}
-
-		if ( *( dependencyEnd - 1 ) == '\r' ) {
-			dependencyEnd -= 1;
-		}
-
-		u64 dependencyFilenameLength = cast( u64, dependencyEnd ) - cast( u64, dependencyStart );
-
-		// get the substring we actually need
-		std::string dependencyFilename( dependencyStart, dependencyFilenameLength );
-		For ( u64, i, 0, dependencyFilename.size() ) {
-			if ( dependencyFilename[i] == PATH_SEPARATOR && dependencyFilename[i + 1] == ' ' ) {
-				dependencyFilename.erase( i, 1 );
-			}
-		}
-
-		// get the file timestamp
-		FileInfo fileInfo;
-		File foundFile = file_find_first( dependencyFilename.c_str(), &fileInfo );
-		assert( foundFile.ptr != INVALID_HANDLE_VALUE );
-		u64 lastWriteTime = fileInfo.last_write_time;
-
-		//printf( "Parsing dependency %s, last write time = %llu\n", dependencyFilename.c_str(), lastWriteTime );
-
-		outBuildInfoFiles.push_back( { lastWriteTime, dependencyFilename.c_str() } );
-
-		current = dependencyEnd + 1;
-
-		while ( *current == PATH_SEPARATOR ) {
-			current += 1;
-		}
-
-		if ( *current == '\r' ) {
-			current += 1;
-		}
-
-		if ( *current == '\n' ) {
-			current += 1;
-		}
-	}
-}
+//static void ReadDependencyFile( const char* depFilename, std::vector<trackedSourceFile_t>& outBuildInfoFiles ) {
+//	char* depFileBuffer = NULL;
+//	bool8 read = file_read_entire( depFilename, &depFileBuffer );
+//
+//	if ( !read ) {
+//		fatal_error( "Failed to read \"%s\".  This should never happen!\n", depFilename );
+//		return;
+//	}
+//
+//	defer( file_free_buffer( &depFileBuffer ) );
+//
+//	outBuildInfoFiles.clear();
+//
+//	char* current = depFileBuffer;
+//
+//	// .d files start with the name of the binary followed by a colon
+//	// so skip past that first
+//	current = strchr( depFileBuffer, ':' );
+//	assert( current );
+//	current += 1;	// skip past the colon
+//	current += 1;	// skip past the following whitespace
+//
+//	// skip past the newline after
+//	current = strchr( current, '\n' );
+//	assert( current );
+//	current += 1;
+//
+//	while ( *current ) {
+//		// get start of the filename
+//		char* dependencyStart = current;
+//
+//		while ( *dependencyStart == ' ' ) {
+//			dependencyStart += 1;
+//		}
+//
+//		// get end of the filename
+//		char* dependencyEnd = NULL;
+//		// filenames are separated by either new line or space
+//		if ( !dependencyEnd ) dependencyEnd = strchr( dependencyStart, ' ' );
+//		if ( !dependencyEnd ) dependencyEnd = strchr( dependencyStart, '\n' );
+//		assert( dependencyEnd );
+//		// paths can have spaces in them, but they are preceded by a single backslash (\)
+//		// so if we find a space but it has a single backslash just before it then keep searching for a space
+//		while ( dependencyEnd && ( *( dependencyEnd - 1 ) == PATH_SEPARATOR ) ) {
+//			dependencyEnd = strchr( dependencyEnd + 1, ' ' );
+//		}
+//
+//		if ( !dependencyEnd ) {
+//			break;
+//		}
+//
+//		if ( *( dependencyEnd - 1 ) == '\r' ) {
+//			dependencyEnd -= 1;
+//		}
+//
+//		u64 dependencyFilenameLength = cast( u64, dependencyEnd ) - cast( u64, dependencyStart );
+//
+//		// get the substring we actually need
+//		std::string dependencyFilename( dependencyStart, dependencyFilenameLength );
+//		For ( u64, i, 0, dependencyFilename.size() ) {
+//			if ( dependencyFilename[i] == PATH_SEPARATOR && dependencyFilename[i + 1] == ' ' ) {
+//				dependencyFilename.erase( i, 1 );
+//			}
+//		}
+//
+//		// get the file timestamp
+//		FileInfo fileInfo;
+//		File foundFile = file_find_first( dependencyFilename.c_str(), &fileInfo );
+//		assert( foundFile.ptr != INVALID_HANDLE_VALUE );
+//		u64 lastWriteTime = fileInfo.last_write_time;
+//
+//		//printf( "Parsing dependency %s, last write time = %llu\n", dependencyFilename.c_str(), lastWriteTime );
+//
+//		outBuildInfoFiles.push_back( { lastWriteTime, dependencyFilename.c_str() } );
+//
+//		current = dependencyEnd + 1;
+//
+//		while ( *current == PATH_SEPARATOR ) {
+//			current += 1;
+//		}
+//
+//		if ( *current == '\r' ) {
+//			current += 1;
+//		}
+//
+//		if ( *current == '\n' ) {
+//			current += 1;
+//		}
+//	}
+//}
 
 static s32 BuildEXE( buildContext_t* context ) {
 	s32 exitCode = -1;
@@ -863,11 +863,11 @@ static s32 BuildStaticLibrary( buildContext_t* context ) {
 
 		args.add( "-c" );
 
-		if ( !context->config.name.empty() ) {
-			args.add( "-MD" );											// generate the dependency file
-			args.add( "-MF" );											// set the name of the dependency file to...
-			args.add( GetDepFilename( context, &context->config ) );	// ...this
-		}
+		//if ( !context->config.name.empty() ) {
+		//	args.add( "-MD" );											// generate the dependency file
+		//	args.add( "-MF" );											// set the name of the dependency file to...
+		//	args.add( GetDepFilename( context, &context->config ) );	// ...this
+		//}
 
 		if ( string_ends_with( sourceFile, ".cpp" ) ) { // TODO(DM): 04/01/2025: IsSourceFile( sourceFile )
 			args.add( "-std=c++20" );
@@ -1040,44 +1040,44 @@ bool8 PathHasSlash( const char* path ) {
 	return GetSlashInPath( path ) != NULL;
 }
 
-static const char* TryFindFile_r( const char* filename, const char* folder ) {
-	const char* result = NULL;
-
-	const char* searchPath = tprintf( "%s%c*", folder, PATH_SEPARATOR );
-
-	const char* filenamePath = path_remove_file_from_path( filename );
-
-	FileInfo fileInfo;
-	File firstFile = file_find_first( searchPath, &fileInfo );
-
-	do {
-		if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) || fileInfo.filename[0] == 0 ) {
-			continue;
-		}
-
-		const char* fullFilename = NULL;
-		if ( PathHasSlash( filename ) ) {
-			fullFilename = tprintf( "%s%c%s%c%s", folder, PATH_SEPARATOR, filenamePath, PATH_SEPARATOR, fileInfo.filename );
-		} else {
-			fullFilename = tprintf( "%s%c%s", folder, PATH_SEPARATOR, fileInfo.filename );
-		}
-
-		if ( fileInfo.is_directory ) {
-			result = TryFindFile_r( filename, fullFilename );
-		}
-
-		if ( result ) {
-			return result;
-		}
-
-		if ( string_ends_with( fullFilename, filename ) ) {
-			result = fullFilename;
-			return result;
-		}
-	} while ( file_find_next( &firstFile, &fileInfo ) );
-
-	return NULL;
-}
+//static const char* TryFindFile_r( const char* filename, const char* folder ) {
+//	const char* result = NULL;
+//
+//	const char* searchPath = tprintf( "%s%c*", folder, PATH_SEPARATOR );
+//
+//	const char* filenamePath = path_remove_file_from_path( filename );
+//
+//	FileInfo fileInfo;
+//	File firstFile = file_find_first( searchPath, &fileInfo );
+//
+//	do {
+//		if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) || fileInfo.filename[0] == 0 ) {
+//			continue;
+//		}
+//
+//		const char* fullFilename = NULL;
+//		if ( PathHasSlash( filename ) ) {
+//			fullFilename = tprintf( "%s%c%s%c%s", folder, PATH_SEPARATOR, filenamePath, PATH_SEPARATOR, fileInfo.filename );
+//		} else {
+//			fullFilename = tprintf( "%s%c%s", folder, PATH_SEPARATOR, fileInfo.filename );
+//		}
+//
+//		if ( fileInfo.is_directory ) {
+//			result = TryFindFile_r( filename, fullFilename );
+//		}
+//
+//		if ( result ) {
+//			return result;
+//		}
+//
+//		if ( string_ends_with( fullFilename, filename ) ) {
+//			result = fullFilename;
+//			return result;
+//		}
+//	} while ( file_find_next( &firstFile, &fileInfo ) );
+//
+//	return NULL;
+//}
 
 static void GetAllSourceFiles_r( const char* path, const char* subfolder, const String& searchFilter, std::vector<std::string>& outSourceFiles ) {
 	assert( path );
@@ -1221,53 +1221,53 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, const 
 	}
 }
 
-void GetAllSubfolders_r( const char* basePath, const char* folder, Array<const char*>* outSubfolders ) {
-	const char* fullSearchPath = NULL;
-
-	if ( string_ends_with( basePath, PATH_SEPARATOR ) ) {
-		if ( folder ) {
-			fullSearchPath = tprintf( "%s%s%c*", basePath, folder, PATH_SEPARATOR );
-		} else {
-			fullSearchPath = tprintf( "%s*", basePath );
-		}
-	} else {
-		if ( folder ) {
-			fullSearchPath = tprintf( "%s%c%s%c*", basePath, PATH_SEPARATOR, folder, PATH_SEPARATOR );
-		} else {
-			fullSearchPath = tprintf( "%s%c*", basePath, PATH_SEPARATOR );
-		}
-	}
-
-	FileInfo fileInfo;
-	File file = file_find_first( fullSearchPath, &fileInfo );
-
-	do {
-		if ( string_equals( fileInfo.filename, "." ) ) {
-			continue;
-		}
-
-		if ( string_equals( fileInfo.filename, ".." ) ) {
-			continue;
-		}
-
-		if ( fileInfo.is_directory ) {
-			const char* folderName = tprintf( "%s", fileInfo.filename );
-
-			//outSubfolders->add( folderName );
-
-			const char* newPath = NULL;
-			if ( folder ) {
-				newPath = tprintf( "%s%c%s", folder, PATH_SEPARATOR, folderName );
-			} else {
-				newPath = folderName;
-			}
-
-			outSubfolders->add( newPath );
-
-			GetAllSubfolders_r( basePath, newPath, outSubfolders );
-		}
-	} while ( file_find_next( &file, &fileInfo ) );
-}
+//void GetAllSubfolders_r( const char* basePath, const char* folder, Array<const char*>* outSubfolders ) {
+//	const char* fullSearchPath = NULL;
+//
+//	if ( string_ends_with( basePath, PATH_SEPARATOR ) ) {
+//		if ( folder ) {
+//			fullSearchPath = tprintf( "%s%s%c*", basePath, folder, PATH_SEPARATOR );
+//		} else {
+//			fullSearchPath = tprintf( "%s*", basePath );
+//		}
+//	} else {
+//		if ( folder ) {
+//			fullSearchPath = tprintf( "%s%c%s%c*", basePath, PATH_SEPARATOR, folder, PATH_SEPARATOR );
+//		} else {
+//			fullSearchPath = tprintf( "%s%c*", basePath, PATH_SEPARATOR );
+//		}
+//	}
+//
+//	FileInfo fileInfo;
+//	File file = file_find_first( fullSearchPath, &fileInfo );
+//
+//	do {
+//		if ( string_equals( fileInfo.filename, "." ) ) {
+//			continue;
+//		}
+//
+//		if ( string_equals( fileInfo.filename, ".." ) ) {
+//			continue;
+//		}
+//
+//		if ( fileInfo.is_directory ) {
+//			const char* folderName = tprintf( "%s", fileInfo.filename );
+//
+//			//outSubfolders->add( folderName );
+//
+//			const char* newPath = NULL;
+//			if ( folder ) {
+//				newPath = tprintf( "%s%c%s", folder, PATH_SEPARATOR, folderName );
+//			} else {
+//				newPath = folderName;
+//			}
+//
+//			outSubfolders->add( newPath );
+//
+//			GetAllSubfolders_r( basePath, newPath, outSubfolders );
+//		}
+//	} while ( file_find_next( &file, &fileInfo ) );
+//}
 
 static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContext_t* context, const BuildConfig* config ) {
 	std::vector<std::string> sourceFiles;
@@ -2304,68 +2304,66 @@ int main( int argc, char** argv ) {
 			context.config = *config;
 			context.fullBinaryName = BuildConfig_GetFullBinaryName( &context.config );
 
-			bool8 shouldSkipBuild = true;
-
 			// figure out if we need to even rebuild
-			auto ShouldRebuild = [actualConfigIndex, &buildInfoData, readBuildInfo]( const buildContext_t* buildContext ) -> bool8 {
-				// if the .build_info isnt there, or we expect a different name now, or something else
-				// then we wont have any tracked source files to check through later on in this subroutine
-				// and the build will be skipped
-				// so just force a rebuild if we cant find/read the .build_info for whatever reason
-				if ( !readBuildInfo ) {
-					printf( "Failed to read %s.  Rebuilding...\n", buildContext->buildInfoFilename.data );
-					return true;
-				}
+			//auto ShouldRebuild = [actualConfigIndex, &buildInfoData, readBuildInfo]( const buildContext_t* buildContext ) -> bool8 {
+			//	// if the .build_info isnt there, or we expect a different name now, or something else
+			//	// then we wont have any tracked source files to check through later on in this subroutine
+			//	// and the build will be skipped
+			//	// so just force a rebuild if we cant find/read the .build_info for whatever reason
+			//	if ( !readBuildInfo ) {
+			//		printf( "Failed to read %s.  Rebuilding...\n", buildContext->buildInfoFilename.data );
+			//		return true;
+			//	}
 
-				// if this was last built on a different version of builder then rebuild
-				if ( buildInfoData.builderVersion.major != BUILDER_VERSION_MAJOR ||
-					 buildInfoData.builderVersion.minor != BUILDER_VERSION_MINOR ||
-					 buildInfoData.builderVersion.patch != BUILDER_VERSION_PATCH )
-				{
-					printf( "Different Builder version detected since last build.  Rebuilding...\n" );
-					return true;
-				}
+			//	// if this was last built on a different version of builder then rebuild
+			//	if ( buildInfoData.builderVersion.major != BUILDER_VERSION_MAJOR ||
+			//		 buildInfoData.builderVersion.minor != BUILDER_VERSION_MINOR ||
+			//		 buildInfoData.builderVersion.patch != BUILDER_VERSION_PATCH )
+			//	{
+			//		printf( "Different Builder version detected since last build.  Rebuilding...\n" );
+			//		return true;
+			//	}
 
-				{
-					// if the binary doesnt exist, we definitely need to rebuild
-					FileInfo binaryFileInfo;
-					File binaryFile = file_find_first( buildContext->fullBinaryName, &binaryFileInfo );
+			//	{
+			//		// if the binary doesnt exist, we definitely need to rebuild
+			//		FileInfo binaryFileInfo;
+			//		File binaryFile = file_find_first( buildContext->fullBinaryName, &binaryFileInfo );
 
-					if ( binaryFile.ptr == INVALID_HANDLE_VALUE ) {
-						return true;
-					}
+			//		if ( binaryFile.ptr == INVALID_HANDLE_VALUE ) {
+			//			return true;
+			//		}
 
-					// if the binary exists but the last time it was written to doesnt match whats in the .build_info then we know we need to rebuild
-					if ( buildInfoData.binaryLastWriteTimes[actualConfigIndex] != binaryFileInfo.last_write_time ) {
-						return true;
-					}
-				}
+			//		// if the binary exists but the last time it was written to doesnt match whats in the .build_info then we know we need to rebuild
+			//		if ( buildInfoData.binaryLastWriteTimes[actualConfigIndex] != binaryFileInfo.last_write_time ) {
+			//			return true;
+			//		}
+			//	}
 
-				// for every code file that the .build_info knows about, find that file on disk and get the time it was written to
-				// if that write time doesnt match what we have in the .build_info for that file then its changed and we need to rebuild
-				const std::vector<trackedSourceFile_t>& trackedSourceFiles = buildInfoData.trackedSourceFiles[actualConfigIndex];
+			//	// for every code file that the .build_info knows about, find that file on disk and get the time it was written to
+			//	// if that write time doesnt match what we have in the .build_info for that file then its changed and we need to rebuild
+			//	const std::vector<trackedSourceFile_t>& trackedSourceFiles = buildInfoData.trackedSourceFiles[actualConfigIndex];
 
-				For ( u64, sourceFileIndex, 0, trackedSourceFiles.size() ) {
-					const trackedSourceFile_t* trackedSourceFile = &trackedSourceFiles[sourceFileIndex];
+			//	For ( u64, sourceFileIndex, 0, trackedSourceFiles.size() ) {
+			//		const trackedSourceFile_t* trackedSourceFile = &trackedSourceFiles[sourceFileIndex];
 
-					const char* trackedSourceFileAndPath = trackedSourceFile->filename.c_str();
-					if ( !path_is_absolute( trackedSourceFile->filename.c_str() ) ) {
-						trackedSourceFileAndPath = tprintf( "%s%c%s", buildContext->inputFilePath.data, PATH_SEPARATOR, trackedSourceFile->filename.c_str() );
-					}
+			//		const char* trackedSourceFileAndPath = trackedSourceFile->filename.c_str();
+			//		if ( !path_is_absolute( trackedSourceFile->filename.c_str() ) ) {
+			//			trackedSourceFileAndPath = tprintf( "%s%c%s", buildContext->inputFilePath.data, PATH_SEPARATOR, trackedSourceFile->filename.c_str() );
+			//		}
 
-					FileInfo fileInfo = {};
-					File file = file_find_first( trackedSourceFileAndPath, &fileInfo );
+			//		FileInfo fileInfo = {};
+			//		File file = file_find_first( trackedSourceFileAndPath, &fileInfo );
 
-					bool8 cantFindFile = file.ptr == INVALID_HANDLE_VALUE;
-					bool8 fileWasOverwritten = fileInfo.last_write_time != trackedSourceFile->lastWriteTime;
+			//		bool8 cantFindFile = file.ptr == INVALID_HANDLE_VALUE;
+			//		bool8 fileWasOverwritten = fileInfo.last_write_time != trackedSourceFile->lastWriteTime;
 
-					if ( cantFindFile || fileWasOverwritten ) {
-						return true;
-					}
-				}
+			//		if ( cantFindFile || fileWasOverwritten ) {
+			//			return true;
+			//		}
+			//	}
 
-				return false;
-			};
+			//	return false;
+			//};
 
 			/*if ( !ShouldRebuild( &context ) ) {
 				numSkippedBuilds++;

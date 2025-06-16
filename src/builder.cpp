@@ -1036,9 +1036,9 @@ const char* GetSlashInPath( const char* path ) {
 	return slash;
 }
 
-bool8 PathHasSlash( const char* path ) {
-	return GetSlashInPath( path ) != NULL;
-}
+//bool8 PathHasSlash( const char* path ) {
+//	return GetSlashInPath( path ) != NULL;
+//}
 
 //static const char* TryFindFile_r( const char* filename, const char* folder ) {
 //	const char* result = NULL;

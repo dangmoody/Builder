@@ -501,161 +501,480 @@ static s32 ShowUsage( const s32 exitCode ) {
 //	}
 //}
 
-static s32 BuildEXE( buildContext_t* context ) {
-	s32 exitCode = -1;
+//static s32 BuildEXE( buildContext_t* context ) {
+//	s32 exitCode = -1;
+//
+//	Array<const char*> args;
+//	args.reserve(
+//		1 +	// clang
+//		3 + // -MD -MF <filename>
+//		1 +	// std
+//		1 +	// symbols
+//		1 +	// optimisation
+//		1 +	// -o
+//		1 +	// intermediate filename
+//		1 +	// source file
+//		context->config.defines.size() +
+//		context->config.additional_includes.size() +
+//		context->config.additional_lib_paths.size() +
+//		context->config.additional_libs.size() +
+//		context->config.warning_levels.size() +
+//		context->config.ignore_warnings.size()
+//	);
+//
+//	Array<const char*> intermediateFiles;
+//	intermediateFiles.reserve( context->config.source_files.size() );
+//
+//	const char* clangPath = tprintf( "%s%cclang%cbin%cclang.exe", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
+//
+//	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
+//
+//	// compile
+//	{
+//		For ( u64, sourceFileIndex, 0, context->config.source_files.size() ) {
+//			const char* sourceFile = context->config.source_files[sourceFileIndex].c_str();
+//
+//			args.reset();
+//
+//			args.add( clangPath );
+//
+//			if ( !context->config.name.empty() ) {
+//				args.add( "-MD" );																				// generate the dependency file
+//				args.add( "-MF" );																				// set the name of the dependency file to...
+//				args.add( tprintf( "%s%c%s.d", context->dotBuilderFolder.data, PATH_SEPARATOR, sourceFile ) );	// ...this
+//			}
+//
+//			if ( string_ends_with( sourceFile, ".cpp" ) || string_ends_with( sourceFile, ".cxx" ) || string_ends_with( sourceFile, ".cc" ) ) {
+//				args.add( "-std=c++20" );
+//			} else {
+//				args.add( "-std=c99" );
+//			}
+//
+//			if ( !context->config.remove_symbols ) {
+//				args.add( "-g" );
+//			}
+//
+//			args.add( OptimizationLevelToString( context->config.optimization_level ) );
+//
+//			{
+//				const char* sourceFileTrimmed = sourceFile;
+//				sourceFileTrimmed = strrchr( sourceFileTrimmed, PATH_SEPARATOR ) + 1;
+//
+//				const char* intermediateFileName = tprintf( "%s%c%s.o", context->config.binary_folder.c_str(), PATH_SEPARATOR, sourceFileTrimmed );
+//
+//				args.add( "-o" );
+//				args.add( intermediateFileName );
+//				intermediateFiles.add( intermediateFileName );
+//			}
+//
+//			args.add( sourceFile );
+//
+//			For ( u32, defineIndex, 0, context->config.defines.size() ) {
+//				args.add( tprintf( "-D%s", context->config.defines[defineIndex].c_str() ) );
+//			}
+//
+//			For ( u32, includeIndex, 0, context->config.additional_includes.size() ) {
+//				args.add( tprintf( "-I%s", context->config.additional_includes[includeIndex].c_str() ) );
+//			}
+//
+//			For ( u32, libPathIndex, 0, context->config.additional_lib_paths.size() ) {
+//				args.add( tprintf( "-L%s", context->config.additional_lib_paths[libPathIndex].c_str() ) );
+//			}
+//
+//			For ( u32, libIndex, 0, context->config.additional_libs.size() ) {
+//				args.add( tprintf( "-l%s", context->config.additional_libs[libIndex].c_str() ) );
+//			}
+//
+//			// must come before ignored warnings
+//			if ( context->config.warnings_as_errors ) {
+//				args.add( "-Werror" );
+//			}
+//
+//			// warning levels
+//			{
+//				std::vector<std::string> allowedWarningLevels = {
+//					"-Weverything",
+//					"-Wall",
+//					"-Wextra",
+//					"-Wpedantic",
+//				};
+//
+//				For ( u64, warningLevelIndex, 0, context->config.warning_levels.size() ) {
+//					const std::string& warningLevel = context->config.warning_levels[warningLevelIndex];
+//
+//					bool8 found = false;
+//
+//					For ( u64, allowedWarningLevelIndex, 0, allowedWarningLevels.size() ) {
+//						if ( allowedWarningLevels[allowedWarningLevelIndex] == warningLevel ) {	// TODO(DM): 14/06/2025: better to compare hashes here instead?
+//							found = true;
+//							break;
+//						}
+//					}
+//
+//					if ( !found ) {
+//						error( "\"%s\" is not allowed as a warning level.\n", warningLevel.c_str() );
+//						return 1;
+//					}
+//
+//					args.add( warningLevel.c_str() );
+//				}
+//			}
+//
+//			For ( u64, ignoreWarningIndex, 0, context->config.ignore_warnings.size() ) {
+//				args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
+//			}
+//		}
+//
+//		exitCode = RunProc( &args, NULL, procFlags );
+//
+//		if ( exitCode != 0 ) {
+//			error( "Compile failed.\n" );
+//			return exitCode;
+//		}
+//	}
+//
+//	// link
+//	{
+//		args.reset();
+//
+//		args.add( clangPath );
+//
+//		args.add( "-o" );
+//		args.add( context->fullBinaryName );
+//
+//		args.add_range( &intermediateFiles );
+//
+//		exitCode = RunProc( &args, NULL, procFlags );
+//
+//		if ( exitCode != 0 ) {
+//			error( "Link failed.\n" );
+//			return exitCode;
+//		}
+//	}
+//
+//	return exitCode;
+//}
+//
+//static s32 BuildDynamicLibrary( buildContext_t* context ) {
+//	bool8 created = folder_create_if_it_doesnt_exist( tprintf( "%s%c%s", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH ) );
+//	if ( !created ) {
+//		errorCode_t errorCode = GetLastErrorCode();
+//		fatal_error( "Failed to create intermediate binary folder.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
+//	}
+//
+//	s32 exitCode = -1;
+//
+//	Array<const char*> args;
+//	args.reserve(
+//		1 +	// clang
+//		1 +	// -shared
+//		1 +	// -c
+//		3 +	// -MD -MF <filename>
+//		1 +	// std
+//		1 +	// symbols
+//		1 +	// optimisation
+//		1 +	// -o
+//		1 +	// intermediate filename
+//		1 +	// source file
+//		context->config.defines.size() +
+//		context->config.additional_includes.size() +
+//		context->config.additional_lib_paths.size() +
+//		context->config.additional_libs.size() +
+//		context->config.warning_levels.size() +
+//		context->config.ignore_warnings.size()
+//	);
+//
+//	Array<const char*> intermediateFiles;
+//	intermediateFiles.reserve( context->config.source_files.size() );
+//
+//	const char* clangPath = tprintf( "%s%cclang%cbin%cclang.exe", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
+//
+//	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
+//
+//	// compile
+//	// make .o files for all compilation units
+//	// TODO(DM): 14/06/2025: embarrassingly parallel
+//	For ( u64, sourceFileIndex, 0, context->config.source_files.size() ) {
+//		const char* sourceFile = context->config.source_files[sourceFileIndex].c_str();
+//		const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
+//
+//		const char* intermediateFilename = tprintf( "%s%c%s%c%s.o", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH, PATH_SEPARATOR, sourceFileNoPath );
+//		intermediateFiles.add( intermediateFilename );
+//
+//		// only rebuild the .o file if the source file was written to more recently or it doesnt exist
+//		{
+//			FileInfo intermediateFileInfo;
+//			File intermediateFile = file_find_first( intermediateFilename, &intermediateFileInfo );
+//
+//			if ( ( intermediateFile.ptr != INVALID_HANDLE_VALUE ) && ( GetLastFileWriteTime( sourceFile ) <= intermediateFileInfo.last_write_time ) ) {
+//				continue;
+//			}
+//		}
+//
+//		args.reset();
+//
+//		args.add( clangPath );
+//		args.add( "-c" );
+//
+//		//if ( !context->config.name.empty() ) {
+//		//	const char* depFilename = tprintf( "%s%c%s.d", context->dotBuilderFolder.data, PATH_SEPARATOR, sourceFileNoPath );
+//
+//		//	args.add( "-MD" );			// generate the dependency file
+//		//	args.add( "-MF" );			// set the name of the dependency file to...
+//		//	args.add( depFilename );	// ...this
+//		//}
+//
+//		if ( string_ends_with( sourceFile, ".cpp" ) || string_ends_with( sourceFile, ".cxx" ) || string_ends_with( sourceFile, ".cc" ) ) {
+//			args.add( "-std=c++20" );
+//		} else if ( string_ends_with( sourceFile, ".c" ) ) {
+//			args.add( "-std=c99" );
+//		}
+//
+//		if ( !context->config.remove_symbols ) {
+//			args.add( "-g" );
+//		}
+//
+//		args.add( OptimizationLevelToString( context->config.optimization_level ) );
+//
+//		args.add( "-o" );
+//		args.add( intermediateFilename );
+//
+//		args.add( sourceFile );
+//
+//		For ( u32, defineIndex, 0, context->config.defines.size() ) {
+//			args.add( tprintf( "-D%s", context->config.defines[defineIndex].c_str() ) );
+//		}
+//
+//		For ( u32, includeIndex, 0, context->config.additional_includes.size() ) {
+//			args.add( tprintf( "-I%s", context->config.additional_includes[includeIndex].c_str() ) );
+//		}
+//
+//		// must come before ignored warnings
+//		if ( context->config.warnings_as_errors ) {
+//			args.add( "-Werror" );
+//		}
+//
+//		// warning levels
+//		{
+//			std::vector<std::string> allowedWarningLevels = {
+//				"-Weverything",
+//				"-Wall",
+//				"-Wextra",
+//				"-Wpedantic",
+//			};
+//
+//			For ( u64, warningLevelIndex, 0, context->config.warning_levels.size() ) {
+//				const std::string& warningLevel = context->config.warning_levels[warningLevelIndex];
+//
+//				bool8 found = false;
+//
+//				For ( u64, allowedWarningLevelIndex, 0, allowedWarningLevels.size() ) {
+//					if ( allowedWarningLevels[allowedWarningLevelIndex] == warningLevel ) {	// TODO(DM): 14/06/2025: better to compare hashes here instead?
+//						found = true;
+//						break;
+//					}
+//				}
+//
+//				if ( !found ) {
+//					error( "\"%s\" is not allowed as a warning level.\n", warningLevel.c_str() );
+//					return 1;
+//				}
+//
+//				args.add( warningLevel.c_str() );
+//			}
+//		}
+//
+//		For ( u64, ignoreWarningIndex, 0, context->config.ignore_warnings.size() ) {
+//			args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
+//		}
+//
+//		exitCode = RunProc( &args, NULL, procFlags );
+//
+//		if ( exitCode != 0 ) {
+//			error( "Compile failed.\n" );
+//			return exitCode;
+//		}
+//	}
+//
+//	// link
+//	{
+//		args.reset();
+//
+//		args.add( clangPath );
+//		args.add( "-shared" );
+//
+//		args.add( "-o" );
+//		args.add( context->fullBinaryName );
+//
+//		args.add_range( &intermediateFiles );
+//
+//		For ( u32, libPathIndex, 0, context->config.additional_lib_paths.size() ) {
+//			args.add( tprintf( "-L%s", context->config.additional_lib_paths[libPathIndex].c_str() ) );
+//		}
+//
+//		For ( u32, libIndex, 0, context->config.additional_libs.size() ) {
+//			args.add( tprintf( "-l%s", context->config.additional_libs[libIndex].c_str() ) );
+//		}
+//
+//		exitCode = RunProc( &args, NULL, procFlags );
+//
+//		if ( exitCode != 0 ) {
+//			error( "Link failed.\n" );
+//			return exitCode;
+//		}
+//	}
+//
+//	return exitCode;
+//}
+//
+//static s32 BuildStaticLibrary( buildContext_t* context ) {
+//	s32 exitCode = 0;
+//
+//	Array<const char*> intermediateFiles;
+//
+//	Array<const char*> args;
+//	args.reserve(
+//		1 +	// clang
+//		1 +	// -c
+//		3 + // -MD -MF <filename>
+//		1 +	// std
+//		1 +	// symbols
+//		1 +	// optimisation
+//		1 +	// -o
+//		1 +	// binary name
+//		context->config.source_files.size() +
+//		context->config.defines.size() +
+//		context->config.additional_includes.size() +
+//		context->config.additional_lib_paths.size() +
+//		context->config.additional_libs.size() +
+//		context->config.warning_levels.size() +
+//		context->config.ignore_warnings.size()
+//	);
+//
+//	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
+//
+//	// build .o files for all compilation units
+//	For ( u64, sourceFileIndex, 0, context->config.source_files.size() ) {
+//		const char* sourceFile = context->config.source_files[sourceFileIndex].c_str();
+//
+//		args.reset();
+//
+//		args.add( tprintf( "%s%cclang%cbin%cclang.exe", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR ) );
+//
+//		args.add( "-c" );
+//
+//		//if ( !context->config.name.empty() ) {
+//		//	args.add( "-MD" );											// generate the dependency file
+//		//	args.add( "-MF" );											// set the name of the dependency file to...
+//		//	args.add( GetDepFilename( context, &context->config ) );	// ...this
+//		//}
+//
+//		if ( string_ends_with( sourceFile, ".cpp" ) ) { // TODO(DM): 04/01/2025: IsSourceFile( sourceFile )
+//			args.add( "-std=c++20" );
+//		} else if ( string_ends_with( sourceFile, ".c" ) ) {
+//			args.add( "-std=c99" );
+//		} else {
+//			assertf( false, "Something went really wrong.\n" );
+//			QUIT_ERROR();
+//		}
+//
+//		if ( !context->config.remove_symbols ) {
+//			args.add( "-g" );
+//		}
+//
+//		args.add( OptimizationLevelToString( context->config.optimization_level ) );
+//
+//		{
+//			const char* sourceFileTrimmed = sourceFile;
+//			sourceFileTrimmed = strrchr( sourceFileTrimmed, PATH_SEPARATOR ) + 1;
+//
+//			const char* intermediateFileName = tprintf( "%s%c%s.o", context->config.binary_folder.c_str(), PATH_SEPARATOR, sourceFileTrimmed );
+//
+//			args.add( "-o" );
+//			args.add( intermediateFileName );
+//			intermediateFiles.add( intermediateFileName );
+//		}
+//
+//		args.add( sourceFile );
+//
+//		For ( u32, defineIndex, 0, context->config.defines.size() ) {
+//			args.add( tprintf( "-D%s", context->config.defines[defineIndex].c_str() ) );
+//		}
+//
+//		For ( u32, includeIndex, 0, context->config.additional_includes.size() ) {
+//			args.add( tprintf( "-I%s", context->config.additional_includes[includeIndex].c_str() ) );
+//		}
+//
+//		// must come before ignored warnings
+//		if ( context->config.warnings_as_errors ) {
+//			args.add( "-Werror" );
+//		}
+//
+//		// warning levels
+//		{
+//			std::vector<std::string> allowedWarningLevels = {
+//				"-Weverything",
+//				"-Wall",
+//				"-Wextra",
+//				"-Wpedantic",
+//			};
+//
+//			For ( u64, warningLevelIndex, 0, context->config.warning_levels.size() ) {
+//				const std::string& warningLevel = context->config.warning_levels[warningLevelIndex];
+//
+//				bool8 found = false;
+//
+//				For ( u64, allowedWarningLevelIndex, 0, allowedWarningLevels.size() ) {
+//					if ( allowedWarningLevels[allowedWarningLevelIndex] == warningLevel ) {
+//						found = true;
+//						break;
+//					}
+//				}
+//
+//				if ( !found ) {
+//					error( "\"%s\" is not allowed as a warning level.\n", warningLevel.c_str() );
+//					return 1;
+//				}
+//
+//				args.add( warningLevel.c_str() );
+//			}
+//		}
+//
+//		For ( u64, ignoreWarningIndex, 0, context->config.ignore_warnings.size() ) {
+//			args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
+//		}
+//
+//		exitCode = RunProc( &args, NULL, procFlags );
+//
+//		if ( exitCode != 0 ) {
+//			error( "Compile failed.\n" );
+//			return exitCode;
+//		}
+//	}
+//
+//	// link step
+//	{
+//		args.reset();
+//
+//		args.add( "lld-link" );
+//		args.add( "/lib" );
+//
+//		args.add( tprintf( "/OUT:%s", context->fullBinaryName ) );
+//
+//		args.add_range( intermediateFiles.data, intermediateFiles.count );
+//
+//		exitCode = RunProc( &args, NULL, procFlags );
+//
+//		if ( exitCode != 0 ) {
+//			error( "Link failed.\n" );
+//			return exitCode;
+//		}
+//	}
+//
+//	return exitCode;
+//}
 
-	Array<const char*> args;
-	args.reserve(
-		1 +	// clang
-		3 + // -MD -MF <filename>
-		1 +	// std
-		1 +	// symbols
-		1 +	// optimisation
-		1 +	// -o
-		1 +	// intermediate filename
-		1 +	// source file
-		context->config.defines.size() +
-		context->config.additional_includes.size() +
-		context->config.additional_lib_paths.size() +
-		context->config.additional_libs.size() +
-		context->config.warning_levels.size() +
-		context->config.ignore_warnings.size()
-	);
-
-	Array<const char*> intermediateFiles;
-	intermediateFiles.reserve( context->config.source_files.size() );
-
-	const char* clangPath = tprintf( "%s%cclang%cbin%cclang.exe", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
-
-	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
-
-	// compile
-	{
-		For ( u64, sourceFileIndex, 0, context->config.source_files.size() ) {
-			const char* sourceFile = context->config.source_files[sourceFileIndex].c_str();
-
-			args.reset();
-
-			args.add( clangPath );
-
-			if ( !context->config.name.empty() ) {
-				args.add( "-MD" );																				// generate the dependency file
-				args.add( "-MF" );																				// set the name of the dependency file to...
-				args.add( tprintf( "%s%c%s.d", context->dotBuilderFolder.data, PATH_SEPARATOR, sourceFile ) );	// ...this
-			}
-
-			if ( string_ends_with( sourceFile, ".cpp" ) || string_ends_with( sourceFile, ".cxx" ) || string_ends_with( sourceFile, ".cc" ) ) {
-				args.add( "-std=c++20" );
-			} else {
-				args.add( "-std=c99" );
-			}
-
-			if ( !context->config.remove_symbols ) {
-				args.add( "-g" );
-			}
-
-			args.add( OptimizationLevelToString( context->config.optimization_level ) );
-
-			{
-				const char* sourceFileTrimmed = sourceFile;
-				sourceFileTrimmed = strrchr( sourceFileTrimmed, PATH_SEPARATOR ) + 1;
-
-				const char* intermediateFileName = tprintf( "%s%c%s.o", context->config.binary_folder.c_str(), PATH_SEPARATOR, sourceFileTrimmed );
-
-				args.add( "-o" );
-				args.add( intermediateFileName );
-				intermediateFiles.add( intermediateFileName );
-			}
-
-			args.add( sourceFile );
-
-			For ( u32, defineIndex, 0, context->config.defines.size() ) {
-				args.add( tprintf( "-D%s", context->config.defines[defineIndex].c_str() ) );
-			}
-
-			For ( u32, includeIndex, 0, context->config.additional_includes.size() ) {
-				args.add( tprintf( "-I%s", context->config.additional_includes[includeIndex].c_str() ) );
-			}
-
-			For ( u32, libPathIndex, 0, context->config.additional_lib_paths.size() ) {
-				args.add( tprintf( "-L%s", context->config.additional_lib_paths[libPathIndex].c_str() ) );
-			}
-
-			For ( u32, libIndex, 0, context->config.additional_libs.size() ) {
-				args.add( tprintf( "-l%s", context->config.additional_libs[libIndex].c_str() ) );
-			}
-
-			// must come before ignored warnings
-			if ( context->config.warnings_as_errors ) {
-				args.add( "-Werror" );
-			}
-
-			// warning levels
-			{
-				std::vector<std::string> allowedWarningLevels = {
-					"-Weverything",
-					"-Wall",
-					"-Wextra",
-					"-Wpedantic",
-				};
-
-				For ( u64, warningLevelIndex, 0, context->config.warning_levels.size() ) {
-					const std::string& warningLevel = context->config.warning_levels[warningLevelIndex];
-
-					bool8 found = false;
-
-					For ( u64, allowedWarningLevelIndex, 0, allowedWarningLevels.size() ) {
-						if ( allowedWarningLevels[allowedWarningLevelIndex] == warningLevel ) {	// TODO(DM): 14/06/2025: better to compare hashes here instead?
-							found = true;
-							break;
-						}
-					}
-
-					if ( !found ) {
-						error( "\"%s\" is not allowed as a warning level.\n", warningLevel.c_str() );
-						return 1;
-					}
-
-					args.add( warningLevel.c_str() );
-				}
-			}
-
-			For ( u64, ignoreWarningIndex, 0, context->config.ignore_warnings.size() ) {
-				args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
-			}
-		}
-
-		exitCode = RunProc( &args, NULL, procFlags );
-
-		if ( exitCode != 0 ) {
-			error( "Compile failed.\n" );
-			return exitCode;
-		}
-	}
-
-	// link
-	{
-		args.reset();
-
-		args.add( clangPath );
-
-		args.add( "-o" );
-		args.add( context->fullBinaryName );
-
-		args.add_range( &intermediateFiles );
-
-		exitCode = RunProc( &args, NULL, procFlags );
-
-		if ( exitCode != 0 ) {
-			error( "Link failed.\n" );
-			return exitCode;
-		}
-	}
-
-	return exitCode;
-}
-
-static s32 BuildDynamicLibrary( buildContext_t* context ) {
+static s32 BuildBinary( buildContext_t* context ) {
 	bool8 created = folder_create_if_it_doesnt_exist( tprintf( "%s%c%s", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH ) );
 	if ( !created ) {
 		errorCode_t errorCode = GetLastErrorCode();
@@ -667,7 +986,7 @@ static s32 BuildDynamicLibrary( buildContext_t* context ) {
 	Array<const char*> args;
 	args.reserve(
 		1 +	// clang
-		1 +	// -shared
+		1 +	// -shared/-lib
 		1 +	// -c
 		3 +	// -MD -MF <filename>
 		1 +	// std
@@ -800,168 +1119,41 @@ static s32 BuildDynamicLibrary( buildContext_t* context ) {
 	{
 		args.reset();
 
-		args.add( clangPath );
-		args.add( "-shared" );
+		// static libraries are just an archive of .o files
+		// so there is no real "link" step, instead the .o files are bundled together
+		// so there must be a separate codepath for "linking" a static library
+		if ( context->config.binary_type == BINARY_TYPE_STATIC_LIBRARY ) {
+			args.add( "lld-link" );
+			args.add( "/lib" );
 
-		args.add( "-o" );
-		args.add( context->fullBinaryName );
+			args.add( tprintf( "/OUT:%s", context->fullBinaryName ) );
 
-		args.add_range( &intermediateFiles );
-
-		For ( u32, libPathIndex, 0, context->config.additional_lib_paths.size() ) {
-			args.add( tprintf( "-L%s", context->config.additional_lib_paths[libPathIndex].c_str() ) );
-		}
-
-		For ( u32, libIndex, 0, context->config.additional_libs.size() ) {
-			args.add( tprintf( "-l%s", context->config.additional_libs[libIndex].c_str() ) );
-		}
-
-		exitCode = RunProc( &args, NULL, procFlags );
-
-		if ( exitCode != 0 ) {
-			error( "Link failed.\n" );
-			return exitCode;
-		}
-	}
-
-	return exitCode;
-}
-
-static s32 BuildStaticLibrary( buildContext_t* context ) {
-	s32 exitCode = 0;
-
-	Array<const char*> intermediateFiles;
-
-	Array<const char*> args;
-	args.reserve(
-		1 +	// clang
-		1 +	// -c
-		3 + // -MD -MF <filename>
-		1 +	// std
-		1 +	// symbols
-		1 +	// optimisation
-		1 +	// -o
-		1 +	// binary name
-		context->config.source_files.size() +
-		context->config.defines.size() +
-		context->config.additional_includes.size() +
-		context->config.additional_lib_paths.size() +
-		context->config.additional_libs.size() +
-		context->config.warning_levels.size() +
-		context->config.ignore_warnings.size()
-	);
-
-	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
-
-	// build .o files for all compilation units
-	For ( u64, sourceFileIndex, 0, context->config.source_files.size() ) {
-		const char* sourceFile = context->config.source_files[sourceFileIndex].c_str();
-
-		args.reset();
-
-		args.add( tprintf( "%s%cclang%cbin%cclang.exe", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR ) );
-
-		args.add( "-c" );
-
-		//if ( !context->config.name.empty() ) {
-		//	args.add( "-MD" );											// generate the dependency file
-		//	args.add( "-MF" );											// set the name of the dependency file to...
-		//	args.add( GetDepFilename( context, &context->config ) );	// ...this
-		//}
-
-		if ( string_ends_with( sourceFile, ".cpp" ) ) { // TODO(DM): 04/01/2025: IsSourceFile( sourceFile )
-			args.add( "-std=c++20" );
-		} else if ( string_ends_with( sourceFile, ".c" ) ) {
-			args.add( "-std=c99" );
+			args.add_range( &intermediateFiles );
 		} else {
-			assertf( false, "Something went really wrong.\n" );
-			QUIT_ERROR();
-		}
+			args.add( clangPath );
 
-		if ( !context->config.remove_symbols ) {
-			args.add( "-g" );
-		}
-
-		args.add( OptimizationLevelToString( context->config.optimization_level ) );
-
-		{
-			const char* sourceFileTrimmed = sourceFile;
-			sourceFileTrimmed = strrchr( sourceFileTrimmed, PATH_SEPARATOR ) + 1;
-
-			const char* intermediateFileName = tprintf( "%s%c%s.o", context->config.binary_folder.c_str(), PATH_SEPARATOR, sourceFileTrimmed );
+			if ( !context->config.remove_symbols ) {
+				args.add( "-g" );
+			}
 
 			args.add( "-o" );
-			args.add( intermediateFileName );
-			intermediateFiles.add( intermediateFileName );
-		}
 
-		args.add( sourceFile );
+			args.add( context->fullBinaryName );
 
-		For ( u32, defineIndex, 0, context->config.defines.size() ) {
-			args.add( tprintf( "-D%s", context->config.defines[defineIndex].c_str() ) );
-		}
+			if ( context->config.binary_type == BINARY_TYPE_DYNAMIC_LIBRARY ) {
+				args.add( "-shared" );
+			}
 
-		For ( u32, includeIndex, 0, context->config.additional_includes.size() ) {
-			args.add( tprintf( "-I%s", context->config.additional_includes[includeIndex].c_str() ) );
-		}
+			args.add_range( &intermediateFiles );
 
-		// must come before ignored warnings
-		if ( context->config.warnings_as_errors ) {
-			args.add( "-Werror" );
-		}
+			For ( u32, libPathIndex, 0, context->config.additional_lib_paths.size() ) {
+				args.add( tprintf( "-L%s", context->config.additional_lib_paths[libPathIndex].c_str() ) );
+			}
 
-		// warning levels
-		{
-			std::vector<std::string> allowedWarningLevels = {
-				"-Weverything",
-				"-Wall",
-				"-Wextra",
-				"-Wpedantic",
-			};
-
-			For ( u64, warningLevelIndex, 0, context->config.warning_levels.size() ) {
-				const std::string& warningLevel = context->config.warning_levels[warningLevelIndex];
-
-				bool8 found = false;
-
-				For ( u64, allowedWarningLevelIndex, 0, allowedWarningLevels.size() ) {
-					if ( allowedWarningLevels[allowedWarningLevelIndex] == warningLevel ) {
-						found = true;
-						break;
-					}
-				}
-
-				if ( !found ) {
-					error( "\"%s\" is not allowed as a warning level.\n", warningLevel.c_str() );
-					return 1;
-				}
-
-				args.add( warningLevel.c_str() );
+			For ( u32, libIndex, 0, context->config.additional_libs.size() ) {
+				args.add( tprintf( "-l%s", context->config.additional_libs[libIndex].c_str() ) );
 			}
 		}
-
-		For ( u64, ignoreWarningIndex, 0, context->config.ignore_warnings.size() ) {
-			args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
-		}
-
-		exitCode = RunProc( &args, NULL, procFlags );
-
-		if ( exitCode != 0 ) {
-			error( "Compile failed.\n" );
-			return exitCode;
-		}
-	}
-
-	// link step
-	{
-		args.reset();
-
-		args.add( "lld-link" );
-		args.add( "/lib" );
-
-		args.add( tprintf( "/OUT:%s", context->fullBinaryName ) );
-
-		args.add_range( intermediateFiles.data, intermediateFiles.count );
 
 		exitCode = RunProc( &args, NULL, procFlags );
 
@@ -995,17 +1187,23 @@ static void NukeFolderInternal_r( const char* folder, const bool8 verbose ) {
 		const char* fileFullPath = tprintf( "%s%c%s", folder, PATH_SEPARATOR, fileInfo.filename );
 
 		if ( fileInfo.is_directory ) {
-			if ( verbose ) printf( "Found folder %s\n", fileFullPath );
+			if ( verbose ) {
+				printf( "Found folder %s\n", fileFullPath );
+			}
 
 			NukeFolderInternal_r( fileFullPath, verbose );
 
-			if ( verbose ) printf( "Deleting folder %s\n", fileFullPath );
+			if ( verbose ) {
+				printf( "Deleting folder %s\n", fileFullPath );
+			}
 
 			if ( !folder_delete( fileFullPath ) ) {
 				error( "Nuke failed to delete folder \"%s\".\n", fileFullPath );
 			}
 		} else {
-			if ( verbose ) printf( "Deleting file %s\n", fileFullPath );
+			if ( verbose ) {
+				printf( "Deleting file %s\n", fileFullPath );
+			}
 
 			if ( !file_delete( fileFullPath ) ) {
 				error( "Nuke failed to delete folder \"%s\".\n", fileFullPath );
@@ -2064,6 +2262,7 @@ int main( int argc, char** argv ) {
 
 		userConfigBuildContext.config.source_files.push_back( buildInfoData.userConfigSourceFilename );
 
+		userConfigBuildContext.config.binary_type = BINARY_TYPE_DYNAMIC_LIBRARY;
 		userConfigBuildContext.config.binary_name = tprintf( "%s.dll", path_remove_path_from_file( path_remove_file_extension( buildInfoData.userConfigSourceFilename.c_str() ) ) );
 		userConfigBuildContext.config.binary_folder = cast( char*, context.dotBuilderFolder.data );
 		userConfigBuildContext.config.defines = {
@@ -2093,7 +2292,8 @@ int main( int argc, char** argv ) {
 			QUIT_ERROR();
 		}
 
-		exitCode = BuildDynamicLibrary( &userConfigBuildContext );
+		//exitCode = BuildDynamicLibrary( &userConfigBuildContext );
+		exitCode = BuildBinary( &userConfigBuildContext );
 
 		if ( exitCode != 0 ) {
 			error( "Pre-build failed!\n" );
@@ -2435,7 +2635,7 @@ int main( int argc, char** argv ) {
 			float64 buildTimeEnd = 0.0f;
 
 			// now do the actual build
-			switch ( config->binary_type ) {
+			/*switch ( config->binary_type ) {
 				case BINARY_TYPE_EXE:
 					buildTimeStart = time_ms();
 
@@ -2459,6 +2659,13 @@ int main( int argc, char** argv ) {
 
 					buildTimeEnd = time_ms();
 					break;
+			}*/
+			{
+				buildTimeStart = time_ms();
+
+				exitCode = BuildBinary( &context );
+
+				buildTimeEnd = time_ms();
 			}
 
 			if ( exitCode == 0 ) {

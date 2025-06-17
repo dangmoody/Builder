@@ -981,7 +981,7 @@ static s32 BuildBinary( buildContext_t* context ) {
 		fatal_error( "Failed to create intermediate binary folder.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
 	}
 
-	s32 exitCode = -1;
+	s32 exitCode = 0;
 
 	Array<const char*> args;
 	args.reserve(
@@ -1009,6 +1009,8 @@ static s32 BuildBinary( buildContext_t* context ) {
 	const char* clangPath = tprintf( "%s%cclang%cbin%cclang.exe", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
 
 	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
+
+	u32 numCompiledFiles = 0;
 
 	// compile
 	// make .o files for all compilation units
@@ -1113,10 +1115,12 @@ static s32 BuildBinary( buildContext_t* context ) {
 			error( "Compile failed.\n" );
 			return exitCode;
 		}
+
+		numCompiledFiles++;
 	}
 
 	// link
-	{
+	if ( numCompiledFiles > 0 ) {
 		args.reset();
 
 		// static libraries are just an archive of .o files

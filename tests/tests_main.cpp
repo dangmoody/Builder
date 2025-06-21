@@ -39,6 +39,7 @@ static s32 RunProc( Array<const char*>* args ) {
 }
 
 static void DoBuildInfoPreTest( const char* buildInfoFilename ) {
+	printf("Attempting to delete \"%s\"", buildInfoFilename);
 	if ( FileExists( buildInfoFilename ) ) {
 		file_delete( buildInfoFilename );
 	}
@@ -49,13 +50,13 @@ static void DoBuildInfoPreTest( const char* buildInfoFilename ) {
 static void DoBuildInfoPostTest( const char* testName, const char* buildSourceFile ) {
 	const char* buildSourceFileNoExtension = path_remove_file_extension( buildSourceFile );
 
-	TEMPER_CHECK_TRUE( folder_exists( tprintf( "tests\\%s\\.builder", testName ) ) );
-	TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests\\%s\\.builder\\%s.build_info", testName, buildSourceFileNoExtension ) ) );
-	TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests\\%s\\.builder\\%s.dll", testName, buildSourceFileNoExtension ) ) );
+	TEMPER_CHECK_TRUE( folder_exists( tprintf( "tests/%s/.builder", testName ) ) );
+	TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests/%s/.builder/%s.build_info", testName, buildSourceFileNoExtension ) ) );
+	TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests/%s/.builder/%s.dll", testName, buildSourceFileNoExtension ) ) );
 	//TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests\\%s\\.builder\\%s.exp", testName, buildSourceFileNoExtension ) ) );	// optional
-	TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests\\%s\\.builder\\%s.ilk", testName, buildSourceFileNoExtension ) ) );
+	TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests/%s/.builder/%s.ilk", testName, buildSourceFileNoExtension ) ) );
 	//TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests\\%s\\.builder\\%s.lib", testName, buildSourceFileNoExtension ) ) );	// optional
-	TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests\\%s\\.builder\\%s.pdb", testName, buildSourceFileNoExtension ) ) );
+	TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests/%s/.builder/%s.pdb", testName, buildSourceFileNoExtension ) ) );
 }
 
 TEMPER_TEST( Compile_Basic, TEMPER_FLAG_SHOULD_RUN ) {
@@ -271,6 +272,10 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 int main( int argc, char** argv ) {
 	core_init( MEM_KILOBYTES( 64 ) );
 	defer( core_shutdown() );
+
+	const char* MySecret = tprintf("Please \%s, with all \%d bullets", "shoot me", 6);
+	printf("%s\n", MySecret);
+	printf("Please %s, with all %d bullets\n", "shoot me", 6);
 
 	TEMPER_RUN( argc, argv );
 

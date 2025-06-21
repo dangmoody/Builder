@@ -30,6 +30,7 @@ SOFTWARE.
 
 #include <allocation_context.h>
 #include <core_types.h>
+#include <cstdlib>
 #include <memory_units.h>
 #include <debug.h>
 #include <typecast.inl>
@@ -38,18 +39,13 @@ SOFTWARE.
 #include <string.h>	// memcpy
 
 static void* aligned_malloc_internal( const size_t size, const MemoryAlignment alignment ) {
-	unused( size );
 	unused( alignment );
-
-	return NULL;
+	return malloc(size);
 }
 
 static void* aligned_realloc_internal( void* ptr, const size_t size, MemoryAlignment alignment ) {
-	unused( ptr );
-	unused( size );
 	unused( alignment );
-
-	return NULL;
+	return realloc(ptr, size);
 }
 
 /*
@@ -118,7 +114,7 @@ void malloc_allocator_free( void* allocator_data, void* ptr ){
 
 void malloc_allocator_reset( void* allocator_data ) {
 	assertf( !allocator_data, "Malloc_allocator is stateless" );
-	
+
 	unused( allocator_data );
 
 	fatal_error( "Generic allocators do not support resetting." );
@@ -135,7 +131,7 @@ void malloc_allocator_create_generic_interface( Allocator& out_interface ) {
 
 	out_interface.free = cast( allocator_free, &malloc_allocator_free );
 	out_interface.reset = cast( allocator_reset, &malloc_allocator_reset );
-	
+
 	// Malloc wrapper has no book keeping
 	out_interface.data = NULL;
 }

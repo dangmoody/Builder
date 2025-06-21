@@ -102,11 +102,11 @@ void fatal_error_internal( const char* file, const int line, const char* prefix,
 	int len = string_vsnprintf( NULL, 0, fmt, args );
 	len++;	// + 1 for null terminator
 
-	s64 total_length = len;
+	// u64 total_length = trunc_cast( u64, len );
 
-	char* error_msg = cast( char*, alloca( total_length ) );
-	string_vsnprintf( error_msg, total_length, fmt, args );
-	error_msg[total_length - 1] = 0;
+	char* error_msg = cast( char*, alloca( len ) );
+	string_vsnprintf( error_msg, len, fmt, args );
+	error_msg[len - 1] = 0;
 
 	assert_dialog_internal( file, line, prefix, error_msg );
 

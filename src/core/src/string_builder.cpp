@@ -74,10 +74,10 @@ static void string_builder_appendfv( StringBuilder* builder, const char* fmt, va
 	StringBuilderBuffer* buffer = cast( StringBuilderBuffer*, mem_alloc( sizeof( StringBuilderBuffer ) ) );
 	buffer->next = NULL;
 
-	int length = string_vsnprintf( NULL, 0, fmt, args );
+	s64 length = string_vsnprintf( NULL, 0, fmt, args );
 	length++;
 
-	buffer->data = cast( char*, mem_alloc( cast( u64, length ) * sizeof( char ) ) );
+	buffer->data = cast( char*, mem_alloc( trunc_cast( u64, length ) * sizeof( char ) ) );
 
 	string_vsnprintf( buffer->data, length, fmt, args );
 

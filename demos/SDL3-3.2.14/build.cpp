@@ -67,6 +67,7 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	// windows
 	// TODO(DM): 14/06/2025: the ONLY reason we cant just do "src/**/windows/*.c" here is because "hidapi/windows/hid.c" includes "hidapi_descriptor_reconstruct.c"
 	// so we have to include every windows subfolder manually whilst making sure to exclude only that one file
+	// also we apparently only want two source files from "src/thread/generic" so we cant glob that either
 	// very annoying!
 	BuildConfig config_sdl_windows = config_sdl_common;
 	config_sdl_windows.name = "sdl-windows";

@@ -70,35 +70,40 @@ enum doingBuildFrom_t {
 	DOING_BUILD_FROM_BUILD_INFO_FILE
 };
 
-#define INTERMEDIATE_PATH					"intermediate"
+#define INTERMEDIATE_PATH				"intermediate"
 
-#define SET_BUILDER_OPTIONS_FUNC_NAME		"set_builder_options"
-#define PRE_BUILD_FUNC_NAME					"on_pre_build"
-#define POST_BUILD_FUNC_NAME				"on_post_build"
+#define SET_BUILDER_OPTIONS_FUNC_NAME	"set_builder_options"
+#define PRE_BUILD_FUNC_NAME				"on_pre_build"
+#define POST_BUILD_FUNC_NAME			"on_post_build"
 
 #define QUIT_ERROR() \
 	debug_break(); \
 	return 1
 
-struct trackedSourceFile_t {
-	u64						lastWriteTime;
-	std::string				filename;
+struct builderVersion_t {
+	s32	major;
+	s32	minor;
+	s32	patch;
 };
 
-struct builderVersion_t {
-	s32								major;
-	s32								minor;
-	s32								patch;
+struct trackedSourceFile_t {
+	u64			lastWriteTime;
+	std::string	filename;
+};
+
+struct compilationUnit_t {
+	std::string							filename;
+	std::vector<trackedSourceFile_t>	includeDependencies;
 };
 
 struct buildInfoData_t {
-	std::vector<BuildConfig>						configs;
-	std::vector<std::vector<trackedSourceFile_t>>	trackedSourceFiles;
-	std::vector<u64>								binaryLastWriteTimes;
+	builderVersion_t							builderVersion;
+	std::vector<std::vector<compilationUnit_t>>	compilationUnits;	// [configIndex][compilationUnitIndex]
+	std::vector<BuildConfig>					configs;
+	std::vector<u64>							binaryLastWriteTimes;
 
-	std::string										userConfigSourceFilename;
-	std::string										userConfigDLLFilename;
-	builderVersion_t								builderVersion;
+	std::string									userConfigSourceFilename;
+	std::string									userConfigDLLFilename;
 };
 
 errorCode_t GetLastErrorCode() {
@@ -410,96 +415,96 @@ static s32 ShowUsage( const s32 exitCode ) {
 // only call this after compilation has finished successfully
 // parse the dependency file that we generated for every dependency thats in there
 // add those to a list - we need to put those in the .build_info file
-//static void ReadDependencyFile( const char* depFilename, std::vector<trackedSourceFile_t>& outBuildInfoFiles ) {
-//	char* depFileBuffer = NULL;
-//	bool8 read = file_read_entire( depFilename, &depFileBuffer );
-//
-//	if ( !read ) {
-//		fatal_error( "Failed to read \"%s\".  This should never happen!\n", depFilename );
-//		return;
-//	}
-//
-//	defer( file_free_buffer( &depFileBuffer ) );
-//
-//	outBuildInfoFiles.clear();
-//
-//	char* current = depFileBuffer;
-//
-//	// .d files start with the name of the binary followed by a colon
-//	// so skip past that first
-//	current = strchr( depFileBuffer, ':' );
-//	assert( current );
-//	current += 1;	// skip past the colon
-//	current += 1;	// skip past the following whitespace
-//
-//	// skip past the newline after
-//	current = strchr( current, '\n' );
-//	assert( current );
-//	current += 1;
-//
-//	while ( *current ) {
-//		// get start of the filename
-//		char* dependencyStart = current;
-//
-//		while ( *dependencyStart == ' ' ) {
-//			dependencyStart += 1;
-//		}
-//
-//		// get end of the filename
-//		char* dependencyEnd = NULL;
-//		// filenames are separated by either new line or space
-//		if ( !dependencyEnd ) dependencyEnd = strchr( dependencyStart, ' ' );
-//		if ( !dependencyEnd ) dependencyEnd = strchr( dependencyStart, '\n' );
-//		assert( dependencyEnd );
-//		// paths can have spaces in them, but they are preceded by a single backslash (\)
-//		// so if we find a space but it has a single backslash just before it then keep searching for a space
-//		while ( dependencyEnd && ( *( dependencyEnd - 1 ) == PATH_SEPARATOR ) ) {
-//			dependencyEnd = strchr( dependencyEnd + 1, ' ' );
-//		}
-//
-//		if ( !dependencyEnd ) {
-//			break;
-//		}
-//
-//		if ( *( dependencyEnd - 1 ) == '\r' ) {
-//			dependencyEnd -= 1;
-//		}
-//
-//		u64 dependencyFilenameLength = cast( u64, dependencyEnd ) - cast( u64, dependencyStart );
-//
-//		// get the substring we actually need
-//		std::string dependencyFilename( dependencyStart, dependencyFilenameLength );
-//		For ( u64, i, 0, dependencyFilename.size() ) {
-//			if ( dependencyFilename[i] == PATH_SEPARATOR && dependencyFilename[i + 1] == ' ' ) {
-//				dependencyFilename.erase( i, 1 );
-//			}
-//		}
-//
-//		// get the file timestamp
-//		FileInfo fileInfo;
-//		File foundFile = file_find_first( dependencyFilename.c_str(), &fileInfo );
-//		assert( foundFile.ptr != INVALID_HANDLE_VALUE );
-//		u64 lastWriteTime = fileInfo.last_write_time;
-//
-//		//printf( "Parsing dependency %s, last write time = %llu\n", dependencyFilename.c_str(), lastWriteTime );
-//
-//		outBuildInfoFiles.push_back( { lastWriteTime, dependencyFilename.c_str() } );
-//
-//		current = dependencyEnd + 1;
-//
-//		while ( *current == PATH_SEPARATOR ) {
-//			current += 1;
-//		}
-//
-//		if ( *current == '\r' ) {
-//			current += 1;
-//		}
-//
-//		if ( *current == '\n' ) {
-//			current += 1;
-//		}
-//	}
-//}
+static void ReadDependencyFile( const char* depFilename, std::vector<trackedSourceFile_t>& outBuildInfoFiles ) {
+	char* depFileBuffer = NULL;
+	bool8 read = file_read_entire( depFilename, &depFileBuffer );
+
+	if ( !read ) {
+		fatal_error( "Failed to read \"%s\".  This should never happen!\n", depFilename );
+		return;
+	}
+
+	defer( file_free_buffer( &depFileBuffer ) );
+
+	outBuildInfoFiles.clear();
+
+	char* current = depFileBuffer;
+
+	// .d files start with the name of the binary followed by a colon
+	// so skip past that first
+	current = strchr( depFileBuffer, ':' );
+	assert( current );
+	current += 1;	// skip past the colon
+	current += 1;	// skip past the following whitespace
+
+	// skip past the newline after
+	current = strchr( current, '\n' );
+	assert( current );
+	current += 1;
+
+	while ( *current ) {
+		// get start of the filename
+		char* dependencyStart = current;
+
+		while ( *dependencyStart == ' ' ) {
+			dependencyStart += 1;
+		}
+
+		// get end of the filename
+		char* dependencyEnd = NULL;
+		// filenames are separated by either new line or space
+		if ( !dependencyEnd ) dependencyEnd = strchr( dependencyStart, ' ' );
+		if ( !dependencyEnd ) dependencyEnd = strchr( dependencyStart, '\n' );
+		assert( dependencyEnd );
+		// paths can have spaces in them, but they are preceded by a single backslash (\)
+		// so if we find a space but it has a single backslash just before it then keep searching for a space
+		while ( dependencyEnd && ( *( dependencyEnd - 1 ) == PATH_SEPARATOR ) ) {
+			dependencyEnd = strchr( dependencyEnd + 1, ' ' );
+		}
+
+		if ( !dependencyEnd ) {
+			break;
+		}
+
+		if ( *( dependencyEnd - 1 ) == '\r' ) {
+			dependencyEnd -= 1;
+		}
+
+		u64 dependencyFilenameLength = cast( u64, dependencyEnd ) - cast( u64, dependencyStart );
+
+		// get the substring we actually need
+		std::string dependencyFilename( dependencyStart, dependencyFilenameLength );
+		For ( u64, i, 0, dependencyFilename.size() ) {
+			if ( dependencyFilename[i] == PATH_SEPARATOR && dependencyFilename[i + 1] == ' ' ) {
+				dependencyFilename.erase( i, 1 );
+			}
+		}
+
+		// get the file timestamp
+		FileInfo fileInfo;
+		File foundFile = file_find_first( dependencyFilename.c_str(), &fileInfo );
+		assert( foundFile.ptr != INVALID_HANDLE_VALUE );
+		u64 lastWriteTime = fileInfo.last_write_time;
+
+		//printf( "Parsing dependency %s, last write time = %llu\n", dependencyFilename.c_str(), lastWriteTime );
+
+		outBuildInfoFiles.push_back( { lastWriteTime, dependencyFilename.c_str() } );
+
+		current = dependencyEnd + 1;
+
+		while ( *current == PATH_SEPARATOR ) {
+			current += 1;
+		}
+
+		if ( *current == '\r' ) {
+			current += 1;
+		}
+
+		if ( *current == '\n' ) {
+			current += 1;
+		}
+	}
+}
 
 //static s32 BuildEXE( buildContext_t* context ) {
 //	s32 exitCode = -1;
@@ -1012,6 +1017,11 @@ static s32 BuildBinary( buildContext_t* context ) {
 
 	u32 numCompiledFiles = 0;
 
+	const char* intermediatePath = tprintf( "%s%c%s", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
+
+	u64 configNameHash = hash_string( context->config.name.c_str(), 0 );
+	u32 actualConfigIndex = hashmap_get_value( context->configIndices, configNameHash );
+
 	// compile
 	// make .o files for all compilation units
 	// TODO(DM): 14/06/2025: embarrassingly parallel
@@ -1019,15 +1029,59 @@ static s32 BuildBinary( buildContext_t* context ) {
 		const char* sourceFile = context->config.source_files[sourceFileIndex].c_str();
 		const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
 
-		const char* intermediateFilename = tprintf( "%s%c%s%c%s.o", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH, PATH_SEPARATOR, sourceFileNoPath );
+		u64 sourceFileNameHash = hash_string( sourceFile, 0 );
+		u32 sourceFileMapIndex = HASHMAP_INVALID_VALUE;
+
+		const char* intermediateFilename = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
 		intermediateFiles.add( intermediateFilename );
 
-		// only rebuild the .o file if the source file was written to more recently or it doesnt exist
-		{
+		const char* depFilename = tprintf( "%s%c%s.d", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
+
+		// only rebuild the .o file if the source file (or any of the files that source file depends on) was written to more recently or it doesnt exist
+		if ( context->buildInfoData ) {
+			bool8 anyFileIsNewer = false;
+
 			FileInfo intermediateFileInfo;
 			File intermediateFile = file_find_first( intermediateFilename, &intermediateFileInfo );
 
-			if ( ( intermediateFile.ptr != INVALID_HANDLE_VALUE ) && ( GetLastFileWriteTime( sourceFile ) <= intermediateFileInfo.last_write_time ) ) {
+			// if the .o file doesnt exist then assume we havent built this file yet
+			// if the .o file does exist but the source file was written to it more recently then we know we want to rebuild
+			if ( ( intermediateFile.ptr == INVALID_HANDLE_VALUE ) || ( GetLastFileWriteTime( sourceFile ) > intermediateFileInfo.last_write_time ) ) {
+				anyFileIsNewer = true;
+			}
+
+			// if the source file wasnt newer than the .o file then do the same timestamp check for all the files that this source file depends on
+			// just because the source file didnt change doesnt mean we dont want to recompile it
+			// what if one of the header files it relies on changed? we still want to recompile that file!
+			{
+				// try to find this source file in the pre-existing .build_info data
+				sourceFileMapIndex = hashmap_get_value( context->sourceFileIndices, sourceFileNameHash );
+
+				if ( sourceFileMapIndex == HASHMAP_INVALID_VALUE ) {
+					// cant find it
+					// assume its a new file and build it
+					anyFileIsNewer = true;
+
+					sourceFileMapIndex = trunc_cast( u32, context->buildInfoData->compilationUnits[actualConfigIndex].size() );
+
+					hashmap_set_value( context->sourceFileIndices, sourceFileNameHash, sourceFileMapIndex );
+				} else {
+					// found the file
+					// get the files this source file depends on and check if any of those are newer than the .o file
+					const std::vector<trackedSourceFile_t>& includeDependencies = context->buildInfoData->compilationUnits[actualConfigIndex][sourceFileIndex].includeDependencies;
+
+					For ( u64, depIndex, 0, includeDependencies.size() ) {
+						if ( includeDependencies[depIndex].lastWriteTime > intermediateFileInfo.last_write_time ) {
+							anyFileIsNewer = true;
+							break;
+						}
+					}
+				}
+			}
+
+			// the .o file exists and none of the files it relies on have been changed more recently
+			// no need to rebuild
+			if ( !anyFileIsNewer ) {
 				continue;
 			}
 		}
@@ -1037,13 +1091,11 @@ static s32 BuildBinary( buildContext_t* context ) {
 		args.add( clangPath );
 		args.add( "-c" );
 
-		//if ( !context->config.name.empty() ) {
-		//	const char* depFilename = tprintf( "%s%c%s.d", context->dotBuilderFolder.data, PATH_SEPARATOR, sourceFileNoPath );
-
-		//	args.add( "-MD" );			// generate the dependency file
-		//	args.add( "-MF" );			// set the name of the dependency file to...
-		//	args.add( depFilename );	// ...this
-		//}
+		if ( !context->config.name.empty() ) {
+			args.add( "-MMD" );			// generate the dependency file
+			args.add( "-MF" );			// set the name of the dependency file to...
+			args.add( depFilename );	// ...this
+		}
 
 		if ( string_ends_with( sourceFile, ".cpp" ) || string_ends_with( sourceFile, ".cxx" ) || string_ends_with( sourceFile, ".cc" ) ) {
 			args.add( "-std=c++20" );
@@ -1117,6 +1169,11 @@ static s32 BuildBinary( buildContext_t* context ) {
 		}
 
 		numCompiledFiles++;
+
+		// put the include dependencies from the .d file into our .build_info data
+		if ( context->buildInfoData ) {
+			ReadDependencyFile( depFilename, context->buildInfoData->compilationUnits[actualConfigIndex][sourceFileIndex].includeDependencies );
+		}
 	}
 
 	// link
@@ -1141,7 +1198,6 @@ static s32 BuildBinary( buildContext_t* context ) {
 			}
 
 			args.add( "-o" );
-
 			args.add( context->fullBinaryName );
 
 			if ( context->config.binary_type == BINARY_TYPE_DYNAMIC_LIBRARY ) {
@@ -1695,7 +1751,7 @@ static bool8 BuildInfo_Read( const char* buildInfoFilename, buildInfoData_t* out
 		u64 totalNumConfigs = ByteBuffer_Read_U64( &buffer );
 
 		outBuildInfoData->configs.resize( totalNumConfigs );
-		outBuildInfoData->trackedSourceFiles.resize( totalNumConfigs );
+		outBuildInfoData->compilationUnits.resize( totalNumConfigs );
 		outBuildInfoData->binaryLastWriteTimes.resize( totalNumConfigs );
 
 		For ( u64, configIndex, 0, outBuildInfoData->configs.size() ) {
@@ -1736,23 +1792,33 @@ static bool8 BuildInfo_Read( const char* buildInfoFilename, buildInfoData_t* out
 				config->warnings_as_errors = ByteBuffer_Read_Bool8( &buffer );
 			}
 
-			// parse tracked source files
+			// parse all compilation units
 			{
-				ByteBuffer_SkipReadPast( &buffer, '\n' );
+				std::vector<compilationUnit_t>& outCompilationUnits = outBuildInfoData->compilationUnits[configIndex];
 
-				u64 count = ByteBuffer_Read_U64( &buffer );
-				std::vector<trackedSourceFile_t>& trackedSourceFiles = outBuildInfoData->trackedSourceFiles[configIndex];
-				trackedSourceFiles.reserve( count );
+				ByteBuffer_SkipReadPast( &buffer, '\n' );	// "compilation_units", skip
 
-				For ( u64, fileIndex, 0, count ) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wreorder-init-list"
-					trackedSourceFile_t buildInfoFile = {};
-					buildInfoFile.filename = ByteBuffer_Read_CString( &buffer );
-					buildInfoFile.lastWriteTime = ByteBuffer_Read_U64( &buffer );
-#pragma clang diagnostic pop
+				u64 numCompilationUnits = ByteBuffer_Read_U64( &buffer );
+				outCompilationUnits.resize( numCompilationUnits );
 
-					trackedSourceFiles.push_back( buildInfoFile );
+				For ( u64, compilationUnitIndex, 0, outCompilationUnits.size() ) {
+					compilationUnit_t* outCompilationUnit = &outCompilationUnits[compilationUnitIndex];
+
+					std::vector<trackedSourceFile_t>& outIncludeDependencies = outCompilationUnit->includeDependencies;
+
+					outCompilationUnit->filename = ByteBuffer_Read_CString( &buffer );
+
+					ByteBuffer_SkipReadPast( &buffer, '\n' );	// "include_dependencies", skip
+
+					u64 numIncludeDependencies = ByteBuffer_Read_U64( &buffer );
+					outIncludeDependencies.reserve( numIncludeDependencies );
+
+					For ( u64, includeDependencyIndex, 0, outIncludeDependencies.size() ) {
+						trackedSourceFile_t* includeDependency = &outIncludeDependencies[includeDependencyIndex];
+
+						includeDependency->filename = ByteBuffer_Read_CString( &buffer );
+						includeDependency->lastWriteTime = ByteBuffer_Read_U64( &buffer );
+					}
 				}
 			}
 
@@ -1863,22 +1929,35 @@ static bool8 BuildInfo_Write( const buildContext_t* context, const buildInfoData
 		ByteBuffer_Write_Bool8( &buffer, config->remove_file_extension );
 		ByteBuffer_Write_Bool8( &buffer, config->warnings_as_errors );
 
-		// serialize all included files and their last write time
+		// serialize all the compilation units
+		// for each compilation unit, serialize all the included files it depends on and when their last write time
 		{
-			const std::vector<trackedSourceFile_t>& trackedSourceFiles = buildInfoData->trackedSourceFiles[configIndex];
+			const std::vector<compilationUnit_t>& compilationUnits = buildInfoData->compilationUnits[configIndex];
 
-			ByteBuffer_Write_CString( &buffer, "tracked_source_files\n" );
-			ByteBuffer_Write_U64( &buffer, trackedSourceFiles.size() );
+			ByteBuffer_Write_CString( &buffer, "compilation_units\n" );
+			ByteBuffer_Write_U64( &buffer, compilationUnits.size() );
 
-			For ( u64, buildInfoFileIndex, 0, trackedSourceFiles.size() ) {
-				const trackedSourceFile_t* trackedSourceFile = &trackedSourceFiles[buildInfoFileIndex];
+			For ( u64, compilationUnitIndex, 0, compilationUnits.size() ) {
+				const compilationUnit_t* compilationUnit = &compilationUnits[compilationUnitIndex];
 
-				// dont write full path of the filename
-				// the path to the source file can change depending on whether we are building from visual studio or the command line
-				// so just write the filename relative to the source folder and let Builder reconstruct the appropriate path as and when it needs to
-				ByteBuffer_Write_CString( &buffer, trackedSourceFile->filename.c_str() );
+				const std::vector<trackedSourceFile_t>& includeDependencies = compilationUnit->includeDependencies;
+
+				ByteBuffer_Write_CString( &buffer, compilationUnit->filename.c_str() );
 				ByteBuffer_Write_CString( &buffer, "\n" );
-				ByteBuffer_Write_U64( &buffer, trackedSourceFile->lastWriteTime );
+
+				ByteBuffer_Write_CString( &buffer, "include_dependencies\n" );
+				ByteBuffer_Write_U64( &buffer, includeDependencies.size() );
+
+				For ( u64, dependencyIndex, 0, includeDependencies.size() ) {
+					const trackedSourceFile_t& includeDependency = includeDependencies[dependencyIndex];
+
+					// dont write full path of the filename
+					// the path to the source file can change depending on whether we are building from visual studio or the command line
+					// so just write the filename relative to the source folder and let Builder reconstruct the appropriate path as and when it needs to
+					ByteBuffer_Write_CString( &buffer, includeDependency.filename.c_str() );
+					ByteBuffer_Write_CString( &buffer, "\n" );
+					ByteBuffer_Write_U64( &buffer, includeDependency.lastWriteTime );
+				}
 			}
 		}
 
@@ -2365,7 +2444,7 @@ int main( int argc, char** argv ) {
 					}
 
 					buildInfoData.binaryLastWriteTimes.resize( options.configs.size() );
-					buildInfoData.trackedSourceFiles.resize( options.configs.size() );
+					buildInfoData.compilationUnits.resize( options.configs.size() );
 
 					printf( "Generating Visual Studio files\n" );
 
@@ -2387,6 +2466,12 @@ int main( int argc, char** argv ) {
 		}
 	}
 
+	if ( readBuildInfo ) {
+		context.sourceFileIndices = hashmap_create( trunc_cast( u32, buildInfoData.compilationUnits.size() ) );
+	} else {
+		context.sourceFileIndices = hashmap_create( 1 );
+	}
+
 	bool8 shouldWriteBuildInfo = true;
 
 	if ( ( context.flags & BUILD_CONTEXT_FLAG_GENERATING_VISUAL_STUDIO_SOLUTION ) == 0 ) {
@@ -2403,7 +2488,7 @@ int main( int argc, char** argv ) {
 		}
 
 		buildInfoData.binaryLastWriteTimes.resize( buildInfoData.configs.size() );
-		buildInfoData.trackedSourceFiles.resize( buildInfoData.configs.size() );
+		//buildInfoData.sourceFileDependencies.resize( buildInfoData.configs.size() );
 
 		// if only one config was added (either by user or as a default build) then we know we just want that one, no config command line arg is needed
 		if ( buildInfoData.configs.size() == 1 ) {
@@ -2490,9 +2575,6 @@ int main( int argc, char** argv ) {
 
 		For ( u64, configToBuildIndex, 0, configsToBuild.size() ) {
 			BuildConfig* config = &configsToBuild[configToBuildIndex];
-
-			u64 configNameHash = hash_string( config->name.c_str(), 0 );
-			u32 actualConfigIndex = hashmap_get_value( context.configIndices, configNameHash );
 
 			assert( !config->binary_name.empty() );
 
@@ -2665,6 +2747,10 @@ int main( int argc, char** argv ) {
 					break;
 			}*/
 			{
+				if ( readBuildInfo ) {
+					context.buildInfoData = &buildInfoData;
+				}
+
 				buildTimeStart = time_ms();
 
 				exitCode = BuildBinary( &context );

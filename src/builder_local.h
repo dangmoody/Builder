@@ -72,6 +72,10 @@ struct buildContext_t {
 
 	Hashmap*			configIndices;
 
+	Hashmap*			sourceFileIndices;
+
+	buildInfoData_t*	buildInfoData;
+
 	// TODO(DM): 10/08/2024: does this want to be inside BuilderOptions?
 	// it would give users more control over their build
 	buildContextFlags_t	flags;

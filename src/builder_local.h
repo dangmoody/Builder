@@ -40,6 +40,7 @@ SOFTWARE.
 #endif
 
 #include <vector>
+//#include <string>
 
 #define ARG_HELP_SHORT		"-h"
 #define ARG_HELP_LONG		"--help"
@@ -67,14 +68,17 @@ enum buildContextFlagBits_t {
 };
 typedef u32 buildContextFlags_t;
 
+struct trackedSourceFile_t {
+	//u64			lastWriteTime;
+	std::string	filename;
+};
+
 struct buildContext_t {
 	BuildConfig			config;
 
 	Hashmap*			configIndices;
 
-	Hashmap*			sourceFileIndices;
-
-	buildInfoData_t*	buildInfoData;
+	std::vector<std::vector<trackedSourceFile_t>>	includeDependencies;
 
 	// TODO(DM): 10/08/2024: does this want to be inside BuilderOptions?
 	// it would give users more control over their build

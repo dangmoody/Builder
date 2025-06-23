@@ -65,6 +65,12 @@ enum {
 	BUILDER_VERSION_PATCH	= 0,
 };
 
+enum buildResult_t {
+	BUILD_RESULT_SUCCESS	= 0,
+	BUILD_RESULT_FAILED,
+	BUILD_RESULT_SKIPPED
+};
+
 enum doingBuildFrom_t {
 	DOING_BUILD_FROM_SOURCE_FILE	= 0,
 	DOING_BUILD_FROM_BUILD_INFO_FILE
@@ -86,24 +92,12 @@ struct builderVersion_t {
 	s32	patch;
 };
 
-struct trackedSourceFile_t {
-	u64			lastWriteTime;
-	std::string	filename;
-};
-
-struct compilationUnit_t {
-	std::string							filename;
-	std::vector<trackedSourceFile_t>	includeDependencies;
-};
-
 struct buildInfoData_t {
 	builderVersion_t							builderVersion;
-	std::vector<std::vector<compilationUnit_t>>	compilationUnits;	// [configIndex][compilationUnitIndex]
 	std::vector<BuildConfig>					configs;
-	std::vector<u64>							binaryLastWriteTimes;
-
 	std::string									userConfigSourceFilename;
 	std::string									userConfigDLLFilename;
+	std::vector<std::vector<std::vector<trackedSourceFile_t>>>	includeDependencies;
 };
 
 errorCode_t GetLastErrorCode() {
@@ -403,15 +397,6 @@ static s32 ShowUsage( const s32 exitCode ) {
 	return exitCode;
 }
 
-//static const char* GetDepFilename( const buildContext_t* context, const BuildConfig* config ) {
-//	assert( context );
-//	assert( config );
-//
-//	const char* configNameNoPath = path_remove_path_from_file( config->name.c_str() );
-//
-//	return tprintf( "%s%c%s.d", context->dotBuilderFolder.data, PATH_SEPARATOR, configNameNoPath );
-//}
-
 // only call this after compilation has finished successfully
 // parse the dependency file that we generated for every dependency thats in there
 // add those to a list - we need to put those in the .build_info file
@@ -488,7 +473,7 @@ static void ReadDependencyFile( const char* depFilename, std::vector<trackedSour
 
 		//printf( "Parsing dependency %s, last write time = %llu\n", dependencyFilename.c_str(), lastWriteTime );
 
-		outBuildInfoFiles.push_back( { lastWriteTime, dependencyFilename.c_str() } );
+		outBuildInfoFiles.push_back( { /*lastWriteTime,*/ dependencyFilename.c_str() } );
 
 		current = dependencyEnd + 1;
 
@@ -506,484 +491,19 @@ static void ReadDependencyFile( const char* depFilename, std::vector<trackedSour
 	}
 }
 
-//static s32 BuildEXE( buildContext_t* context ) {
-//	s32 exitCode = -1;
-//
-//	Array<const char*> args;
-//	args.reserve(
-//		1 +	// clang
-//		3 + // -MD -MF <filename>
-//		1 +	// std
-//		1 +	// symbols
-//		1 +	// optimisation
-//		1 +	// -o
-//		1 +	// intermediate filename
-//		1 +	// source file
-//		context->config.defines.size() +
-//		context->config.additional_includes.size() +
-//		context->config.additional_lib_paths.size() +
-//		context->config.additional_libs.size() +
-//		context->config.warning_levels.size() +
-//		context->config.ignore_warnings.size()
-//	);
-//
-//	Array<const char*> intermediateFiles;
-//	intermediateFiles.reserve( context->config.source_files.size() );
-//
-//	const char* clangPath = tprintf( "%s%cclang%cbin%cclang.exe", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
-//
-//	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
-//
-//	// compile
-//	{
-//		For ( u64, sourceFileIndex, 0, context->config.source_files.size() ) {
-//			const char* sourceFile = context->config.source_files[sourceFileIndex].c_str();
-//
-//			args.reset();
-//
-//			args.add( clangPath );
-//
-//			if ( !context->config.name.empty() ) {
-//				args.add( "-MD" );																				// generate the dependency file
-//				args.add( "-MF" );																				// set the name of the dependency file to...
-//				args.add( tprintf( "%s%c%s.d", context->dotBuilderFolder.data, PATH_SEPARATOR, sourceFile ) );	// ...this
-//			}
-//
-//			if ( string_ends_with( sourceFile, ".cpp" ) || string_ends_with( sourceFile, ".cxx" ) || string_ends_with( sourceFile, ".cc" ) ) {
-//				args.add( "-std=c++20" );
-//			} else {
-//				args.add( "-std=c99" );
-//			}
-//
-//			if ( !context->config.remove_symbols ) {
-//				args.add( "-g" );
-//			}
-//
-//			args.add( OptimizationLevelToString( context->config.optimization_level ) );
-//
-//			{
-//				const char* sourceFileTrimmed = sourceFile;
-//				sourceFileTrimmed = strrchr( sourceFileTrimmed, PATH_SEPARATOR ) + 1;
-//
-//				const char* intermediateFileName = tprintf( "%s%c%s.o", context->config.binary_folder.c_str(), PATH_SEPARATOR, sourceFileTrimmed );
-//
-//				args.add( "-o" );
-//				args.add( intermediateFileName );
-//				intermediateFiles.add( intermediateFileName );
-//			}
-//
-//			args.add( sourceFile );
-//
-//			For ( u32, defineIndex, 0, context->config.defines.size() ) {
-//				args.add( tprintf( "-D%s", context->config.defines[defineIndex].c_str() ) );
-//			}
-//
-//			For ( u32, includeIndex, 0, context->config.additional_includes.size() ) {
-//				args.add( tprintf( "-I%s", context->config.additional_includes[includeIndex].c_str() ) );
-//			}
-//
-//			For ( u32, libPathIndex, 0, context->config.additional_lib_paths.size() ) {
-//				args.add( tprintf( "-L%s", context->config.additional_lib_paths[libPathIndex].c_str() ) );
-//			}
-//
-//			For ( u32, libIndex, 0, context->config.additional_libs.size() ) {
-//				args.add( tprintf( "-l%s", context->config.additional_libs[libIndex].c_str() ) );
-//			}
-//
-//			// must come before ignored warnings
-//			if ( context->config.warnings_as_errors ) {
-//				args.add( "-Werror" );
-//			}
-//
-//			// warning levels
-//			{
-//				std::vector<std::string> allowedWarningLevels = {
-//					"-Weverything",
-//					"-Wall",
-//					"-Wextra",
-//					"-Wpedantic",
-//				};
-//
-//				For ( u64, warningLevelIndex, 0, context->config.warning_levels.size() ) {
-//					const std::string& warningLevel = context->config.warning_levels[warningLevelIndex];
-//
-//					bool8 found = false;
-//
-//					For ( u64, allowedWarningLevelIndex, 0, allowedWarningLevels.size() ) {
-//						if ( allowedWarningLevels[allowedWarningLevelIndex] == warningLevel ) {	// TODO(DM): 14/06/2025: better to compare hashes here instead?
-//							found = true;
-//							break;
-//						}
-//					}
-//
-//					if ( !found ) {
-//						error( "\"%s\" is not allowed as a warning level.\n", warningLevel.c_str() );
-//						return 1;
-//					}
-//
-//					args.add( warningLevel.c_str() );
-//				}
-//			}
-//
-//			For ( u64, ignoreWarningIndex, 0, context->config.ignore_warnings.size() ) {
-//				args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
-//			}
-//		}
-//
-//		exitCode = RunProc( &args, NULL, procFlags );
-//
-//		if ( exitCode != 0 ) {
-//			error( "Compile failed.\n" );
-//			return exitCode;
-//		}
-//	}
-//
-//	// link
-//	{
-//		args.reset();
-//
-//		args.add( clangPath );
-//
-//		args.add( "-o" );
-//		args.add( context->fullBinaryName );
-//
-//		args.add_range( &intermediateFiles );
-//
-//		exitCode = RunProc( &args, NULL, procFlags );
-//
-//		if ( exitCode != 0 ) {
-//			error( "Link failed.\n" );
-//			return exitCode;
-//		}
-//	}
-//
-//	return exitCode;
-//}
-//
-//static s32 BuildDynamicLibrary( buildContext_t* context ) {
-//	bool8 created = folder_create_if_it_doesnt_exist( tprintf( "%s%c%s", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH ) );
-//	if ( !created ) {
-//		errorCode_t errorCode = GetLastErrorCode();
-//		fatal_error( "Failed to create intermediate binary folder.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
-//	}
-//
-//	s32 exitCode = -1;
-//
-//	Array<const char*> args;
-//	args.reserve(
-//		1 +	// clang
-//		1 +	// -shared
-//		1 +	// -c
-//		3 +	// -MD -MF <filename>
-//		1 +	// std
-//		1 +	// symbols
-//		1 +	// optimisation
-//		1 +	// -o
-//		1 +	// intermediate filename
-//		1 +	// source file
-//		context->config.defines.size() +
-//		context->config.additional_includes.size() +
-//		context->config.additional_lib_paths.size() +
-//		context->config.additional_libs.size() +
-//		context->config.warning_levels.size() +
-//		context->config.ignore_warnings.size()
-//	);
-//
-//	Array<const char*> intermediateFiles;
-//	intermediateFiles.reserve( context->config.source_files.size() );
-//
-//	const char* clangPath = tprintf( "%s%cclang%cbin%cclang.exe", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
-//
-//	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
-//
-//	// compile
-//	// make .o files for all compilation units
-//	// TODO(DM): 14/06/2025: embarrassingly parallel
-//	For ( u64, sourceFileIndex, 0, context->config.source_files.size() ) {
-//		const char* sourceFile = context->config.source_files[sourceFileIndex].c_str();
-//		const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
-//
-//		const char* intermediateFilename = tprintf( "%s%c%s%c%s.o", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH, PATH_SEPARATOR, sourceFileNoPath );
-//		intermediateFiles.add( intermediateFilename );
-//
-//		// only rebuild the .o file if the source file was written to more recently or it doesnt exist
-//		{
-//			FileInfo intermediateFileInfo;
-//			File intermediateFile = file_find_first( intermediateFilename, &intermediateFileInfo );
-//
-//			if ( ( intermediateFile.ptr != INVALID_HANDLE_VALUE ) && ( GetLastFileWriteTime( sourceFile ) <= intermediateFileInfo.last_write_time ) ) {
-//				continue;
-//			}
-//		}
-//
-//		args.reset();
-//
-//		args.add( clangPath );
-//		args.add( "-c" );
-//
-//		//if ( !context->config.name.empty() ) {
-//		//	const char* depFilename = tprintf( "%s%c%s.d", context->dotBuilderFolder.data, PATH_SEPARATOR, sourceFileNoPath );
-//
-//		//	args.add( "-MD" );			// generate the dependency file
-//		//	args.add( "-MF" );			// set the name of the dependency file to...
-//		//	args.add( depFilename );	// ...this
-//		//}
-//
-//		if ( string_ends_with( sourceFile, ".cpp" ) || string_ends_with( sourceFile, ".cxx" ) || string_ends_with( sourceFile, ".cc" ) ) {
-//			args.add( "-std=c++20" );
-//		} else if ( string_ends_with( sourceFile, ".c" ) ) {
-//			args.add( "-std=c99" );
-//		}
-//
-//		if ( !context->config.remove_symbols ) {
-//			args.add( "-g" );
-//		}
-//
-//		args.add( OptimizationLevelToString( context->config.optimization_level ) );
-//
-//		args.add( "-o" );
-//		args.add( intermediateFilename );
-//
-//		args.add( sourceFile );
-//
-//		For ( u32, defineIndex, 0, context->config.defines.size() ) {
-//			args.add( tprintf( "-D%s", context->config.defines[defineIndex].c_str() ) );
-//		}
-//
-//		For ( u32, includeIndex, 0, context->config.additional_includes.size() ) {
-//			args.add( tprintf( "-I%s", context->config.additional_includes[includeIndex].c_str() ) );
-//		}
-//
-//		// must come before ignored warnings
-//		if ( context->config.warnings_as_errors ) {
-//			args.add( "-Werror" );
-//		}
-//
-//		// warning levels
-//		{
-//			std::vector<std::string> allowedWarningLevels = {
-//				"-Weverything",
-//				"-Wall",
-//				"-Wextra",
-//				"-Wpedantic",
-//			};
-//
-//			For ( u64, warningLevelIndex, 0, context->config.warning_levels.size() ) {
-//				const std::string& warningLevel = context->config.warning_levels[warningLevelIndex];
-//
-//				bool8 found = false;
-//
-//				For ( u64, allowedWarningLevelIndex, 0, allowedWarningLevels.size() ) {
-//					if ( allowedWarningLevels[allowedWarningLevelIndex] == warningLevel ) {	// TODO(DM): 14/06/2025: better to compare hashes here instead?
-//						found = true;
-//						break;
-//					}
-//				}
-//
-//				if ( !found ) {
-//					error( "\"%s\" is not allowed as a warning level.\n", warningLevel.c_str() );
-//					return 1;
-//				}
-//
-//				args.add( warningLevel.c_str() );
-//			}
-//		}
-//
-//		For ( u64, ignoreWarningIndex, 0, context->config.ignore_warnings.size() ) {
-//			args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
-//		}
-//
-//		exitCode = RunProc( &args, NULL, procFlags );
-//
-//		if ( exitCode != 0 ) {
-//			error( "Compile failed.\n" );
-//			return exitCode;
-//		}
-//	}
-//
-//	// link
-//	{
-//		args.reset();
-//
-//		args.add( clangPath );
-//		args.add( "-shared" );
-//
-//		args.add( "-o" );
-//		args.add( context->fullBinaryName );
-//
-//		args.add_range( &intermediateFiles );
-//
-//		For ( u32, libPathIndex, 0, context->config.additional_lib_paths.size() ) {
-//			args.add( tprintf( "-L%s", context->config.additional_lib_paths[libPathIndex].c_str() ) );
-//		}
-//
-//		For ( u32, libIndex, 0, context->config.additional_libs.size() ) {
-//			args.add( tprintf( "-l%s", context->config.additional_libs[libIndex].c_str() ) );
-//		}
-//
-//		exitCode = RunProc( &args, NULL, procFlags );
-//
-//		if ( exitCode != 0 ) {
-//			error( "Link failed.\n" );
-//			return exitCode;
-//		}
-//	}
-//
-//	return exitCode;
-//}
-//
-//static s32 BuildStaticLibrary( buildContext_t* context ) {
-//	s32 exitCode = 0;
-//
-//	Array<const char*> intermediateFiles;
-//
-//	Array<const char*> args;
-//	args.reserve(
-//		1 +	// clang
-//		1 +	// -c
-//		3 + // -MD -MF <filename>
-//		1 +	// std
-//		1 +	// symbols
-//		1 +	// optimisation
-//		1 +	// -o
-//		1 +	// binary name
-//		context->config.source_files.size() +
-//		context->config.defines.size() +
-//		context->config.additional_includes.size() +
-//		context->config.additional_lib_paths.size() +
-//		context->config.additional_libs.size() +
-//		context->config.warning_levels.size() +
-//		context->config.ignore_warnings.size()
-//	);
-//
-//	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
-//
-//	// build .o files for all compilation units
-//	For ( u64, sourceFileIndex, 0, context->config.source_files.size() ) {
-//		const char* sourceFile = context->config.source_files[sourceFileIndex].c_str();
-//
-//		args.reset();
-//
-//		args.add( tprintf( "%s%cclang%cbin%cclang.exe", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR ) );
-//
-//		args.add( "-c" );
-//
-//		//if ( !context->config.name.empty() ) {
-//		//	args.add( "-MD" );											// generate the dependency file
-//		//	args.add( "-MF" );											// set the name of the dependency file to...
-//		//	args.add( GetDepFilename( context, &context->config ) );	// ...this
-//		//}
-//
-//		if ( string_ends_with( sourceFile, ".cpp" ) ) { // TODO(DM): 04/01/2025: IsSourceFile( sourceFile )
-//			args.add( "-std=c++20" );
-//		} else if ( string_ends_with( sourceFile, ".c" ) ) {
-//			args.add( "-std=c99" );
-//		} else {
-//			assertf( false, "Something went really wrong.\n" );
-//			QUIT_ERROR();
-//		}
-//
-//		if ( !context->config.remove_symbols ) {
-//			args.add( "-g" );
-//		}
-//
-//		args.add( OptimizationLevelToString( context->config.optimization_level ) );
-//
-//		{
-//			const char* sourceFileTrimmed = sourceFile;
-//			sourceFileTrimmed = strrchr( sourceFileTrimmed, PATH_SEPARATOR ) + 1;
-//
-//			const char* intermediateFileName = tprintf( "%s%c%s.o", context->config.binary_folder.c_str(), PATH_SEPARATOR, sourceFileTrimmed );
-//
-//			args.add( "-o" );
-//			args.add( intermediateFileName );
-//			intermediateFiles.add( intermediateFileName );
-//		}
-//
-//		args.add( sourceFile );
-//
-//		For ( u32, defineIndex, 0, context->config.defines.size() ) {
-//			args.add( tprintf( "-D%s", context->config.defines[defineIndex].c_str() ) );
-//		}
-//
-//		For ( u32, includeIndex, 0, context->config.additional_includes.size() ) {
-//			args.add( tprintf( "-I%s", context->config.additional_includes[includeIndex].c_str() ) );
-//		}
-//
-//		// must come before ignored warnings
-//		if ( context->config.warnings_as_errors ) {
-//			args.add( "-Werror" );
-//		}
-//
-//		// warning levels
-//		{
-//			std::vector<std::string> allowedWarningLevels = {
-//				"-Weverything",
-//				"-Wall",
-//				"-Wextra",
-//				"-Wpedantic",
-//			};
-//
-//			For ( u64, warningLevelIndex, 0, context->config.warning_levels.size() ) {
-//				const std::string& warningLevel = context->config.warning_levels[warningLevelIndex];
-//
-//				bool8 found = false;
-//
-//				For ( u64, allowedWarningLevelIndex, 0, allowedWarningLevels.size() ) {
-//					if ( allowedWarningLevels[allowedWarningLevelIndex] == warningLevel ) {
-//						found = true;
-//						break;
-//					}
-//				}
-//
-//				if ( !found ) {
-//					error( "\"%s\" is not allowed as a warning level.\n", warningLevel.c_str() );
-//					return 1;
-//				}
-//
-//				args.add( warningLevel.c_str() );
-//			}
-//		}
-//
-//		For ( u64, ignoreWarningIndex, 0, context->config.ignore_warnings.size() ) {
-//			args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
-//		}
-//
-//		exitCode = RunProc( &args, NULL, procFlags );
-//
-//		if ( exitCode != 0 ) {
-//			error( "Compile failed.\n" );
-//			return exitCode;
-//		}
-//	}
-//
-//	// link step
-//	{
-//		args.reset();
-//
-//		args.add( "lld-link" );
-//		args.add( "/lib" );
-//
-//		args.add( tprintf( "/OUT:%s", context->fullBinaryName ) );
-//
-//		args.add_range( intermediateFiles.data, intermediateFiles.count );
-//
-//		exitCode = RunProc( &args, NULL, procFlags );
-//
-//		if ( exitCode != 0 ) {
-//			error( "Link failed.\n" );
-//			return exitCode;
-//		}
-//	}
-//
-//	return exitCode;
-//}
+static buildResult_t BuildBinary( buildContext_t* context ) {
+	// create binary folder
+	if ( !folder_create_if_it_doesnt_exist( context->config.binary_folder.c_str() ) ) {
+		errorCode_t errorCode = GetLastErrorCode();
+		fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".  Error code: " ERROR_CODE_FORMAT "\n", SET_BUILDER_OPTIONS_FUNC_NAME, context->config.binary_folder.c_str(), errorCode );
+		return BUILD_RESULT_FAILED;
+	}
 
-static s32 BuildBinary( buildContext_t* context ) {
-	bool8 created = folder_create_if_it_doesnt_exist( tprintf( "%s%c%s", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH ) );
-	if ( !created ) {
+	// create intermediate folder
+	if ( !folder_create_if_it_doesnt_exist( tprintf( "%s%c%s", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH ) ) ) {
 		errorCode_t errorCode = GetLastErrorCode();
 		fatal_error( "Failed to create intermediate binary folder.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
+		return BUILD_RESULT_FAILED;
 	}
 
 	s32 exitCode = 0;
@@ -1019,9 +539,6 @@ static s32 BuildBinary( buildContext_t* context ) {
 
 	const char* intermediatePath = tprintf( "%s%c%s", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
 
-	u64 configNameHash = hash_string( context->config.name.c_str(), 0 );
-	u32 actualConfigIndex = hashmap_get_value( context->configIndices, configNameHash );
-
 	// compile
 	// make .o files for all compilation units
 	// TODO(DM): 14/06/2025: embarrassingly parallel
@@ -1029,7 +546,9 @@ static s32 BuildBinary( buildContext_t* context ) {
 		const char* sourceFile = context->config.source_files[sourceFileIndex].c_str();
 		const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
 
-		u64 sourceFileNameHash = hash_string( sourceFile, 0 );
+		//printf( "Building %s\n", sourceFileNoPath );
+
+		//u64 sourceFileNameHash = hash_string( sourceFile, 0 );
 		u32 sourceFileMapIndex = HASHMAP_INVALID_VALUE;
 
 		const char* intermediateFilename = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
@@ -1038,7 +557,7 @@ static s32 BuildBinary( buildContext_t* context ) {
 		const char* depFilename = tprintf( "%s%c%s.d", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
 
 		// only rebuild the .o file if the source file (or any of the files that source file depends on) was written to more recently or it doesnt exist
-		if ( context->buildInfoData ) {
+		{
 			bool8 anyFileIsNewer = false;
 
 			FileInfo intermediateFileInfo;
@@ -1053,28 +572,15 @@ static s32 BuildBinary( buildContext_t* context ) {
 			// if the source file wasnt newer than the .o file then do the same timestamp check for all the files that this source file depends on
 			// just because the source file didnt change doesnt mean we dont want to recompile it
 			// what if one of the header files it relies on changed? we still want to recompile that file!
-			{
-				// try to find this source file in the pre-existing .build_info data
-				sourceFileMapIndex = hashmap_get_value( context->sourceFileIndices, sourceFileNameHash );
+			if ( !context->config.name.empty() ) {
+				std::vector<trackedSourceFile_t>& includeDependencies = context->includeDependencies[sourceFileIndex];
 
-				if ( sourceFileMapIndex == HASHMAP_INVALID_VALUE ) {
-					// cant find it
-					// assume its a new file and build it
-					anyFileIsNewer = true;
+				For ( u64, dependencyIndex, 0, includeDependencies.size() ) {
+					u64 dependencyLastWriteTime = GetLastFileWriteTime( includeDependencies[dependencyIndex].filename.c_str() );
 
-					sourceFileMapIndex = trunc_cast( u32, context->buildInfoData->compilationUnits[actualConfigIndex].size() );
-
-					hashmap_set_value( context->sourceFileIndices, sourceFileNameHash, sourceFileMapIndex );
-				} else {
-					// found the file
-					// get the files this source file depends on and check if any of those are newer than the .o file
-					const std::vector<trackedSourceFile_t>& includeDependencies = context->buildInfoData->compilationUnits[actualConfigIndex][sourceFileIndex].includeDependencies;
-
-					For ( u64, depIndex, 0, includeDependencies.size() ) {
-						if ( includeDependencies[depIndex].lastWriteTime > intermediateFileInfo.last_write_time ) {
-							anyFileIsNewer = true;
-							break;
-						}
+					if ( dependencyLastWriteTime > intermediateFileInfo.last_write_time ) {
+						anyFileIsNewer = true;
+						break;
 					}
 				}
 			}
@@ -1150,7 +656,7 @@ static s32 BuildBinary( buildContext_t* context ) {
 
 				if ( !found ) {
 					error( "\"%s\" is not allowed as a warning level.\n", warningLevel.c_str() );
-					return 1;
+					return BUILD_RESULT_FAILED;
 				}
 
 				args.add( warningLevel.c_str() );
@@ -1165,14 +671,23 @@ static s32 BuildBinary( buildContext_t* context ) {
 
 		if ( exitCode != 0 ) {
 			error( "Compile failed.\n" );
-			return exitCode;
+			return BUILD_RESULT_FAILED;
 		}
 
 		numCompiledFiles++;
 
 		// put the include dependencies from the .d file into our .build_info data
-		if ( context->buildInfoData ) {
-			ReadDependencyFile( depFilename, context->buildInfoData->compilationUnits[actualConfigIndex][sourceFileIndex].includeDependencies );
+		if ( !context->config.name.empty() ) {
+			std::vector<trackedSourceFile_t> includeDependencies;
+			ReadDependencyFile( depFilename, includeDependencies );
+
+			/*printf( "    include_dependencies = {\n" );
+			For ( u64, i, 0, includeDependencies.size() ) {
+				printf( "        %s,\n", includeDependencies[i].filename.c_str() );
+			}
+			printf( "    }\n" );*/
+
+			context->includeDependencies[sourceFileIndex] = includeDependencies;
 		}
 	}
 
@@ -1219,11 +734,11 @@ static s32 BuildBinary( buildContext_t* context ) {
 
 		if ( exitCode != 0 ) {
 			error( "Link failed.\n" );
-			return exitCode;
+			return BUILD_RESULT_FAILED;
 		}
 	}
 
-	return exitCode;
+	return numCompiledFiles == 0 ? BUILD_RESULT_SKIPPED : BUILD_RESULT_SUCCESS;
 }
 
 static bool8 FileExists( const char* filename ) {
@@ -1293,49 +808,6 @@ const char* GetSlashInPath( const char* path ) {
 
 	return slash;
 }
-
-//bool8 PathHasSlash( const char* path ) {
-//	return GetSlashInPath( path ) != NULL;
-//}
-
-//static const char* TryFindFile_r( const char* filename, const char* folder ) {
-//	const char* result = NULL;
-//
-//	const char* searchPath = tprintf( "%s%c*", folder, PATH_SEPARATOR );
-//
-//	const char* filenamePath = path_remove_file_from_path( filename );
-//
-//	FileInfo fileInfo;
-//	File firstFile = file_find_first( searchPath, &fileInfo );
-//
-//	do {
-//		if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) || fileInfo.filename[0] == 0 ) {
-//			continue;
-//		}
-//
-//		const char* fullFilename = NULL;
-//		if ( PathHasSlash( filename ) ) {
-//			fullFilename = tprintf( "%s%c%s%c%s", folder, PATH_SEPARATOR, filenamePath, PATH_SEPARATOR, fileInfo.filename );
-//		} else {
-//			fullFilename = tprintf( "%s%c%s", folder, PATH_SEPARATOR, fileInfo.filename );
-//		}
-//
-//		if ( fileInfo.is_directory ) {
-//			result = TryFindFile_r( filename, fullFilename );
-//		}
-//
-//		if ( result ) {
-//			return result;
-//		}
-//
-//		if ( string_ends_with( fullFilename, filename ) ) {
-//			result = fullFilename;
-//			return result;
-//		}
-//	} while ( file_find_next( &firstFile, &fileInfo ) );
-//
-//	return NULL;
-//}
 
 static void GetAllSourceFiles_r( const char* path, const char* subfolder, const String& searchFilter, std::vector<std::string>& outSourceFiles ) {
 	assert( path );
@@ -1479,54 +951,6 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, const 
 	}
 }
 
-//void GetAllSubfolders_r( const char* basePath, const char* folder, Array<const char*>* outSubfolders ) {
-//	const char* fullSearchPath = NULL;
-//
-//	if ( string_ends_with( basePath, PATH_SEPARATOR ) ) {
-//		if ( folder ) {
-//			fullSearchPath = tprintf( "%s%s%c*", basePath, folder, PATH_SEPARATOR );
-//		} else {
-//			fullSearchPath = tprintf( "%s*", basePath );
-//		}
-//	} else {
-//		if ( folder ) {
-//			fullSearchPath = tprintf( "%s%c%s%c*", basePath, PATH_SEPARATOR, folder, PATH_SEPARATOR );
-//		} else {
-//			fullSearchPath = tprintf( "%s%c*", basePath, PATH_SEPARATOR );
-//		}
-//	}
-//
-//	FileInfo fileInfo;
-//	File file = file_find_first( fullSearchPath, &fileInfo );
-//
-//	do {
-//		if ( string_equals( fileInfo.filename, "." ) ) {
-//			continue;
-//		}
-//
-//		if ( string_equals( fileInfo.filename, ".." ) ) {
-//			continue;
-//		}
-//
-//		if ( fileInfo.is_directory ) {
-//			const char* folderName = tprintf( "%s", fileInfo.filename );
-//
-//			//outSubfolders->add( folderName );
-//
-//			const char* newPath = NULL;
-//			if ( folder ) {
-//				newPath = tprintf( "%s%c%s", folder, PATH_SEPARATOR, folderName );
-//			} else {
-//				newPath = folderName;
-//			}
-//
-//			outSubfolders->add( newPath );
-//
-//			GetAllSubfolders_r( basePath, newPath, outSubfolders );
-//		}
-//	} while ( file_find_next( &file, &fileInfo ) );
-//}
-
 static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContext_t* context, const BuildConfig* config ) {
 	std::vector<std::string> sourceFiles;
 
@@ -1643,27 +1067,23 @@ static void ByteBuffer_Write_CString( byteBuffer_t* buffer, const char* str ) {
 	buffer->data.add_range( cast( const u8*, str ), length );
 }
 
-static void ByteBuffer_Read_StringField( byteBuffer_t* buffer, char** outKey, std::string* outValue ) {
-	assertf( outKey || outValue, "When reading a string field, you must take either the key or the value otherwise you will take no data and what's the point of that?" );
+static std::string ByteBuffer_Read_StringField( byteBuffer_t* buffer, const char* key ) {
+	assert( key );
 
 	const char* colon = cast( const char*, memchr( &buffer->data[buffer->readOffset], ':', buffer->data.count - buffer->readOffset ) );
 	u64 keyLength = cast( u64, colon ) - cast( u64, &buffer->data[buffer->readOffset] );
 
-	if ( outKey ) {
-		*outKey = cast( char*, mem_alloc( ( keyLength + 1 ) * sizeof( char ) ) );	// + 1 for null terminator
-		memcpy( *outKey, &buffer->data[buffer->readOffset], keyLength * sizeof( char ) );
-		*outKey[keyLength] = 0;
-	}
+	char* actualKey = cast( char*, mem_alloc( ( keyLength + 1 ) * sizeof( char ) ) );	// + 1 for null terminator
+	memcpy( actualKey, &buffer->data[buffer->readOffset], keyLength * sizeof( char ) );
+	actualKey[keyLength] = 0;
+
+	assert( string_equals( actualKey, key ) );
 
 	buffer->readOffset += keyLength;	// skip to the colon
 	buffer->readOffset += 1;			// skip past the colon
 	buffer->readOffset += 1;			// skip past following whitespace
 
-	char* value = ByteBuffer_Read_CString( buffer );
-
-	if ( outValue ) {
-		*outValue = std::string( value );
-	}
+	return ByteBuffer_Read_CString( buffer );
 }
 
 static void ByteBuffer_Write_StringField( byteBuffer_t* buffer, const char* key, const char* value ) {
@@ -1673,6 +1093,44 @@ static void ByteBuffer_Write_StringField( byteBuffer_t* buffer, const char* key,
 	ByteBuffer_Write_CString( buffer, key );
 	ByteBuffer_Write_CString( buffer, ": " );
 	ByteBuffer_Write_CString( buffer, value );
+	ByteBuffer_Write_CString( buffer, "\n" );
+}
+
+static u64 ByteBuffer_Read_IntField_U64( byteBuffer_t* buffer, const char* key ) {
+	assert( buffer );
+	assert( key );
+
+	const char* colon = cast( const char*, memchr( &buffer->data[buffer->readOffset], ':', buffer->data.count - buffer->readOffset ) );
+	u64 keyLength = cast( u64, colon ) - cast( u64, &buffer->data[buffer->readOffset] );
+
+	char* actualKey = cast( char*, mem_alloc( ( keyLength + 1 ) * sizeof( char ) ) );	// + 1 for null terminator
+	memcpy( actualKey, &buffer->data[buffer->readOffset], keyLength * sizeof( char ) );
+	actualKey[keyLength] = 0;
+
+	assert( string_equals( key, actualKey ) );
+
+	buffer->readOffset += keyLength;	// skip to the colon
+	buffer->readOffset += 1;			// skip past the colon
+	buffer->readOffset += 1;			// skip past following whitespace
+
+	mem_free( actualKey );
+	actualKey = NULL;
+
+	u64 value = ByteBuffer_Read_U64( buffer );
+
+	ByteBuffer_SkipReadPast( buffer, '\n' );
+
+	return value;
+}
+
+// "key": value
+static void ByteBuffer_Write_IntField_U64( byteBuffer_t* buffer, const char* key, const u64 value ) {
+	assert( buffer );
+	assert( key );
+
+	ByteBuffer_Write_CString( buffer, key );
+	ByteBuffer_Write_CString( buffer, ": " );
+	ByteBuffer_Write_U64( buffer, value );
 	ByteBuffer_Write_CString( buffer, "\n" );
 }
 
@@ -1738,37 +1196,38 @@ static bool8 BuildInfo_Read( const char* buildInfoFilename, buildInfoData_t* out
 		return false;
 	}
 
-	ByteBuffer_Read_CString( &buffer );	// "builder_version" tag, skip
+	std::string builderVersionTag = ByteBuffer_Read_CString( &buffer );
+	assert( builderVersionTag == "builder_version:" );
+
 	outBuildInfoData->builderVersion.major = ByteBuffer_Read_S32( &buffer );
 	outBuildInfoData->builderVersion.minor = ByteBuffer_Read_S32( &buffer );
 	outBuildInfoData->builderVersion.patch = ByteBuffer_Read_S32( &buffer );
 
-	ByteBuffer_Read_StringField( &buffer, NULL, &outBuildInfoData->userConfigSourceFilename );
-	ByteBuffer_Read_StringField( &buffer, NULL, &outBuildInfoData->userConfigDLLFilename );
+	outBuildInfoData->userConfigSourceFilename = ByteBuffer_Read_StringField( &buffer, "build_source_file" );
+	outBuildInfoData->userConfigDLLFilename = ByteBuffer_Read_StringField( &buffer, "DLL" );
 
 	// parse all BuilderOptions
 	{
-		u64 totalNumConfigs = ByteBuffer_Read_U64( &buffer );
+		u64 totalNumConfigs = ByteBuffer_Read_IntField_U64( &buffer, "configs" );
 
 		outBuildInfoData->configs.resize( totalNumConfigs );
-		outBuildInfoData->compilationUnits.resize( totalNumConfigs );
-		outBuildInfoData->binaryLastWriteTimes.resize( totalNumConfigs );
+		outBuildInfoData->includeDependencies.resize( totalNumConfigs );
 
 		For ( u64, configIndex, 0, outBuildInfoData->configs.size() ) {
 			// parse the config itself
 			{
 				BuildConfig* config = &outBuildInfoData->configs[configIndex];
 
-				ByteBuffer_Read_StringField( &buffer, NULL, &config->name );
+				config->name = ByteBuffer_Read_StringField( &buffer, "config" );
 				ByteBuffer_Read_U64( &buffer );	// name hash, skip
 
 				{
-					std::vector<const char*> dependencyNames = ByteBuffer_Read_CStringArray( &buffer );
+					u64 numDependsOn = ByteBuffer_Read_IntField_U64( &buffer, "depends_on" );
 
-					config->depends_on.resize( dependencyNames.size() );
+					config->depends_on.resize( numDependsOn );
 
-					For ( u64, dependencyIndex, 0, dependencyNames.size() ) {
-						config->depends_on[dependencyIndex].name = dependencyNames[dependencyIndex];
+					For ( u64, dependencyIndex, 0, numDependsOn ) {
+						config->depends_on[dependencyIndex].name = ByteBuffer_Read_CString( &buffer );
 					}
 				}
 
@@ -1779,11 +1238,8 @@ static bool8 BuildInfo_Read( const char* buildInfoFilename, buildInfoData_t* out
 				config->additional_libs = ByteBuffer_Read_STDStringArray( &buffer );
 				config->ignore_warnings = ByteBuffer_Read_STDStringArray( &buffer );
 
-				ByteBuffer_Read_StringField( &buffer, NULL, &config->binary_name );
-				ByteBuffer_Read_StringField( &buffer, NULL, &config->binary_folder );
-
-				ByteBuffer_SkipReadPast( &buffer, '\n' );	// binary_last_write_time, skip
-				outBuildInfoData->binaryLastWriteTimes[configIndex] = ByteBuffer_Read_U64( &buffer );
+				config->binary_name = ByteBuffer_Read_StringField( &buffer, "binary_name" );
+				config->binary_folder = ByteBuffer_Read_StringField( &buffer, "binary_folder" );
 
 				config->binary_type = cast( BinaryType, ByteBuffer_Read_S32( &buffer ) );
 				config->optimization_level = cast( OptimizationLevel, ByteBuffer_Read_S32( &buffer ) );
@@ -1794,30 +1250,20 @@ static bool8 BuildInfo_Read( const char* buildInfoFilename, buildInfoData_t* out
 
 			// parse all compilation units
 			{
-				std::vector<compilationUnit_t>& outCompilationUnits = outBuildInfoData->compilationUnits[configIndex];
+				u64 numConfigIncludeDependencies = ByteBuffer_Read_IntField_U64( &buffer, "source_files_include_dependencies" );
 
-				ByteBuffer_SkipReadPast( &buffer, '\n' );	// "compilation_units", skip
+				outBuildInfoData->includeDependencies[configIndex].resize( numConfigIncludeDependencies );
 
-				u64 numCompilationUnits = ByteBuffer_Read_U64( &buffer );
-				outCompilationUnits.resize( numCompilationUnits );
+				For ( u64, sourceFileIndex, 0, numConfigIncludeDependencies ) {
+					u64 numIncludeDependencies = ByteBuffer_Read_IntField_U64( &buffer, "include_dependencies" );
 
-				For ( u64, compilationUnitIndex, 0, outCompilationUnits.size() ) {
-					compilationUnit_t* outCompilationUnit = &outCompilationUnits[compilationUnitIndex];
+					outBuildInfoData->includeDependencies[configIndex][sourceFileIndex].resize( numIncludeDependencies );
 
-					std::vector<trackedSourceFile_t>& outIncludeDependencies = outCompilationUnit->includeDependencies;
-
-					outCompilationUnit->filename = ByteBuffer_Read_CString( &buffer );
-
-					ByteBuffer_SkipReadPast( &buffer, '\n' );	// "include_dependencies", skip
-
-					u64 numIncludeDependencies = ByteBuffer_Read_U64( &buffer );
-					outIncludeDependencies.reserve( numIncludeDependencies );
-
-					For ( u64, includeDependencyIndex, 0, outIncludeDependencies.size() ) {
-						trackedSourceFile_t* includeDependency = &outIncludeDependencies[includeDependencyIndex];
+					For ( u64, includeDependencyIndex, 0, numIncludeDependencies ) {
+						trackedSourceFile_t* includeDependency = &outBuildInfoData->includeDependencies[configIndex][sourceFileIndex][includeDependencyIndex];
 
 						includeDependency->filename = ByteBuffer_Read_CString( &buffer );
-						includeDependency->lastWriteTime = ByteBuffer_Read_U64( &buffer );
+						//includeDependency->lastWriteTime = ByteBuffer_Read_U64( &buffer );
 					}
 				}
 			}
@@ -1875,7 +1321,7 @@ static bool8 BuildInfo_Write( const buildContext_t* context, const buildInfoData
 	ByteBuffer_Write_StringField( &buffer, "build_source_file", buildInfoData->userConfigSourceFilename.c_str() );
 	ByteBuffer_Write_StringField( &buffer, "DLL", buildInfoData->userConfigDLLFilename.c_str() );
 
-	ByteBuffer_Write_U64( &buffer, buildInfoData->configs.size() );
+	ByteBuffer_Write_IntField_U64( &buffer, "configs", buildInfoData->configs.size() );
 
 	For ( u64, configIndex, 0, buildInfoData->configs.size() ) {
 		const BuildConfig* config = &buildInfoData->configs[configIndex];
@@ -1887,8 +1333,7 @@ static bool8 BuildInfo_Write( const buildContext_t* context, const buildInfoData
 
 		// serialize names of all build dependencies
 		{
-			ByteBuffer_Write_CString( &buffer, "depends_on\n" );
-			ByteBuffer_Write_U64( &buffer, config->depends_on.size() );
+			ByteBuffer_Write_IntField_U64( &buffer, "depends_on", config->depends_on.size() );
 
 			For ( u64, dependencyIndex, 0, config->depends_on.size() ) {
 				ByteBuffer_Write_CString( &buffer, config->depends_on[dependencyIndex].name.c_str() );
@@ -1906,57 +1351,30 @@ static bool8 BuildInfo_Write( const buildContext_t* context, const buildInfoData
 		ByteBuffer_Write_StringField( &buffer, "binary_name", config->binary_name.c_str() );
 		ByteBuffer_Write_StringField( &buffer, "binary_folder", config->binary_folder.c_str() );
 
-		// write the last write time of the binary
-		// if the binary doesnt exist (we havent built it yet) then just write 0
-		{
-			ByteBuffer_Write_CString( &buffer, "last_binary_write_time\n" );
-
-			const char* binaryFullName = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, BuildConfig_GetFullBinaryName( config ) );
-
-			FileInfo fileInfo;
-			File binaryFile = file_find_first( binaryFullName, &fileInfo );
-
-			if ( binaryFile.ptr != INVALID_HANDLE_VALUE ) {
-				ByteBuffer_Write_U64( &buffer, fileInfo.last_write_time );
-			} else {
-				ByteBuffer_Write_U64( &buffer, 0 );
-			}
-		}
-
 		ByteBuffer_Write_S32( &buffer, config->binary_type );
 		ByteBuffer_Write_S32( &buffer, config->optimization_level );
 		ByteBuffer_Write_Bool8( &buffer, config->remove_symbols );
 		ByteBuffer_Write_Bool8( &buffer, config->remove_file_extension );
 		ByteBuffer_Write_Bool8( &buffer, config->warnings_as_errors );
 
-		// serialize all the compilation units
+		// serialize all compilation units
 		// for each compilation unit, serialize all the included files it depends on and when their last write time
 		{
-			const std::vector<compilationUnit_t>& compilationUnits = buildInfoData->compilationUnits[configIndex];
+			std::vector<std::vector<trackedSourceFile_t>> configIncludeDependencies = buildInfoData->includeDependencies[configIndex];
 
-			ByteBuffer_Write_CString( &buffer, "compilation_units\n" );
-			ByteBuffer_Write_U64( &buffer, compilationUnits.size() );
+			ByteBuffer_Write_IntField_U64( &buffer, "source_files_include_dependencies", configIncludeDependencies.size() );
 
-			For ( u64, compilationUnitIndex, 0, compilationUnits.size() ) {
-				const compilationUnit_t* compilationUnit = &compilationUnits[compilationUnitIndex];
+			For ( u64, sourceFileIndex, 0, configIncludeDependencies.size() ) {
+				std::vector<trackedSourceFile_t> includeDependencies = configIncludeDependencies[sourceFileIndex];
 
-				const std::vector<trackedSourceFile_t>& includeDependencies = compilationUnit->includeDependencies;
+				ByteBuffer_Write_IntField_U64( &buffer, "include_dependencies", includeDependencies.size() );
 
-				ByteBuffer_Write_CString( &buffer, compilationUnit->filename.c_str() );
-				ByteBuffer_Write_CString( &buffer, "\n" );
+				For ( u64, includeDepdendencyIndex, 0, includeDependencies.size() ) {
+					trackedSourceFile_t* includeDependency = &includeDependencies[includeDepdendencyIndex];
 
-				ByteBuffer_Write_CString( &buffer, "include_dependencies\n" );
-				ByteBuffer_Write_U64( &buffer, includeDependencies.size() );
-
-				For ( u64, dependencyIndex, 0, includeDependencies.size() ) {
-					const trackedSourceFile_t& includeDependency = includeDependencies[dependencyIndex];
-
-					// dont write full path of the filename
-					// the path to the source file can change depending on whether we are building from visual studio or the command line
-					// so just write the filename relative to the source folder and let Builder reconstruct the appropriate path as and when it needs to
-					ByteBuffer_Write_CString( &buffer, includeDependency.filename.c_str() );
+					ByteBuffer_Write_CString( &buffer, includeDependency->filename.c_str() );
 					ByteBuffer_Write_CString( &buffer, "\n" );
-					ByteBuffer_Write_U64( &buffer, includeDependency.lastWriteTime );
+					//ByteBuffer_Write_U64( &buffer, includeDependency->lastWriteTime );
 				}
 			}
 		}
@@ -2330,6 +1748,7 @@ int main( int argc, char** argv ) {
 	// build config step
 	// see if they have set_builder_options() overridden
 	// if they do, then build a DLL first and call that function to set some more build options
+	buildResult_t userConfigBuildResult = BUILD_RESULT_SKIPPED;
 	if ( doUserConfigBuild ) {
 		float64 userConfigBuildTimeStart = time_ms();
 
@@ -2348,10 +1767,10 @@ int main( int argc, char** argv ) {
 		userConfigBuildContext.config.binary_type = BINARY_TYPE_DYNAMIC_LIBRARY;
 		userConfigBuildContext.config.binary_name = tprintf( "%s.dll", path_remove_path_from_file( path_remove_file_extension( buildInfoData.userConfigSourceFilename.c_str() ) ) );
 		userConfigBuildContext.config.binary_folder = cast( char*, context.dotBuilderFolder.data );
-		userConfigBuildContext.config.defines = {
+		userConfigBuildContext.config.defines.insert( userConfigBuildContext.config.defines.end(), {
 			"_CRT_SECURE_NO_WARNINGS",
 			"BUILDER_DOING_USER_CONFIG_BUILD"
-		};
+		} );
 
 		// this is needed because this tells the compiler what to set _ITERATOR_DEBUG_LEVEL to
 		// ABI compatibility will be broken if this is not the same between all binaries
@@ -2369,16 +1788,9 @@ int main( int argc, char** argv ) {
 
 		buildInfoData.userConfigDLLFilename = userConfigBuildContext.fullBinaryName;
 
-		if ( !folder_create_if_it_doesnt_exist( userConfigBuildContext.config.binary_folder.c_str() ) ) {
-			errorCode_t errorCode = GetLastErrorCode();
-			error( "Failed to create the .builder folder.  Error code " ERROR_CODE_FORMAT "\n", userConfigBuildContext.config.binary_folder.c_str(), errorCode );
-			QUIT_ERROR();
-		}
+		userConfigBuildResult = BuildBinary( &userConfigBuildContext );
 
-		//exitCode = BuildDynamicLibrary( &userConfigBuildContext );
-		exitCode = BuildBinary( &userConfigBuildContext );
-
-		if ( exitCode != 0 ) {
+		if ( userConfigBuildResult == BUILD_RESULT_FAILED ) {
 			error( "Pre-build failed!\n" );
 			QUIT_ERROR();
 		}
@@ -2388,7 +1800,7 @@ int main( int argc, char** argv ) {
 		userConfigBuildTimeMS = userConfigBuildTimeEnd - userConfigBuildTimeStart;
 	}
 
-	printf( "\n" );
+	//printf( "\n" );
 
 	BuilderOptions options = {};
 
@@ -2414,6 +1826,8 @@ int main( int argc, char** argv ) {
 				setBuilderOptionsTimeMS = setBuilderOptionsTimeEnd - setBuilderOptionsTimeStart;
 
 				buildInfoData.configs = options.configs;
+
+				buildInfoData.includeDependencies.resize( buildInfoData.configs.size() );
 
 				// if the user wants to generate a visual studio solution then do that now
 				if ( options.generate_solution ) {
@@ -2443,9 +1857,6 @@ int main( int argc, char** argv ) {
 						}
 					}
 
-					buildInfoData.binaryLastWriteTimes.resize( options.configs.size() );
-					buildInfoData.compilationUnits.resize( options.configs.size() );
-
 					printf( "Generating Visual Studio files\n" );
 
 					float64 start = time_ms();
@@ -2466,12 +1877,6 @@ int main( int argc, char** argv ) {
 		}
 	}
 
-	if ( readBuildInfo ) {
-		context.sourceFileIndices = hashmap_create( trunc_cast( u32, buildInfoData.compilationUnits.size() ) );
-	} else {
-		context.sourceFileIndices = hashmap_create( 1 );
-	}
-
 	bool8 shouldWriteBuildInfo = true;
 
 	if ( ( context.flags & BUILD_CONTEXT_FLAG_GENERATING_VISUAL_STUDIO_SOLUTION ) == 0 ) {
@@ -2486,9 +1891,6 @@ int main( int argc, char** argv ) {
 
 			buildInfoData.configs.push_back( config );
 		}
-
-		buildInfoData.binaryLastWriteTimes.resize( buildInfoData.configs.size() );
-		//buildInfoData.sourceFileDependencies.resize( buildInfoData.configs.size() );
 
 		// if only one config was added (either by user or as a default build) then we know we just want that one, no config command line arg is needed
 		if ( buildInfoData.configs.size() == 1 ) {
@@ -2578,6 +1980,9 @@ int main( int argc, char** argv ) {
 
 			assert( !config->binary_name.empty() );
 
+			u64 configNameHash = hash_string( config->name.c_str(), 0 );
+			u64 actualConfigIndex = hashmap_get_value( context.configIndices, configNameHash );
+
 			BuildConfig_AddDefaults( config );
 
 			// make sure that the binary folder and binary name are at least set to defaults
@@ -2590,73 +1995,6 @@ int main( int argc, char** argv ) {
 			context.config = *config;
 			context.fullBinaryName = BuildConfig_GetFullBinaryName( &context.config );
 
-			// figure out if we need to even rebuild
-			//auto ShouldRebuild = [actualConfigIndex, &buildInfoData, readBuildInfo]( const buildContext_t* buildContext ) -> bool8 {
-			//	// if the .build_info isnt there, or we expect a different name now, or something else
-			//	// then we wont have any tracked source files to check through later on in this subroutine
-			//	// and the build will be skipped
-			//	// so just force a rebuild if we cant find/read the .build_info for whatever reason
-			//	if ( !readBuildInfo ) {
-			//		printf( "Failed to read %s.  Rebuilding...\n", buildContext->buildInfoFilename.data );
-			//		return true;
-			//	}
-
-			//	// if this was last built on a different version of builder then rebuild
-			//	if ( buildInfoData.builderVersion.major != BUILDER_VERSION_MAJOR ||
-			//		 buildInfoData.builderVersion.minor != BUILDER_VERSION_MINOR ||
-			//		 buildInfoData.builderVersion.patch != BUILDER_VERSION_PATCH )
-			//	{
-			//		printf( "Different Builder version detected since last build.  Rebuilding...\n" );
-			//		return true;
-			//	}
-
-			//	{
-			//		// if the binary doesnt exist, we definitely need to rebuild
-			//		FileInfo binaryFileInfo;
-			//		File binaryFile = file_find_first( buildContext->fullBinaryName, &binaryFileInfo );
-
-			//		if ( binaryFile.ptr == INVALID_HANDLE_VALUE ) {
-			//			return true;
-			//		}
-
-			//		// if the binary exists but the last time it was written to doesnt match whats in the .build_info then we know we need to rebuild
-			//		if ( buildInfoData.binaryLastWriteTimes[actualConfigIndex] != binaryFileInfo.last_write_time ) {
-			//			return true;
-			//		}
-			//	}
-
-			//	// for every code file that the .build_info knows about, find that file on disk and get the time it was written to
-			//	// if that write time doesnt match what we have in the .build_info for that file then its changed and we need to rebuild
-			//	const std::vector<trackedSourceFile_t>& trackedSourceFiles = buildInfoData.trackedSourceFiles[actualConfigIndex];
-
-			//	For ( u64, sourceFileIndex, 0, trackedSourceFiles.size() ) {
-			//		const trackedSourceFile_t* trackedSourceFile = &trackedSourceFiles[sourceFileIndex];
-
-			//		const char* trackedSourceFileAndPath = trackedSourceFile->filename.c_str();
-			//		if ( !path_is_absolute( trackedSourceFile->filename.c_str() ) ) {
-			//			trackedSourceFileAndPath = tprintf( "%s%c%s", buildContext->inputFilePath.data, PATH_SEPARATOR, trackedSourceFile->filename.c_str() );
-			//		}
-
-			//		FileInfo fileInfo = {};
-			//		File file = file_find_first( trackedSourceFileAndPath, &fileInfo );
-
-			//		bool8 cantFindFile = file.ptr == INVALID_HANDLE_VALUE;
-			//		bool8 fileWasOverwritten = fileInfo.last_write_time != trackedSourceFile->lastWriteTime;
-
-			//		if ( cantFindFile || fileWasOverwritten ) {
-			//			return true;
-			//		}
-			//	}
-
-			//	return false;
-			//};
-
-			/*if ( !ShouldRebuild( &context ) ) {
-				numSkippedBuilds++;
-
-				printf( "Skipped \"%s\".\n", context.config.binary_name.c_str() );
-				continue;
-			} else*/
 			{
 				printf( "Building \"%s\"", context.config.binary_name.c_str() );
 
@@ -2665,12 +2003,6 @@ int main( int argc, char** argv ) {
 				}
 
 				printf( "\n" );
-			}
-
-			if ( !folder_create_if_it_doesnt_exist( context.config.binary_folder.c_str() ) ) {
-				errorCode_t errorCode = GetLastErrorCode();
-				fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".  Error code: " ERROR_CODE_FORMAT "\n", SET_BUILDER_OPTIONS_FUNC_NAME, context.config.binary_folder.c_str(), errorCode );
-				return 1;
 			}
 
 			// make all non-absolute additional include paths relative to the build source file
@@ -2717,66 +2049,40 @@ int main( int argc, char** argv ) {
 				context.config.source_files = finalSourceFilesToBuild;
 			}
 
+			buildInfoData.includeDependencies[actualConfigIndex].resize( context.config.source_files.size() );
+
 			float64 buildTimeStart = 0.0f;
 			float64 buildTimeEnd = 0.0f;
 
-			// now do the actual build
-			/*switch ( config->binary_type ) {
-				case BINARY_TYPE_EXE:
-					buildTimeStart = time_ms();
+			buildResult_t buildResult = BUILD_RESULT_SUCCESS;
 
-					exitCode = BuildEXE( &context );
-
-					buildTimeEnd = time_ms();
-					break;
-
-				case BINARY_TYPE_DYNAMIC_LIBRARY:
-					buildTimeStart = time_ms();
-
-					exitCode = BuildDynamicLibrary( &context );
-
-					buildTimeEnd = time_ms();
-					break;
-
-				case BINARY_TYPE_STATIC_LIBRARY:
-					buildTimeStart = time_ms();
-
-					exitCode = BuildStaticLibrary( &context );
-
-					buildTimeEnd = time_ms();
-					break;
-			}*/
 			{
-				if ( readBuildInfo ) {
-					context.buildInfoData = &buildInfoData;
-				}
-
 				buildTimeStart = time_ms();
 
-				exitCode = BuildBinary( &context );
+				context.includeDependencies = buildInfoData.includeDependencies[actualConfigIndex];
+
+				buildResult = BuildBinary( &context );
+
+				buildInfoData.includeDependencies[actualConfigIndex] = context.includeDependencies;
 
 				buildTimeEnd = time_ms();
 			}
 
-			if ( exitCode == 0 ) {
-				numSuccessfulBuilds++;
+			switch ( buildResult ) {
+				case BUILD_RESULT_SUCCESS:
+					numSuccessfulBuilds++;
+					printf( "Finished building \"%s\", %f ms\n\n", context.fullBinaryName, buildTimeEnd - buildTimeStart );
+					break;
 
-				//float64 depFileReadStart = time_ms();
+				case BUILD_RESULT_FAILED:
+					numFailedBuilds++;
+					error( "Build failed.\n\n" );
+					QUIT_ERROR();
 
-				//// get the updated list of dependency files from the .d file and put those into the .build_info file data
-				//ReadDependencyFile( &context, config, buildInfoData.trackedSourceFiles[actualConfigIndex] );
-
-				//float64 depFileReadEnd = time_ms();
-
-				printf( "Finished building \"%s\":\n", context.fullBinaryName );
-				//printf( "    Read .d file: %f ms\n", depFileReadEnd - depFileReadStart );
-				printf( "    Build time:   %f ms\n", buildTimeEnd - buildTimeStart );
-				printf( "\n" );
-			} else {
-				numFailedBuilds++;
-
-				error( "Build failed.\n" );
-				QUIT_ERROR();
+				case BUILD_RESULT_SKIPPED:
+					numSkippedBuilds++;
+					printf( "Skipped!\n\n" );
+					break;
 			}
 
 			mem_reset_temp_storage();
@@ -2810,7 +2116,7 @@ int main( int argc, char** argv ) {
 	float64 totalTimeEnd = time_ms();
 	printf( "Build finished:\n" );
 	if ( doUserConfigBuild ) {
-		printf( "    User config build:   %f ms\n", userConfigBuildTimeMS );
+		printf( "    User config build:   %f ms%s\n", userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? " (skipped)" : "" );
 	}
 	if ( !doubleeq( setBuilderOptionsTimeMS, 1.0 ) ) {
 		printf( "    set_builder_options: %f ms\n", setBuilderOptionsTimeMS );

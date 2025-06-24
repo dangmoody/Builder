@@ -261,42 +261,6 @@ void BuildConfig_AddDefaults( BuildConfig* outConfig ) {
 	outConfig->additional_libs.push_back( "msvcrt.lib" );
 #endif
 #endif // defined( _WIN64 )
-
-	outConfig->ignore_warnings.push_back( "-Wno-newline-eof" );
-	outConfig->ignore_warnings.push_back( "-Wno-pointer-integer-compare" );
-	outConfig->ignore_warnings.push_back( "-Wno-declaration-after-statement" );
-	outConfig->ignore_warnings.push_back( "-Wno-gnu-zero-variadic-macro-arguments" );
-	outConfig->ignore_warnings.push_back( "-Wno-cast-align" );
-	outConfig->ignore_warnings.push_back( "-Wno-bad-function-cast" );
-	outConfig->ignore_warnings.push_back( "-Wno-format-nonliteral" );
-	outConfig->ignore_warnings.push_back( "-Wno-missing-braces" );
-	outConfig->ignore_warnings.push_back( "-Wno-switch-enum" );
-	outConfig->ignore_warnings.push_back( "-Wno-covered-switch-default" );
-	outConfig->ignore_warnings.push_back( "-Wno-double-promotion" );
-	outConfig->ignore_warnings.push_back( "-Wno-cast-qual" );
-	outConfig->ignore_warnings.push_back( "-Wno-unused-variable" );
-	outConfig->ignore_warnings.push_back( "-Wno-unused-function" );
-	outConfig->ignore_warnings.push_back( "-Wno-empty-translation-unit" );
-	outConfig->ignore_warnings.push_back( "-Wno-zero-as-null-pointer-constant" );
-	outConfig->ignore_warnings.push_back( "-Wno-c++98-compat-pedantic" );
-	outConfig->ignore_warnings.push_back( "-Wno-unused-macros" );
-
-#if BUILDER_CLANG_VERSION_MAJOR >= 17
-	outConfig->ignore_warnings.push_back( "-Wno-unsafe-buffer-usage" );			// basically any time you access a ptr as an array, which is dumb
-	outConfig->ignore_warnings.push_back( "-Wno-reorder-init-list" );			// C++: "designated initializers must be in order"
-	outConfig->ignore_warnings.push_back( "-Wno-old-style-cast" );				// C++: "C-style casts are banned"
-	outConfig->ignore_warnings.push_back( "-Wno-global-constructors" );			// C++: "declaration requires a global destructor"
-	outConfig->ignore_warnings.push_back( "-Wno-exit-time-destructors" );		// C++: "declaration requires an exit-time destructor" (same as the above, basically)
-#endif
-
-#if BUILDER_CLANG_VERSION_MAJOR >= 18
-	outConfig->ignore_warnings.push_back( "-Wno-missing-field-initializers" );
-#endif
-
-	// DM!!! dont think this warning wants to be disabled by default?
-#if BUILDER_CLANG_VERSION_MAJOR >= 20
-	outConfig->ignore_warnings.push_back( "-Wno-nontrivial-memcall" );			// basically any time you try to use a non-void ptr as a parameter where one is expected
-#endif
 }
 
 const char* BuildConfig_GetFullBinaryName( const BuildConfig* config ) {
@@ -1680,6 +1644,7 @@ int main( int argc, char** argv ) {
 #endif
 
 		userConfigBuildContext.config.ignore_warnings.push_back( "-Wno-missing-prototypes" );	// otherwise the user has to forward declare functions like set_builder_options and thats annoying
+		userConfigBuildContext.config.ignore_warnings.push_back( "-Wno-reorder-init-list" );	// allow users to initialize struct members in whatever order they want
 
 		userConfigBuildContext.fullBinaryName = tprintf( "%s%c%s", userConfigBuildContext.config.binary_folder.c_str(), PATH_SEPARATOR, userConfigBuildContext.config.binary_name.c_str() );
 

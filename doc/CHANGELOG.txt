@@ -24,7 +24,9 @@ v0.7.0, <RELEASE DATE HERE>:
 		* Maybe more, in future.
 * Added -Wno-nontrivial-memcall to the list of default ignored warnings.
 	* This warning seems to fire every time we do pointer arithmetic, which is tedious.
-* Added some more error checking that we weren't doing, but should have.
+* Removed all default ignored warnings.
+	* Because users can now set their own warning level(s) for their builds, it makes no sense for Builder to ignore a bunch by default.
+	* This gives you more control over your builds.
 * Moved some extraneous logging when generating a Visual Studio solution to only show when verbose logging (-v) argument is specified.
 * Hide unecessary warning that gets fired when doing a hashmap lookup.
 * Fixed builds failing when building the same source file from a different folder location.

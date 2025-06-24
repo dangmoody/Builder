@@ -6,6 +6,8 @@ clang
 
 .builder
 
+*.o
+
 builder.exe
 builder_tests.exe
 

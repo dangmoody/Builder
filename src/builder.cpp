@@ -464,7 +464,8 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 	}
 
 	// create intermediate folder
-	if ( !folder_create_if_it_doesnt_exist( tprintf( "%s%c%s", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH ) ) ) {
+	const char* intermediatePath = tprintf( "%s%c%s", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
+	if ( !folder_create_if_it_doesnt_exist( intermediatePath ) ) {
 		errorCode_t errorCode = GetLastErrorCode();
 		fatal_error( "Failed to create intermediate binary folder.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
 		return BUILD_RESULT_FAILED;
@@ -500,8 +501,6 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
 
 	u32 numCompiledFiles = 0;
-
-	const char* intermediatePath = tprintf( "%s%c%s", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
 
 	// compile
 	// make .o files for all compilation units
@@ -1688,6 +1687,8 @@ int main( int argc, char** argv ) {
 				setBuilderOptionsTimeMS = setBuilderOptionsTimeEnd - setBuilderOptionsTimeStart;
 
 				buildInfoData.configs = options.configs;
+
+				buildInfoData.includeDependencies.resize( buildInfoData.configs.size() );
 
 				// if the user wants to generate a visual studio solution then do that now
 				if ( options.generate_solution ) {

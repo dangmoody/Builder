@@ -1980,7 +1980,7 @@ int main( int argc, char** argv ) {
 	if ( doUserConfigBuild ) {
 		printf( "    User config build:   %f ms%s\n", userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? " (skipped)" : "" );
 	}
-	if ( !doubleeq( setBuilderOptionsTimeMS, 1.0 ) ) {
+	if ( !doubleeq( setBuilderOptionsTimeMS, -1.0 ) ) {
 		printf( "    set_builder_options: %f ms\n", setBuilderOptionsTimeMS );
 	}
 	if ( options.generate_solution ) {

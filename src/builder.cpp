@@ -1976,6 +1976,7 @@ int main( int argc, char** argv ) {
 	}
 
 	float64 totalTimeEnd = time_ms();
+
 	printf( "Build finished:\n" );
 	if ( doUserConfigBuild ) {
 		printf( "    User config build:   %f ms%s\n", userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? " (skipped)" : "" );

@@ -68,17 +68,12 @@ enum buildContextFlagBits_t {
 };
 typedef u32 buildContextFlags_t;
 
-struct trackedSourceFile_t {
-	//u64			lastWriteTime;
-	std::string	filename;
-};
-
 struct buildContext_t {
 	BuildConfig			config;
 
 	Hashmap*			configIndices;
 
-	std::vector<std::vector<trackedSourceFile_t>>	includeDependencies;
+	std::vector<std::vector<std::string>>	includeDependencies;
 
 	// TODO(DM): 10/08/2024: does this want to be inside BuilderOptions?
 	// it would give users more control over their build

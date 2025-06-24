@@ -97,7 +97,7 @@ struct buildInfoData_t {
 	std::vector<BuildConfig>					configs;
 	std::string									userConfigSourceFilename;
 	std::string									userConfigDLLFilename;
-	std::vector<std::vector<std::vector<trackedSourceFile_t>>>	includeDependencies;
+	std::vector<std::vector<std::vector<std::string>>>	includeDependencies;
 };
 
 errorCode_t GetLastErrorCode() {
@@ -400,7 +400,7 @@ static s32 ShowUsage( const s32 exitCode ) {
 // only call this after compilation has finished successfully
 // parse the dependency file that we generated for every dependency thats in there
 // add those to a list - we need to put those in the .build_info file
-static void ReadDependencyFile( const char* depFilename, std::vector<trackedSourceFile_t>& outBuildInfoFiles ) {
+static void ReadDependencyFile( const char* depFilename, std::vector<std::string>& outIncludeDependencies ) {
 	char* depFileBuffer = NULL;
 	bool8 read = file_read_entire( depFilename, &depFileBuffer );
 
@@ -411,7 +411,7 @@ static void ReadDependencyFile( const char* depFilename, std::vector<trackedSour
 
 	defer( file_free_buffer( &depFileBuffer ) );
 
-	outBuildInfoFiles.clear();
+	outIncludeDependencies.clear();
 
 	char* current = depFileBuffer;
 
@@ -473,7 +473,7 @@ static void ReadDependencyFile( const char* depFilename, std::vector<trackedSour
 
 		//printf( "Parsing dependency %s, last write time = %llu\n", dependencyFilename.c_str(), lastWriteTime );
 
-		outBuildInfoFiles.push_back( { /*lastWriteTime,*/ dependencyFilename.c_str() } );
+		outIncludeDependencies.push_back( dependencyFilename.c_str() );
 
 		current = dependencyEnd + 1;
 
@@ -573,10 +573,10 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 			// just because the source file didnt change doesnt mean we dont want to recompile it
 			// what if one of the header files it relies on changed? we still want to recompile that file!
 			if ( !context->config.name.empty() ) {
-				std::vector<trackedSourceFile_t>& includeDependencies = context->includeDependencies[sourceFileIndex];
+				std::vector<std::string>& includeDependencies = context->includeDependencies[sourceFileIndex];
 
 				For ( u64, dependencyIndex, 0, includeDependencies.size() ) {
-					u64 dependencyLastWriteTime = GetLastFileWriteTime( includeDependencies[dependencyIndex].filename.c_str() );
+					u64 dependencyLastWriteTime = GetLastFileWriteTime( includeDependencies[dependencyIndex].c_str() );
 
 					if ( dependencyLastWriteTime > intermediateFileInfo.last_write_time ) {
 						anyFileIsNewer = true;
@@ -678,12 +678,13 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 
 		// put the include dependencies from the .d file into our .build_info data
 		if ( !context->config.name.empty() ) {
-			std::vector<trackedSourceFile_t> includeDependencies;
+			std::vector<std::string> includeDependencies;
 			ReadDependencyFile( depFilename, includeDependencies );
 
+			// TODO(DM): do we want to log this in verbose mode? will the user get anything out of that?
 			/*printf( "    include_dependencies = {\n" );
 			For ( u64, i, 0, includeDependencies.size() ) {
-				printf( "        %s,\n", includeDependencies[i].filename.c_str() );
+				printf( "        %s,\n", includeDependencies[i].c_str() );
 			}
 			printf( "    }\n" );*/
 
@@ -1260,10 +1261,7 @@ static bool8 BuildInfo_Read( const char* buildInfoFilename, buildInfoData_t* out
 					outBuildInfoData->includeDependencies[configIndex][sourceFileIndex].resize( numIncludeDependencies );
 
 					For ( u64, includeDependencyIndex, 0, numIncludeDependencies ) {
-						trackedSourceFile_t* includeDependency = &outBuildInfoData->includeDependencies[configIndex][sourceFileIndex][includeDependencyIndex];
-
-						includeDependency->filename = ByteBuffer_Read_CString( &buffer );
-						//includeDependency->lastWriteTime = ByteBuffer_Read_U64( &buffer );
+						outBuildInfoData->includeDependencies[configIndex][sourceFileIndex][includeDependencyIndex] = ByteBuffer_Read_CString( &buffer );
 					}
 				}
 			}
@@ -1360,19 +1358,17 @@ static bool8 BuildInfo_Write( const buildContext_t* context, const buildInfoData
 		// serialize all compilation units
 		// for each compilation unit, serialize all the included files it depends on and when their last write time
 		{
-			std::vector<std::vector<trackedSourceFile_t>> configIncludeDependencies = buildInfoData->includeDependencies[configIndex];
+			std::vector<std::vector<std::string>> configIncludeDependencies = buildInfoData->includeDependencies[configIndex];
 
 			ByteBuffer_Write_IntField_U64( &buffer, "source_files_include_dependencies", configIncludeDependencies.size() );
 
 			For ( u64, sourceFileIndex, 0, configIncludeDependencies.size() ) {
-				std::vector<trackedSourceFile_t> includeDependencies = configIncludeDependencies[sourceFileIndex];
+				std::vector<std::string> includeDependencies = configIncludeDependencies[sourceFileIndex];
 
 				ByteBuffer_Write_IntField_U64( &buffer, "include_dependencies", includeDependencies.size() );
 
 				For ( u64, includeDepdendencyIndex, 0, includeDependencies.size() ) {
-					trackedSourceFile_t* includeDependency = &includeDependencies[includeDepdendencyIndex];
-
-					ByteBuffer_Write_CString( &buffer, includeDependency->filename.c_str() );
+					ByteBuffer_Write_CString( &buffer, includeDependencies[includeDepdendencyIndex].c_str() );
 					ByteBuffer_Write_CString( &buffer, "\n" );
 					//ByteBuffer_Write_U64( &buffer, includeDependency->lastWriteTime );
 				}

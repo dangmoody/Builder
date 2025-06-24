@@ -1063,81 +1063,11 @@ static char* ByteBuffer_Read_CString( byteBuffer_t* buffer ) {
 static void ByteBuffer_Write_CString( byteBuffer_t* buffer, const char* str ) {
 	assert( str );
 
-	u64 length = strlen( str );
-
-	buffer->data.add_range( cast( const u8*, str ), length );
-}
-
-static std::string ByteBuffer_Read_StringField( byteBuffer_t* buffer, const char* key ) {
-	assert( key );
-
-	const char* colon = cast( const char*, memchr( &buffer->data[buffer->readOffset], ':', buffer->data.count - buffer->readOffset ) );
-	u64 keyLength = cast( u64, colon ) - cast( u64, &buffer->data[buffer->readOffset] );
-
-	char* actualKey = cast( char*, mem_alloc( ( keyLength + 1 ) * sizeof( char ) ) );	// + 1 for null terminator
-	memcpy( actualKey, &buffer->data[buffer->readOffset], keyLength * sizeof( char ) );
-	actualKey[keyLength] = 0;
-
-	assert( string_equals( actualKey, key ) );
-
-	buffer->readOffset += keyLength;	// skip to the colon
-	buffer->readOffset += 1;			// skip past the colon
-	buffer->readOffset += 1;			// skip past following whitespace
-
-	return ByteBuffer_Read_CString( buffer );
-}
-
-static void ByteBuffer_Write_StringField( byteBuffer_t* buffer, const char* key, const char* value ) {
-	assert( key );
-	assert( value );
-
-	ByteBuffer_Write_CString( buffer, key );
-	ByteBuffer_Write_CString( buffer, ": " );
-	ByteBuffer_Write_CString( buffer, value );
-	ByteBuffer_Write_CString( buffer, "\n" );
-}
-
-static u64 ByteBuffer_Read_IntField_U64( byteBuffer_t* buffer, const char* key ) {
-	assert( buffer );
-	assert( key );
-
-	const char* colon = cast( const char*, memchr( &buffer->data[buffer->readOffset], ':', buffer->data.count - buffer->readOffset ) );
-	u64 keyLength = cast( u64, colon ) - cast( u64, &buffer->data[buffer->readOffset] );
-
-	char* actualKey = cast( char*, mem_alloc( ( keyLength + 1 ) * sizeof( char ) ) );	// + 1 for null terminator
-	memcpy( actualKey, &buffer->data[buffer->readOffset], keyLength * sizeof( char ) );
-	actualKey[keyLength] = 0;
-
-	assert( string_equals( key, actualKey ) );
-
-	buffer->readOffset += keyLength;	// skip to the colon
-	buffer->readOffset += 1;			// skip past the colon
-	buffer->readOffset += 1;			// skip past following whitespace
-
-	mem_free( actualKey );
-	actualKey = NULL;
-
-	u64 value = ByteBuffer_Read_U64( buffer );
-
-	ByteBuffer_SkipReadPast( buffer, '\n' );
-
-	return value;
-}
-
-// "key": value
-static void ByteBuffer_Write_IntField_U64( byteBuffer_t* buffer, const char* key, const u64 value ) {
-	assert( buffer );
-	assert( key );
-
-	ByteBuffer_Write_CString( buffer, key );
-	ByteBuffer_Write_CString( buffer, ": " );
-	ByteBuffer_Write_U64( buffer, value );
-	ByteBuffer_Write_CString( buffer, "\n" );
+	buffer->data.add_range( cast( const u8*, str ), strlen( str ) );
+	buffer->data.add_range( cast( const u8*, "\n" ), strlen( "\n" ) );
 }
 
 static std::vector<const char*> ByteBuffer_Read_CStringArray( byteBuffer_t* buffer ) {
-	ByteBuffer_SkipReadPast( buffer, '\n' );	// skip the name of the array
-
 	u64 arrayCount = ByteBuffer_Read_U64( buffer );
 	std::vector<const char*> result( arrayCount );
 
@@ -1148,20 +1078,7 @@ static std::vector<const char*> ByteBuffer_Read_CStringArray( byteBuffer_t* buff
 	return result;
 }
 
-static void ByteBuffer_Write_CStringArray( byteBuffer_t* buffer, const std::vector<const char*>& array, const char* name ) {
-	ByteBuffer_Write_CString( buffer, name );
-	ByteBuffer_Write_CString( buffer, "\n" );
-	ByteBuffer_Write_U64( buffer, array.size() );
-
-	For ( u64, i, 0, array.size() ) {
-		ByteBuffer_Write_CString( buffer, array[i] );
-		ByteBuffer_Write_CString( buffer, "\n" );
-	}
-}
-
 static std::vector<std::string> ByteBuffer_Read_STDStringArray( byteBuffer_t* buffer ) {
-	ByteBuffer_SkipReadPast( buffer, '\n' );	// skip the name of the array
-
 	u64 arrayCount = ByteBuffer_Read_U64( buffer );
 	std::vector<std::string> result( arrayCount );
 
@@ -1172,14 +1089,11 @@ static std::vector<std::string> ByteBuffer_Read_STDStringArray( byteBuffer_t* bu
 	return result;
 }
 
-static void ByteBuffer_Write_STDStringArray( byteBuffer_t* buffer, const std::vector<std::string>& array, const char* name ) {
-	ByteBuffer_Write_CString( buffer, name );
-	ByteBuffer_Write_CString( buffer, "\n" );
+static void ByteBuffer_Write_STDStringArray( byteBuffer_t* buffer, const std::vector<std::string>& array ) {
 	ByteBuffer_Write_U64( buffer, array.size() );
 
 	For ( u64, i, 0, array.size() ) {
 		ByteBuffer_Write_CString( buffer, array[i].c_str() );
-		ByteBuffer_Write_CString( buffer, "\n" );
 	}
 }
 
@@ -1197,19 +1111,16 @@ static bool8 BuildInfo_Read( const char* buildInfoFilename, buildInfoData_t* out
 		return false;
 	}
 
-	std::string builderVersionTag = ByteBuffer_Read_CString( &buffer );
-	assert( builderVersionTag == "builder_version:" );
-
 	outBuildInfoData->builderVersion.major = ByteBuffer_Read_S32( &buffer );
 	outBuildInfoData->builderVersion.minor = ByteBuffer_Read_S32( &buffer );
 	outBuildInfoData->builderVersion.patch = ByteBuffer_Read_S32( &buffer );
 
-	outBuildInfoData->userConfigSourceFilename = ByteBuffer_Read_StringField( &buffer, "build_source_file" );
-	outBuildInfoData->userConfigDLLFilename = ByteBuffer_Read_StringField( &buffer, "DLL" );
+	outBuildInfoData->userConfigSourceFilename = ByteBuffer_Read_CString( &buffer );
+	outBuildInfoData->userConfigDLLFilename = ByteBuffer_Read_CString( &buffer );
 
 	// parse all BuilderOptions
 	{
-		u64 totalNumConfigs = ByteBuffer_Read_IntField_U64( &buffer, "configs" );
+		u64 totalNumConfigs = ByteBuffer_Read_U64( &buffer );
 
 		outBuildInfoData->configs.resize( totalNumConfigs );
 		outBuildInfoData->includeDependencies.resize( totalNumConfigs );
@@ -1219,11 +1130,11 @@ static bool8 BuildInfo_Read( const char* buildInfoFilename, buildInfoData_t* out
 			{
 				BuildConfig* config = &outBuildInfoData->configs[configIndex];
 
-				config->name = ByteBuffer_Read_StringField( &buffer, "config" );
+				config->name = ByteBuffer_Read_CString( &buffer );
 				ByteBuffer_Read_U64( &buffer );	// name hash, skip
 
 				{
-					u64 numDependsOn = ByteBuffer_Read_IntField_U64( &buffer, "depends_on" );
+					u64 numDependsOn = ByteBuffer_Read_U64( &buffer );
 
 					config->depends_on.resize( numDependsOn );
 
@@ -1239,8 +1150,8 @@ static bool8 BuildInfo_Read( const char* buildInfoFilename, buildInfoData_t* out
 				config->additional_libs = ByteBuffer_Read_STDStringArray( &buffer );
 				config->ignore_warnings = ByteBuffer_Read_STDStringArray( &buffer );
 
-				config->binary_name = ByteBuffer_Read_StringField( &buffer, "binary_name" );
-				config->binary_folder = ByteBuffer_Read_StringField( &buffer, "binary_folder" );
+				config->binary_name = ByteBuffer_Read_CString( &buffer );
+				config->binary_folder = ByteBuffer_Read_CString( &buffer );
 
 				config->binary_type = cast( BinaryType, ByteBuffer_Read_S32( &buffer ) );
 				config->optimization_level = cast( OptimizationLevel, ByteBuffer_Read_S32( &buffer ) );
@@ -1251,12 +1162,12 @@ static bool8 BuildInfo_Read( const char* buildInfoFilename, buildInfoData_t* out
 
 			// parse all compilation units
 			{
-				u64 numConfigIncludeDependencies = ByteBuffer_Read_IntField_U64( &buffer, "source_files_include_dependencies" );
+				u64 numConfigIncludeDependencies = ByteBuffer_Read_U64( &buffer );
 
 				outBuildInfoData->includeDependencies[configIndex].resize( numConfigIncludeDependencies );
 
 				For ( u64, sourceFileIndex, 0, numConfigIncludeDependencies ) {
-					u64 numIncludeDependencies = ByteBuffer_Read_IntField_U64( &buffer, "include_dependencies" );
+					u64 numIncludeDependencies = ByteBuffer_Read_U64( &buffer );
 
 					outBuildInfoData->includeDependencies[configIndex][sourceFileIndex].resize( numIncludeDependencies );
 
@@ -1265,8 +1176,6 @@ static bool8 BuildInfo_Read( const char* buildInfoFilename, buildInfoData_t* out
 					}
 				}
 			}
-
-			ByteBuffer_SkipReadPast( &buffer, '\n' );
 		}
 	}
 
@@ -1311,43 +1220,41 @@ static bool8 BuildInfo_Write( const buildContext_t* context, const buildInfoData
 
 	byteBuffer_t buffer = {};
 
-	ByteBuffer_Write_CString( &buffer, "builder_version:\n" );
 	ByteBuffer_Write_S32( &buffer, BUILDER_VERSION_MAJOR );
 	ByteBuffer_Write_S32( &buffer, BUILDER_VERSION_MINOR );
 	ByteBuffer_Write_S32( &buffer, BUILDER_VERSION_PATCH );
 
-	ByteBuffer_Write_StringField( &buffer, "build_source_file", buildInfoData->userConfigSourceFilename.c_str() );
-	ByteBuffer_Write_StringField( &buffer, "DLL", buildInfoData->userConfigDLLFilename.c_str() );
+	ByteBuffer_Write_CString( &buffer, buildInfoData->userConfigSourceFilename.c_str() );
+	ByteBuffer_Write_CString( &buffer, buildInfoData->userConfigDLLFilename.c_str() );
 
-	ByteBuffer_Write_IntField_U64( &buffer, "configs", buildInfoData->configs.size() );
+	ByteBuffer_Write_U64( &buffer, buildInfoData->configs.size() );
 
 	For ( u64, configIndex, 0, buildInfoData->configs.size() ) {
 		const BuildConfig* config = &buildInfoData->configs[configIndex];
 
-		ByteBuffer_Write_StringField( &buffer, "config", config->name.c_str() );
+		ByteBuffer_Write_CString( &buffer, config->name.c_str() );
 
 		u64 configNameHash = hash_string( config->name.c_str(), 0 );
 		ByteBuffer_Write_U64( &buffer, configNameHash );
 
 		// serialize names of all build dependencies
 		{
-			ByteBuffer_Write_IntField_U64( &buffer, "depends_on", config->depends_on.size() );
+			ByteBuffer_Write_U64( &buffer, config->depends_on.size() );
 
 			For ( u64, dependencyIndex, 0, config->depends_on.size() ) {
 				ByteBuffer_Write_CString( &buffer, config->depends_on[dependencyIndex].name.c_str() );
-				ByteBuffer_Write_CString( &buffer, "\n" );
 			}
 		}
 
-		ByteBuffer_Write_STDStringArray( &buffer, config->source_files, "source_files" );
-		ByteBuffer_Write_STDStringArray( &buffer, config->defines, "defines" );
-		ByteBuffer_Write_STDStringArray( &buffer, config->additional_includes, "additional_includes" );
-		ByteBuffer_Write_STDStringArray( &buffer, config->additional_lib_paths, "additional_lib_paths" );
-		ByteBuffer_Write_STDStringArray( &buffer, config->additional_libs, "additional_libs" );
-		ByteBuffer_Write_STDStringArray( &buffer, config->ignore_warnings, "ignore_warnings" );
+		ByteBuffer_Write_STDStringArray( &buffer, config->source_files );
+		ByteBuffer_Write_STDStringArray( &buffer, config->defines );
+		ByteBuffer_Write_STDStringArray( &buffer, config->additional_includes );
+		ByteBuffer_Write_STDStringArray( &buffer, config->additional_lib_paths );
+		ByteBuffer_Write_STDStringArray( &buffer, config->additional_libs );
+		ByteBuffer_Write_STDStringArray( &buffer, config->ignore_warnings );
 
-		ByteBuffer_Write_StringField( &buffer, "binary_name", config->binary_name.c_str() );
-		ByteBuffer_Write_StringField( &buffer, "binary_folder", config->binary_folder.c_str() );
+		ByteBuffer_Write_CString( &buffer, config->binary_name.c_str() );
+		ByteBuffer_Write_CString( &buffer, config->binary_folder.c_str() );
 
 		ByteBuffer_Write_S32( &buffer, config->binary_type );
 		ByteBuffer_Write_S32( &buffer, config->optimization_level );
@@ -1360,21 +1267,18 @@ static bool8 BuildInfo_Write( const buildContext_t* context, const buildInfoData
 		{
 			std::vector<std::vector<std::string>> configIncludeDependencies = buildInfoData->includeDependencies[configIndex];
 
-			ByteBuffer_Write_IntField_U64( &buffer, "source_files_include_dependencies", configIncludeDependencies.size() );
+			ByteBuffer_Write_U64( &buffer, configIncludeDependencies.size() );
 
 			For ( u64, sourceFileIndex, 0, configIncludeDependencies.size() ) {
 				std::vector<std::string> includeDependencies = configIncludeDependencies[sourceFileIndex];
 
-				ByteBuffer_Write_IntField_U64( &buffer, "include_dependencies", includeDependencies.size() );
+				ByteBuffer_Write_U64( &buffer, includeDependencies.size() );
 
 				For ( u64, includeDepdendencyIndex, 0, includeDependencies.size() ) {
 					ByteBuffer_Write_CString( &buffer, includeDependencies[includeDepdendencyIndex].c_str() );
-					ByteBuffer_Write_CString( &buffer, "\n" );
 				}
 			}
 		}
-
-		ByteBuffer_Write_CString( &buffer, "\n" );
 
 		mem_reset_temp_storage();
 	}

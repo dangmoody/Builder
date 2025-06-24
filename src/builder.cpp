@@ -1719,8 +1719,6 @@ int main( int argc, char** argv ) {
 		buildInfoData.userConfigSourceFilename = context.inputFile;
 	}
 
-	s32 exitCode = 0;
-
 	Library library = {};
 	defer( if ( library.ptr ) library_unload( &library ) );
 

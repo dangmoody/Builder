@@ -1689,8 +1689,6 @@ int main( int argc, char** argv ) {
 
 				buildInfoData.configs = options.configs;
 
-				buildInfoData.includeDependencies.resize( buildInfoData.configs.size() );
-
 				// if the user wants to generate a visual studio solution then do that now
 				if ( options.generate_solution ) {
 					// you either want to generate a visual studio solution or build this config, but not both
@@ -1779,6 +1777,8 @@ int main( int argc, char** argv ) {
 				}
 			}
 		}
+
+		buildInfoData.includeDependencies.resize( buildInfoData.configs.size() );
 
 		// none of the configs can have the same name
 		// TODO(DM): 14/11/2024: can we do better than o(n^2) here?

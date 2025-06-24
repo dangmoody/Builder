@@ -1370,7 +1370,6 @@ static bool8 BuildInfo_Write( const buildContext_t* context, const buildInfoData
 				For ( u64, includeDepdendencyIndex, 0, includeDependencies.size() ) {
 					ByteBuffer_Write_CString( &buffer, includeDependencies[includeDepdendencyIndex].c_str() );
 					ByteBuffer_Write_CString( &buffer, "\n" );
-					//ByteBuffer_Write_U64( &buffer, includeDependency->lastWriteTime );
 				}
 			}
 		}

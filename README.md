@@ -115,6 +115,8 @@ If you only have the one config then you don't need to pass `--config=` at the c
 
 See the `BuildConfig` struct inside `builder.h` for a full list of all the things that you can configure in your build.
 
+When the build source file is getting compiled, Builder will a custom `#define` called `BUILDER_DOING_USER_CONFIG_BUILD`.  This can be useful if you need to seperate your `build.cpp` file from the other code files.
+
 Builder also has other entry points:
 * `on_pre_build()` - This gets run just before your program gets compiled.
 * `on_post_build()` - This gets run just after your program gets compiled.

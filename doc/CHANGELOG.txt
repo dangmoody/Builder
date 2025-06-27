@@ -22,8 +22,6 @@ v0.7.0, 27/06/2025:
 		* .build_info file read and write time.
 		* Dependency file read time.
 		* Maybe more, in future.
-* Added -Wno-nontrivial-memcall to the list of default ignored warnings.
-	* This warning seems to fire every time we do pointer arithmetic, which is tedious.
 * Removed all default ignored warnings.
 	* Because users can now set their own warning level(s) for their builds, it makes no sense for Builder to ignore a bunch by default.
 	* This gives you more control over your builds.

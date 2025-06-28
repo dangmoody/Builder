@@ -1,3 +1,9 @@
+v0.7.1, <RELEASE DATE HERE>:
+
+* Added a timer for first time setup, if it runs.
+
+----------------------------------------------------------------
+
 v0.7.0, 27/06/2025:
 
 * Reduced build times (round 2)!

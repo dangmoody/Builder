@@ -1277,11 +1277,11 @@ static void AddBuildConfigAndDependenciesUnique( buildContext_t* context, BuildC
 int main( int argc, char** argv ) {
 	float64 totalTimeStart = time_ms();
 
-	float64 userConfigBuildTimeMS = -1.0f;
-	float64 setBuilderOptionsTimeMS = -1.0f;
-	float64 visualStudioGenerationTimeMS = -1.0f;
-	float64 buildInfoReadTimeMS = -1.0f;
-	float64 buildInfoWriteTimeMS = -1.0f;
+	float64 userConfigBuildTimeMS = -1.0;
+	float64 setBuilderOptionsTimeMS = -1.0;
+	float64 visualStudioGenerationTimeMS = -1.0;
+	float64 buildInfoReadTimeMS = -1.0;
+	float64 buildInfoWriteTimeMS = -1.0;
 
 	core_init( MEM_MEGABYTES( 128 ) );	// TODO(DM): 26/03/2025: can we just use defaults for this now?
 	defer( core_shutdown() );
@@ -1298,8 +1298,10 @@ int main( int argc, char** argv ) {
 #endif
 
 	// check if we need to perform first time setup
+	bool8 doFirstTimeSetup = false;
+	float64 firstTimeSetupTimeMS = -1.0;
 	{
-		bool8 doFirstTimeSetup = false;
+		float64 firstTimeSetupStartTimeMS = time_ms();
 
 		// on exit set the CWD back to what we had before
 		const char* oldCWD = path_current_working_directory();
@@ -1429,6 +1431,10 @@ int main( int argc, char** argv ) {
 		}
 
 		mem_reset_temp_storage();
+
+		float64 firstTimeSetupEndTimeMS = time_ms();
+
+		firstTimeSetupTimeMS = firstTimeSetupEndTimeMS - firstTimeSetupStartTimeMS;
 	}
 
 	//const char* inputFile = NULL;
@@ -1979,6 +1985,9 @@ int main( int argc, char** argv ) {
 	float64 totalTimeEnd = time_ms();
 
 	printf( "Build finished:\n" );
+	if ( doFirstTimeSetup ) {
+		printf( "    First time setup:    %f ms\n", firstTimeSetupTimeMS );
+	}
 	if ( doUserConfigBuild ) {
 		printf( "    User config build:   %f ms%s\n", userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? " (skipped)" : "" );
 	}

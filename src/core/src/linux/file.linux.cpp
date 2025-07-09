@@ -26,11 +26,6 @@ SOFTWARE.
 ===========================================================================
 */
 
-#pragma once
-
-// TODO(DM): many functions in here need filling out
-// some functions are the same as the windows version and do not make OS-specific calls, so maybe move those into a common source file?
-
 #ifdef __linux__
 
 #include <file.h>
@@ -38,30 +33,37 @@ SOFTWARE.
 /*
 ================================================================================================
 
-	File
+	Linux File IO implementations
 
 ================================================================================================
 */
 
+enum {
+	INVALID_HANDLE_VALUE = 0xFFFFFFFF,
+};
+
 static bool8 create_folder_internal( const char* path ) {
-	unused( path );
+	int result = mkdir( path, S_IRWXU | S_IRWXG | S_IRWXO );
+	int err = errno;
 
-	return false;
+	if ( ( result != 0 ) && ( err != EEXIST ) ) {
+		assert( result == 0, "ERROR: Failed to create directory \"%s\": %s\n", path, strerror( err ) );
+	}
+
+	return result == 0;
 }
-
-//================================================================
 
 File file_open( const char* filename ) {
 	unused( filename );
 
-	return { NULL, 0 };
+	return { INVALID_HANDLE_VALUE, 0 };
 }
 
 File file_open_or_create( const char* filename, const bool8 keep_existing_content ) {
 	unused( filename );
 	unused( keep_existing_content );
 
-	return { NULL, 0 };
+	return { INVALID_HANDLE_VALUE, 0 };
 }
 
 bool8 file_close( File* file ) {
@@ -78,137 +80,69 @@ bool8 file_copy( const char* original_path, const char* new_path ) {
 }
 
 bool8 file_rename( const char* old_filename, const char* new_filename ) {
-	unused( old_filename );
-	unused( new_filename );
+	assert( old_filename );
+	assert( new_filename );
 
-	return false;
-}
+	int result = rename( old_filename, new_filename );
+	int err = errno;
 
-void file_free_buffer( char** buffer ) {
-	//TODO(TOM): Figure out how to configure the file IO allocator
-	Allocator* platform_allocator = g_core_ptr->allocator_stack[0];
+	assertf( "Failed to rename file \"%s\" to \"%s\": %s.\n", strerror( err ) );
 
-	mem_push_allocator( platform_allocator );
-	defer( mem_pop_allocator() );
-
-	mem_free( *buffer );
-	*buffer = NULL;
-}
-
-bool8 file_read_entire( const char* filename, char** outBuffer, u64* out_file_length ) {
-	assertf( filename, "Specified file name to read from cannot be null." );
-	assertf( !*outBuffer, "Specified out-buffer MUST be null because this function news it." );
-
-	//TODO(TOM): Figure out how to configure the file IO allocator
-	Allocator* platform_allocator = g_core_ptr->allocator_stack[0];
-
-	mem_push_allocator( platform_allocator );
-	defer( mem_pop_allocator() );
-
-	File file = file_open( filename );
-
-	if ( file.ptr == NULL ) {
-		return 0;
-	}
-
-	u64 file_size = file_get_size( file );
-
-	char* temp = cast( char*, mem_alloc( file_size + 1 ) );
-
-	bool8 read = file_read( &file, 0, file_size, temp );
-
-	file_close( &file );
-
-	temp[file_size] = 0;
-
-	*outBuffer = temp;
-
-	if ( out_file_length ) {
-		*out_file_length = file_size;
-	}
-
-	return read;
-}
-
-bool8 file_read( File* file, const u64 size, void* out_data ) {
-	bool8 read = file_read( file, file->offset, size, out_data );
-
-	if ( read ) {
-		file->offset += size;
-	}
-
-	return read;
+	return result == 0;
 }
 
 bool8 file_read( File* file, const u64 offset, const u64 size, void* out_data ) {
-	unused( file );
-	unused( offset );
-	unused( size );
-	unused( out_data );
+	assert( file && file->handle != INVALID_FILE_HANDLE );
+	assert( size );
+	assert( out_data );
 
-	return false;
-}
+	ssize_t bytes_read = pread( file->handle, out_data, size, offset );
+	int err = errno;
 
-bool8 file_write_entire( const char* filename, const void* data, const u64 size ) {
-	assertf( filename, "File name cannot be null." );
-	assertf( data, "Write data cannot be null." );
+	assertf( bytes_read == size, "Failed to read %llu bytes of file at offset %llu: %s.\n", size, offset, strerror( err ) );
 
-	File file = file_open_or_create( filename );
-
-	if ( file.ptr == NULL ) {
-		return false;
-	}
-
-	defer( file_close( &file ) );
-
-	return file_write( &file, data, 0, size );
-}
-
-bool8 file_write( File* file, const void* data, const u64 size ) {
-	bool8 written = file_write( file, data, file->offset, size );
-
-	if ( written ) {
-		file->offset += size;
-	}
-
-	return written;
-}
-
-bool8 file_write( File* file, const char* data ) {
-	return file_write( file, data, strlen( data ) * sizeof( char ) );
-}
-
-bool8 file_write_line( File* file, const char* line ) {
-	bool8 main_write = file_write( file, line );
-	return main_write && file_write( file, "\n" );
+	return bytes_read == size;
 }
 
 bool8 file_write( File* file, const void* data, const u64 offset, const u64 size ) {
-	unused( file );
-	unused( data );
-	unused( offset );
-	unused( size );
+	assert( file && file->handle != INVALID_FILE_HANDLE );
+	assert( data );
+	assert( size );
 
-	return false;
+	ssize_t bytes_written = pwrite( file->handle, data, size, offset );
+	int err = errno;
+
+	assertf( bytes_written == size, "Failed to write %llu bytes of file at offset %llu: %s.\n", size, offset, strerror( err ) );
+
+	return bytes_written == size;
 }
 
 bool8 file_delete( const char* filename ) {
-	unused( filename );
+	assert( filename );
 
-	return false;
+	int result = remove( filename );
+	int err = errno;
+
+	assertf( result == 0, "Failed to delete file \"%s\": %s.\n", strerror( err ) );
+
+	return result == 0;
 }
 
 u64 file_get_size( const File file ) {
-	unused( file );
+	stat file_stat = {};
+	int result = fstat( file->handle, &file_stat );
+	int err = errno;
 
-	return 0;
+	assertf( result == 0, "Failed to get size of file: %s\n", strerror( err ) );
+
+	return file_stat.st_size;
 }
 
 File file_find_first( const char* path, FileInfo* out_file_info ) {
 	unused( path );
 	unused( out_file_info );
 
-	return { NULL, 0 };
+	return { INVALID_HANDLE_VALUE, 0 };
 }
 
 bool8 file_find_next( File* first_file, FileInfo* out_file_info ) {
@@ -218,53 +152,35 @@ bool8 file_find_next( File* first_file, FileInfo* out_file_info ) {
 	return false;
 }
 
-bool8 folder_create_if_it_doesnt_exist( const char* path ) {
-	assertf( path, "Path cannot be NULL." );
-
-	// if already here, no problem
-	if ( folder_exists( path ) ) {
-		return true;
-	}
-
-	// otherwise create the folder
-	{
-		bool8 result = false;
-
-		u64 path_len = strlen( path );
-
-		// dont process trailing slash if one exists
-		// otherwise we will get duplicate results for sub-dirs to parse
-		//if ( path[path_len - 1] == '/' ) {
-		//	path_len--;
-		//}
-
-		for ( u64 i = 0; i <= path_len; i++ ) {
-			if ( path[i] != '/' && path[i] != '\0' && path[i] != '\\' ) {
-				continue;
-			}
-
-			char name[1024] = {};
-			strncpy( name, path, i );
-
-			result |= create_folder_internal( name );
-		}
-
-		return result;
-	}
-}
-
 bool8 folder_delete( const char* path ) {
-	unused( path );
+	assert( path );
 
-	return false;
+	int result = rmdir( path );
+	int err = errno;
+
+	assertf( result == 0, "Failed to delete folder \"%s\": %s.\n", strerror( err ) );
+
+	return result == 0;
 }
 
 bool8 folder_exists( const char* path ) {
-	unused( path );
+	assert( path );
 
+	DIR* dir = opendir( path );
+	int err = errno;
+
+	if ( dir ) {
+		closedir( dir );
+		return true;
+	} else if ( err == ENOENT ) {
+		return false;
+	}
+
+	assertf( false, "Failed to check if the folder exists: %s\n", strerror( err ) );
 	return false;
 }
 
+// TODO(DM): 09/07/2025: do we still want this?
 u64 folder_get_num_files( const char* path ) {
 	unused( path );
 

@@ -42,7 +42,7 @@ SOFTWARE.
 /*
 ================================================================================================
 
-	File
+	Win64 File IO implementations
 
 ================================================================================================
 */
@@ -59,7 +59,7 @@ static File open_file_internal( const char* filename, const DWORD access_flags, 
 	// TODO(DM): allow setting a logging level for the file system? verbose logging?
 	//printf( "%s last error: 0x%08X\n", __FUNCTION__, GetLastError() );
 
-	return { handle, 0 };
+	return { cast( u64, handle ), 0 };
 }
 
 //static File open_or_create_file_internal( const char* filename, const DWORD access_flags, const DWORD creation_disposition ) {
@@ -119,15 +119,15 @@ File file_open_or_create( const char* filename, const bool8 keep_existing_conten
 }
 
 bool8 file_close( File* file ) {
-	assertf( file, "The file->ptr can be NULL, but the pointer to the handle MUST be non-NULL." );
+	assertf( file, "The file->handle can be invalid, but the pointer to the handle MUST be non-NULL." );
 
-	HANDLE handle = cast( HANDLE, file->ptr );
+	HANDLE handle = cast( HANDLE, file->handle );
 
 	BOOL result = CloseHandle( handle );
 
 	//printf( "%s() last error: 0x%08X\n", __FUNCTION__, GetLastError() );
 
-	file->ptr = INVALID_HANDLE_VALUE;
+	file->handle = INVALID_HANDLE_VALUE;
 
 	return cast( bool8, result );
 }
@@ -153,71 +153,15 @@ bool8 file_rename( const char* old_filename, const char* new_filename ) {
 	return renamed;
 }
 
-void file_free_buffer( char** buffer ) {
-	//TODO(TOM): Figure out how to configure the file IO allocator
-	Allocator* platform_allocator = g_core_ptr->allocator_stack[0];
-
-	mem_push_allocator( platform_allocator );
-	defer( mem_pop_allocator() );
-
-	mem_free( *buffer );
-	*buffer = NULL;
-}
-
-bool8 file_read_entire( const char* filename, char** outBuffer, u64* out_file_length ) {
-	assertf( filename, "Specified file name to read from cannot be null." );
-	assertf( !*outBuffer, "Specified out-buffer MUST be null because this function news it." );
-
-	//TODO(TOM): Figure out how to configure the file IO allocator
-	Allocator* platform_allocator = g_core_ptr->allocator_stack[0];
-
-	mem_push_allocator( platform_allocator );
-	defer( mem_pop_allocator() );
-
-	File file = file_open( filename );
-
-	if ( file.ptr == NULL ) {
-		return 0;
-	}
-
-	u64 file_size = file_get_size( file );
-
-	char* temp = cast( char*, mem_alloc( file_size + 1 ) );
-
-	bool8 read = file_read( &file, 0, file_size, temp );
-
-	file_close( &file );
-
-	temp[file_size] = 0;
-
-	*outBuffer = temp;
-
-	if ( out_file_length ) {
-		*out_file_length = file_size;
-	}
-
-	return read;
-}
-
-bool8 file_read( File* file, const u64 size, void* out_data ) {
-	bool8 read = file_read( file, file->offset, size, out_data );
-
-	if ( read ) {
-		file->offset += size;
-	}
-
-	return read;
-}
-
 bool8 file_read( File* file, const u64 offset, const u64 size, void* out_data ) {
-	assertf( file && file->ptr, "File cannot be null." );
+	assert( file && file->handle != INVALID_HANDLE_VALUE );
 	assertf( out_data, "Out data cannot be null." );
 
 	if ( size == 0 ) {
 		return 0;
 	}
 
-	HANDLE handle = cast( HANDLE, file->ptr );
+	HANDLE handle = cast( HANDLE, file->handle );
 
 	DWORD bytes_read = 0;
 	DWORD bytes_to_read = cast( DWORD, size );
@@ -247,49 +191,15 @@ bool8 file_read( File* file, const u64 offset, const u64 size, void* out_data ) 
 	return bytes_read == size;
 }
 
-bool8 file_write_entire( const char* filename, const void* data, const u64 size ) {
-	assertf( filename, "File name cannot be null." );
-	assertf( data, "Write data cannot be null." );
-
-	File file = file_open_or_create( filename );
-
-	if ( file.ptr == NULL ) {
-		return false;
-	}
-
-	defer( file_close( &file ) );
-
-	return file_write( &file, data, 0, size );
-}
-
-bool8 file_write( File* file, const void* data, const u64 size ) {
-	bool8 written = file_write( file, data, file->offset, size );
-
-	if ( written ) {
-		file->offset += size;
-	}
-
-	return written;
-}
-
-bool8 file_write( File* file, const char* data ) {
-	return file_write( file, data, strlen( data ) * sizeof( char ) );
-}
-
-bool8 file_write_line( File* file, const char* line ) {
-	bool8 main_write = file_write( file, line );
-	return main_write && file_write( file, "\n" );
-}
-
 bool8 file_write( File* file, const void* data, const u64 offset, const u64 size ) {
-	assertf( file && file->ptr, "File cannot be null." );
+	assertf( file && file->handle, "File cannot be null." );
 	assertf( data, "Write data cannot be null." );
 
 	if ( size == 0 ) {
 		return false;
 	}
 
-	HANDLE handle = cast( HANDLE, file->ptr );
+	HANDLE handle = cast( HANDLE, file->handle );
 
 	DWORD bytes_written = 0;
 	DWORD bytes_to_write = cast( DWORD, size );
@@ -367,10 +277,10 @@ File file_find_first( const char* path, FileInfo* out_file_info ) {
 }
 
 bool8 file_find_next( File* first_file, FileInfo* out_file_info ) {
-	assertf( first_file && first_file->ptr, "first_file cannot be invalid." );
+	assertf( first_file && first_file->handle, "first_file cannot be invalid." );
 	assertf( out_file_info, "Out file info cannot be null." );
 
-	HANDLE handle = cast( HANDLE, first_file->ptr );
+	HANDLE handle = cast( HANDLE, first_file->handle );
 
 	WIN32_FIND_DATA info = {};
 	bool8 found = cast( bool8, FindNextFile( handle, &info ) );
@@ -388,41 +298,6 @@ bool8 file_find_next( File* first_file, FileInfo* out_file_info ) {
 	get_file_info_internal( &info, out_file_info );
 
 	return true;
-}
-
-bool8 folder_create_if_it_doesnt_exist( const char* path ) {
-	assertf( path, "Path cannot be NULL." );
-
-	// if already here, no problem
-	if ( folder_exists( path ) ) {
-		return true;
-	}
-
-	// otherwise create the folder
-	{
-		bool8 result = false;
-
-		u64 path_len = strlen( path );
-
-		// dont process trailing slash if one exists
-		// otherwise we will get duplicate results for sub-dirs to parse
-		//if ( path[path_len - 1] == '/' ) {
-		//	path_len--;
-		//}
-
-		for ( u64 i = 0; i <= path_len; i++ ) {
-			if ( path[i] != '/' && path[i] != '\0' && path[i] != '\\' ) {
-				continue;
-			}
-
-			char name[1024] = {};
-			strncpy( name, path, i );
-
-			result |= create_folder_internal( name );
-		}
-
-		return result;
-	}
 }
 
 bool8 folder_delete( const char* path ) {

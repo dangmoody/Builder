@@ -48,7 +48,7 @@ SOFTWARE.
 #endif // __linux__
 
 struct File {
-	void*	ptr;
+	u64		handle;
 	u64		offset;
 };
 

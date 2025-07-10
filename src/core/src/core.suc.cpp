@@ -45,6 +45,7 @@ SOFTWARE.
 #include "cmd_line_args.cpp"
 #include "core_string.cpp"
 #include "debug.cpp"
+#include "file.cpp"
 #include "hashmap.cpp"
 #include "math.cpp"
 #include "random.cpp"

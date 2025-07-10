@@ -59,7 +59,7 @@ bool8 file_read_entire( const char* filename, char** outBuffer, u64* out_file_le
 
 	File file = file_open( filename );
 
-	if ( file.ptr == NULL ) {
+	if ( file.handle == INVALID_FILE_HANDLE ) {
 		return 0;
 	}
 
@@ -98,7 +98,7 @@ bool8 file_write_entire( const char* filename, const void* data, const u64 size 
 
 	File file = file_open_or_create( filename );
 
-	if ( file.ptr == NULL ) {
+	if ( file.handle == INVALID_FILE_HANDLE ) {
 		return false;
 	}
 

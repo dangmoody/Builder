@@ -42,6 +42,8 @@ SOFTWARE.
 ================================================================================================
 */
 
+#define INVALID_FILE_HANDLE U64_MAX
+
 #ifdef __linux__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wpadded"

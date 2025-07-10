@@ -93,15 +93,6 @@ enum doingBuildFrom_t {
 #pragma clang diagnostic ignored "-Wpadded"
 #endif
 
-// TODO (MY) - Discuss with DM - on windows a 64bit integer is a "long long", but on posix it's "long". This changes the syntax of what's needed for printf. This is something core should probably handle in core_types.h
-#if defined(_WIN32)
-#define PRIu64 "llu"
-#elif defined(__linux__)
-#define PRIu64 "lu"
-#else
-#error Unrecognised platform
-#endif
-
 struct builderVersion_t {
 	s32	major;
 	s32	minor;
@@ -116,19 +107,11 @@ struct buildInfoData_t {
 	std::vector<std::vector<std::vector<std::string>>>	includeDependencies;
 };
 
-errorCode_t GetLastErrorCode() {
-#ifdef _WIN64
-	return GetLastError();
-#else
-#error Unrecognised platform!
-#endif
-}
-
 static u64 GetLastFileWriteTime( const char* filename ) {
 	FileInfo fileInfo;
 	File file = file_find_first( filename, &fileInfo );
 
-	assert( file.ptr != INVALID_HANDLE_VALUE );
+	assert( file.handle != INVALID_FILE_HANDLE );
 
 	return fileInfo.last_write_time;
 }
@@ -448,7 +431,7 @@ static void ReadDependencyFile( const char* depFilename, std::vector<std::string
 		// get the file timestamp
 		FileInfo fileInfo;
 		File foundFile = file_find_first( dependencyFilename.c_str(), &fileInfo );
-		assert( foundFile.ptr != INVALID_HANDLE_VALUE );
+		assert( foundFile.handle != INVALID_FILE_HANDLE );
 		u64 lastWriteTime = fileInfo.last_write_time;
 
 		//printf( "Parsing dependency %s, last write time = %llu\n", dependencyFilename.c_str(), lastWriteTime );
@@ -474,7 +457,7 @@ static void ReadDependencyFile( const char* depFilename, std::vector<std::string
 static buildResult_t BuildBinary( buildContext_t* context ) {
 	// create binary folder
 	if ( !folder_create_if_it_doesnt_exist( context->config.binary_folder.c_str() ) ) {
-		errorCode_t errorCode = GetLastErrorCode();
+		errorCode_t errorCode = get_last_error_code();
 		fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".  Error code: " ERROR_CODE_FORMAT "\n", SET_BUILDER_OPTIONS_FUNC_NAME, context->config.binary_folder.c_str(), errorCode );
 		return BUILD_RESULT_FAILED;
 	}
@@ -482,7 +465,7 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 	// create intermediate folder
 	const char* intermediatePath = tprintf( "%s%c%s", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
 	if ( !folder_create_if_it_doesnt_exist( intermediatePath ) ) {
-		errorCode_t errorCode = GetLastErrorCode();
+		errorCode_t errorCode = get_last_error_code();
 		fatal_error( "Failed to create intermediate binary folder.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
 		return BUILD_RESULT_FAILED;
 	}
@@ -544,7 +527,7 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 
 			// if the .o file doesnt exist then assume we havent built this file yet
 			// if the .o file does exist but the source file was written to it more recently then we know we want to rebuild
-			if ( ( intermediateFile.ptr == INVALID_HANDLE_VALUE ) || ( GetLastFileWriteTime( sourceFile ) > intermediateFileInfo.last_write_time ) ) {
+			if ( ( intermediateFile.handle == INVALID_FILE_HANDLE ) || ( GetLastFileWriteTime( sourceFile ) > intermediateFileInfo.last_write_time ) ) {
 				anyFileIsNewer = true;
 			}
 
@@ -725,7 +708,7 @@ static bool8 FileExists( const char* filename ) {
 	FileInfo fileInfo = {};
 	File file = file_find_first( filename, &fileInfo );
 
-	return file.ptr != INVALID_HANDLE_VALUE;
+	return file.handle != INVALID_FILE_HANDLE;
 }
 
 static void NukeFolderInternal_r( const char* folder, const bool8 verbose ) {
@@ -906,7 +889,7 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, const 
 		FileInfo fileInfo = {};
 		File file = file_find_first( fullSearchPath, &fileInfo );
 
-		if ( file.ptr != INVALID_HANDLE_VALUE ) {
+		if ( file.handle != INVALID_FILE_HANDLE ) {
 			do {
 				if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) ) {
 					continue;
@@ -1370,7 +1353,7 @@ int main( int argc, char** argv ) {
 			const char* clangInstallerFilename = tprintf( "LLVM-%d.%d.%d-win64.exe", BUILDER_CLANG_VERSION_MAJOR, BUILDER_CLANG_VERSION_MINOR, BUILDER_CLANG_VERSION_PATCH );
 
 			if ( !folder_create_if_it_doesnt_exist( tprintf( ".%ctemp", PATH_SEPARATOR ) ) ) {
-				errorCode_t errorCode = GetLastErrorCode();
+				errorCode_t errorCode = get_last_error_code();
 				error( "Failed to create the temp folder that the Clang install uses.  Is it possible you have whacky user permissions? Error code: " ERROR_CODE_FORMAT "\n", errorCode );
 				QUIT_ERROR();
 			}
@@ -2007,7 +1990,7 @@ int main( int argc, char** argv ) {
 	if ( doUserConfigBuild ) {
 		printf( "    User config build:   %f ms%s\n", userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? " (skipped)" : "" );
 	}
-	if ( !doubleeq( setBuilderOptionsTimeMS, -1.0 ) ) {
+	if ( !hlml::doubleeq( setBuilderOptionsTimeMS, -1.0 ) ) {
 		printf( "    set_builder_options: %f ms\n", setBuilderOptionsTimeMS );
 	}
 	if ( options.generate_solution ) {

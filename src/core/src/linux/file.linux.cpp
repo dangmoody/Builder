@@ -30,6 +30,10 @@ SOFTWARE.
 
 #include <file.h>
 
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <dirent.h>
+
 /*
 ================================================================================================
 
@@ -38,16 +42,12 @@ SOFTWARE.
 ================================================================================================
 */
 
-enum {
-	INVALID_HANDLE_VALUE = 0xFFFFFFFF,
-};
-
 static bool8 create_folder_internal( const char* path ) {
 	int result = mkdir( path, S_IRWXU | S_IRWXG | S_IRWXO );
 	int err = errno;
 
 	if ( ( result != 0 ) && ( err != EEXIST ) ) {
-		assert( result == 0, "ERROR: Failed to create directory \"%s\": %s\n", path, strerror( err ) );
+		assertf( result == 0, "ERROR: Failed to create directory \"%s\": %s\n", path, strerror( err ) );
 	}
 
 	return result == 0;
@@ -56,14 +56,14 @@ static bool8 create_folder_internal( const char* path ) {
 File file_open( const char* filename ) {
 	unused( filename );
 
-	return { INVALID_HANDLE_VALUE, 0 };
+	return { INVALID_FILE_HANDLE, 0 };
 }
 
 File file_open_or_create( const char* filename, const bool8 keep_existing_content ) {
 	unused( filename );
 	unused( keep_existing_content );
 
-	return { INVALID_HANDLE_VALUE, 0 };
+	return { INVALID_FILE_HANDLE, 0 };
 }
 
 bool8 file_close( File* file ) {
@@ -96,12 +96,12 @@ bool8 file_read( File* file, const u64 offset, const u64 size, void* out_data ) 
 	assert( size );
 	assert( out_data );
 
-	ssize_t bytes_read = pread( file->handle, out_data, size, offset );
+	ssize_t bytes_read = pread( trunc_cast( int, file->handle ), out_data, size, trunc_cast( off_t, offset ) );
 	int err = errno;
 
 	assertf( bytes_read == size, "Failed to read %llu bytes of file at offset %llu: %s.\n", size, offset, strerror( err ) );
 
-	return bytes_read == size;
+	return trunc_cast( u64, bytes_read ) == size;
 }
 
 bool8 file_write( File* file, const void* data, const u64 offset, const u64 size ) {
@@ -109,12 +109,12 @@ bool8 file_write( File* file, const void* data, const u64 offset, const u64 size
 	assert( data );
 	assert( size );
 
-	ssize_t bytes_written = pwrite( file->handle, data, size, offset );
+	ssize_t bytes_written = pwrite( trunc_cast( int, file->handle ), data, size, trunc_cast( off_t, offset ) );
 	int err = errno;
 
 	assertf( bytes_written == size, "Failed to write %llu bytes of file at offset %llu: %s.\n", size, offset, strerror( err ) );
 
-	return bytes_written == size;
+	return trunc_cast( u64, bytes_written ) == size;
 }
 
 bool8 file_delete( const char* filename ) {
@@ -129,20 +129,20 @@ bool8 file_delete( const char* filename ) {
 }
 
 u64 file_get_size( const File file ) {
-	stat file_stat = {};
-	int result = fstat( file->handle, &file_stat );
+	struct stat file_stat = {};
+	int result = fstat( trunc_cast( int, file.handle ), &file_stat );
 	int err = errno;
 
 	assertf( result == 0, "Failed to get size of file: %s\n", strerror( err ) );
 
-	return file_stat.st_size;
+	return trunc_cast( u64, file_stat.st_size );
 }
 
 File file_find_first( const char* path, FileInfo* out_file_info ) {
 	unused( path );
 	unused( out_file_info );
 
-	return { INVALID_HANDLE_VALUE, 0 };
+	return { INVALID_FILE_HANDLE, 0 };
 }
 
 bool8 file_find_next( File* first_file, FileInfo* out_file_info ) {

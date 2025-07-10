@@ -33,10 +33,12 @@ SOFTWARE.
 
 // TODO(DM): the only reason this exists is because we call IsDebuggerPresent() and __debugbreak() in this file
 // that probably wants to be moved into a .inl in that case
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <Windows.h>
+#if defined( _WIN32 )
+	#define WIN32_LEAN_AND_MEAN
+	#define NOMINMAX
+	#include <Windows.h>
+#elif defined( __linux__ )
+	#include<signal.h>
 #endif
 
 #ifdef _WIN32
@@ -101,14 +103,17 @@ CORE_API void					fatal_error_internal( const char* file, const int line, const 
 		} while ( 0 )
 #endif
 
-#ifdef _DEBUG
-	#ifdef _WIN32
+#if defined( _DEBUG )
+	#if defined( _WIN32 )
 		#define debug_break() \
 			do { \
 				if ( IsDebuggerPresent() ) { \
 					__debugbreak(); \
 				} \
 			} while ( 0 )
+	#elif defined( __linux__ )
+		#define debug_break() \
+			raise( SIGTRAP )
 	#else
 		#error Unrecognised platform.
 	#endif

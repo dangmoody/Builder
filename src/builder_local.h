@@ -40,6 +40,7 @@ SOFTWARE.
 #endif
 
 #include <vector>
+//#include <string>
 
 #define ARG_HELP_SHORT		"-h"
 #define ARG_HELP_LONG		"--help"
@@ -70,6 +71,8 @@ struct buildContext_t {
 
 	Hashmap*			configIndices;
 
+	std::vector<std::vector<std::string>>	includeDependencies;
+
 	// TODO(DM): 10/08/2024: does this want to be inside BuilderOptions?
 	// it would give users more control over their build
 	buildContextFlags_t	flags;
@@ -88,11 +91,11 @@ struct buildContext_t {
 void		NukeFolder_r( const char* folder, const bool8 deleteRoot, const bool8 verbose );
 
 const char*	GetSlashInPath( const char* path );
-bool8		PathHasSlash( const char* path );
+//bool8		PathHasSlash( const char* path );
 
 bool8		FileIsSourceFile( const char* filename );
 bool8		FileIsHeaderFile( const char* filename );
-void		GetAllSubfolders_r( const char* basePath, const char* folder, Array<const char*>* outSubfolders );
+//void		GetAllSubfolders_r( const char* basePath, const char* folder, Array<const char*>* outSubfolders );
 
 const char*	BuildConfig_GetFullBinaryName( const BuildConfig* config );
 void		BuildConfig_AddDefaults( BuildConfig* outConfig );

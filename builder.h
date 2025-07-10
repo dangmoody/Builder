@@ -92,6 +92,10 @@ struct BuildConfig {
 	// Uses the Clang syntax (E.G.: -Wno-newline-eof).
 	std::vector<std::string>	ignore_warnings;
 
+	// The warning/diagnostic groups that you want to enable.
+	// Allowed values: -Weverything, -Wall, -Wextra, -Wpedantic.
+	std::vector<std::string>	warning_levels;
+
 	// The name that the built binary is going to have.
 	// This will be placed inside binary_folder, if you set that.
 	std::string					binary_name;

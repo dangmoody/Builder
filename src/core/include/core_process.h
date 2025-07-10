@@ -34,8 +34,14 @@ SOFTWARE.
 
 struct Process;
 
+enum ProcessFlagBits {
+	PROCESS_FLAG_ASYNC	= 1,
+	PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR,
+};
+typedef u32 ProcessFlags;
 
-CORE_API Process*	process_create( Array<const char*>* args, Array<const char*>* environment_variables );
+
+CORE_API Process*	process_create( Array<const char*>* args, Array<const char*>* environment_variables, const ProcessFlags flags );
 
 CORE_API void		process_destroy( Process* process );
 

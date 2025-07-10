@@ -6,12 +6,20 @@ clang
 
 .builder
 
+*.o
+
 builder.exe
 builder_tests.exe
+
+# ignore test binaries
+tests/**/*.exe
+tests/**/*.ilk
+tests/**/*.pdb
 
 releases/**/*
 
 bug_reports/**/*
+
 
 #
 # visual studio stuff
@@ -19,7 +27,14 @@ bug_reports/**/*
 .vs
 x64
 
+
 #
 # rider stuff
 #
 .idea
+
+# ignore test-generated visual studio solutions
+tests/**/*.sln
+tests/**/*.vcxproj
+tests/**/*.vcxproj.user
+tests/**/*.vcxproj.filters

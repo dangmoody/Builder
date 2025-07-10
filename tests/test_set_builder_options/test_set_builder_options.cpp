@@ -1,8 +1,11 @@
 // this test is for configuring as many things through set_builder_options() as possible
 
-#include <builder.h>
-
 #include <stdio.h>
+
+// you can use this #define if you need to seperate your build script from your actual program code
+#if BUILDER_DOING_USER_CONFIG_BUILD
+
+#include <builder.h>
 
 BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	BuildConfig debug = {
@@ -24,6 +27,8 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	add_build_config( options, &debug );
 	add_build_config( options, &release );
 }
+
+#endif // BUILDER_DOING_USER_CONFIG_BUILD
 
 int main() {
 	int exitCode = 420;

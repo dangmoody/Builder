@@ -23,7 +23,7 @@ static bool8 FileExists( const char* filename ) {
 }
 
 static s32 RunProc( Array<const char*>* args ) {
-	Process* process = process_create( args, NULL );
+	Process* process = process_create( args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
 	defer( process_destroy( process ) );
 
 	{
@@ -230,6 +230,7 @@ TEMPER_TEST( Compile_DynamicLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 	}
 }
 
+// TODO(DM): this!
 TEMPER_TEST( RebuildSkipping, TEMPER_FLAG_SHOULD_RUN ) {
 
 }

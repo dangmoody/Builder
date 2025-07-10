@@ -48,6 +48,7 @@ struct Allocator;
 */
 
 struct CORE_API String {
+	char*		original_data = NULL;
 	char*		data = NULL;
 	u64			count = 0;
 	Allocator*	allocator = NULL;

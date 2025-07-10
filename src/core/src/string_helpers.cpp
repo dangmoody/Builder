@@ -65,6 +65,12 @@ bool8 string_starts_with( const char* str, const char* prefix ) {
 	return strncmp( str, prefix, strlen( prefix ) ) == 0;
 }
 
+bool8 string_ends_with( const char* str, const char end ) {
+	assert( str );
+
+	return str[strlen( str ) - 1] == end;
+}
+
 bool8 string_ends_with( const char* str, const char* suffix ) {
 	assertf( str, "str cannot be NULL." );
 	assertf( suffix, "suffix cannot be NULL." );

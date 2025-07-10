@@ -1,8 +1,25 @@
-v0.7.0, <RELEASE DATE HERE>:
+v0.7.1, <RELEASE DATE HERE>:
 
-* Moved some extraneous logging when generating a Visual Studio solution to only show when verbose logging (-v) argument is specified.
-* Hide unecessary warning that gets fired when doing a hashmap lookup.
-* Time more than just the total time taken to run Builder.exe from start to finish.
+* Added a timer for first time setup, if it runs.
+
+----------------------------------------------------------------
+
+v0.7.0, 27/06/2025:
+
+* Reduced build times (round 2)!
+	* Instead of compiling all source files into a single intermediate file and then passing that to Clang, we now build one intermediate file per compilation unit.
+		* This means faster full rebuilds as well as incremental builds (even SUC builds are faster).
+		* These newly created intermediate files go inside <binary folder>/intermediate.
+	* As a result of the new way we build binaries, all old .build_info files are incompatible.  You will need to delete your .builder folder and rebuild.  Sorry!
+* Added better support for wildcard file resolution so now it works more like Linux.
+	* Before, doing something like src/*.cpp would resolve ALL .cpp files in the src folder as well any found in subfolders.  Now it will NOT resolve files in subfolders.
+	* If you want subfolder file resolution you must follow the linux convention (E.G.: src/**/*.cpp).
+* Added BuildConfig::warning_levels.
+	* Before we used to add all Clang warning levels to builds by default, but now we enable none of them by default.
+	* This is to let people decide how strict they want the compiler to be (we already offered options like this with BuildConfig::warnings_as_errors).
+	* Clang can be quite strict as it is, so let's not annoy people unnecessarily.
+* Added some more timing metrics when doing builds.
+	* We now time more than just the total time taken to run Builder.exe from start to finish.
 	* We're doing this to get a better idea of where build time is being spent when using Builder and therefore how we can make Builder faster.
 	* We now also log:
 		* User config build.
@@ -11,6 +28,13 @@ v0.7.0, <RELEASE DATE HERE>:
 		* .build_info file read and write time.
 		* Dependency file read time.
 		* Maybe more, in future.
+* Removed all default ignored warnings.
+	* Because users can now set their own warning level(s) for their builds, it makes no sense for Builder to ignore a bunch by default.
+	* This gives you more control over your builds.
+* Moved some extraneous logging when generating a Visual Studio solution to only show when verbose logging (-v) argument is specified.
+* Hide unecessary warning that gets fired when doing a hashmap lookup.
+* Fixed builds failing when building the same source file from a different folder location.
+* Fixed builds not skipping when binary has already been built.
 
 ----------------------------------------------------------------
 

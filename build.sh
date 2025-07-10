@@ -43,11 +43,11 @@ fi
 source_files="$source_folder/builder.cpp $source_folder/visual_studio.cpp $source_folder/core/src/core.suc.cpp"
 
 defines="-D_CRT_SECURE_NO_WARNINGS -DCORE_USE_XXHASH -DCORE_SUC -DCORE_USE_SUBPROCESS -DHASHMAP_HIDE_MISSING_KEY_WARNING -DHLML_NAMESPACE"
-if [[ "$config" != "debug" ]]; then
-	defines="$define -D_DEBUG"
+if [[ "$config" == "debug" ]]; then
+	defines="$defines -D_DEBUG"
 fi
 
-if [[ "$config" != "release" ]]; then
+if [[ "$config" == "release" ]]; then
 	defines="$defines -DNDEBUG"
 fi
 

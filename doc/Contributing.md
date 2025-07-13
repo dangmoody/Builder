@@ -16,7 +16,9 @@ You'll need the same version of Clang installed that Builder is currently buildi
 
 #### Linux
 
-You'll need `libuuid`.  We are working to remove this dependency in future, but for now you will need it.
+You'll need `libuuid` (we are working to remove this dependency in future, but for now you will need it).
+
+If you want to use an IDE to open `builder.sln` then you'll also need MSBuild as, somehow, the solution is dependent on it (we are working to remove this dependency in future, but for now you will need it).
 
 ### Compiling Builder
 

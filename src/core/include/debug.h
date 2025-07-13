@@ -77,10 +77,11 @@ enum ConsoleTextColor {
 
 CORE_API void					set_console_text_color( const ConsoleTextColor color );
 
-// logging
+// DO NOT CALL THESE FUNCTIONS DIRECTLY
 CORE_API void					info_internal( const char* function, const char* fmt, ... );
 CORE_API void					warning_internal( const char* function, const char* fmt, ... );
 CORE_API void					error_internal( const char* function, const char* fmt, ... );
+CORE_API void					fatal_error_internal( const char* file, const int line, const char* prefix, const char* fmt, ... );
 
 #define info( fmt, ... )		info_internal( __FUNCTION__, fmt, ##__VA_ARGS__ )
 #define warning( fmt, ... )		warning_internal( __FUNCTION__, fmt, ##__VA_ARGS__ )
@@ -91,9 +92,6 @@ CORE_API LogVerbosity			get_log_verbosity();
 CORE_API void					dump_callstack( void );
 
 CORE_API errorCode_t			get_last_error_code();
-
-// DO NOT CALL THESE FUNCTIONS DIRECTLY
-CORE_API void					fatal_error_internal( const char* file, const int line, const char* prefix, const char* fmt, ... );
 
 #ifndef fatal_error
 	#define fatal_error( fmt, ... )	\
@@ -118,8 +116,8 @@ CORE_API void					fatal_error_internal( const char* file, const int line, const 
 		#error Unrecognised platform.
 	#endif
 
-	// helper macro for debugging
-	// will trigger a breakpoint if the condition is met
+	// Helper macro for debugging.
+	// This will trigger a breakpoint if the condition is met.
 	#define debug_break_here_if( condition ) \
 		do { \
 			if ( (condition) ) { \
@@ -129,7 +127,7 @@ CORE_API void					fatal_error_internal( const char* file, const int line, const 
 
 	#define assert( x ) \
 		do { \
-			if ( !( x ) ) { \
+			if ( !(x) ) { \
 				fatal_error_internal( __FUNCTION__, __LINE__, "ASSERT FAILED", #x ); \
 				debug_break(); \
 			} \
@@ -137,7 +135,7 @@ CORE_API void					fatal_error_internal( const char* file, const int line, const 
 
 	#define assertf( x, fmt, ... ) \
 		do { \
-			if ( !( x ) ) { \
+			if ( !(x) ) { \
 				fatal_error_internal( __FUNCTION__, __LINE__, "ASSERT FAILED", fmt, __VA_ARGS__ ); \
 				debug_break(); \
 			} \

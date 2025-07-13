@@ -1297,6 +1297,108 @@ int main( int argc, char** argv ) {
 	context.verbose = false;
 #endif
 
+	// parse command line args
+	const char* inputConfigName = NULL;
+	u64 inputConfigNameHash = 0;
+
+	doingBuildFrom_t doingBuildFrom = DOING_BUILD_FROM_SOURCE_FILE;
+
+	For ( s32, argIndex, 1, argc ) {
+		const char* arg = argv[argIndex];
+		const u64 argLen = strlen( arg );
+
+		if ( string_equals( arg, ARG_HELP_SHORT ) || string_equals( arg, ARG_HELP_LONG ) ) {
+			return ShowUsage( 0 );
+		}
+
+		if ( string_equals( arg, ARG_VERBOSE_SHORT ) || string_equals( arg, ARG_HELP_LONG ) ) {
+			context.verbose = true;
+			continue;
+		}
+
+		if ( string_ends_with( arg, ".c" ) || string_ends_with( arg, ".cpp" ) ) {
+			if ( context.inputFile != NULL ) {
+				error( "You've already specified a file for me to build.  If you want me to build more than one source file, specify it via %s().\n", SET_BUILDER_OPTIONS_FUNC_NAME );
+				QUIT_ERROR();
+			}
+
+			context.inputFile = arg;
+			doingBuildFrom = DOING_BUILD_FROM_SOURCE_FILE;
+
+			continue;
+		}
+
+		if ( string_ends_with( arg, BUILD_INFO_FILE_EXTENSION ) ) {
+			if ( context.inputFile != NULL ) {
+				error( "You've already specified a file for me to build.  If you want me to build more than one source file, specify it via %s().\n", SET_BUILDER_OPTIONS_FUNC_NAME );
+				QUIT_ERROR();
+			}
+
+			context.inputFile = arg;
+			doingBuildFrom = DOING_BUILD_FROM_BUILD_INFO_FILE;
+
+			continue;
+		}
+
+		if ( string_starts_with( arg, ARG_CONFIG ) ) {
+			const char* equals = strchr( arg, '=' );
+
+			if ( !equals ) {
+				error( "I detected that you want to set a config, but you never gave me the equals (=) immediately after it.  You need to do that.\n" );
+
+				return ShowUsage( 1 );
+			}
+
+			const char* configName = equals + 1;
+
+			if ( strlen( configName ) < 1 ) {
+				error( "You specified the start of the config arg, but you never actually gave me a name for the config.  I need that.\n" );
+
+				return ShowUsage( 1 );
+			}
+
+			inputConfigName = configName;
+			inputConfigNameHash = hash_string( inputConfigName, 0 );
+
+			continue;
+		}
+
+		if ( string_equals( arg, ARG_NUKE ) ) {
+			if ( argIndex == argc - 1 ) {
+				error( "You passed in " ARG_NUKE " but you never told me what folder you want me to nuke.  I need to know!" );
+				QUIT_ERROR();
+			}
+
+			const char* folderToNuke = argv[argIndex + 1];
+
+			printf( "Nuking \"%s\"\n", folderToNuke );
+
+			float64 startTime = time_ms();
+
+			NukeFolder_r( folderToNuke, false, true );
+
+			float64 endTime = time_ms();
+
+			printf( "Done.  %f ms\n", endTime - startTime );
+
+			return 0;
+		}
+
+		// unrecognised arg, show error
+		error( "Unrecognised argument \"%s\".\n", arg );
+		QUIT_ERROR();
+	}
+
+	// validate input file
+	if ( context.inputFile == NULL ) {
+		error(
+			"You haven't told me what source files I need to build.  I need one.\n"
+			"Run builder " ARG_HELP_LONG " if you need help.\n"
+		);
+
+		QUIT_ERROR();
+	}
+
 	// check if we need to perform first time setup
 	bool8 doFirstTimeSetup = false;
 	float64 firstTimeSetupTimeMS = -1.0;
@@ -1436,111 +1538,6 @@ int main( int argc, char** argv ) {
 
 		firstTimeSetupTimeMS = firstTimeSetupEndTimeMS - firstTimeSetupStartTimeMS;
 	}
-
-	//const char* inputFile = NULL;
-
-	const char* inputConfigName = NULL;
-	u64 inputConfigNameHash = 0;
-
-	doingBuildFrom_t doingBuildFrom = DOING_BUILD_FROM_SOURCE_FILE;
-
-	for ( s32 argIndex = 1; argIndex < argc; argIndex++ ) {
-		const char* arg = argv[argIndex];
-		const u64 argLen = strlen( arg );
-
-		if ( string_equals( arg, ARG_HELP_SHORT ) || string_equals( arg, ARG_HELP_LONG ) ) {
-			return ShowUsage( 0 );
-		}
-
-		if ( string_equals( arg, ARG_VERBOSE_SHORT ) || string_equals( arg, ARG_HELP_LONG ) ) {
-			context.verbose = true;
-			continue;
-		}
-
-		if ( string_ends_with( arg, ".c" ) || string_ends_with( arg, ".cpp" ) ) {
-			if ( context.inputFile != NULL ) {
-				error( "You've already specified a file for me to build.  If you want me to build more than one source file, specify it via %s().\n", SET_BUILDER_OPTIONS_FUNC_NAME );
-				QUIT_ERROR();
-			}
-
-			context.inputFile = arg;
-			doingBuildFrom = DOING_BUILD_FROM_SOURCE_FILE;
-
-			continue;
-		}
-
-		if ( string_ends_with( arg, BUILD_INFO_FILE_EXTENSION ) ) {
-			if ( context.inputFile != NULL ) {
-				error( "You've already specified a file for me to build.  If you want me to build more than one source file, specify it via %s().\n", SET_BUILDER_OPTIONS_FUNC_NAME );
-				QUIT_ERROR();
-			}
-
-			context.inputFile = arg;
-			doingBuildFrom = DOING_BUILD_FROM_BUILD_INFO_FILE;
-
-			continue;
-		}
-
-		if ( string_starts_with( arg, ARG_CONFIG ) ) {
-			const char* equals = strchr( arg, '=' );
-
-			if ( !equals ) {
-				error( "I detected that you want to set a config, but you never gave me the equals (=) immediately after it.  You need to do that.\n" );
-
-				return ShowUsage( 1 );
-			}
-
-			const char* configName = equals + 1;
-
-			if ( strlen( configName ) < 1 ) {
-				error( "You specified the start of the config arg, but you never actually gave me a name for the config.  I need that.\n" );
-
-				return ShowUsage( 1 );
-			}
-
-			inputConfigName = configName;
-			inputConfigNameHash = hash_string( inputConfigName, 0 );
-
-			continue;
-		}
-
-		if ( string_equals( arg, ARG_NUKE ) ) {
-			if ( argIndex == argc - 1 ) {
-				error( "You passed in " ARG_NUKE " but you never told me what folder you want me to nuke.  I need to know!" );
-				QUIT_ERROR();
-			}
-
-			const char* folderToNuke = argv[argIndex + 1];
-
-			printf( "Nuking \"%s\"\n", folderToNuke );
-
-			float64 startTime = time_ms();
-
-			NukeFolder_r( folderToNuke, false, true );
-
-			float64 endTime = time_ms();
-
-			printf( "Done.  %f ms\n", endTime - startTime );
-
-			return 0;
-		}
-
-		// unrecognised arg, show error
-		error( "Unrecognised argument \"%s\".\n", arg );
-		QUIT_ERROR();
-	}
-
-	// validate input file
-	if ( context.inputFile == NULL ) {
-		error(
-			"You haven't told me what source files I need to build.  I need one.\n"
-			"Run builder " ARG_HELP_LONG " if you need help.\n"
-		);
-
-		QUIT_ERROR();
-	}
-
-	u64 inputFileLength = strlen( context.inputFile );
 
 	// the default binary folder is the same folder as the source file
 	// if the file doesnt have a path then assume its in the same path as the current working directory (where we are calling builder from)

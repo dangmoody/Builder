@@ -496,7 +496,8 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 	Array<const char*> intermediateFiles;
 	intermediateFiles.reserve( context->config.source_files.size() );
 
-	const char* clangPath = tprintf( "%s%cclang%cbin%cclang.exe", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
+	//const char* compilerPath = tprintf( "%s%cclang%cbin%cclang.exe", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
+	const char* compilerPath = context->compilerPath.data;
 
 	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
 
@@ -557,7 +558,7 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 
 		args.reset();
 
-		args.add( clangPath );
+		args.add( compilerPath );
 		args.add( "-c" );
 
 		if ( !context->config.name.empty() ) {
@@ -670,7 +671,7 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 
 			args.add_range( &intermediateFiles );
 		} else {
-			args.add( clangPath );
+			args.add( compilerPath );
 
 			if ( !context->config.remove_symbols ) {
 				args.add( "-g" );
@@ -1399,7 +1400,7 @@ int main( int argc, char** argv ) {
 		QUIT_ERROR();
 	}
 
-	// check if we need to perform first time setup
+	/*// check if we need to perform first time setup
 	bool8 doFirstTimeSetup = false;
 	float64 firstTimeSetupTimeMS = -1.0;
 	{
@@ -1537,7 +1538,7 @@ int main( int argc, char** argv ) {
 		float64 firstTimeSetupEndTimeMS = time_ms();
 
 		firstTimeSetupTimeMS = firstTimeSetupEndTimeMS - firstTimeSetupStartTimeMS;
-	}
+	}*/
 
 	// the default binary folder is the same folder as the source file
 	// if the file doesnt have a path then assume its in the same path as the current working directory (where we are calling builder from)
@@ -1619,6 +1620,11 @@ int main( int argc, char** argv ) {
 		BuildConfig_AddDefaults( &userConfigBuildContext.config );
 		userConfigBuildContext.flags = BUILD_CONTEXT_FLAG_SHOW_STDOUT;
 
+		// DM!!! 15/07/2025: we assume the default installed clang folder for now
+		// obviously this is not good enough long term
+		// whats the nicest way of giving builder a default compiler for things like this?
+		userConfigBuildContext.compilerPath = "clang";
+
 		userConfigBuildContext.dotBuilderFolder = context.dotBuilderFolder;
 
 		if ( context.verbose ) {
@@ -1688,6 +1694,8 @@ int main( int argc, char** argv ) {
 				float64 setBuilderOptionsTimeEnd = time_ms();
 
 				setBuilderOptionsTimeMS = setBuilderOptionsTimeEnd - setBuilderOptionsTimeStart;
+
+				string_copy_from_c_string( &context.compilerPath, options.compiler_path.c_str(), options.compiler_path.size() );
 
 				buildInfoData.configs = options.configs;
 
@@ -1976,15 +1984,16 @@ int main( int argc, char** argv ) {
 		}
 
 		float64 end = time_ms();
+
 		buildInfoWriteTimeMS = end - start;
 	}
 
 	float64 totalTimeEnd = time_ms();
 
 	printf( "Build finished:\n" );
-	if ( doFirstTimeSetup ) {
+	/*if ( doFirstTimeSetup ) {
 		printf( "    First time setup:    %f ms\n", firstTimeSetupTimeMS );
-	}
+	}*/
 	if ( doUserConfigBuild ) {
 		printf( "    User config build:   %f ms%s\n", userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? " (skipped)" : "" );
 	}

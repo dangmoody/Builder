@@ -79,6 +79,8 @@ struct buildContext_t {
 	// it would give users more control over their build
 	buildContextFlags_t	flags;
 
+	String				compilerPath;
+
 	const char*			fullBinaryName;
 
 	const char*			inputFile;

@@ -171,6 +171,9 @@ struct VisualStudioSolution {
 };
 
 struct BuilderOptions {
+	// The path to your compiler.
+	std::string					compiler_path;
+
 	// All the possible configs that you could build with.
 	// Pass the one you actually want to build with via the --config= command line argument.
 	// If you want use Visual Studio only, then don't fill this out.

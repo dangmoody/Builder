@@ -8,6 +8,13 @@ We are accepting PRs for Builder!
 * Your PR fixes one of the issues in the repo's [issues list](https://github.com/dangmoody/Builder/issues).
 * I am grateful for any and all PRs that get submitted, but it's entirely my discretion as to whether or not the PR gets accepted.  I will do my best to work with you on the changes before rejecting a PR.
 
+## Git Branches
+
+The naming convention for branches is `lower-case-separated-by-hyphens`.
+
+* Development branches are prefixed `dev-`.
+* Experimental branches are prefixed `exp-`.
+
 ## Developer Setup
 
 ### Pre-requisites

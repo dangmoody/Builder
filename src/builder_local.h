@@ -81,8 +81,6 @@ struct buildContext_t {
 
 	String				compilerPath;
 
-	const char*			fullBinaryName;
-
 	const char*			inputFile;
 	String				inputFilePath;
 

@@ -93,11 +93,11 @@ struct builderVersion_t {
 };
 
 struct buildInfoData_t {
-	builderVersion_t							builderVersion;
-	std::vector<BuildConfig>					configs;
-	std::string									userConfigSourceFilename;
-	std::string									userConfigDLLFilename;
-	std::vector<std::vector<std::vector<std::string>>>	includeDependencies;
+	builderVersion_t									builderVersion;
+	std::vector<BuildConfig>							configs;
+	std::string											userConfigSourceFilename;
+	std::string											userConfigDLLFilename;
+	std::vector<std::vector<std::vector<std::string>>>	includeDependencies;	// [configIndex][sourceFileIndex][dependencyIndex]
 };
 
 errorCode_t GetLastErrorCode() {
@@ -561,17 +561,14 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 		args.add( compilerPath );
 		args.add( "-c" );
 
-		if ( !context->config.name.empty() ) {
-			args.add( "-MMD" );			// generate the dependency file
-			args.add( "-MF" );			// set the name of the dependency file to...
-			args.add( depFilename );	// ...this
-		}
-
 		if ( string_ends_with( sourceFile, ".cpp" ) || string_ends_with( sourceFile, ".cxx" ) || string_ends_with( sourceFile, ".cc" ) ) {
 			args.add( "-std=c++20" );
 		} else if ( string_ends_with( sourceFile, ".c" ) ) {
 			args.add( "-std=c99" );
 		}
+
+		args.add( "-o" );
+		args.add( intermediateFilename );
 
 		if ( !context->config.remove_symbols ) {
 			args.add( "-g" );
@@ -579,8 +576,11 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 
 		args.add( OptimizationLevelToString( context->config.optimization_level ) );
 
-		args.add( "-o" );
-		args.add( intermediateFilename );
+		if ( !context->config.name.empty() ) {
+			args.add( "-MMD" );			// generate the dependency file
+			args.add( "-MF" );			// set the name of the dependency file to...
+			args.add( depFilename );	// ...this
+		}
 
 		args.add( sourceFile );
 
@@ -656,6 +656,8 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 		}
 	}
 
+	const char* fullBinaryName = BuildConfig_GetFullBinaryName( &context->config );
+
 	// link
 	if ( numCompiledFiles > 0 ) {
 		args.reset();
@@ -667,7 +669,7 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 			args.add( "lld-link" );
 			args.add( "/lib" );
 
-			args.add( tprintf( "/OUT:%s", context->fullBinaryName ) );
+			args.add( tprintf( "/OUT:%s", fullBinaryName ) );
 
 			args.add_range( &intermediateFiles );
 		} else {
@@ -678,7 +680,7 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 			}
 
 			args.add( "-o" );
-			args.add( context->fullBinaryName );
+			args.add( fullBinaryName );
 
 			if ( context->config.binary_type == BINARY_TYPE_DYNAMIC_LIBRARY ) {
 				args.add( "-shared" );
@@ -1248,7 +1250,7 @@ static bool8 BuildInfo_Write( const buildContext_t* context, const buildInfoData
 	}
 
 	// write to the file
-	bool8 written = file_write_entire( cast( char*, context->buildInfoFilename.data ), buffer.data.data, buffer.data.count );
+	bool8 written = file_write_entire( context->buildInfoFilename.data, buffer.data.data, buffer.data.count );
 
 	if ( !written ) {
 		error( "Failed to write %s!\n", context->buildInfoFilename.data );
@@ -1400,146 +1402,6 @@ int main( int argc, char** argv ) {
 		QUIT_ERROR();
 	}
 
-	/*// check if we need to perform first time setup
-	bool8 doFirstTimeSetup = false;
-	float64 firstTimeSetupTimeMS = -1.0;
-	{
-		float64 firstTimeSetupStartTimeMS = time_ms();
-
-		// on exit set the CWD back to what we had before
-		const char* oldCWD = path_current_working_directory();
-		defer( SetCurrentDirectory( oldCWD ) );
-
-		// set CWD to whereever builder lives for first time setup
-		SetCurrentDirectory( path_app_path() );
-
-		{
-			const char* clangAbsolutePath = tprintf( "%s%cclang%cbin%cclang.exe", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
-
-			// if we cant find our copy of clang then we definitely need to run first time setup
-			if ( !FileExists( clangAbsolutePath ) ) {
-				doFirstTimeSetup = true;
-			} else {
-				// otherwise if we have clang but the version doesnt match, then we still need to re-download and re-install it
-				bool8 correctClangVersion = false;
-
-				Array<const char*> args;
-				args.add( clangAbsolutePath );
-				args.add( "-v" );
-
-				Process* clangVersionCheck = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
-				defer( process_destroy( clangVersionCheck ) );
-
-				// this string is at the very start of "clang -v"
-				const char* clangVersionString = tprintf( "clang version %d.%d.%d", BUILDER_CLANG_VERSION_MAJOR, BUILDER_CLANG_VERSION_MINOR, BUILDER_CLANG_VERSION_PATCH );
-
-				char buffer[1024];
-				while ( process_read_stdout( clangVersionCheck, buffer, 1024 ) ) {
-					if ( string_contains( buffer, clangVersionString ) ) {
-						correctClangVersion = true;
-						break;
-					}
-				}
-
-				s32 exitCode = process_join( clangVersionCheck );
-				assertf( exitCode == 0, "Something went terribly wrong..\n" );
-
-				if ( !correctClangVersion ) {
-					warning( "Required Clang version not found.  I will need to re-download and re-install Clang.\n" );
-					doFirstTimeSetup = true;
-				}
-			}
-		}
-
-		if ( doFirstTimeSetup ) {
-			printf( "Performing first time setup...\n" );
-
-			const char* clangInstallerFilename = tprintf( "LLVM-%d.%d.%d-win64.exe", BUILDER_CLANG_VERSION_MAJOR, BUILDER_CLANG_VERSION_MINOR, BUILDER_CLANG_VERSION_PATCH );
-
-			if ( !folder_create_if_it_doesnt_exist( tprintf( ".%ctemp", PATH_SEPARATOR ) ) ) {
-				errorCode_t errorCode = GetLastErrorCode();
-				error( "Failed to create the temp folder that the Clang install uses.  Is it possible you have whacky user permissions? Error code: " ERROR_CODE_FORMAT "\n", errorCode );
-				QUIT_ERROR();
-			}
-
-			// download clang
-			{
-				printf( "Downloading Clang (please wait) ...\n" );
-
-				Array<const char*> args;
-				args.reserve( 4 );
-				args.add( "curl" );
-				args.add( "-o" );
-				args.add( tprintf( "temp%cclang_installer.exe", PATH_SEPARATOR ) );
-				args.add( "-L" );
-				args.add( tprintf( "https://github.com/llvm/llvm-project/releases/download/llvmorg-%d.%d.%d/%s", BUILDER_CLANG_VERSION_MAJOR, BUILDER_CLANG_VERSION_MINOR, BUILDER_CLANG_VERSION_PATCH, clangInstallerFilename ) );
-
-				s32 exitCode = RunProc( &args, NULL, PROC_FLAG_SHOW_STDOUT );
-
-				if ( exitCode == 0 ) {
-					printf( "Done.\n" );
-				} else {
-					error( "Failed to download Clang.  The CURL HTTP request failed.\n" );
-					QUIT_ERROR();
-				}
-			}
-
-			// install clang
-			{
-				printf( "Installing Clang (please wait) ... " );
-
-				const char* clangInstallFolder = "clang";
-
-				if ( !folder_create_if_it_doesnt_exist( clangInstallFolder ) ) {
-					errorCode_t errorCode = GetLastErrorCode();
-					error( "Failed to create the clang install folder \"%s\".  Is it possible you have some whacky user permissions? Error code: " ERROR_CODE_FORMAT "\n", clangInstallFolder, errorCode );
-					QUIT_ERROR();
-				}
-
-				// set clang installer command line arguments
-				// taken from: https://discourse.llvm.org/t/using-clang-windows-installer-from-command-line/49698/2 which references https://nsis.sourceforge.io/Docs/Chapter3.html#installerusagecommon
-				Array<const char*> args;
-				args.reserve( 4 );
-				args.add( tprintf( ".%ctemp%cclang_installer.exe", PATH_SEPARATOR, PATH_SEPARATOR ) );
-				args.add( "/S" );		// install in silent mode
-				args.add( tprintf( "/D=%s%c%s", path_app_path(), PATH_SEPARATOR, clangInstallFolder ) );	// set the install directory, absolute paths only
-
-				Array<const char*> envVars;
-				envVars.add( "__compat_layer=RunAsInvoker" );	// this tricks the subprocess into thinking we are running with elevation
-
-				s32 exitCode = RunProc( &args, &envVars );
-
-				if ( exitCode == 0 ) {
-					printf( "Done.\n" );
-				} else {
-					error( "Failed to install Clang.\n" );
-					QUIT_ERROR();
-				}
-			}
-
-			// clean up temp files
-			{
-				printf( "Cleaning up ... " );
-
-				NukeFolder_r( "temp", true, true );
-
-				if ( folder_exists( "temp" ) ) {
-					warning( "Failed to fully delete the temp folder after installing Clang.  You are safe to delete this yourself.\n" );
-				}
-
-				printf( "\n" );
-			}
-
-			doFirstTimeSetup = false;
-		}
-
-		mem_reset_temp_storage();
-
-		float64 firstTimeSetupEndTimeMS = time_ms();
-
-		firstTimeSetupTimeMS = firstTimeSetupEndTimeMS - firstTimeSetupStartTimeMS;
-	}*/
-
 	// the default binary folder is the same folder as the source file
 	// if the file doesnt have a path then assume its in the same path as the current working directory (where we are calling builder from)
 	{
@@ -1573,7 +1435,7 @@ int main( int argc, char** argv ) {
 	{
 		float64 start = time_ms();
 
-		readBuildInfo = BuildInfo_Read( cast( char*, context.buildInfoFilename.data ), &buildInfoData );
+		readBuildInfo = BuildInfo_Read( context.buildInfoFilename.data, &buildInfoData );
 
 		float64 end = time_ms();
 
@@ -1620,6 +1482,8 @@ int main( int argc, char** argv ) {
 		BuildConfig_AddDefaults( &userConfigBuildContext.config );
 		userConfigBuildContext.flags = BUILD_CONTEXT_FLAG_SHOW_STDOUT;
 
+		//userConfigBuildContext.inputFilePath = context.inputFilePath;
+
 		// DM!!! 15/07/2025: we assume the default installed clang folder for now
 		// obviously this is not good enough long term
 		// whats the nicest way of giving builder a default compiler for things like this?
@@ -1634,8 +1498,8 @@ int main( int argc, char** argv ) {
 		userConfigBuildContext.config.source_files.push_back( buildInfoData.userConfigSourceFilename );
 
 		userConfigBuildContext.config.binary_type = BINARY_TYPE_DYNAMIC_LIBRARY;
-		userConfigBuildContext.config.binary_name = tprintf( "%s.dll", path_remove_path_from_file( path_remove_file_extension( buildInfoData.userConfigSourceFilename.c_str() ) ) );
-		userConfigBuildContext.config.binary_folder = cast( char*, context.dotBuilderFolder.data );
+		userConfigBuildContext.config.binary_name = path_remove_path_from_file( path_remove_file_extension( buildInfoData.userConfigSourceFilename.c_str() ) );
+		userConfigBuildContext.config.binary_folder = context.dotBuilderFolder.data;
 		userConfigBuildContext.config.defines.insert( userConfigBuildContext.config.defines.end(), {
 			"_CRT_SECURE_NO_WARNINGS",
 			"BUILDER_DOING_USER_CONFIG_BUILD"
@@ -1654,9 +1518,7 @@ int main( int argc, char** argv ) {
 		userConfigBuildContext.config.ignore_warnings.push_back( "-Wno-missing-prototypes" );	// otherwise the user has to forward declare functions like set_builder_options and thats annoying
 		userConfigBuildContext.config.ignore_warnings.push_back( "-Wno-reorder-init-list" );	// allow users to initialize struct members in whatever order they want
 
-		userConfigBuildContext.fullBinaryName = tprintf( "%s%c%s", userConfigBuildContext.config.binary_folder.c_str(), PATH_SEPARATOR, userConfigBuildContext.config.binary_name.c_str() );
-
-		buildInfoData.userConfigDLLFilename = userConfigBuildContext.fullBinaryName;
+		buildInfoData.userConfigDLLFilename = BuildConfig_GetFullBinaryName( &userConfigBuildContext.config );
 
 		userConfigBuildResult = BuildBinary( &userConfigBuildContext );
 
@@ -1839,7 +1701,7 @@ int main( int argc, char** argv ) {
 			printf( "Running pre-build code...\n" );
 
 			const char* oldCWD = path_current_working_directory();
-			SetCurrentDirectory( cast( char*, context.inputFilePath.data ) );
+			SetCurrentDirectory( context.inputFilePath.data );
 			defer( SetCurrentDirectory( oldCWD ) );
 
 			preBuildFunc();
@@ -1863,11 +1725,10 @@ int main( int argc, char** argv ) {
 			if ( !config->binary_folder.empty() ) {
 				config->binary_folder = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, config->binary_folder.c_str() );
 			} else {
-				config->binary_folder = cast( char*, context.inputFilePath.data );
+				config->binary_folder = context.inputFilePath.data;
 			}
 
 			context.config = *config;
-			context.fullBinaryName = BuildConfig_GetFullBinaryName( &context.config );
 
 			{
 				printf( "Building \"%s\"", context.config.binary_name.c_str() );
@@ -1925,38 +1786,34 @@ int main( int argc, char** argv ) {
 
 			buildInfoData.includeDependencies[actualConfigIndex].resize( context.config.source_files.size() );
 
-			float64 buildTimeStart = 0.0f;
-			float64 buildTimeEnd = 0.0f;
-
-			buildResult_t buildResult = BUILD_RESULT_SUCCESS;
-
+			// now do the actual build
 			{
-				buildTimeStart = time_ms();
+				float64 buildTimeStart = time_ms();
 
 				context.includeDependencies = buildInfoData.includeDependencies[actualConfigIndex];
 
-				buildResult = BuildBinary( &context );
+				buildResult_t buildResult = BuildBinary( &context );
 
 				buildInfoData.includeDependencies[actualConfigIndex] = context.includeDependencies;
 
-				buildTimeEnd = time_ms();
-			}
+				float64 buildTimeEnd = time_ms();
 
-			switch ( buildResult ) {
-				case BUILD_RESULT_SUCCESS:
-					numSuccessfulBuilds++;
-					printf( "Finished building \"%s\", %f ms\n\n", context.fullBinaryName, buildTimeEnd - buildTimeStart );
-					break;
+				switch ( buildResult ) {
+					case BUILD_RESULT_SUCCESS:
+						numSuccessfulBuilds++;
+						printf( "Finished building \"%s\", %f ms\n\n", context.config.binary_name.c_str(), buildTimeEnd - buildTimeStart );
+						break;
 
-				case BUILD_RESULT_FAILED:
-					numFailedBuilds++;
-					error( "Build failed.\n\n" );
-					QUIT_ERROR();
+					case BUILD_RESULT_FAILED:
+						numFailedBuilds++;
+						error( "Build failed.\n\n" );
+						QUIT_ERROR();
 
-				case BUILD_RESULT_SKIPPED:
-					numSkippedBuilds++;
-					printf( "Skipped!\n\n" );
-					break;
+					case BUILD_RESULT_SKIPPED:
+						numSkippedBuilds++;
+						printf( "Skipped!\n\n" );
+						break;
+				}
 			}
 
 			mem_reset_temp_storage();
@@ -1966,7 +1823,7 @@ int main( int argc, char** argv ) {
 			printf( "Running post-build code...\n" );
 
 			const char* oldCWD = path_current_working_directory();
-			SetCurrentDirectory( cast( char*, context.inputFilePath.data ) );
+			SetCurrentDirectory( context.inputFilePath.data );
 			defer( SetCurrentDirectory( oldCWD ) );
 
 			postBuildFunc();

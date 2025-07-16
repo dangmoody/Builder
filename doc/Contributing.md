@@ -19,7 +19,7 @@ The naming convention for branches is `lower-case-separated-by-hyphens`.
 
 ### Pre-requisites
 
-You'll need the same version of Clang installed that Builder is currently building with as a separate install.  This is because you need a compiler to build Builder with.  You can check which version Builder is using inside `builder.h`.
+Builder is built with [Clang 20.1.5](https://github.com/llvm/llvm-project/releases/tag/llvmorg-20.1.5).
 
 #### Linux
 

@@ -173,7 +173,7 @@ static const char* BinaryTypeToString( const BinaryType type ) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wswitch"
 
-static const char* LanguageVersionToString( const LanguageVersion languageVersion ) {
+static const char* LanguageVersionToCompilerArg( const LanguageVersion languageVersion ) {
 	assert( languageVersion == LANGUAGE_VERSION_UNSET );
 
 	switch ( languageVersion ) {
@@ -193,7 +193,7 @@ static const char* LanguageVersionToString( const LanguageVersion languageVersio
 
 #pragma clang diagnostic pop
 
-static const char* OptimizationLevelToString( const OptimizationLevel level ) {
+static const char* OptimizationLevelToCompilerArg( const OptimizationLevel level ) {
 	switch ( level ) {
 		case OPTIMIZATION_LEVEL_O0:	return "-O0";
 		case OPTIMIZATION_LEVEL_O1:	return "-O1";
@@ -258,7 +258,7 @@ static const char* BuildConfig_ToString( const BuildConfig* config ) {
 	PrintField( "binary_name", config->binary_name.c_str() );
 	PrintField( "binary_folder", config->binary_folder.c_str() );
 	PrintField( "binary_type", BinaryTypeToString( config->binary_type ) );
-	PrintField( "optimization_level", OptimizationLevelToString( config->optimization_level ) );
+	PrintField( "optimization_level", OptimizationLevelToCompilerArg( config->optimization_level ) );
 	PrintField( "remove_symbols", config->remove_symbols ? "true" : "false" );
 	PrintField( "remove_file_extension", config->remove_file_extension ? "true" : "false" );
 	PrintField( "warnings_as_errors", config->warnings_as_errors ? "true" : "false" );
@@ -339,7 +339,7 @@ static s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVar
 		error(
 			"Failed to run process \"%s\".\n"
 			"Is it definitely installed? Is it meant to be added to your PATH? Did you type the path correctly?\n"
-			, args[0]
+			, ( *args )[0]
 		);
 
 		// DM: 20/07/2025: I'm not 100% sure that its totally OK to have -1 as our own special exit code to mean that the process couldnt be found
@@ -592,14 +592,14 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 		args.add( "-c" );
 
 		if ( context->config.language_version != LANGUAGE_VERSION_UNSET ) {
-			args.add( LanguageVersionToString( context->config.language_version ) );
+			args.add( LanguageVersionToCompilerArg( context->config.language_version ) );
 		}
 
 		if ( !context->config.remove_symbols ) {
 			args.add( "-g" );
 		}
 
-		args.add( OptimizationLevelToString( context->config.optimization_level ) );
+		args.add( OptimizationLevelToCompilerArg( context->config.optimization_level ) );
 
 		args.add( "-o" );
 		args.add( intermediateFilename );

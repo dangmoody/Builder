@@ -32,3 +32,9 @@ tests/**/*.sln
 tests/**/*.vcxproj
 tests/**/*.vcxproj.user
 tests/**/*.vcxproj.filters
+
+
+#
+# rider stuff
+#
+.idea

@@ -59,6 +59,16 @@ SOFTWARE.
 =============================================================================
 */
 
+#ifdef _DEBUG
+	#if defined( _WIN64 )
+		#define DEFAULT_COMPILER_PATH "clang_win64/bin/clang.exe"
+	#elif defined( __linux__ )
+		#define DEFAULT_COMPILER_PATH "clang_linux/bin/clang"
+	#endif	// _WIN64
+#else
+	#define DEFAULT_COMPILER_PATH "clang/bin/clang.exe"
+#endif	// _DEBUG
+
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
 	BUILDER_VERSION_MINOR	= 7,
@@ -279,6 +289,7 @@ void BuildConfig_AddDefaults( BuildConfig* outConfig ) {
 	outConfig->additional_libs.push_back( "user32.lib" );
 
 	// MSVCRT is needed for ABI compatibility between builder and the user config DLL
+	// TODO(DM): 20/07/2025: if its only the user config DLL that needs to care about this then maybe dont make every config include these libraries?
 #if defined( _DEBUG )
 	outConfig->additional_libs.push_back( "msvcrtd.lib" );
 #elif defined( NDEBUG )
@@ -1282,9 +1293,7 @@ static bool8 BuildInfo_Write( const buildContext_t* context, const buildInfoData
 	}
 
 	// write to the file
-	bool8 written = file_write_entire( context->buildInfoFilename.data, buffer.data.data, buffer.data.count );
-
-	if ( !written ) {
+	if ( !file_write_entire( context->buildInfoFilename.data, buffer.data.data, buffer.data.count ) ) {
 		error( "Failed to write %s!\n", context->buildInfoFilename.data );
 		return false;
 	}
@@ -1516,12 +1525,7 @@ int main( int argc, char** argv ) {
 		BuildConfig_AddDefaults( &userConfigBuildContext.config );
 		userConfigBuildContext.flags = BUILD_CONTEXT_FLAG_SHOW_STDOUT;
 
-		//userConfigBuildContext.inputFilePath = context.inputFilePath;
-
-		// DM!!! 15/07/2025: we assume the default installed clang folder for now
-		// obviously this is not good enough long term
-		// whats the nicest way of giving builder a default compiler for things like this?
-		userConfigBuildContext.compilerPath = "clang";
+		userConfigBuildContext.compilerPath = DEFAULT_COMPILER_PATH;
 
 		userConfigBuildContext.dotBuilderFolder = context.dotBuilderFolder;
 

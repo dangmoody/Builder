@@ -64,7 +64,6 @@ struct buildInfoData_t;
 enum buildContextFlagBits_t {
 	BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS					= bit( 0 ),
 	BUILD_CONTEXT_FLAG_SHOW_STDOUT							= bit( 1 ),
-	BUILD_CONTEXT_FLAG_GENERATING_VISUAL_STUDIO_SOLUTION	= bit( 2 ),
 };
 typedef u32 buildContextFlags_t;
 

@@ -78,11 +78,6 @@ Process* process_create( Array<const char*>* args, Array<const char*>* environme
 	mem_push_allocator( platform_allocator );
 	defer( mem_pop_allocator() );
 
-	// dont memset here because kicking off a subprocess is a slow thing to do
-	// and we need all the speed wins we can get here, no matter how small
-	Process* process = cast( Process*, mem_alloc( sizeof( Process ) ) );
-	process->proc = {};
-
 	int options = internal_get_subprocess_options( flags );
 
 	if ( environment_variables == NULL ) {
@@ -99,10 +94,16 @@ Process* process_create( Array<const char*>* args, Array<const char*>* environme
 		args->add( NULL );
 	}
 
-	int result = subprocess_create_ex( args->data, options, environment_variables ? environment_variables->data : NULL, &process->proc );
+	struct subprocess_s subprocess = {};
+	if ( subprocess_create_ex( args->data, options, environment_variables ? environment_variables->data : NULL, &subprocess ) != 0 ) {
+		//error( "Failed to create process: 0x%X\n", GetLastError() );
+		return NULL;
+	}
 
-	assertf( result == 0, "Failed to create process: 0x%X\n", GetLastError() );
-	unused( result );
+	// dont memset here because kicking off a subprocess is a slow thing to do
+	// and we need all the speed wins we can get here, no matter how small
+	Process* process = cast( Process*, mem_alloc( sizeof( Process ) ) );
+	process->proc = subprocess;
 
 	return process;
 }

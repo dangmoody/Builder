@@ -31,11 +31,6 @@ SOFTWARE.
 #include <vector>
 #include <string>
 
-// The version of Clang that Builder is using.
-//#define BUILDER_CLANG_VERSION_MAJOR	20
-//#define BUILDER_CLANG_VERSION_MINOR	1
-//#define BUILDER_CLANG_VERSION_PATCH	5
-
 // If you override set_builder_options() you will need preface the function with the BUILDER_CALLBACK #define.
 // This is because when Builder does its user config build stage it will search your code for the function set_builder_options() and BUILDER_DOING_USER_CONFIG_BUILD will be defined.
 // This means that you need to have set_builder_options() exposed so that Builder can find the function and call it, hence it gets exported as a symbol in the binary.
@@ -45,6 +40,17 @@ SOFTWARE.
 #else
 #define BUILDER_CALLBACK	static
 #endif
+
+enum LanguageVersion {
+	LANGUAGE_VERSION_UNSET	= 0,
+	LANGUAGE_VERSION_C89,
+	LANGUAGE_VERSION_C99,
+	LANGUAGE_VERSION_CPP11,
+	LANGUAGE_VERSION_CPP14,
+	LANGUAGE_VERSION_CPP17,
+	LANGUAGE_VERSION_CPP20,
+	LANGUAGE_VERSION_CPP23,
+};
 
 enum BinaryType {
 	BINARY_TYPE_EXE	= 0,			// .exe on Windows
@@ -106,6 +112,10 @@ struct BuildConfig {
 	//
 	// Where 'name' is whatever you set this to.
 	std::string					name;
+
+	// What version of C or C++ do you want to build with?
+	// For Clang: This sets the -std argument.
+	LanguageVersion				language_version;
 
 	// What kind of binary do you want to build?
 	// Defaults to EXE.

@@ -169,12 +169,36 @@ static const char* BinaryTypeToString( const BinaryType type ) {
 	}
 }
 
+// TODO(DM): 20/07/2025: do we want to ignore this warning via the build script?
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wswitch"
+
+static const char* LanguageVersionToString( const LanguageVersion languageVersion ) {
+	assert( languageVersion == LANGUAGE_VERSION_UNSET );
+
+	switch ( languageVersion ) {
+		case LANGUAGE_VERSION_C89:		return "-std=c89";
+		case LANGUAGE_VERSION_C99:		return "-std=c99";
+		case LANGUAGE_VERSION_CPP11:	return "-std=cpp11";
+		case LANGUAGE_VERSION_CPP14:	return "-std=cpp14";
+		case LANGUAGE_VERSION_CPP17:	return "-std=cpp17";
+		case LANGUAGE_VERSION_CPP20:	return "-std=cpp20";
+		case LANGUAGE_VERSION_CPP23:	return "-std=cpp23";
+	}
+
+	assert( false );
+
+	return NULL;
+}
+
+#pragma clang diagnostic pop
+
 static const char* OptimizationLevelToString( const OptimizationLevel level ) {
 	switch ( level ) {
-		case OPTIMIZATION_LEVEL_O0: return "-O0";
-		case OPTIMIZATION_LEVEL_O1: return "-O1";
-		case OPTIMIZATION_LEVEL_O2: return "-O2";
-		case OPTIMIZATION_LEVEL_O3: return "-O3";
+		case OPTIMIZATION_LEVEL_O0:	return "-O0";
+		case OPTIMIZATION_LEVEL_O1:	return "-O1";
+		case OPTIMIZATION_LEVEL_O2:	return "-O2";
+		case OPTIMIZATION_LEVEL_O3:	return "-O3";
 	}
 }
 
@@ -310,6 +334,19 @@ static s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVar
 	}
 
 	Process* process = process_create( args, environmentVariables, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
+
+	if ( !process ) {
+		error(
+			"Failed to run process \"%s\".\n"
+			"Is it definitely installed? Is it meant to be added to your PATH? Did you type the path correctly?\n"
+			, args[0]
+		);
+
+		// DM: 20/07/2025: I'm not 100% sure that its totally OK to have -1 as our own special exit code to mean that the process couldnt be found
+		// its totally possible for other processes to return -1 and have it mean something else
+		// the interpretation of the exit code of the processes we run is the responsibility of the calling code and were probably making a lot of assumptions there
+		return -1;
+	}
 
 	// show stdout
 	if ( procFlags & PROC_FLAG_SHOW_STDOUT ) {
@@ -478,12 +515,12 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 		1 +	// clang
 		1 +	// -shared/-lib
 		1 +	// -c
-		3 +	// -MD -MF <filename>
-		1 +	// std
+		1 +	// std=
 		1 +	// symbols
 		1 +	// optimisation
 		1 +	// -o
 		1 +	// intermediate filename
+		3 +	// -MD -MF <filename>
 		1 +	// source file
 		context->config.defines.size() +
 		context->config.additional_includes.size() +
@@ -496,9 +533,6 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 	Array<const char*> intermediateFiles;
 	intermediateFiles.reserve( context->config.source_files.size() );
 
-	//const char* compilerPath = tprintf( "%s%cclang%cbin%cclang.exe", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
-	const char* compilerPath = context->compilerPath.data;
-
 	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
 
 	u32 numCompiledFiles = 0;
@@ -509,11 +543,6 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 	For ( u64, sourceFileIndex, 0, context->config.source_files.size() ) {
 		const char* sourceFile = context->config.source_files[sourceFileIndex].c_str();
 		const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
-
-		//printf( "Building %s\n", sourceFileNoPath );
-
-		//u64 sourceFileNameHash = hash_string( sourceFile, 0 );
-		u32 sourceFileMapIndex = HASHMAP_INVALID_VALUE;
 
 		const char* intermediateFilename = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
 		intermediateFiles.add( intermediateFilename );
@@ -558,23 +587,22 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 
 		args.reset();
 
-		args.add( compilerPath );
+		args.add( context->compilerPath.data );
+
 		args.add( "-c" );
 
-		if ( string_ends_with( sourceFile, ".cpp" ) || string_ends_with( sourceFile, ".cxx" ) || string_ends_with( sourceFile, ".cc" ) ) {
-			args.add( "-std=c++20" );
-		} else if ( string_ends_with( sourceFile, ".c" ) ) {
-			args.add( "-std=c99" );
+		if ( context->config.language_version != LANGUAGE_VERSION_UNSET ) {
+			args.add( LanguageVersionToString( context->config.language_version ) );
 		}
-
-		args.add( "-o" );
-		args.add( intermediateFilename );
 
 		if ( !context->config.remove_symbols ) {
 			args.add( "-g" );
 		}
 
 		args.add( OptimizationLevelToString( context->config.optimization_level ) );
+
+		args.add( "-o" );
+		args.add( intermediateFilename );
 
 		if ( !context->config.name.empty() ) {
 			args.add( "-MMD" );			// generate the dependency file
@@ -656,10 +684,14 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 		}
 	}
 
-	const char* fullBinaryName = BuildConfig_GetFullBinaryName( &context->config );
+	if ( numCompiledFiles == 0 ) {
+		return BUILD_RESULT_SKIPPED;
+	}
 
 	// link
-	if ( numCompiledFiles > 0 ) {
+	{
+		const char* fullBinaryName = BuildConfig_GetFullBinaryName( &context->config );
+
 		args.reset();
 
 		// static libraries are just an archive of .o files
@@ -673,7 +705,7 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 
 			args.add_range( &intermediateFiles );
 		} else {
-			args.add( compilerPath );
+			args.add( context->compilerPath.data );
 
 			if ( !context->config.remove_symbols ) {
 				args.add( "-g" );
@@ -705,7 +737,7 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 		}
 	}
 
-	return numCompiledFiles == 0 ? BUILD_RESULT_SKIPPED : BUILD_RESULT_SUCCESS;
+	return BUILD_RESULT_SUCCESS;
 }
 
 static bool8 FileExists( const char* filename ) {
@@ -1463,6 +1495,8 @@ int main( int argc, char** argv ) {
 
 	bool8 doUserConfigBuild = doingBuildFrom == DOING_BUILD_FROM_SOURCE_FILE;
 
+	// even when building from a .build_info file we still need the user config dll
+	// in case the user has on_*_build() filled out, for example
 	if ( doingBuildFrom == DOING_BUILD_FROM_BUILD_INFO_FILE ) {
 		library = library_load( buildInfoData.userConfigDLLFilename.c_str() );
 
@@ -1571,10 +1605,9 @@ int main( int argc, char** argv ) {
 							"I see you want to generate a Visual Studio Solution, but you've also specified a config that you want to build.\n"
 							"You must do one or the other, you can't do both.\n\n"
 						);
+
 						QUIT_ERROR();
 					}
-
-					context.flags |= BUILD_CONTEXT_FLAG_GENERATING_VISUAL_STUDIO_SOLUTION;
 
 					// make sure BuilderOptions::configs and configs from visual studio match
 					// we will need this list later for validation
@@ -1598,6 +1631,7 @@ int main( int argc, char** argv ) {
 					bool8 generated = GenerateVisualStudioSolution( &context, &options );
 
 					float64 end = time_ms();
+
 					visualStudioGenerationTimeMS = end - start;
 
 					if ( !generated ) {
@@ -1606,232 +1640,231 @@ int main( int argc, char** argv ) {
 					}
 
 					printf( "Done.\n" );
+
+					return 0;
 				}
 			}
 		}
 	}
 
-	bool8 shouldWriteBuildInfo = true;
+	std::vector<BuildConfig> configsToBuild;
 
-	if ( ( context.flags & BUILD_CONTEXT_FLAG_GENERATING_VISUAL_STUDIO_SOLUTION ) == 0 ) {
-		std::vector<BuildConfig> configsToBuild;
+	// if no configs were manually added then assume we are just doing a default build with no user-specified options
+	if ( buildInfoData.configs.size() == 0 ) {
+		BuildConfig config = {
+			.source_files = { context.inputFile },
+			.binary_name = defaultBinaryName
+		};
 
-		// if no configs were manually added then assume we are just doing a default build with no user-specified options
-		if ( buildInfoData.configs.size() == 0 ) {
-			BuildConfig config = {
-				.source_files = { context.inputFile },
-				.binary_name = defaultBinaryName
-			};
+		buildInfoData.configs.push_back( config );
+	}
 
-			buildInfoData.configs.push_back( config );
+	// if only one config was added (either by user or as a default build) then we know we just want that one, no config command line arg is needed
+	if ( buildInfoData.configs.size() == 1 ) {
+		AddBuildConfigAndDependenciesUnique( &context, &buildInfoData.configs[0], configsToBuild );
+	} else {
+		if ( !inputConfigName ) {
+			error(
+				"This build has multiple configs, but you never specified a config name.\n"
+				"You must pass in a config name via " ARG_CONFIG "\n"
+				"Run builder " ARG_HELP_LONG " if you need help.\n"
+			);
+
+			QUIT_ERROR();
 		}
 
-		// if only one config was added (either by user or as a default build) then we know we just want that one, no config command line arg is needed
-		if ( buildInfoData.configs.size() == 1 ) {
-			AddBuildConfigAndDependenciesUnique( &context, &buildInfoData.configs[0], configsToBuild );
-		} else {
-			if ( !inputConfigName ) {
+		For ( size_t, configIndex, 0, buildInfoData.configs.size() ) {
+			if ( buildInfoData.configs[configIndex].name.empty() ) {
 				error(
-					"This build has multiple configs, but you never specified a config name.\n"
-					"You must pass in a config name via " ARG_CONFIG "\n"
-					"Run builder " ARG_HELP_LONG " if you need help.\n"
+					"You have multiple BuildConfigs in your build source file, but some of them have empty names.\n"
+					"When you have multiple BuildConfigs, ALL of them MUST have non-empty names.\n"
+					"You need to set 'BuildConfig::name' in every BuildConfig that you add via add_build_config() (including dependencies!).\n"
 				);
-				QUIT_ERROR();
-			}
 
-			For ( size_t, configIndex, 0, buildInfoData.configs.size() ) {
-				if ( buildInfoData.configs[configIndex].name.empty() ) {
-					error(
-						"You have multiple BuildConfigs in your build source file, but some of them have empty names.\n"
-						"When you have multiple BuildConfigs, ALL of them MUST have non-empty names.\n"
-						"You need to set 'BuildConfig::name' in every BuildConfig that you add via add_build_config() (including dependencies!).\n"
-					);
-
-					QUIT_ERROR();
-				}
-			}
-		}
-
-		buildInfoData.includeDependencies.resize( buildInfoData.configs.size() );
-
-		// none of the configs can have the same name
-		// TODO(DM): 14/11/2024: can we do better than o(n^2) here?
-		For ( size_t, configIndexA, 0, buildInfoData.configs.size() ) {
-			const char* configNameA = buildInfoData.configs[configIndexA].name.c_str();
-			u64 configNameHashA = hash_string( configNameA, 0 );
-
-			For ( size_t, configIndexB, 0, buildInfoData.configs.size() ) {
-				if ( configIndexA == configIndexB ) {
-					continue;
-				}
-
-				const char* configNameB = buildInfoData.configs[configIndexB].name.c_str();
-				u64 configNameHashB = hash_string( configNameB, 0 );
-
-				if ( configNameHashA == configNameHashB ) {
-					error( "I found multiple configs with the name \"%s\".  All config names MUST be unique, otherwise I don't know which specific config you want me to build.\n", configNameA );
-					QUIT_ERROR();
-				}
-			}
-		}
-
-		// of all the configs that the user filled out inside set_builder_options
-		// find the one the user asked for in the command line
-		if ( inputConfigName ) {
-			bool8 foundConfig = false;
-			For ( u64, configIndex, 0, buildInfoData.configs.size() ) {
-				BuildConfig* config = &buildInfoData.configs[configIndex];
-
-				if ( hash_string( config->name.c_str(), 0 ) == inputConfigNameHash ) {
-					AddBuildConfigAndDependenciesUnique( &context, config, configsToBuild );
-
-					foundConfig = true;
-
-					break;
-				}
-			}
-
-			if ( !foundConfig ) {
-				error( "You passed the config name \"%s\" via the command line, but I never found a config with that name inside %s.  Make sure they match.\n", inputConfigName, SET_BUILDER_OPTIONS_FUNC_NAME );
 				QUIT_ERROR();
 			}
 		}
-
-		if ( preBuildFunc ) {
-			printf( "Running pre-build code...\n" );
-
-			const char* oldCWD = path_current_working_directory();
-			SetCurrentDirectory( context.inputFilePath.data );
-			defer( SetCurrentDirectory( oldCWD ) );
-
-			preBuildFunc();
-		}
-
-		u32 numSuccessfulBuilds = 0;
-		u32 numFailedBuilds = 0;
-		u32 numSkippedBuilds = 0;
-
-		For ( u64, configToBuildIndex, 0, configsToBuild.size() ) {
-			BuildConfig* config = &configsToBuild[configToBuildIndex];
-
-			assert( !config->binary_name.empty() );
-
-			u64 configNameHash = hash_string( config->name.c_str(), 0 );
-			u64 actualConfigIndex = hashmap_get_value( context.configIndices, configNameHash );
-
-			BuildConfig_AddDefaults( config );
-
-			// make sure that the binary folder and binary name are at least set to defaults
-			if ( !config->binary_folder.empty() ) {
-				config->binary_folder = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, config->binary_folder.c_str() );
-			} else {
-				config->binary_folder = context.inputFilePath.data;
-			}
-
-			context.config = *config;
-
-			{
-				printf( "Building \"%s\"", context.config.binary_name.c_str() );
-
-				if ( !context.config.name.empty() ) {
-					printf( ", config \"%s\"", context.config.name.c_str() );
-				}
-
-				printf( "\n" );
-			}
-
-			// make all non-absolute additional include paths relative to the build source file
-			For ( u64, includeIndex, 0, context.config.additional_includes.size() ) {
-				const char* additionalInclude = context.config.additional_includes[includeIndex].c_str();
-
-				if ( path_is_absolute( additionalInclude ) ) {
-					context.config.additional_includes[includeIndex] = additionalInclude;
-				} else {
-					context.config.additional_includes[includeIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalInclude );
-				}
-			}
-
-			// make all non-absolute additional library paths relative to the build source file
-			For ( u64, libPathIndex, 0, context.config.additional_lib_paths.size() ) {
-				const char* additionalLibPath = context.config.additional_lib_paths[libPathIndex].c_str();
-
-				if ( path_is_absolute( additionalLibPath ) ) {
-					context.config.additional_lib_paths[libPathIndex] = additionalLibPath;
-				} else {
-					context.config.additional_lib_paths[libPathIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalLibPath );
-				}
-			}
-
-			// get all the "compilation units" that we are actually going to give to the compiler
-			// if no source files were added in set_builder_options() then assume they only want to build the same file as the one specified via the command line
-			if ( context.config.source_files.size() == 0 ) {
-				context.config.source_files.push_back( context.inputFile );
-			} else {
-				// otherwise the user told us to build other source files, so go find and build those instead
-				// keep this as a std::vector because this gets fed back into BuilderOptions::source_files
-				std::vector<std::string> finalSourceFilesToBuild = BuildConfig_GetAllSourceFiles( &context, &context.config );
-
-				// at this point its totally acceptable for finalSourceFilesToBuild to be empty
-				// this is because the compiler should be the one that tells the user they specified no valid source files to build with
-				// the compiler can and will throw an error for that, so let it
-
-				// the .build_info file wont store the full paths to the source files because the input path can change depending on whether we're building via visual studio or from the command line
-				// so we need to reconstruct the full paths to the source files ourselves
-				For ( u64, sourceFileIndex, 0, finalSourceFilesToBuild.size() ) {
-					finalSourceFilesToBuild[sourceFileIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, finalSourceFilesToBuild[sourceFileIndex].c_str() );
-				}
-
-				context.config.source_files = finalSourceFilesToBuild;
-			}
-
-			buildInfoData.includeDependencies[actualConfigIndex].resize( context.config.source_files.size() );
-
-			// now do the actual build
-			{
-				float64 buildTimeStart = time_ms();
-
-				context.includeDependencies = buildInfoData.includeDependencies[actualConfigIndex];
-
-				buildResult_t buildResult = BuildBinary( &context );
-
-				buildInfoData.includeDependencies[actualConfigIndex] = context.includeDependencies;
-
-				float64 buildTimeEnd = time_ms();
-
-				switch ( buildResult ) {
-					case BUILD_RESULT_SUCCESS:
-						numSuccessfulBuilds++;
-						printf( "Finished building \"%s\", %f ms\n\n", context.config.binary_name.c_str(), buildTimeEnd - buildTimeStart );
-						break;
-
-					case BUILD_RESULT_FAILED:
-						numFailedBuilds++;
-						error( "Build failed.\n\n" );
-						QUIT_ERROR();
-
-					case BUILD_RESULT_SKIPPED:
-						numSkippedBuilds++;
-						printf( "Skipped!\n\n" );
-						break;
-				}
-			}
-
-			mem_reset_temp_storage();
-		}
-
-		if ( postBuildFunc ) {
-			printf( "Running post-build code...\n" );
-
-			const char* oldCWD = path_current_working_directory();
-			SetCurrentDirectory( context.inputFilePath.data );
-			defer( SetCurrentDirectory( oldCWD ) );
-
-			postBuildFunc();
-		}
-
-		// only dont want to write the .build_info if all the builds skipped or if a build failed
-		shouldWriteBuildInfo = ( numSuccessfulBuilds > 0 ) && ( numFailedBuilds == 0 );
 	}
+
+	buildInfoData.includeDependencies.resize( buildInfoData.configs.size() );
+
+	// none of the configs can have the same name
+	// TODO(DM): 14/11/2024: can we do better than o(n^2) here?
+	For ( size_t, configIndexA, 0, buildInfoData.configs.size() ) {
+		const char* configNameA = buildInfoData.configs[configIndexA].name.c_str();
+		u64 configNameHashA = hash_string( configNameA, 0 );
+
+		For ( size_t, configIndexB, 0, buildInfoData.configs.size() ) {
+			if ( configIndexA == configIndexB ) {
+				continue;
+			}
+
+			const char* configNameB = buildInfoData.configs[configIndexB].name.c_str();
+			u64 configNameHashB = hash_string( configNameB, 0 );
+
+			if ( configNameHashA == configNameHashB ) {
+				error( "I found multiple configs with the name \"%s\".  All config names MUST be unique, otherwise I don't know which specific config you want me to build.\n", configNameA );
+				QUIT_ERROR();
+			}
+		}
+	}
+
+	// of all the configs that the user filled out inside set_builder_options
+	// find the one the user asked for in the command line
+	if ( inputConfigName ) {
+		bool8 foundConfig = false;
+		For ( u64, configIndex, 0, buildInfoData.configs.size() ) {
+			BuildConfig* config = &buildInfoData.configs[configIndex];
+
+			if ( hash_string( config->name.c_str(), 0 ) == inputConfigNameHash ) {
+				AddBuildConfigAndDependenciesUnique( &context, config, configsToBuild );
+
+				foundConfig = true;
+
+				break;
+			}
+		}
+
+		if ( !foundConfig ) {
+			error( "You passed the config name \"%s\" via the command line, but I never found a config with that name inside %s.  Make sure they match.\n", inputConfigName, SET_BUILDER_OPTIONS_FUNC_NAME );
+			QUIT_ERROR();
+		}
+	}
+
+	if ( preBuildFunc ) {
+		printf( "Running pre-build code...\n" );
+
+		const char* oldCWD = path_current_working_directory();
+		SetCurrentDirectory( context.inputFilePath.data );
+		defer( SetCurrentDirectory( oldCWD ) );
+
+		preBuildFunc();
+	}
+
+	u32 numSuccessfulBuilds = 0;
+	u32 numFailedBuilds = 0;
+	u32 numSkippedBuilds = 0;
+
+	For ( u64, configToBuildIndex, 0, configsToBuild.size() ) {
+		BuildConfig* config = &configsToBuild[configToBuildIndex];
+
+		assert( !config->binary_name.empty() );
+
+		u64 configNameHash = hash_string( config->name.c_str(), 0 );
+		u64 actualConfigIndex = hashmap_get_value( context.configIndices, configNameHash );
+
+		BuildConfig_AddDefaults( config );
+
+		// make sure that the binary folder and binary name are at least set to defaults
+		if ( !config->binary_folder.empty() ) {
+			config->binary_folder = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, config->binary_folder.c_str() );
+		} else {
+			config->binary_folder = context.inputFilePath.data;
+		}
+
+		context.config = *config;
+
+		{
+			printf( "Building \"%s\"", context.config.binary_name.c_str() );
+
+			if ( !context.config.name.empty() ) {
+				printf( ", config \"%s\"", context.config.name.c_str() );
+			}
+
+			printf( "\n" );
+		}
+
+		// make all non-absolute additional include paths relative to the build source file
+		For ( u64, includeIndex, 0, context.config.additional_includes.size() ) {
+			const char* additionalInclude = context.config.additional_includes[includeIndex].c_str();
+
+			if ( path_is_absolute( additionalInclude ) ) {
+				context.config.additional_includes[includeIndex] = additionalInclude;
+			} else {
+				context.config.additional_includes[includeIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalInclude );
+			}
+		}
+
+		// make all non-absolute additional library paths relative to the build source file
+		For ( u64, libPathIndex, 0, context.config.additional_lib_paths.size() ) {
+			const char* additionalLibPath = context.config.additional_lib_paths[libPathIndex].c_str();
+
+			if ( path_is_absolute( additionalLibPath ) ) {
+				context.config.additional_lib_paths[libPathIndex] = additionalLibPath;
+			} else {
+				context.config.additional_lib_paths[libPathIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalLibPath );
+			}
+		}
+
+		// get all the "compilation units" that we are actually going to give to the compiler
+		// if no source files were added in set_builder_options() then assume they only want to build the same file as the one specified via the command line
+		if ( context.config.source_files.size() == 0 ) {
+			context.config.source_files.push_back( context.inputFile );
+		} else {
+			// otherwise the user told us to build other source files, so go find and build those instead
+			// keep this as a std::vector because this gets fed back into BuilderOptions::source_files
+			std::vector<std::string> finalSourceFilesToBuild = BuildConfig_GetAllSourceFiles( &context, &context.config );
+
+			// at this point its totally acceptable for finalSourceFilesToBuild to be empty
+			// this is because the compiler should be the one that tells the user they specified no valid source files to build with
+			// the compiler can and will throw an error for that, so let it
+
+			// the .build_info file wont store the full paths to the source files because the input path can change depending on whether we're building via visual studio or from the command line
+			// so we need to reconstruct the full paths to the source files ourselves
+			For ( u64, sourceFileIndex, 0, finalSourceFilesToBuild.size() ) {
+				finalSourceFilesToBuild[sourceFileIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, finalSourceFilesToBuild[sourceFileIndex].c_str() );
+			}
+
+			context.config.source_files = finalSourceFilesToBuild;
+		}
+
+		buildInfoData.includeDependencies[actualConfigIndex].resize( context.config.source_files.size() );
+
+		// now do the actual build
+		{
+			float64 buildTimeStart = time_ms();
+
+			context.includeDependencies = buildInfoData.includeDependencies[actualConfigIndex];
+
+			buildResult_t buildResult = BuildBinary( &context );
+
+			buildInfoData.includeDependencies[actualConfigIndex] = context.includeDependencies;
+
+			float64 buildTimeEnd = time_ms();
+
+			switch ( buildResult ) {
+				case BUILD_RESULT_SUCCESS:
+					numSuccessfulBuilds++;
+					printf( "Finished building \"%s\", %f ms\n\n", context.config.binary_name.c_str(), buildTimeEnd - buildTimeStart );
+					break;
+
+				case BUILD_RESULT_FAILED:
+					numFailedBuilds++;
+					error( "Build failed.\n\n" );
+					QUIT_ERROR();
+
+				case BUILD_RESULT_SKIPPED:
+					numSkippedBuilds++;
+					printf( "Skipped!\n\n" );
+					break;
+			}
+		}
+
+		mem_reset_temp_storage();
+	}
+
+	if ( postBuildFunc ) {
+		printf( "Running post-build code...\n" );
+
+		const char* oldCWD = path_current_working_directory();
+		SetCurrentDirectory( context.inputFilePath.data );
+		defer( SetCurrentDirectory( oldCWD ) );
+
+		postBuildFunc();
+	}
+
+	// only dont want to write the .build_info if all the builds skipped or if a build failed
+	bool shouldWriteBuildInfo = ( numSuccessfulBuilds > 0 ) && ( numFailedBuilds == 0 );
 
 	if ( shouldWriteBuildInfo ) {
 		float64 start = time_ms();
@@ -1848,9 +1881,6 @@ int main( int argc, char** argv ) {
 	float64 totalTimeEnd = time_ms();
 
 	printf( "Build finished:\n" );
-	/*if ( doFirstTimeSetup ) {
-		printf( "    First time setup:    %f ms\n", firstTimeSetupTimeMS );
-	}*/
 	if ( doUserConfigBuild ) {
 		printf( "    User config build:   %f ms%s\n", userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? " (skipped)" : "" );
 	}

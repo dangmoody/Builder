@@ -11,20 +11,25 @@ call build.bat release
 
 pushd %~dp0
 
-set temp_folder=.\\releases\\builder
+set temp_folder=.\\releases\\temp
 
 if not exist %temp_folder% (
 	mkdir %temp_folder%
 )
 
-robocopy .\\    %temp_folder% builder.exe
-robocopy .\\    %temp_folder% builder.h
-robocopy .\\    %temp_folder% README.md
-robocopy .\\    %temp_folder% LICENSE
-robocopy .\\doc %temp_folder% CHANGELOG.txt
-robocopy .\\doc %temp_folder% Contributing.md
+if not exist %temp_folder%\\clang (
+	mkdir %temp_folder%\\clang
+)
 
-.\\7zip\\7za.exe a -tzip releases\\builder_%version%.zip %temp_folder%
+robocopy    .\\            %temp_folder%        builder.exe
+robocopy    .\\            %temp_folder%        builder.h
+robocopy    .\\            %temp_folder%        README.md
+robocopy    .\\            %temp_folder%        LICENSE
+robocopy    .\\doc         %temp_folder%        CHANGELOG.txt
+robocopy    .\\doc         %temp_folder%        Contributing.md
+robocopy /e .\\clang_win64 %temp_folder%\\clang
+
+.\\7zip\\7za.exe a -tzip releases\\builder_win64_%version%.zip %temp_folder%
 
 rd /s /Q %temp_folder%
 

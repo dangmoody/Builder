@@ -51,6 +51,26 @@ SOFTWARE.
 
 #define BUILD_INFO_FILE_EXTENSION	".build_info"
 
+#define INTERMEDIATE_PATH			"intermediate"
+
+#ifdef _DEBUG
+	#if defined( _WIN64 )
+		#define DEFAULT_COMPILER_PATH	"clang_win64/bin/clang.exe"
+		#define DEFAULT_LINKER_PATH		"clang_win64/bin/lld-link.exe"
+	#elif defined( __linux__ )
+		#define DEFAULT_COMPILER_PATH	"clang_linux/bin/clang"
+		#define DEFAULT_LINKER_PATH		"clang_linux/bin/lld-link"
+	#endif
+#else
+	#if defined( _WIN64 )
+		#define DEFAULT_COMPILER_PATH	"clang/bin/clang.exe"
+		#define DEFAULT_LINKER_PATH		"clang/bin/lld-link.exe"
+	#elif defined( __linux__ )
+		#define DEFAULT_COMPILER_PATH	"clang/bin/clang"
+		#define DEFAULT_LINKER_PATH		"clang/bin/lld-link"
+	#endif
+#endif
+
 #ifdef _WIN64
 #define ERROR_CODE_FORMAT "0x%X"
 typedef DWORD errorCode_t;
@@ -102,6 +122,31 @@ bool8		FileIsHeaderFile( const char* filename );
 
 const char*	BuildConfig_GetFullBinaryName( const BuildConfig* config );
 void		BuildConfig_AddDefaults( BuildConfig* outConfig );
+
+// DM!!! 22/07/2025: refactor this in such a way where we dont have 3 different flag types representing the same thing!!!
+enum procFlagBits_t {
+	PROC_FLAG_SHOW_ARGS		= bit( 0 ),
+	PROC_FLAG_SHOW_STDOUT	= bit( 1 ),
+};
+typedef u32 procFlags_t;
+
+static procFlags_t GetProcFlagsFromBuildContextFlags( const buildContextFlags_t buildContextFlags ) {
+	procFlags_t result = 0;
+
+	if ( buildContextFlags & BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS ) result |= PROC_FLAG_SHOW_ARGS;
+	if ( buildContextFlags & BUILD_CONTEXT_FLAG_SHOW_STDOUT )        result |= PROC_FLAG_SHOW_STDOUT;
+
+	return result;
+}
+s32			RunProc( Array<const char*>* args, Array<const char*>* environmentVariables, const procFlags_t procFlags = 0 );
+
+struct compilerBackend_t {
+	bool8	( *CompileSourceFile )( buildContext_t* context, const char* sourceFile );
+	bool8	( *LinkIntermediateFiles )( buildContext_t* context, const Array<const char*>& intermediateFiles );
+};
+extern compilerBackend_t	g_clangBackend;
+//extern compilerBackend_t	g_gccBackend;
+extern compilerBackend_t	g_msvcBackend;
 
 
 bool8		GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* options );

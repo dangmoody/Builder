@@ -59,16 +59,6 @@ SOFTWARE.
 =============================================================================
 */
 
-#ifdef _DEBUG
-	#if defined( _WIN64 )
-		#define DEFAULT_COMPILER_PATH "clang_win64/bin/clang.exe"
-	#elif defined( __linux__ )
-		#define DEFAULT_COMPILER_PATH "clang_linux/bin/clang"
-	#endif	// _WIN64
-#else
-	#define DEFAULT_COMPILER_PATH "clang/bin/clang.exe"
-#endif	// _DEBUG
-
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
 	BUILDER_VERSION_MINOR	= 8,
@@ -85,8 +75,6 @@ enum doingBuildFrom_t {
 	DOING_BUILD_FROM_SOURCE_FILE	= 0,
 	DOING_BUILD_FROM_BUILD_INFO_FILE
 };
-
-#define INTERMEDIATE_PATH				"intermediate"
 
 #define SET_BUILDER_OPTIONS_FUNC_NAME	"set_builder_options"
 #define PRE_BUILD_FUNC_NAME				"on_pre_build"
@@ -179,36 +167,12 @@ static const char* BinaryTypeToString( const BinaryType type ) {
 	}
 }
 
-// TODO(DM): 20/07/2025: do we want to ignore this warning via the build script?
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wswitch"
-
-static const char* LanguageVersionToCompilerArg( const LanguageVersion languageVersion ) {
-	assert( languageVersion == LANGUAGE_VERSION_UNSET );
-
-	switch ( languageVersion ) {
-		case LANGUAGE_VERSION_C89:		return "-std=c89";
-		case LANGUAGE_VERSION_C99:		return "-std=c99";
-		case LANGUAGE_VERSION_CPP11:	return "-std=cpp11";
-		case LANGUAGE_VERSION_CPP14:	return "-std=cpp14";
-		case LANGUAGE_VERSION_CPP17:	return "-std=cpp17";
-		case LANGUAGE_VERSION_CPP20:	return "-std=cpp20";
-		case LANGUAGE_VERSION_CPP23:	return "-std=cpp23";
-	}
-
-	assert( false );
-
-	return NULL;
-}
-
-#pragma clang diagnostic pop
-
-static const char* OptimizationLevelToCompilerArg( const OptimizationLevel level ) {
+static const char* OptimizationLevelToString( OptimizationLevel level ) {
 	switch ( level ) {
-		case OPTIMIZATION_LEVEL_O0:	return "-O0";
-		case OPTIMIZATION_LEVEL_O1:	return "-O1";
-		case OPTIMIZATION_LEVEL_O2:	return "-O2";
-		case OPTIMIZATION_LEVEL_O3:	return "-O3";
+		case OPTIMIZATION_LEVEL_O0: return "OPTIMIZATION_LEVEL_00";
+		case OPTIMIZATION_LEVEL_O1: return "OPTIMIZATION_LEVEL_01";
+		case OPTIMIZATION_LEVEL_O2: return "OPTIMIZATION_LEVEL_02";
+		case OPTIMIZATION_LEVEL_O3: return "OPTIMIZATION_LEVEL_03";
 	}
 }
 
@@ -268,7 +232,7 @@ static const char* BuildConfig_ToString( const BuildConfig* config ) {
 	PrintField( "binary_name", config->binary_name.c_str() );
 	PrintField( "binary_folder", config->binary_folder.c_str() );
 	PrintField( "binary_type", BinaryTypeToString( config->binary_type ) );
-	PrintField( "optimization_level", OptimizationLevelToCompilerArg( config->optimization_level ) );
+	PrintField( "optimization_level", OptimizationLevelToString( config->optimization_level ) );
 	PrintField( "remove_symbols", config->remove_symbols ? "true" : "false" );
 	PrintField( "remove_file_extension", config->remove_file_extension ? "true" : "false" );
 	PrintField( "warnings_as_errors", config->warnings_as_errors ? "true" : "false" );
@@ -317,22 +281,7 @@ const char* BuildConfig_GetFullBinaryName( const BuildConfig* config ) {
 	return string_builder_to_string( &builder );
 }
 
-enum procFlagBits_t {
-	PROC_FLAG_SHOW_ARGS		= bit( 0 ),
-	PROC_FLAG_SHOW_STDOUT	= bit( 1 ),
-};
-typedef u32 procFlags_t;
-
-static procFlags_t GetProcFlagsFromBuildContextFlags( const buildContextFlags_t buildContextFlags ) {
-	procFlags_t result = 0;
-
-	if ( buildContextFlags & BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS ) result |= PROC_FLAG_SHOW_ARGS;
-	if ( buildContextFlags & BUILD_CONTEXT_FLAG_SHOW_STDOUT )        result |= PROC_FLAG_SHOW_STDOUT;
-
-	return result;
-}
-
-static s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVariables, procFlags_t procFlags = 0 ) {
+s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVariables, const procFlags_t procFlags ) {
 	assert( args );
 	assert( args->data );
 	assert( args->count >= 1 );
@@ -503,6 +452,16 @@ static void ReadDependencyFile( const char* depFilename, std::vector<std::string
 	}
 }
 
+static compilerBackend_t* g_backend = NULL;
+
+//static bool8 Backend_CompileSourceFile( buildContext_t* context, const char* sourceFile ) {
+//	return g_backend->CompileSourceFile( context, sourceFile );
+//}
+//
+//static bool8 Backend_LinkIntermediateFiles( buildContext_t* context, Array<const char*>& intermediateFiles ) {
+//	return g_backend->LinkIntermediateFiles( context, intermediateFiles );
+//}
+
 static buildResult_t BuildBinary( buildContext_t* context ) {
 	// create binary folder
 	if ( !folder_create_if_it_doesnt_exist( context->config.binary_folder.c_str() ) ) {
@@ -521,30 +480,8 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 
 	s32 exitCode = 0;
 
-	Array<const char*> args;
-	args.reserve(
-		1 +	// clang
-		1 +	// -shared/-lib
-		1 +	// -c
-		1 +	// std=
-		1 +	// symbols
-		1 +	// optimisation
-		1 +	// -o
-		1 +	// intermediate filename
-		3 +	// -MD -MF <filename>
-		1 +	// source file
-		context->config.defines.size() +
-		context->config.additional_includes.size() +
-		context->config.additional_lib_paths.size() +
-		context->config.additional_libs.size() +
-		context->config.warning_levels.size() +
-		context->config.ignore_warnings.size()
-	);
-
 	Array<const char*> intermediateFiles;
 	intermediateFiles.reserve( context->config.source_files.size() );
-
-	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
 
 	u32 numCompiledFiles = 0;
 
@@ -596,83 +533,7 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 			}
 		}
 
-		args.reset();
-
-		args.add( context->compilerPath.data );
-
-		args.add( "-c" );
-
-		if ( context->config.language_version != LANGUAGE_VERSION_UNSET ) {
-			args.add( LanguageVersionToCompilerArg( context->config.language_version ) );
-		}
-
-		if ( !context->config.remove_symbols ) {
-			args.add( "-g" );
-		}
-
-		args.add( OptimizationLevelToCompilerArg( context->config.optimization_level ) );
-
-		args.add( "-o" );
-		args.add( intermediateFilename );
-
-		if ( !context->config.name.empty() ) {
-			args.add( "-MMD" );			// generate the dependency file
-			args.add( "-MF" );			// set the name of the dependency file to...
-			args.add( depFilename );	// ...this
-		}
-
-		args.add( sourceFile );
-
-		For ( u32, defineIndex, 0, context->config.defines.size() ) {
-			args.add( tprintf( "-D%s", context->config.defines[defineIndex].c_str() ) );
-		}
-
-		For ( u32, includeIndex, 0, context->config.additional_includes.size() ) {
-			args.add( tprintf( "-I%s", context->config.additional_includes[includeIndex].c_str() ) );
-		}
-
-		// must come before ignored warnings
-		if ( context->config.warnings_as_errors ) {
-			args.add( "-Werror" );
-		}
-
-		// warning levels
-		{
-			std::vector<std::string> allowedWarningLevels = {
-				"-Weverything",
-				"-Wall",
-				"-Wextra",
-				"-Wpedantic",
-			};
-
-			For ( u64, warningLevelIndex, 0, context->config.warning_levels.size() ) {
-				const std::string& warningLevel = context->config.warning_levels[warningLevelIndex];
-
-				bool8 found = false;
-
-				For ( u64, allowedWarningLevelIndex, 0, allowedWarningLevels.size() ) {
-					if ( allowedWarningLevels[allowedWarningLevelIndex] == warningLevel ) {	// TODO(DM): 14/06/2025: better to compare hashes here instead?
-						found = true;
-						break;
-					}
-				}
-
-				if ( !found ) {
-					error( "\"%s\" is not allowed as a warning level.\n", warningLevel.c_str() );
-					return BUILD_RESULT_FAILED;
-				}
-
-				args.add( warningLevel.c_str() );
-			}
-		}
-
-		For ( u64, ignoreWarningIndex, 0, context->config.ignore_warnings.size() ) {
-			args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
-		}
-
-		exitCode = RunProc( &args, NULL, procFlags );
-
-		if ( exitCode != 0 ) {
+		if ( !g_backend->CompileSourceFile( context, sourceFile ) ) {
 			error( "Compile failed.\n" );
 			return BUILD_RESULT_FAILED;
 		}
@@ -699,53 +560,9 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 		return BUILD_RESULT_SKIPPED;
 	}
 
-	// link
-	{
-		const char* fullBinaryName = BuildConfig_GetFullBinaryName( &context->config );
-
-		args.reset();
-
-		// static libraries are just an archive of .o files
-		// so there is no real "link" step, instead the .o files are bundled together
-		// so there must be a separate codepath for "linking" a static library
-		if ( context->config.binary_type == BINARY_TYPE_STATIC_LIBRARY ) {
-			args.add( "lld-link" );
-			args.add( "/lib" );
-
-			args.add( tprintf( "/OUT:%s", fullBinaryName ) );
-
-			args.add_range( &intermediateFiles );
-		} else {
-			args.add( context->compilerPath.data );
-
-			if ( !context->config.remove_symbols ) {
-				args.add( "-g" );
-			}
-
-			args.add( "-o" );
-			args.add( fullBinaryName );
-
-			if ( context->config.binary_type == BINARY_TYPE_DYNAMIC_LIBRARY ) {
-				args.add( "-shared" );
-			}
-
-			args.add_range( &intermediateFiles );
-
-			For ( u32, libPathIndex, 0, context->config.additional_lib_paths.size() ) {
-				args.add( tprintf( "-L%s", context->config.additional_lib_paths[libPathIndex].c_str() ) );
-			}
-
-			For ( u32, libIndex, 0, context->config.additional_libs.size() ) {
-				args.add( tprintf( "-l%s", context->config.additional_libs[libIndex].c_str() ) );
-			}
-		}
-
-		exitCode = RunProc( &args, NULL, procFlags );
-
-		if ( exitCode != 0 ) {
-			error( "Link failed.\n" );
-			return BUILD_RESULT_FAILED;
-		}
+	if ( !g_backend->LinkIntermediateFiles( context, intermediateFiles ) ) {
+		error( "Linking failed.\n" );
+		return BUILD_RESULT_FAILED;
 	}
 
 	return BUILD_RESULT_SUCCESS;
@@ -1558,6 +1375,8 @@ int main( int argc, char** argv ) {
 
 		buildInfoData.userConfigDLLFilename = BuildConfig_GetFullBinaryName( &userConfigBuildContext.config );
 
+		g_backend = &g_clangBackend;
+
 		userConfigBuildResult = BuildBinary( &userConfigBuildContext );
 
 		if ( userConfigBuildResult == BUILD_RESULT_FAILED ) {
@@ -1654,6 +1473,14 @@ int main( int argc, char** argv ) {
 	// if the user never specified a compiler, we can build with the default compiler that just built the user config DLL with
 	if ( options.compiler_path.empty() ) {
 		options.compiler_path = DEFAULT_COMPILER_PATH;
+	}
+
+	if ( string_ends_with( options.compiler_path.c_str(), "clang.exe" ) || string_ends_with( options.compiler_path.c_str(), "clang" ) ) {
+		g_backend = &g_clangBackend;
+	} /*else if ( string_ends_with( options.compiler_path.c_str(), "gcc.exe" ) || string_ends_with( options.compiler_path.c_str(), "gcc" ) ) {
+		g_backend = &g_gccBackend;
+	}*/ else if ( string_ends_with( options.compiler_path.c_str(), "cl.exe" ) || string_ends_with( options.compiler_path.c_str(), "cl" ) ) {
+		g_backend = &g_msvcBackend;
 	}
 
 	std::vector<BuildConfig> configsToBuild;

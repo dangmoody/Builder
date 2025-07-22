@@ -89,10 +89,12 @@
   <ItemDefinitionGroup>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\backend_msvc.cpp" />
     <ClCompile Include="src\builder.cpp" />
     <ClCompile Include="src\core\src\allocation_context.cpp" />
     <ClCompile Include="src\core\src\allocator_linear.cpp" />
     <ClCompile Include="src\core\src\allocator_malloc.cpp" />
+    <ClCompile Include="src\backend_clang.cpp" />
     <ClCompile Include="src\core\src\cmd_line_args.cpp" />
     <ClCompile Include="src\core\src\core.suc.cpp" />
     <ClCompile Include="src\core\src\core.win64.suc.cpp" />

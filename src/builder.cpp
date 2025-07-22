@@ -1595,7 +1595,7 @@ int main( int argc, char** argv ) {
 
 				setBuilderOptionsTimeMS = setBuilderOptionsTimeEnd - setBuilderOptionsTimeStart;
 
-				string_copy_from_c_string( &context.compilerPath, options.compiler_path.c_str(), options.compiler_path.size() );
+				context.compilerPath = options.compiler_path.c_str();
 
 				buildInfoData.configs = options.configs;
 
@@ -1649,6 +1649,11 @@ int main( int argc, char** argv ) {
 				}
 			}
 		}
+	}
+
+	// if the user never specified a compiler, we can build with the default compiler that just built the user config DLL with
+	if ( options.compiler_path.empty() ) {
+		options.compiler_path = DEFAULT_COMPILER_PATH;
 	}
 
 	std::vector<BuildConfig> configsToBuild;

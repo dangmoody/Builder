@@ -50,6 +50,8 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 
 	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
 
+	// DM!!! dont make this args list every time
+	// store this somewhere and just reset it
 	Array<const char*> args;
 	args.reserve(
 		1 +	// cl
@@ -118,6 +120,7 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 			"/Wall",
 		};
 
+		// MSVC only allows one warning level to be set
 		if ( context->config.warning_levels.size() > 1 ) {
 			StringBuilder builder;
 			string_builder_reset( &builder );
@@ -168,6 +171,8 @@ static bool8 MSVC_LinkIntermediateFiles( buildContext_t* context, const Array<co
 
 	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
 
+	// DM!!! dont make this args list every time
+	// store this somewhere and just reset it
 	Array<const char*> args;
 	args.reserve(
 		1 +	// link

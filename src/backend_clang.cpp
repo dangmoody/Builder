@@ -49,6 +49,8 @@ static bool8 Clang_CompileSourceFile( buildContext_t* context, const char* sourc
 
 	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
 
+	// DM!!! dont make this args list every time
+	// store this somewhere and just reset it
 	Array<const char*> args;
 	args.reserve(
 		1 +	// clang
@@ -153,6 +155,8 @@ static bool8 Clang_LinkIntermediateFiles( buildContext_t* context, const Array<c
 
 	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
 
+	// DM!!! dont make this args list every time
+	// store this somewhere and just reset it
 	Array<const char*> args;
 	args.reserve(
 		1 + // lld-link
@@ -167,7 +171,7 @@ static bool8 Clang_LinkIntermediateFiles( buildContext_t* context, const Array<c
 
 	args.reset();
 
-	// static libraries are just an archive of .o files
+	// in clang: static libraries are just an archive of .o files
 	// so there is no real "link" step, instead the .o files are bundled together
 	// so there must be a separate codepath for "linking" a static library
 	if ( context->config.binary_type == BINARY_TYPE_STATIC_LIBRARY ) {

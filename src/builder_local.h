@@ -55,20 +55,15 @@ SOFTWARE.
 
 #ifdef _DEBUG
 	#if defined( _WIN64 )
-		#define DEFAULT_COMPILER_PATH	"clang_win64/bin/clang.exe"
-		#define DEFAULT_LINKER_PATH		"clang_win64/bin/lld-link.exe"
+		#define DEFAULT_COMPILER_PATH	"clang_win64/bin/clang"
+		#define DEFAULT_LINKER_PATH		"clang_win64/bin/lld-link"
 	#elif defined( __linux__ )
 		#define DEFAULT_COMPILER_PATH	"clang_linux/bin/clang"
 		#define DEFAULT_LINKER_PATH		"clang_linux/bin/lld-link"
 	#endif
 #else
-	#if defined( _WIN64 )
-		#define DEFAULT_COMPILER_PATH	"clang/bin/clang.exe"
-		#define DEFAULT_LINKER_PATH		"clang/bin/lld-link.exe"
-	#elif defined( __linux__ )
-		#define DEFAULT_COMPILER_PATH	"clang/bin/clang"
-		#define DEFAULT_LINKER_PATH		"clang/bin/lld-link"
-	#endif
+	#define DEFAULT_COMPILER_PATH		"clang/bin/clang"
+	#define DEFAULT_LINKER_PATH			"clang/bin/lld-link"
 #endif
 
 #ifdef _WIN64

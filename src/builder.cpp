@@ -1506,15 +1506,16 @@ int main( int argc, char** argv ) {
 
 				Process* vcvarsProcess = process_create( &args, NULL, /*PROCESS_FLAG_ASYNC*/0 );
 
-				StringBuilder stringBuilder;
+				StringBuilder vcvarsOutput;
+				string_builder_reset( &vcvarsOutput );
 
 				char buffer[1024] = {};
 				while ( process_read_stdout( vcvarsProcess, buffer, 1024 ) ) {
-					string_builder_appendf( &stringBuilder, "%s", buffer );
+					string_builder_appendf( &vcvarsOutput, "%s", buffer );
 					//printf( "%s", buffer );
 				}
 
-				const char* outputBuffer = string_builder_to_string( &stringBuilder );
+				const char* outputBuffer = string_builder_to_string( &vcvarsOutput );
 
 				//printf( "%s\n", outputBuffer );
 

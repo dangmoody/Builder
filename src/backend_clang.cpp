@@ -151,6 +151,8 @@ static bool8 Clang_CompileSourceFile( buildContext_t* context, const char* sourc
 }
 
 static bool8 Clang_LinkIntermediateFiles( buildContext_t* context, const Array<const char*>& intermediateFiles ) {
+	assert( context );
+
 	const char* fullBinaryName = BuildConfig_GetFullBinaryName( &context->config );
 
 	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
@@ -175,7 +177,7 @@ static bool8 Clang_LinkIntermediateFiles( buildContext_t* context, const Array<c
 	// so there is no real "link" step, instead the .o files are bundled together
 	// so there must be a separate codepath for "linking" a static library
 	if ( context->config.binary_type == BINARY_TYPE_STATIC_LIBRARY ) {
-		args.add( "lld-link" );
+		args.add( g_clangBackend.linkerName );
 		args.add( "/lib" );
 
 		args.add( tprintf( "/OUT:%s", fullBinaryName ) );
@@ -212,6 +214,7 @@ static bool8 Clang_LinkIntermediateFiles( buildContext_t* context, const Array<c
 }
 
 compilerBackend_t g_clangBackend = {
+	.linkerName				= "lld-link",
 	.CompileSourceFile		= Clang_CompileSourceFile,
 	.LinkIntermediateFiles	= Clang_LinkIntermediateFiles,
 };

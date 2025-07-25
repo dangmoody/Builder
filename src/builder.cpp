@@ -1470,21 +1470,6 @@ int main( int argc, char** argv ) {
 		}
 	}
 
-	// if the user never specified a compiler, we can build with the default compiler that just built the user config DLL with
-	if ( options.compiler_path.empty() ) {
-		options.compiler_path = DEFAULT_COMPILER_PATH;
-	}
-
-	if ( string_ends_with( options.compiler_path.c_str(), "clang.exe" ) || string_ends_with( options.compiler_path.c_str(), "clang" ) ) {
-		g_backend = &g_clangBackend;
-	} /*else if ( string_ends_with( options.compiler_path.c_str(), "gcc.exe" ) || string_ends_with( options.compiler_path.c_str(), "gcc" ) ) {
-		g_backend = &g_gccBackend;
-	}*/ else if ( string_ends_with( options.compiler_path.c_str(), "cl.exe" ) || string_ends_with( options.compiler_path.c_str(), "cl" ) ) {
-		g_backend = &g_msvcBackend;
-	}
-
-	std::vector<BuildConfig> configsToBuild;
-
 	// if no configs were manually added then assume we are just doing a default build with no user-specified options
 	if ( buildInfoData.configs.size() == 0 ) {
 		BuildConfig config = {
@@ -1494,6 +1479,159 @@ int main( int argc, char** argv ) {
 
 		buildInfoData.configs.push_back( config );
 	}
+
+	{
+		// if the user never specified a compiler, we can build with the default compiler that we just built the user config DLL with
+		if ( options.compiler_path.empty() ) {
+			options.compiler_path = DEFAULT_COMPILER_PATH;
+		}
+
+		if ( string_ends_with( options.compiler_path.c_str(), "clang.exe" ) || string_ends_with( options.compiler_path.c_str(), "clang" ) ) {
+			g_backend = &g_clangBackend;
+		} else if ( string_ends_with( options.compiler_path.c_str(), "cl.exe" ) || string_ends_with( options.compiler_path.c_str(), "cl" ) ) {
+			g_backend = &g_msvcBackend;
+
+			// microsoft need us to tell their own compiler that runs on their own platform (specifically FOR their own platform) where their own include and library folders are, sigh...
+			// the way we do that is by manually calling a vcvars*.bat script and using the information it gives us back to know which include and lib folders to look for
+			// and even then we still have to manually construct the windows SDK folders! AAARGH!
+			// DM!!! 25/07/2025:
+			//	- clean this shit up!
+			//	- I think this code needs to move into a compilerBackend_t::Init() function or something like that
+			//	  this is clearly MSVC-only code and should be self contained
+			{
+				Array<const char*> args;
+				args.add( "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvars64.bat" );
+				args.add( "&&" );
+				args.add( "set" );
+
+				Process* vcvarsProcess = process_create( &args, NULL, /*PROCESS_FLAG_ASYNC*/0 );
+
+				StringBuilder stringBuilder;
+
+				char buffer[1024] = {};
+				while ( process_read_stdout( vcvarsProcess, buffer, 1024 ) ) {
+					string_builder_appendf( &stringBuilder, "%s", buffer );
+					//printf( "%s", buffer );
+				}
+
+				const char* outputBuffer = string_builder_to_string( &stringBuilder );
+
+				//printf( "%s\n", outputBuffer );
+
+				{
+					auto ParseTagString = []( const char* fileBuffer, const char* tag ) -> std::string {
+						const char* lineStart = strstr( fileBuffer, tag );
+						assert( lineStart );
+						lineStart += strlen( tag );
+
+						const char* lineEnd = NULL;
+						if ( !lineEnd ) lineEnd = strchr( lineStart, '\r' );
+						if ( !lineEnd ) lineEnd = strchr( lineStart, '\n' );
+
+						return std::string( lineStart, lineEnd );
+					};
+
+					auto ParseTagArray = []( const char* fileBuffer, const char* tag ) -> std::vector<std::string> {
+						std::vector<std::string> paths;
+
+						const char* lineStart = strstr( fileBuffer, tag );
+						assert( lineStart );
+						lineStart += strlen( tag );
+
+						const char* lineEnd = strchr( lineStart, '\n' );
+
+						const char* semicolon = strchr( lineStart, ';' );
+
+						while ( cast( u64, semicolon ) < cast( u64, lineEnd ) ) {
+							u64 pathLength = cast( u64, semicolon ) - cast( u64, lineStart );
+							std::string path( lineStart, pathLength );
+
+							paths.push_back( path );
+
+							lineStart = semicolon + 1;
+							semicolon = strchr( lineStart, ';' );
+						}
+
+						return paths;
+					};
+
+					std::vector<std::string> includePaths = ParseTagArray( outputBuffer, "INCLUDE=" );
+					For ( u64, i, 0, buildInfoData.configs.size() ) {
+						BuildConfig* config = &buildInfoData.configs[i];
+
+						config->additional_includes.insert( config->additional_includes.end(), includePaths.begin(), includePaths.end() );
+					}
+
+					std::string windowsSDKVersion = ParseTagString( outputBuffer, "WindowsSDKLibVersion=" );
+					windowsSDKVersion.pop_back();	// remove trailing slash
+
+					std::string windowsSDKRootFolder = ParseTagString( outputBuffer, "WindowsSdkDir=" );
+					windowsSDKRootFolder.pop_back();	// remove trailing slash
+
+					std::vector<std::string> libPaths = ParseTagArray( outputBuffer, "LIB=" );
+					// add windows sdk lib folders that we need too
+					std::string windowsSDKLibFolder = windowsSDKRootFolder + PATH_SEPARATOR + "Lib" + PATH_SEPARATOR + windowsSDKVersion + PATH_SEPARATOR + "um" + PATH_SEPARATOR + "x64";
+					libPaths.push_back( windowsSDKLibFolder );
+
+					StringBuilder msvcIncludes = {};
+					string_builder_reset( &msvcIncludes );
+					For ( u64, i, 0, includePaths.size() - 1 ) {
+						string_builder_appendf( &msvcIncludes, "%s;", includePaths[i].c_str() );
+					}
+					string_builder_appendf( &msvcIncludes, "%s;", includePaths[includePaths.size() - 1].c_str() );
+					const char* includeEnvVar = string_builder_to_string( &msvcIncludes );
+					SetEnvironmentVariable( "INCLUDE", includeEnvVar );	// DM!!! 25/07/2025: make an os level wrapper for this
+
+					StringBuilder msvcLibs = {};
+					string_builder_reset( &msvcLibs );
+					For ( u64, i, 0, libPaths.size() ) {
+						string_builder_appendf( &msvcLibs, "%s;", libPaths[i].c_str() );
+					}
+					string_builder_appendf( &msvcLibs, "%s;", libPaths[libPaths.size() - 1].c_str() );
+					const char* libsEnvVar = string_builder_to_string( &msvcLibs );
+					SetEnvironmentVariable( "LIB", libsEnvVar );	// DM!!! 25/07/2025: make an os level wrapper for this
+
+					For ( u64, i, 0, buildInfoData.configs.size() ) {
+						BuildConfig* config = &buildInfoData.configs[i];
+
+						config->additional_lib_paths.insert( config->additional_lib_paths.end(), libPaths.begin(), libPaths.end() );
+					}
+				}
+
+				s32 exitCode = process_join( vcvarsProcess );
+
+				process_destroy( vcvarsProcess );
+				vcvarsProcess = NULL;
+			}
+		}
+		// TODO(DM): 24/07/2025: add gcc backend
+		/*else if ( string_ends_with( options.compiler_path.c_str(), "gcc.exe" ) || string_ends_with( options.compiler_path.c_str(), "gcc" ) ) {
+			g_backend = &g_gccBackend;
+		}*/
+		else {
+			error(
+				"The compiler you want to build with (\"%s\") is not one that I recognise.\n"
+				"Currently, I only support: Clang, GCC, and MSVC.\n"
+				"So you must use one of those compilers and make the compiler path end with the name of the executable.  Sorry!\n"
+				, options.compiler_path.c_str()
+			);
+
+			QUIT_ERROR();
+		}
+
+		// get the linker program that we need
+		const char* compilerPathOnly = path_remove_file_from_path( options.compiler_path.c_str() );
+
+		if ( compilerPathOnly ) {
+			// in this case assume theres no path specified because the user wants to use a compiler thats in their PATH
+			// so we can automatically find the linker program too because of that
+			context.linkerPath = g_backend->linkerName;
+		} else {
+			string_printf( &context.linkerPath, "%s%c%s", compilerPathOnly, PATH_SEPARATOR, g_backend->linkerName );
+		}
+	}
+
+	std::vector<BuildConfig> configsToBuild;
 
 	// if only one config was added (either by user or as a default build) then we know we just want that one, no config command line arg is needed
 	if ( buildInfoData.configs.size() == 1 ) {

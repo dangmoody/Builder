@@ -99,6 +99,7 @@ struct buildContext_t {
 	buildContextFlags_t	flags;
 
 	String				compilerPath;
+	String				linkerPath;
 
 	const char*			inputFile;
 	String				inputFilePath;
@@ -141,6 +142,8 @@ static procFlags_t GetProcFlagsFromBuildContextFlags( const buildContextFlags_t 
 s32			RunProc( Array<const char*>* args, Array<const char*>* environmentVariables, const procFlags_t procFlags = 0 );
 
 struct compilerBackend_t {
+	const char*	linkerName;
+
 	bool8	( *CompileSourceFile )( buildContext_t* context, const char* sourceFile );
 	bool8	( *LinkIntermediateFiles )( buildContext_t* context, const Array<const char*>& intermediateFiles );
 };

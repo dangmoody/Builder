@@ -181,7 +181,8 @@ struct VisualStudioSolution {
 };
 
 struct BuilderOptions {
-	// The path to your compiler.
+	// The path to the compiler that you want to build with.
+	// If you leave this unset then Builder will use the portable install of Clang that it came with.
 	std::string					compiler_path;
 
 	// All the possible configs that you could build with.

@@ -50,11 +50,14 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 
 	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
 
+	context->config.additional_includes.push_back( "." );
+
 	// DM!!! dont make this args list every time
 	// store this somewhere and just reset it
 	Array<const char*> args;
 	args.reserve(
 		1 +	// cl
+		1 +	// /c
 		1 +	// /std=
 		1 +	// /DEBUG
 		1 +	// /O*
@@ -74,6 +77,8 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 
 	args.add( context->compilerPath.data );
 
+	args.add( "/c" );
+
 	if ( context->config.language_version != LANGUAGE_VERSION_UNSET ) {
 		args.add( LanguageVersionToCompilerArg( context->config.language_version ) );
 	}
@@ -84,7 +89,7 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 
 	args.add( OptimizationLevelToCompilerArg( context->config.optimization_level ) );
 
-	args.add( tprintf( "/Fo:\"%s\"", intermediateFilename ) );
+	args.add( tprintf( "/Fo%s", intermediateFilename ) );
 
 	// DM!!! 22/07/2025: find the correct flags that MSVC needs for this
 	//if ( !context->config.name.empty() ) {
@@ -167,6 +172,8 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 }
 
 static bool8 MSVC_LinkIntermediateFiles( buildContext_t* context, const Array<const char*>& intermediateFiles ) {
+	assert( context );
+
 	const char* fullBinaryName = BuildConfig_GetFullBinaryName( &context->config );
 
 	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
@@ -186,7 +193,12 @@ static bool8 MSVC_LinkIntermediateFiles( buildContext_t* context, const Array<co
 
 	args.reset();
 
-	args.add( "link" );
+	const char* compilerPathOnly = path_remove_file_from_path( context->compilerPath.data );
+	if ( compilerPathOnly ) {
+		args.add( tprintf( "%s%c%s", compilerPathOnly, PATH_SEPARATOR, g_msvcBackend.linkerName ) );
+	} else {
+		args.add( g_msvcBackend.linkerName );
+	}
 
 	if ( context->config.binary_type == BINARY_TYPE_STATIC_LIBRARY ) {
 		args.add( "/lib" );
@@ -216,6 +228,7 @@ static bool8 MSVC_LinkIntermediateFiles( buildContext_t* context, const Array<co
 }
 
 compilerBackend_t g_msvcBackend = {
+	.linkerName				= "link",
 	.CompileSourceFile		= MSVC_CompileSourceFile,
 	.LinkIntermediateFiles	= MSVC_LinkIntermediateFiles,
 };

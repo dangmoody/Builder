@@ -138,9 +138,11 @@ s32			RunProc( Array<const char*>* args, Array<const char*>* environmentVariable
 
 struct compilerBackend_t {
 	const char*	linkerName;
+	void*		data;
 
-	bool8	( *CompileSourceFile )( buildContext_t* context, const char* sourceFile );
-	bool8	( *LinkIntermediateFiles )( buildContext_t* context, const Array<const char*>& intermediateFiles );
+	void		( *Init )( void );
+	bool8		( *CompileSourceFile )( buildContext_t* context, const char* sourceFile );
+	bool8		( *LinkIntermediateFiles )( buildContext_t* context, const Array<const char*>& intermediateFiles );
 };
 extern compilerBackend_t	g_clangBackend;
 //extern compilerBackend_t	g_gccBackend;

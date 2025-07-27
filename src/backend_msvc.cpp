@@ -33,6 +33,7 @@ SOFTWARE.
 #include "core/include/paths.h"
 #include "core/include/array.inl"
 #include "core/include/string_builder.h"
+#include "core/include/core_process.h"
 
 // TODO(DM): 20/07/2025: do we want to ignore this warning via the build script?
 #pragma clang diagnostic push
@@ -63,6 +64,119 @@ static const char* OptimizationLevelToCompilerArg( const OptimizationLevel level
 		case OPTIMIZATION_LEVEL_O2:	return "/O2";
 		case OPTIMIZATION_LEVEL_O3:	return "/O2";	// DM!!! 22/07/2025: whats the real answer here?
 	}
+}
+
+//================================================================
+
+struct msvcState_t {
+	std::vector<std::string>	windowsIncludes;
+	std::vector<std::string>	windowsLibPaths;
+};
+
+static msvcState_t* g_msvcState = NULL;
+
+static void MSVC_Init() {
+	g_msvcState = cast( msvcState_t*, mem_alloc( sizeof( msvcState_t ) ) );
+	new( g_msvcState ) msvcState_t;
+
+	// microsoft need us to tell their own compiler that runs on their own platform (specifically FOR their own platform) where their own include and library folders are, sigh...
+	// the way we do that is by manually calling a vcvars*.bat script and using the information it gives us back to know which include and lib folders to look for
+	// and even then we still have to manually construct the windows SDK folders! AAARGH!
+	// DM!!! 25/07/2025: clean this shit up!
+	Array<const char*> args;
+	args.add( "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvars64.bat" );
+	args.add( "&&" );
+	args.add( "set" );
+
+	Process* vcvarsProcess = process_create( &args, NULL, /*PROCESS_FLAG_ASYNC*/0 );
+
+	StringBuilder vcvarsOutput = {};
+	string_builder_reset( &vcvarsOutput );
+
+	char buffer[1024] = {};
+	while ( process_read_stdout( vcvarsProcess, buffer, 1024 ) ) {
+		string_builder_appendf( &vcvarsOutput, "%s", buffer );
+		//printf( "%s", buffer );
+	}
+
+	const char* outputBuffer = string_builder_to_string( &vcvarsOutput );
+
+	//printf( "%s\n", outputBuffer );
+
+	{
+		auto ParseTagString = []( const char* fileBuffer, const char* tag ) -> std::string {
+			const char* lineStart = strstr( fileBuffer, tag );
+			assert( lineStart );
+			lineStart += strlen( tag );
+
+			const char* lineEnd = NULL;
+			if ( !lineEnd ) lineEnd = strchr( lineStart, '\r' );
+			if ( !lineEnd ) lineEnd = strchr( lineStart, '\n' );
+
+			return std::string( lineStart, lineEnd );
+		};
+
+		auto ParseTagArray = []( const char* fileBuffer, const char* tag ) -> std::vector<std::string> {
+			std::vector<std::string> paths;
+
+			const char* lineStart = strstr( fileBuffer, tag );
+			assert( lineStart );
+			lineStart += strlen( tag );
+
+			const char* lineEnd = strchr( lineStart, '\n' );
+
+			const char* semicolon = strchr( lineStart, ';' );
+
+			while ( cast( u64, semicolon ) < cast( u64, lineEnd ) ) {
+				u64 pathLength = cast( u64, semicolon ) - cast( u64, lineStart );
+				std::string path( lineStart, pathLength );
+
+				paths.push_back( path );
+
+				lineStart = semicolon + 1;
+				semicolon = strchr( lineStart, ';' );
+			}
+
+			return paths;
+		};
+
+		g_msvcState->windowsIncludes = ParseTagArray( outputBuffer, "INCLUDE=" );
+		g_msvcState->windowsLibPaths = ParseTagArray( outputBuffer, "LIB=" );
+
+		std::string windowsSDKVersion = ParseTagString( outputBuffer, "WindowsSDKLibVersion=" );
+		windowsSDKVersion.pop_back();	// remove trailing slash
+
+		std::string windowsSDKRootFolder = ParseTagString( outputBuffer, "WindowsSdkDir=" );
+		windowsSDKRootFolder.pop_back();	// remove trailing slash
+
+		// add windows sdk lib folders that we need too
+		std::string windowsSDKLibFolder = windowsSDKRootFolder + PATH_SEPARATOR + "Lib" + PATH_SEPARATOR + windowsSDKVersion + PATH_SEPARATOR + "um" + PATH_SEPARATOR + "x64";
+
+		g_msvcState->windowsLibPaths.push_back( windowsSDKLibFolder );
+
+		StringBuilder msvcIncludes = {};
+		string_builder_reset( &msvcIncludes );
+		For ( u64, includeIndex, 0, g_msvcState->windowsIncludes.size() - 1 ) {
+			string_builder_appendf( &msvcIncludes, "%s;", g_msvcState->windowsIncludes[includeIndex].c_str() );
+		}
+		string_builder_appendf( &msvcIncludes, "%s", g_msvcState->windowsIncludes[g_msvcState->windowsIncludes.size() - 1].c_str() );
+		const char* includeEnvVar = string_builder_to_string( &msvcIncludes );
+		SetEnvironmentVariable( "INCLUDE", includeEnvVar );	// DM!!! 25/07/2025: make an os level wrapper for this
+
+		StringBuilder msvcLibs = {};
+		string_builder_reset( &msvcLibs );
+		For ( u64, libPathIndex, 0, g_msvcState->windowsLibPaths.size() - 1 ) {
+			string_builder_appendf( &msvcLibs, "%s;", g_msvcState->windowsLibPaths[libPathIndex].c_str() );
+		}
+		string_builder_appendf( &msvcLibs, "%s", g_msvcState->windowsLibPaths[g_msvcState->windowsLibPaths.size() - 1].c_str() );
+		const char* libsEnvVar = string_builder_to_string( &msvcLibs );
+		SetEnvironmentVariable( "LIB", libsEnvVar );	// DM!!! 25/07/2025: make an os level wrapper for this
+	}
+
+	s32 exitCode = process_join( vcvarsProcess );
+
+	process_destroy( vcvarsProcess );
+	vcvarsProcess = NULL;
 }
 
 static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* sourceFile ) {
@@ -257,6 +371,8 @@ static bool8 MSVC_LinkIntermediateFiles( buildContext_t* context, const Array<co
 
 compilerBackend_t g_msvcBackend = {
 	.linkerName				= "link",
+	.data					= &g_msvcState,
+	.Init					= MSVC_Init,
 	.CompileSourceFile		= MSVC_CompileSourceFile,
 	.LinkIntermediateFiles	= MSVC_LinkIntermediateFiles,
 };

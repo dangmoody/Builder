@@ -64,6 +64,10 @@ static const char* OptimizationLevelToCompilerArg( const OptimizationLevel level
 	}
 }
 
+static void Clang_Init() {
+	// nothing, clang doesnt need any init logic
+}
+
 static bool8 Clang_CompileSourceFile( buildContext_t* context, const char* sourceFile ) {
 	assert( context );
 	assert( sourceFile );
@@ -243,6 +247,8 @@ static bool8 Clang_LinkIntermediateFiles( buildContext_t* context, const Array<c
 
 compilerBackend_t g_clangBackend = {
 	.linkerName				= "lld-link",
+	.data					= NULL,
+	.Init					= Clang_Init,
 	.CompileSourceFile		= Clang_CompileSourceFile,
 	.LinkIntermediateFiles	= Clang_LinkIntermediateFiles,
 };

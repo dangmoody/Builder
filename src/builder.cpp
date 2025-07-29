@@ -1394,15 +1394,17 @@ int main( int argc, char** argv ) {
 		// if the user never specified a compiler, we can build with the default compiler that we just built the user config DLL with
 		if ( options.compiler_path.empty() ) {
 			options.compiler_path = DEFAULT_COMPILER_PATH;
+		} else {
+			options.compiler_path = path_remove_file_extension( options.compiler_path.c_str() );
 		}
 
-		if ( string_ends_with( options.compiler_path.c_str(), "clang.exe" ) || string_ends_with( options.compiler_path.c_str(), "clang" ) ) {
+		if ( string_ends_with( options.compiler_path.c_str(), "clang" ) ) {
 			context.compilerBackend = &g_clangBackend;
-		} else if ( string_ends_with( options.compiler_path.c_str(), "cl.exe" ) || string_ends_with( options.compiler_path.c_str(), "cl" ) ) {
+		} else if ( string_ends_with( options.compiler_path.c_str(), "cl" ) ) {
 			context.compilerBackend = &g_msvcBackend;
 		}
 		// TODO(DM): 24/07/2025: add gcc backend
-		/*else if ( string_ends_with( options.compiler_path.c_str(), "gcc.exe" ) || string_ends_with( options.compiler_path.c_str(), "gcc" ) ) {
+		/*else if ( string_ends_with( options.compiler_path.c_str(), "gcc" ) ) {
 			context.backend = &g_gccBackend;
 		}*/
 		else {

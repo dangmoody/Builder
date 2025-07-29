@@ -461,18 +461,15 @@ static bool8 MSVC_LinkIntermediateFiles( buildContext_t* context, const Array<co
 // the only reason context and sourceFile are parms is because the clang implementation cares about them
 // having "hanging" parms is ugly
 // figure out a way of not having to do this
-static void MSVC_GetIncludeDependencies( const buildContext_t* context, const char* sourceFile, std::vector<std::string>& outIncludeDependencies ) {
-	unused( context );
-	unused( sourceFile );
-
+static void MSVC_GetIncludeDependenciesFromSourceFileBuild( std::vector<std::string>& outIncludeDependencies ) {
 	outIncludeDependencies = g_msvcState->includeDependencies;
 }
 
 compilerBackend_t g_msvcBackend = {
-	.linkerName				= "link",
-	.data					= &g_msvcState,
-	.Init					= MSVC_Init,
-	.CompileSourceFile		= MSVC_CompileSourceFile,
-	.LinkIntermediateFiles	= MSVC_LinkIntermediateFiles,
-	.GetIncludeDependencies	= MSVC_GetIncludeDependencies,
+	.linkerName									= "link",
+	.data										= &g_msvcState,
+	.Init										= MSVC_Init,
+	.CompileSourceFile							= MSVC_CompileSourceFile,
+	.LinkIntermediateFiles						= MSVC_LinkIntermediateFiles,
+	.GetIncludeDependenciesFromSourceFileBuild	= MSVC_GetIncludeDependenciesFromSourceFileBuild,
 };

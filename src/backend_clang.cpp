@@ -34,6 +34,12 @@ SOFTWARE.
 #include "core/include/array.inl"
 #include "core/include/file.h"
 
+struct clangState_t {
+	const char*	depFilename;
+};
+
+static clangState_t* g_clangState = NULL;
+
 // TODO(DM): 20/07/2025: do we want to ignore this warning via the build script?
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wswitch"
@@ -65,31 +71,10 @@ static const char* OptimizationLevelToCompilerArg( const OptimizationLevel level
 	}
 }
 
-static const char* GetIntermediateFilePath( const buildContext_t* context ) {
-	return tprintf( "%s%c%s", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
-}
-
-static const char* GetIntermediateFilename( const buildContext_t* context, const char* sourceFile ) {
-	const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
-
-	const char* intermediatePath = GetIntermediateFilePath( context );
-	const char* intermediateFilename = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
-
-	return intermediateFilename;
-}
-
-static const char* GetDepFilename( const buildContext_t* context, const char* sourceFile ) {
-	const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
-
-	const char* intermediatePath = GetIntermediateFilePath( context );
-
-	const char* depFilename = tprintf( "%s%c%s.d", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
-
-	return depFilename;
-}
-
 static bool8 Clang_Init() {
-	// nothing, clang doesnt need any init logic
+	g_clangState = cast( clangState_t*, mem_alloc( sizeof( clangState_t ) ) );
+	new( g_clangState ) clangState_t;
+
 	return true;
 }
 
@@ -97,8 +82,12 @@ static bool8 Clang_CompileSourceFile( buildContext_t* context, const char* sourc
 	assert( context );
 	assert( sourceFile );
 
-	const char* intermediateFilename = GetIntermediateFilename( context, sourceFile );
-	const char* depFilename = GetDepFilename( context, sourceFile );
+	const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
+
+	const char* intermediatePath = tprintf( "%s%c%s", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
+	const char* intermediateFilename = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
+
+	g_clangState->depFilename = tprintf( "%s%c%s.d", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
 
 	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
 
@@ -144,9 +133,9 @@ static bool8 Clang_CompileSourceFile( buildContext_t* context, const char* sourc
 	args.add( intermediateFilename );
 
 	if ( context->flags & BUILD_CONTEXT_FLAG_GENERATE_INCLUDE_DEPENDENCIES ) {
-		args.add( "-MMD" );			// generate the dependency file
-		args.add( "-MF" );			// set the name of the dependency file to...
-		args.add( depFilename );	// ...this
+		args.add( "-MMD" );						// generate the dependency file
+		args.add( "-MF" );						// set the name of the dependency file to...
+		args.add( g_clangState->depFilename );	// ...this
 	}
 
 	args.add( sourceFile );
@@ -269,8 +258,8 @@ static bool8 Clang_LinkIntermediateFiles( buildContext_t* context, const Array<c
 // only call this after compilation has finished successfully
 // parse the dependency file that we generated for every dependency thats in there
 // add those to a list - we need to put those in the .build_info file
-static void Clang_GetIncludeDependencies( const buildContext_t* context, const char* sourceFile, std::vector<std::string>& outIncludeDependencies ) {
-	const char* depFilename = GetDepFilename( context, sourceFile );
+static void Clang_GetIncludeDependenciesFromSourceFileBuild( std::vector<std::string>& outIncludeDependencies ) {
+	const char* depFilename = g_clangState->depFilename;
 
 	char* depFileBuffer = NULL;
 	bool8 read = file_read_entire( depFilename, &depFileBuffer );
@@ -363,10 +352,10 @@ static void Clang_GetIncludeDependencies( const buildContext_t* context, const c
 }
 
 compilerBackend_t g_clangBackend = {
-	.linkerName				= "lld-link",
-	.data					= NULL,
-	.Init					= Clang_Init,
-	.CompileSourceFile		= Clang_CompileSourceFile,
-	.LinkIntermediateFiles	= Clang_LinkIntermediateFiles,
-	.GetIncludeDependencies	= Clang_GetIncludeDependencies,
+	.linkerName									= "lld-link",
+	.data										= NULL,
+	.Init										= Clang_Init,
+	.CompileSourceFile							= Clang_CompileSourceFile,
+	.LinkIntermediateFiles						= Clang_LinkIntermediateFiles,
+	.GetIncludeDependenciesFromSourceFileBuild	= Clang_GetIncludeDependenciesFromSourceFileBuild,
 };

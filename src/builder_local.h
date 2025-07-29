@@ -100,7 +100,7 @@ struct compilerBackend_t {
 	bool8		( *Init )( void );
 	bool8		( *CompileSourceFile )( buildContext_t* context, const char* sourceFile );
 	bool8		( *LinkIntermediateFiles )( buildContext_t* context, const Array<const char*>& intermediateFiles );
-	void		( *GetIncludeDependencies )( const buildContext_t* context, const char* sourceFile, std::vector<std::string>& includeDependencies );
+	void		( *GetIncludeDependenciesFromSourceFileBuild )( std::vector<std::string>& includeDependencies );
 };
 
 extern compilerBackend_t	g_clangBackend;

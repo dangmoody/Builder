@@ -448,21 +448,14 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 		// DM!!! 28/07/2025: we dont need the separate array here, just write the output of the function directly into context->includeDependencies[sourceFileIndex]
 		// get the new include dependencies after recompiling this source file
 		if ( context->flags & BUILD_CONTEXT_FLAG_GENERATE_INCLUDE_DEPENDENCIES ) {
-#if 1
 			context->compilerBackend->GetIncludeDependenciesFromSourceFileBuild( context->includeDependencies[sourceFileIndex] );
-#else
-			std::vector<std::string> includeDependencies;
-			context->compilerBackend->GetIncludeDependenciesFromSourceFileBuild( includeDependencies );
 
-			// TODO(DM): do we want to log this in verbose mode? will the user get anything out of that?
+			// TODO(DM): 29/07/2025: do we want to log this in verbose mode? will the user get anything out of that?
 			/*printf( "    include_dependencies = {\n" );
-			For ( u64, i, 0, includeDependencies.size() ) {
-				printf( "        %s,\n", includeDependencies[i].c_str() );
+			For ( u64, i, 0, context->includeDependencies.size() ) {
+				printf( "        %s,\n", context->includeDependencies[i].c_str() );
 			}
 			printf( "    }\n" );*/
-
-			context->includeDependencies[sourceFileIndex] = includeDependencies;
-#endif
 		}
 	}
 

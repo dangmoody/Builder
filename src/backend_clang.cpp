@@ -32,6 +32,7 @@ SOFTWARE.
 #include "core/include/string_helpers.h"
 #include "core/include/paths.h"
 #include "core/include/array.inl"
+#include "core/include/file.h"
 
 // TODO(DM): 20/07/2025: do we want to ignore this warning via the build script?
 #pragma clang diagnostic push
@@ -64,20 +65,40 @@ static const char* OptimizationLevelToCompilerArg( const OptimizationLevel level
 	}
 }
 
-static void Clang_Init() {
+static const char* GetIntermediateFilePath( const buildContext_t* context ) {
+	return tprintf( "%s%c%s", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
+}
+
+static const char* GetIntermediateFilename( const buildContext_t* context, const char* sourceFile ) {
+	const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
+
+	const char* intermediatePath = GetIntermediateFilePath( context );
+	const char* intermediateFilename = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
+
+	return intermediateFilename;
+}
+
+static const char* GetDepFilename( const buildContext_t* context, const char* sourceFile ) {
+	const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
+
+	const char* intermediatePath = GetIntermediateFilePath( context );
+
+	const char* depFilename = tprintf( "%s%c%s.d", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
+
+	return depFilename;
+}
+
+static bool8 Clang_Init() {
 	// nothing, clang doesnt need any init logic
+	return true;
 }
 
 static bool8 Clang_CompileSourceFile( buildContext_t* context, const char* sourceFile ) {
 	assert( context );
 	assert( sourceFile );
 
-	const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
-
-	const char* intermediatePath = tprintf( "%s%c%s", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
-	const char* intermediateFilename = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
-
-	const char* depFilename = tprintf( "%s%c%s.d", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
+	const char* intermediateFilename = GetIntermediateFilename( context, sourceFile );
+	const char* depFilename = GetDepFilename( context, sourceFile );
 
 	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
 
@@ -122,7 +143,7 @@ static bool8 Clang_CompileSourceFile( buildContext_t* context, const char* sourc
 	args.add( "-o" );
 	args.add( intermediateFilename );
 
-	if ( !context->config.name.empty() ) {
+	if ( context->flags & BUILD_CONTEXT_FLAG_GENERATE_INCLUDE_DEPENDENCIES ) {
 		args.add( "-MMD" );			// generate the dependency file
 		args.add( "-MF" );			// set the name of the dependency file to...
 		args.add( depFilename );	// ...this
@@ -245,10 +266,107 @@ static bool8 Clang_LinkIntermediateFiles( buildContext_t* context, const Array<c
 	return exitCode == 0;
 }
 
+// only call this after compilation has finished successfully
+// parse the dependency file that we generated for every dependency thats in there
+// add those to a list - we need to put those in the .build_info file
+static void Clang_GetIncludeDependencies( const buildContext_t* context, const char* sourceFile, std::vector<std::string>& outIncludeDependencies ) {
+	const char* depFilename = GetDepFilename( context, sourceFile );
+
+	char* depFileBuffer = NULL;
+	bool8 read = file_read_entire( depFilename, &depFileBuffer );
+
+	if ( !read ) {
+		fatal_error( "Failed to read \"%s\".  This should never happen!\n", depFilename );
+		return;
+	}
+
+	defer( file_free_buffer( &depFileBuffer ) );
+
+	outIncludeDependencies.clear();
+
+	char* current = depFileBuffer;
+
+	// .d files start with the name of the binary followed by a colon
+	// so skip past that first
+	current = strchr( depFileBuffer, ':' );
+	assert( current );
+	current += 1;	// skip past the colon
+	current += 1;	// skip past the following whitespace
+
+	// skip past the newline after
+	current = strchr( current, '\n' );
+	assert( current );
+	current += 1;
+
+	while ( *current ) {
+		// get start of the filename
+		char* dependencyStart = current;
+
+		while ( *dependencyStart == ' ' ) {
+			dependencyStart += 1;
+		}
+
+		// get end of the filename
+		char* dependencyEnd = NULL;
+		// filenames are separated by either new line or space
+		if ( !dependencyEnd ) dependencyEnd = strchr( dependencyStart, ' ' );
+		if ( !dependencyEnd ) dependencyEnd = strchr( dependencyStart, '\n' );
+		assert( dependencyEnd );
+		// paths can have spaces in them, but they are preceded by a single backslash (\)
+		// so if we find a space but it has a single backslash just before it then keep searching for a space
+		while ( dependencyEnd && ( *( dependencyEnd - 1 ) == PATH_SEPARATOR ) ) {
+			dependencyEnd = strchr( dependencyEnd + 1, ' ' );
+		}
+
+		if ( !dependencyEnd ) {
+			break;
+		}
+
+		if ( *( dependencyEnd - 1 ) == '\r' ) {
+			dependencyEnd -= 1;
+		}
+
+		u64 dependencyFilenameLength = cast( u64, dependencyEnd ) - cast( u64, dependencyStart );
+
+		// get the substring we actually need
+		std::string dependencyFilename( dependencyStart, dependencyFilenameLength );
+		For ( u64, i, 0, dependencyFilename.size() ) {
+			if ( dependencyFilename[i] == PATH_SEPARATOR && dependencyFilename[i + 1] == ' ' ) {
+				dependencyFilename.erase( i, 1 );
+			}
+		}
+
+		// get the file timestamp
+		FileInfo fileInfo;
+		File foundFile = file_find_first( dependencyFilename.c_str(), &fileInfo );
+		assert( foundFile.ptr != INVALID_HANDLE_VALUE );
+		u64 lastWriteTime = fileInfo.last_write_time;
+
+		//printf( "Parsing dependency %s, last write time = %llu\n", dependencyFilename.c_str(), lastWriteTime );
+
+		outIncludeDependencies.push_back( dependencyFilename.c_str() );
+
+		current = dependencyEnd + 1;
+
+		while ( *current == PATH_SEPARATOR ) {
+			current += 1;
+		}
+
+		if ( *current == '\r' ) {
+			current += 1;
+		}
+
+		if ( *current == '\n' ) {
+			current += 1;
+		}
+	}
+}
+
 compilerBackend_t g_clangBackend = {
 	.linkerName				= "lld-link",
 	.data					= NULL,
 	.Init					= Clang_Init,
 	.CompileSourceFile		= Clang_CompileSourceFile,
 	.LinkIntermediateFiles	= Clang_LinkIntermediateFiles,
+	.GetIncludeDependencies	= Clang_GetIncludeDependencies,
 };

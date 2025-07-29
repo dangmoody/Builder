@@ -42,16 +42,17 @@ SOFTWARE.
 #include <vector>
 //#include <string>
 
-#define ARG_HELP_SHORT		"-h"
-#define ARG_HELP_LONG		"--help"
-#define ARG_VERBOSE_SHORT	"-v"
-#define ARG_VERBOSE_LONG	"--verbose"
-#define ARG_NUKE			"--nuke"
-#define ARG_CONFIG			"--config="
+// cmd line args
+#define ARG_HELP_SHORT					"-h"
+#define ARG_HELP_LONG					"--help"
+#define ARG_VERBOSE_SHORT				"-v"
+#define ARG_VERBOSE_LONG				"--verbose"
+#define ARG_NUKE						"--nuke"
+#define ARG_CONFIG						"--config="
 
-#define BUILD_INFO_FILE_EXTENSION	".build_info"
+#define BUILD_INFO_FILE_EXTENSION		".build_info"
 
-#define INTERMEDIATE_PATH			"intermediate"
+#define INTERMEDIATE_PATH				"intermediate"
 
 #ifdef _DEBUG
 	#if defined( _WIN64 )
@@ -73,51 +74,17 @@ typedef DWORD errorCode_t;
 #error Unrecognised platform!
 #endif
 
+struct buildContext_t;
+
 struct Hashmap;
 struct buildInfoData_t;
 
 enum buildContextFlagBits_t {
-	BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS					= bit( 0 ),
-	BUILD_CONTEXT_FLAG_SHOW_STDOUT							= bit( 1 ),
+	BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS				= bit( 0 ),
+	BUILD_CONTEXT_FLAG_SHOW_STDOUT						= bit( 1 ),
+	BUILD_CONTEXT_FLAG_GENERATE_INCLUDE_DEPENDENCIES	= bit( 2 ),
 };
 typedef u32 buildContextFlags_t;
-
-struct buildContext_t {
-	BuildConfig			config;
-
-	Hashmap*			configIndices;
-
-	std::vector<std::vector<std::string>>	includeDependencies;
-
-	// TODO(DM): 10/08/2024: does this want to be inside BuilderOptions?
-	// it would give users more control over their build
-	buildContextFlags_t	flags;
-
-	String				compilerPath;
-	String				linkerPath;
-
-	const char*			inputFile;
-	String				inputFilePath;
-
-	String				dotBuilderFolder;
-	String				buildInfoFilename;
-
-	bool8				verbose;
-};
-
-errorCode_t	GetLastErrorCode();
-
-void		NukeFolder_r( const char* folder, const bool8 deleteRoot, const bool8 verbose );
-
-const char*	GetSlashInPath( const char* path );
-//bool8		PathHasSlash( const char* path );
-
-bool8		FileIsSourceFile( const char* filename );
-bool8		FileIsHeaderFile( const char* filename );
-//void		GetAllSubfolders_r( const char* basePath, const char* folder, Array<const char*>* outSubfolders );
-
-const char*	BuildConfig_GetFullBinaryName( const BuildConfig* config );
-void		BuildConfig_AddDefaults( BuildConfig* outConfig );
 
 // DM!!! 22/07/2025: refactor this in such a way where we dont have 3 different flag types representing the same thing!!!
 enum procFlagBits_t {
@@ -126,28 +93,60 @@ enum procFlagBits_t {
 };
 typedef u32 procFlags_t;
 
-static procFlags_t GetProcFlagsFromBuildContextFlags( const buildContextFlags_t buildContextFlags ) {
-	procFlags_t result = 0;
-
-	if ( buildContextFlags & BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS ) result |= PROC_FLAG_SHOW_ARGS;
-	if ( buildContextFlags & BUILD_CONTEXT_FLAG_SHOW_STDOUT )        result |= PROC_FLAG_SHOW_STDOUT;
-
-	return result;
-}
-s32			RunProc( Array<const char*>* args, Array<const char*>* environmentVariables, const procFlags_t procFlags = 0 );
-
 struct compilerBackend_t {
 	const char*	linkerName;
 	void*		data;
 
-	void		( *Init )( void );
+	bool8		( *Init )( void );
 	bool8		( *CompileSourceFile )( buildContext_t* context, const char* sourceFile );
 	bool8		( *LinkIntermediateFiles )( buildContext_t* context, const Array<const char*>& intermediateFiles );
+	void		( *GetIncludeDependencies )( const buildContext_t* context, const char* sourceFile, std::vector<std::string>& includeDependencies );
 };
+
 extern compilerBackend_t	g_clangBackend;
 //extern compilerBackend_t	g_gccBackend;
 extern compilerBackend_t	g_msvcBackend;
 
+struct buildContext_t {
+	compilerBackend_t*						compilerBackend;
+
+	BuildConfig								config;
+
+	Hashmap*								configIndices;
+
+	std::vector<std::vector<std::string>>	includeDependencies;	// [sourceFileIndex][dependencyIndex]
+
+	// TODO(DM): 10/08/2024: does this want to be inside BuilderOptions?
+	// it would give users more control over their build
+	buildContextFlags_t						flags;
+
+	String									compilerPath;
+	String									linkerPath;
+
+	const char*								inputFile;
+	String									inputFilePath;
+
+	String									dotBuilderFolder;
+	String									buildInfoFilename;
+
+	bool8									verbose;
+};
+
+errorCode_t	GetLastErrorCode();
+
+void		NukeFolder_r( const char* folder, const bool8 deleteRoot, const bool8 verbose );
+
+const char*	GetSlashInPath( const char* path );
+
+bool8		FileIsSourceFile( const char* filename );
+bool8		FileIsHeaderFile( const char* filename );
+
+const char*	BuildConfig_GetFullBinaryName( const BuildConfig* config );
+void		BuildConfig_AddDefaults( BuildConfig* outConfig );
+
+procFlags_t	GetProcFlagsFromBuildContextFlags( buildContextFlags_t flags );
+
+s32			RunProc( Array<const char*>* args, Array<const char*>* environmentVariables, const procFlags_t procFlags = 0 );
 
 bool8		GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* options );
 

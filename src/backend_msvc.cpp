@@ -71,13 +71,17 @@ static const char* OptimizationLevelToCompilerArg( const OptimizationLevel level
 struct msvcState_t {
 	std::vector<std::string>	windowsIncludes;
 	std::vector<std::string>	windowsLibPaths;
+
+	std::vector<std::string>	includeDependencies;
 };
 
 static msvcState_t* g_msvcState = NULL;
 
-static void MSVC_Init() {
+static bool8 MSVC_Init() {
+	// DM!!! 29/07/2025: this never gets freed - clean it up
 	g_msvcState = cast( msvcState_t*, mem_alloc( sizeof( msvcState_t ) ) );
 	new( g_msvcState ) msvcState_t;
+	//memset( g_msvcState, 0, sizeof( msvcState_t ) );
 
 	// microsoft need us to tell their own compiler that runs on their own platform (specifically FOR their own platform) where their own include and library folders are, sigh...
 	// the way we do that is by manually calling a vcvars*.bat script and using the information it gives us back to know which include and lib folders to look for
@@ -90,18 +94,24 @@ static void MSVC_Init() {
 
 	Process* vcvarsProcess = process_create( &args, NULL, /*PROCESS_FLAG_ASYNC*/0 );
 
+	if ( !vcvarsProcess ) {
+		error( "Failed to run vcvars64.bat.  Builder currently expects this to be installed in the default directory.  Sorry.\n" );
+		return false;
+	}
+
 	StringBuilder vcvarsOutput = {};
 	string_builder_reset( &vcvarsOutput );
+	defer( string_builder_destroy( &vcvarsOutput ) );
 
 	char buffer[1024] = {};
-	while ( process_read_stdout( vcvarsProcess, buffer, 1024 ) ) {
+	u64 bytesRead = U64_MAX;
+	while ( ( bytesRead = process_read_stdout( vcvarsProcess, buffer, 1024 ) ) ) {
+		buffer[bytesRead] = 0;
+
 		string_builder_appendf( &vcvarsOutput, "%s", buffer );
-		//printf( "%s", buffer );
 	}
 
 	const char* outputBuffer = string_builder_to_string( &vcvarsOutput );
-
-	//printf( "%s\n", outputBuffer );
 
 	{
 		auto ParseTagString = []( const char* fileBuffer, const char* tag ) -> std::string {
@@ -144,14 +154,13 @@ static void MSVC_Init() {
 		g_msvcState->windowsLibPaths = ParseTagArray( outputBuffer, "LIB=" );
 
 		std::string windowsSDKVersion = ParseTagString( outputBuffer, "WindowsSDKLibVersion=" );
-		windowsSDKVersion.pop_back();	// remove trailing slash
+		windowsSDKVersion.pop_back();		// remove trailing slash
 
 		std::string windowsSDKRootFolder = ParseTagString( outputBuffer, "WindowsSdkDir=" );
 		windowsSDKRootFolder.pop_back();	// remove trailing slash
 
 		// add windows sdk lib folders that we need too
 		std::string windowsSDKLibFolder = windowsSDKRootFolder + PATH_SEPARATOR + "Lib" + PATH_SEPARATOR + windowsSDKVersion + PATH_SEPARATOR + "um" + PATH_SEPARATOR + "x64";
-
 		g_msvcState->windowsLibPaths.push_back( windowsSDKLibFolder );
 
 		StringBuilder msvcIncludes = {};
@@ -177,6 +186,8 @@ static void MSVC_Init() {
 
 	process_destroy( vcvarsProcess );
 	vcvarsProcess = NULL;
+
+	return exitCode == 0;
 }
 
 static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* sourceFile ) {
@@ -188,11 +199,11 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 	const char* intermediatePath = tprintf( "%s%c%s", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
 	const char* intermediateFilename = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
 
-	const char* depFilename = tprintf( "%s%c%s.d", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
-
 	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
 
 	context->config.additional_includes.push_back( "." );
+
+	g_msvcState->includeDependencies.clear();
 
 	// DM!!! dont make this args list every time
 	// store this somewhere and just reset it
@@ -204,6 +215,7 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 		1 +	// /DEBUG
 		1 +	// /O*
 		1 +	// /Fo:<intermediate filename>
+		1 + // /showIncludes
 		3 +	// -MD -MF <filename>
 		1 +	// source file
 		context->config.defines.size() +
@@ -233,12 +245,9 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 
 	args.add( tprintf( "/Fo%s", intermediateFilename ) );
 
-	// DM!!! 22/07/2025: find the correct flags that MSVC needs for this
-	//if ( !context->config.name.empty() ) {
-	//	args.add( "-MMD" );			// generate the dependency file
-	//	args.add( "-MF" );			// set the name of the dependency file to...
-	//	args.add( depFilename );	// ...this
-	//}
+	if ( context->flags & BUILD_CONTEXT_FLAG_GENERATE_INCLUDE_DEPENDENCIES ) {
+		args.add( "/showIncludes" );
+	}
 
 	args.add( sourceFile );
 
@@ -308,7 +317,87 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 		args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
 	}
 
-	s32 exitCode = RunProc( &args, NULL, procFlags );
+	if ( procFlags & PROC_FLAG_SHOW_ARGS ) {
+		For ( u64, argIndex, 0, args.count ) {
+			printf( "%s ", args[argIndex] );
+		}
+		printf( "\n" );
+	}
+
+	// MSVC doesnt output include dependencies to .d files
+	// it only supports printing them to stdout
+	// so we have to parse the stdout of the process ourselves
+	s32 exitCode = 0;
+	StringBuilder processStdout = {};
+	defer( string_builder_destroy( &processStdout ) );
+	{
+		u32 processFlags = PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR;
+		Process* process = process_create( &args, NULL, processFlags );
+
+		string_builder_reset( &processStdout );
+
+		if ( procFlags & PROC_FLAG_SHOW_STDOUT ) {
+			char buffer[1024] = { 0 };
+			u64 bytesRead = U64_MAX;
+
+			while ( ( bytesRead = process_read_stdout( process, buffer, 1024 ) ) ) {
+				buffer[bytesRead] = 0;
+
+				string_builder_appendf( &processStdout, "%s", buffer );
+			}
+		}
+
+		exitCode = process_join( process );
+
+		process_destroy( process );
+		process = NULL;
+	}
+
+	const char* buffer = string_builder_to_string( &processStdout );
+
+	if ( context->flags & BUILD_CONTEXT_FLAG_GENERATE_INCLUDE_DEPENDENCIES ) {
+		// now parse the stdout
+		// all include dependencies are on their own line
+		// the line always starts with a specific prefix
+		const char* includeDependencyPrefix = "Note: including file: ";
+		const u64 includeDependencyPrefixLength = strlen( includeDependencyPrefix );
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-qual"
+		char* lineStart = cast( char*, buffer );
+#pragma clang diagnostic pop
+
+		while ( *lineStart ) {
+			char* lineEnd = strchr( lineStart, '\n' );
+
+			if ( !lineEnd ) {
+				continue;
+			}
+
+			u64 lineLength = cast( u64, lineEnd ) - cast( u64, lineStart );
+			std::string bufferLine( lineStart, lineLength );
+
+			if ( string_ends_with( bufferLine.c_str(), "\r" ) ) {
+				bufferLine.pop_back();
+			}
+
+			if ( string_starts_with( bufferLine.c_str(), includeDependencyPrefix ) ) {
+				bufferLine.erase( 0, includeDependencyPrefixLength );
+
+				while ( bufferLine[0] == ' ' ) {
+					bufferLine.erase( 0, 1 );
+				}
+
+				g_msvcState->includeDependencies.push_back( bufferLine );
+			} else {
+				printf( "%s\n", bufferLine.c_str() );
+			}
+
+			lineStart = lineEnd + 1;
+		}
+	} else {
+		printf( "%s", buffer );
+	}
 
 	return exitCode == 0;
 }
@@ -369,10 +458,22 @@ static bool8 MSVC_LinkIntermediateFiles( buildContext_t* context, const Array<co
 	return exitCode == 0;
 }
 
+// DM!!! 28/07/2025: this code is ugly
+// the only reason context and sourceFile are parms is because the clang implementation cares about them
+// having "hanging" parms is ugly
+// figure out a way of not having to do this
+static void MSVC_GetIncludeDependencies( const buildContext_t* context, const char* sourceFile, std::vector<std::string>& outIncludeDependencies ) {
+	unused( context );
+	unused( sourceFile );
+
+	outIncludeDependencies = g_msvcState->includeDependencies;
+}
+
 compilerBackend_t g_msvcBackend = {
 	.linkerName				= "link",
 	.data					= &g_msvcState,
 	.Init					= MSVC_Init,
 	.CompileSourceFile		= MSVC_CompileSourceFile,
 	.LinkIntermediateFiles	= MSVC_LinkIntermediateFiles,
+	.GetIncludeDependencies	= MSVC_GetIncludeDependencies,
 };

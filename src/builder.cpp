@@ -358,109 +358,14 @@ static s32 ShowUsage( const s32 exitCode ) {
 	return exitCode;
 }
 
-// only call this after compilation has finished successfully
-// parse the dependency file that we generated for every dependency thats in there
-// add those to a list - we need to put those in the .build_info file
-static void ReadDependencyFile( const char* depFilename, std::vector<std::string>& outIncludeDependencies ) {
-	char* depFileBuffer = NULL;
-	bool8 read = file_read_entire( depFilename, &depFileBuffer );
+procFlags_t GetProcFlagsFromBuildContextFlags( const buildContextFlags_t buildContextFlags ) {
+	procFlags_t result = 0;
 
-	if ( !read ) {
-		fatal_error( "Failed to read \"%s\".  This should never happen!\n", depFilename );
-		return;
-	}
+	if ( buildContextFlags & BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS ) result |= PROC_FLAG_SHOW_ARGS;
+	if ( buildContextFlags & BUILD_CONTEXT_FLAG_SHOW_STDOUT )        result |= PROC_FLAG_SHOW_STDOUT;
 
-	defer( file_free_buffer( &depFileBuffer ) );
-
-	outIncludeDependencies.clear();
-
-	char* current = depFileBuffer;
-
-	// .d files start with the name of the binary followed by a colon
-	// so skip past that first
-	current = strchr( depFileBuffer, ':' );
-	assert( current );
-	current += 1;	// skip past the colon
-	current += 1;	// skip past the following whitespace
-
-	// skip past the newline after
-	current = strchr( current, '\n' );
-	assert( current );
-	current += 1;
-
-	while ( *current ) {
-		// get start of the filename
-		char* dependencyStart = current;
-
-		while ( *dependencyStart == ' ' ) {
-			dependencyStart += 1;
-		}
-
-		// get end of the filename
-		char* dependencyEnd = NULL;
-		// filenames are separated by either new line or space
-		if ( !dependencyEnd ) dependencyEnd = strchr( dependencyStart, ' ' );
-		if ( !dependencyEnd ) dependencyEnd = strchr( dependencyStart, '\n' );
-		assert( dependencyEnd );
-		// paths can have spaces in them, but they are preceded by a single backslash (\)
-		// so if we find a space but it has a single backslash just before it then keep searching for a space
-		while ( dependencyEnd && ( *( dependencyEnd - 1 ) == PATH_SEPARATOR ) ) {
-			dependencyEnd = strchr( dependencyEnd + 1, ' ' );
-		}
-
-		if ( !dependencyEnd ) {
-			break;
-		}
-
-		if ( *( dependencyEnd - 1 ) == '\r' ) {
-			dependencyEnd -= 1;
-		}
-
-		u64 dependencyFilenameLength = cast( u64, dependencyEnd ) - cast( u64, dependencyStart );
-
-		// get the substring we actually need
-		std::string dependencyFilename( dependencyStart, dependencyFilenameLength );
-		For ( u64, i, 0, dependencyFilename.size() ) {
-			if ( dependencyFilename[i] == PATH_SEPARATOR && dependencyFilename[i + 1] == ' ' ) {
-				dependencyFilename.erase( i, 1 );
-			}
-		}
-
-		// get the file timestamp
-		FileInfo fileInfo;
-		File foundFile = file_find_first( dependencyFilename.c_str(), &fileInfo );
-		assert( foundFile.ptr != INVALID_HANDLE_VALUE );
-		u64 lastWriteTime = fileInfo.last_write_time;
-
-		//printf( "Parsing dependency %s, last write time = %llu\n", dependencyFilename.c_str(), lastWriteTime );
-
-		outIncludeDependencies.push_back( dependencyFilename.c_str() );
-
-		current = dependencyEnd + 1;
-
-		while ( *current == PATH_SEPARATOR ) {
-			current += 1;
-		}
-
-		if ( *current == '\r' ) {
-			current += 1;
-		}
-
-		if ( *current == '\n' ) {
-			current += 1;
-		}
-	}
+	return result;
 }
-
-static compilerBackend_t* g_backend = NULL;
-
-//static bool8 Backend_CompileSourceFile( buildContext_t* context, const char* sourceFile ) {
-//	return g_backend->CompileSourceFile( context, sourceFile );
-//}
-//
-//static bool8 Backend_LinkIntermediateFiles( buildContext_t* context, Array<const char*>& intermediateFiles ) {
-//	return g_backend->LinkIntermediateFiles( context, intermediateFiles );
-//}
 
 static buildResult_t BuildBinary( buildContext_t* context ) {
 	// create binary folder
@@ -533,17 +438,21 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 			}
 		}
 
-		if ( !g_backend->CompileSourceFile( context, sourceFile ) ) {
+		if ( !context->compilerBackend->CompileSourceFile( context, sourceFile ) ) {
 			error( "Compile failed.\n" );
 			return BUILD_RESULT_FAILED;
 		}
 
-		numCompiledFiles++;
+		numCompiledFiles += 1;
 
-		// put the include dependencies from the .d file into our .build_info data
-		if ( !context->config.name.empty() ) {
+		// DM!!! 28/07/2025: we dont need the separate array here, just write the output of the function directly into context->includeDependencies[sourceFileIndex]
+#if 0
+		context->compilerBackend->GetIncludeDependencies( context, sourceFile, context->includeDependencies[sourceFileIndex] );
+#else
+		// get the new include dependencies after recompiling this source file
+		if ( context->flags & BUILD_CONTEXT_FLAG_GENERATE_INCLUDE_DEPENDENCIES ) {
 			std::vector<std::string> includeDependencies;
-			ReadDependencyFile( depFilename, includeDependencies );
+			context->compilerBackend->GetIncludeDependencies( context, sourceFile, includeDependencies );
 
 			// TODO(DM): do we want to log this in verbose mode? will the user get anything out of that?
 			/*printf( "    include_dependencies = {\n" );
@@ -554,13 +463,14 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 
 			context->includeDependencies[sourceFileIndex] = includeDependencies;
 		}
+#endif
 	}
 
 	if ( numCompiledFiles == 0 ) {
 		return BUILD_RESULT_SKIPPED;
 	}
 
-	if ( !g_backend->LinkIntermediateFiles( context, intermediateFiles ) ) {
+	if ( !context->compilerBackend->LinkIntermediateFiles( context, intermediateFiles ) ) {
 		error( "Linking failed.\n" );
 		return BUILD_RESULT_FAILED;
 	}
@@ -1151,7 +1061,7 @@ int main( int argc, char** argv ) {
 
 	buildContext_t context = {};
 	context.configIndices = hashmap_create( 1 );	// TODO(DM): 30/03/2025: whats a reasonable default here?
-	context.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS | BUILD_CONTEXT_FLAG_SHOW_STDOUT;
+	context.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS | BUILD_CONTEXT_FLAG_SHOW_STDOUT | BUILD_CONTEXT_FLAG_GENERATE_INCLUDE_DEPENDENCIES;
 #ifdef _DEBUG
 	context.verbose = true;
 #else
@@ -1375,7 +1285,7 @@ int main( int argc, char** argv ) {
 
 		buildInfoData.userConfigDLLFilename = BuildConfig_GetFullBinaryName( &userConfigBuildContext.config );
 
-		g_backend = &g_clangBackend;
+		userConfigBuildContext.compilerBackend = &g_clangBackend;
 
 		userConfigBuildResult = BuildBinary( &userConfigBuildContext );
 
@@ -1487,13 +1397,13 @@ int main( int argc, char** argv ) {
 		}
 
 		if ( string_ends_with( options.compiler_path.c_str(), "clang.exe" ) || string_ends_with( options.compiler_path.c_str(), "clang" ) ) {
-			g_backend = &g_clangBackend;
+			context.compilerBackend = &g_clangBackend;
 		} else if ( string_ends_with( options.compiler_path.c_str(), "cl.exe" ) || string_ends_with( options.compiler_path.c_str(), "cl" ) ) {
-			g_backend = &g_msvcBackend;
+			context.compilerBackend = &g_msvcBackend;
 		}
 		// TODO(DM): 24/07/2025: add gcc backend
 		/*else if ( string_ends_with( options.compiler_path.c_str(), "gcc.exe" ) || string_ends_with( options.compiler_path.c_str(), "gcc" ) ) {
-			g_backend = &g_gccBackend;
+			context.backend = &g_gccBackend;
 		}*/
 		else {
 			error(
@@ -1506,7 +1416,9 @@ int main( int argc, char** argv ) {
 			QUIT_ERROR();
 		}
 
-		g_backend->Init();
+		if ( !context.compilerBackend->Init() ) {
+			QUIT_ERROR();
+		}
 
 		// get the linker program that we need
 		const char* compilerPathOnly = path_remove_file_from_path( options.compiler_path.c_str() );
@@ -1514,9 +1426,9 @@ int main( int argc, char** argv ) {
 		if ( compilerPathOnly ) {
 			// in this case assume theres no path specified because the user wants to use a compiler thats in their PATH
 			// so we can automatically find the linker program too because of that
-			context.linkerPath = g_backend->linkerName;
+			context.linkerPath = context.compilerBackend->linkerName;
 		} else {
-			string_printf( &context.linkerPath, "%s%c%s", compilerPathOnly, PATH_SEPARATOR, g_backend->linkerName );
+			string_printf( &context.linkerPath, "%s%c%s", compilerPathOnly, PATH_SEPARATOR, context.compilerBackend->linkerName );
 		}
 	}
 

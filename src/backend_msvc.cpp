@@ -81,7 +81,6 @@ static bool8 MSVC_Init() {
 	// DM!!! 29/07/2025: this never gets freed - clean it up
 	g_msvcState = cast( msvcState_t*, mem_alloc( sizeof( msvcState_t ) ) );
 	new( g_msvcState ) msvcState_t;
-	//memset( g_msvcState, 0, sizeof( msvcState_t ) );
 
 	// microsoft need us to tell their own compiler that runs on their own platform (specifically FOR their own platform) where their own include and library folders are, sigh...
 	// the way we do that is by manually calling a vcvars*.bat script and using the information it gives us back to know which include and lib folders to look for

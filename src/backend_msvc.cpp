@@ -26,6 +26,8 @@ SOFTWARE.
 ===========================================================================
 */
 
+#ifdef _WIN32
+
 #include "builder_local.h"
 
 #include "core/include/debug.h"
@@ -257,7 +259,7 @@ static bool8 MSVC_Init() {
 		}
 		string_builder_appendf( &msvcIncludes, "%s", g_msvcState->windowsIncludes[g_msvcState->windowsIncludes.size() - 1].c_str() );
 		const char* includeEnvVar = string_builder_to_string( &msvcIncludes );
-		SetEnvironmentVariable( "INCLUDE", includeEnvVar );	// DM!!! 25/07/2025: make an os level wrapper for this
+		SetEnvironmentVariable( "INCLUDE", includeEnvVar );	// TODO(DM): 25/07/2025: do we want an os level wrapper for this?
 
 		// set lib path environment variable
 		StringBuilder msvcLibs = {};
@@ -267,7 +269,7 @@ static bool8 MSVC_Init() {
 		}
 		string_builder_appendf( &msvcLibs, "%s", g_msvcState->windowsLibPaths[g_msvcState->windowsLibPaths.size() - 1].c_str() );
 		const char* libsEnvVar = string_builder_to_string( &msvcLibs );
-		SetEnvironmentVariable( "LIB", libsEnvVar );	// DM!!! 25/07/2025: make an os level wrapper for this
+		SetEnvironmentVariable( "LIB", libsEnvVar );	// TODO(DM): 25/07/2025: do we want an os level wrapper for this?
 	}
 
 	s32 exitCode = process_join( vcvarsProcess );
@@ -558,3 +560,5 @@ compilerBackend_t g_msvcBackend = {
 	.LinkIntermediateFiles						= MSVC_LinkIntermediateFiles,
 	.GetIncludeDependenciesFromSourceFileBuild	= MSVC_GetIncludeDependenciesFromSourceFileBuild,
 };
+
+#endif // _WIN32

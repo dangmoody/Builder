@@ -1398,7 +1398,16 @@ int main( int argc, char** argv ) {
 		if ( string_ends_with( options.compiler_path.c_str(), "clang" ) ) {
 			context.compilerBackend = &g_clangBackend;
 		} else if ( string_ends_with( options.compiler_path.c_str(), "cl" ) ) {
+#if _WIN32
 			context.compilerBackend = &g_msvcBackend;
+#else
+			error(
+				"It appears you want to compile with MSVC on a non-Windows platform.\n"
+				"MSVC only supports Windows.  Sorry.\n"
+			);
+
+			QUIT_ERROR();
+#endif
 		}
 		// TODO(DM): 24/07/2025: add gcc backend
 		/*else if ( string_ends_with( options.compiler_path.c_str(), "gcc" ) ) {

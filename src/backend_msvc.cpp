@@ -545,10 +545,6 @@ static bool8 MSVC_LinkIntermediateFiles( buildContext_t* context, const Array<co
 	return exitCode == 0;
 }
 
-// DM!!! 28/07/2025: this code is ugly
-// the only reason context and sourceFile are parms is because the clang implementation cares about them
-// having "hanging" parms is ugly
-// figure out a way of not having to do this
 static void MSVC_GetIncludeDependenciesFromSourceFileBuild( std::vector<std::string>& outIncludeDependencies ) {
 	outIncludeDependencies = g_msvcState->includeDependencies;
 }

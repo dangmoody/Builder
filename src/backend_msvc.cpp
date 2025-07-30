@@ -70,6 +70,8 @@ static const char* OptimizationLevelToCompilerArg( const OptimizationLevel level
 //================================================================
 
 struct msvcState_t {
+	Array<const char*>			args;
+
 	std::vector<std::string>	windowsIncludes;
 	std::vector<std::string>	windowsLibPaths;
 
@@ -123,7 +125,6 @@ static bool8 MSVC_Init() {
 		return paths;
 	};
 
-	// DM!!! 29/07/2025: this never gets freed - clean it up
 	g_msvcState = cast( msvcState_t*, mem_alloc( sizeof( msvcState_t ) ) );
 	new( g_msvcState ) msvcState_t;
 
@@ -297,10 +298,7 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 
 	g_msvcState->includeDependencies.clear();
 
-	// DM!!! dont make this args list every time
-	// store this somewhere and just reset it
-	Array<const char*> args;
-	args.reserve(
+	g_msvcState->args.reserve(
 		1 +	// cl
 		1 +	// /c
 		1 +	// /std=
@@ -311,7 +309,7 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 		3 +	// -MD -MF <filename>
 		1 +	// source file
 		context->config.defines.size() +
-		( context->config.additional_includes.size() * 2 ) +	// /I <include>
+		context->config.additional_includes.size() +	// /I <include>
 		context->config.additional_lib_paths.size() +
 		context->config.additional_libs.size() +
 		1 +	// /WX
@@ -319,41 +317,41 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 		context->config.ignore_warnings.size()
 	);
 
-	args.reset();
+	g_msvcState->args.reset();
 
-	args.add( context->compilerPath.data );
+	g_msvcState->args.add( context->compilerPath.data );
 
-	args.add( "/c" );
+	g_msvcState->args.add( "/c" );
 
 	if ( context->config.language_version != LANGUAGE_VERSION_UNSET ) {
-		args.add( LanguageVersionToCompilerArg( context->config.language_version ) );
+		g_msvcState->args.add( LanguageVersionToCompilerArg( context->config.language_version ) );
 	}
 
 	if ( !context->config.remove_symbols ) {
-		args.add( "/DEBUG" );
+		g_msvcState->args.add( "/DEBUG" );
 	}
 
-	args.add( OptimizationLevelToCompilerArg( context->config.optimization_level ) );
+	g_msvcState->args.add( OptimizationLevelToCompilerArg( context->config.optimization_level ) );
 
-	args.add( tprintf( "/Fo%s", intermediateFilename ) );
+	g_msvcState->args.add( tprintf( "/Fo%s", intermediateFilename ) );
 
 	if ( context->flags & BUILD_CONTEXT_FLAG_GENERATE_INCLUDE_DEPENDENCIES ) {
-		args.add( "/showIncludes" );
+		g_msvcState->args.add( "/showIncludes" );
 	}
 
-	args.add( sourceFile );
+	g_msvcState->args.add( sourceFile );
 
 	For ( u32, defineIndex, 0, context->config.defines.size() ) {
-		args.add( tprintf( "/D%s", context->config.defines[defineIndex].c_str() ) );
+		g_msvcState->args.add( tprintf( "/D%s", context->config.defines[defineIndex].c_str() ) );
 	}
 
 	For ( u32, includeIndex, 0, context->config.additional_includes.size() ) {
-		args.add( tprintf( "/I%s", context->config.additional_includes[includeIndex].c_str() ) );
+		g_msvcState->args.add( tprintf( "/I%s", context->config.additional_includes[includeIndex].c_str() ) );
 	}
 
 	// must come before ignored warnings
 	if ( context->config.warnings_as_errors ) {
-		args.add( "/WX" );
+		g_msvcState->args.add( "/WX" );
 	}
 
 	// warning levels
@@ -401,17 +399,17 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 				return false;
 			}
 
-			args.add( warningLevel.c_str() );
+			g_msvcState->args.add( warningLevel.c_str() );
 		}
 	}
 
 	For ( u64, ignoreWarningIndex, 0, context->config.ignore_warnings.size() ) {
-		args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
+		g_msvcState->args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
 	}
 
 	if ( procFlags & PROC_FLAG_SHOW_ARGS ) {
-		For ( u64, argIndex, 0, args.count ) {
-			printf( "%s ", args[argIndex] );
+		For ( u64, argIndex, 0, g_msvcState->args.count ) {
+			printf( "%s ", g_msvcState->args[argIndex] );
 		}
 		printf( "\n" );
 	}
@@ -424,7 +422,7 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 	defer( string_builder_destroy( &processStdout ) );
 	{
 		u32 processFlags = PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR;
-		Process* process = process_create( &args, NULL, processFlags );
+		Process* process = process_create( &g_msvcState->args, NULL, processFlags );
 
 		string_builder_reset( &processStdout );
 
@@ -501,10 +499,7 @@ static bool8 MSVC_LinkIntermediateFiles( buildContext_t* context, const Array<co
 
 	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
 
-	// DM!!! dont make this args list every time
-	// store this somewhere and just reset it
-	Array<const char*> args;
-	args.reserve(
+	g_msvcState->args.reserve(
 		1 +	// link
 		1 +	// /lib or /shared
 		1 +	// /DEBUG
@@ -514,38 +509,38 @@ static bool8 MSVC_LinkIntermediateFiles( buildContext_t* context, const Array<co
 		context->config.additional_libs.size()
 	);
 
-	args.reset();
+	g_msvcState->args.reset();
 
 	const char* compilerPathOnly = path_remove_file_from_path( context->compilerPath.data );
 	if ( compilerPathOnly ) {
-		args.add( tprintf( "%s%c%s", compilerPathOnly, PATH_SEPARATOR, g_msvcBackend.linkerName ) );
+		g_msvcState->args.add( tprintf( "%s%c%s", compilerPathOnly, PATH_SEPARATOR, g_msvcBackend.linkerName ) );
 	} else {
-		args.add( g_msvcBackend.linkerName );
+		g_msvcState->args.add( g_msvcBackend.linkerName );
 	}
 
 	if ( context->config.binary_type == BINARY_TYPE_STATIC_LIBRARY ) {
-		args.add( "/lib" );
+		g_msvcState->args.add( "/lib" );
 	} else if ( context->config.binary_type == BINARY_TYPE_DYNAMIC_LIBRARY ) {
-		args.add( "/shared" );
+		g_msvcState->args.add( "/shared" );
 	}
 
 	if ( !context->config.remove_symbols ) {
-		args.add( "/DEBUG" );
+		g_msvcState->args.add( "/DEBUG" );
 	}
 
-	args.add( tprintf( "/OUT:%s", fullBinaryName ) );
+	g_msvcState->args.add( tprintf( "/OUT:%s", fullBinaryName ) );
 
-	args.add_range( &intermediateFiles );
+	g_msvcState->args.add_range( &intermediateFiles );
 
 	For ( u32, libPathIndex, 0, context->config.additional_lib_paths.size() ) {
-		args.add( tprintf( "/LIBPATH:\"%s\"", context->config.additional_lib_paths[libPathIndex].c_str() ) );
+		g_msvcState->args.add( tprintf( "/LIBPATH:\"%s\"", context->config.additional_lib_paths[libPathIndex].c_str() ) );
 	}
 
 	For ( u32, libIndex, 0, context->config.additional_libs.size() ) {
-		args.add( context->config.additional_libs[libIndex].c_str() );
+		g_msvcState->args.add( context->config.additional_libs[libIndex].c_str() );
 	}
 
-	s32 exitCode = RunProc( &args, NULL, procFlags );
+	s32 exitCode = RunProc( &g_msvcState->args, NULL, procFlags );
 
 	return exitCode == 0;
 }

@@ -35,7 +35,9 @@ SOFTWARE.
 #include "core/include/file.h"
 
 struct clangState_t {
-	const char*	depFilename;
+	Array<const char*>	args;
+
+	const char*			depFilename;
 };
 
 static clangState_t* g_clangState = NULL;
@@ -96,10 +98,7 @@ static bool8 Clang_CompileSourceFile( buildContext_t* context, const char* sourc
 
 	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
 
-	// DM!!! dont make this args list every time
-	// store this somewhere and just reset it
-	Array<const char*> args;
-	args.reserve(
+	g_clangState->args.reserve(
 		1 +	// clang
 		1 +	// -shared/-lib
 		1 +	// -c
@@ -118,44 +117,44 @@ static bool8 Clang_CompileSourceFile( buildContext_t* context, const char* sourc
 		context->config.ignore_warnings.size()
 	);
 
-	args.reset();
+	g_clangState->args.reset();
 
-	args.add( context->compilerPath.data );
+	g_clangState->args.add( context->compilerPath.data );
 
-	args.add( "-c" );
+	g_clangState->args.add( "-c" );
 
 	if ( context->config.language_version != LANGUAGE_VERSION_UNSET ) {
-		args.add( LanguageVersionToCompilerArg( context->config.language_version ) );
+		g_clangState->args.add( LanguageVersionToCompilerArg( context->config.language_version ) );
 	}
 
 	if ( !context->config.remove_symbols ) {
-		args.add( "-g" );
+		g_clangState->args.add( "-g" );
 	}
 
-	args.add( OptimizationLevelToCompilerArg( context->config.optimization_level ) );
+	g_clangState->args.add( OptimizationLevelToCompilerArg( context->config.optimization_level ) );
 
-	args.add( "-o" );
-	args.add( intermediateFilename );
+	g_clangState->args.add( "-o" );
+	g_clangState->args.add( intermediateFilename );
 
 	if ( context->flags & BUILD_CONTEXT_FLAG_GENERATE_INCLUDE_DEPENDENCIES ) {
-		args.add( "-MMD" );						// generate the dependency file
-		args.add( "-MF" );						// set the name of the dependency file to...
-		args.add( g_clangState->depFilename );	// ...this
+		g_clangState->args.add( "-MMD" );						// generate the dependency file
+		g_clangState->args.add( "-MF" );						// set the name of the dependency file to...
+		g_clangState->args.add( g_clangState->depFilename );	// ...this
 	}
 
-	args.add( sourceFile );
+	g_clangState->args.add( sourceFile );
 
 	For ( u32, defineIndex, 0, context->config.defines.size() ) {
-		args.add( tprintf( "-D%s", context->config.defines[defineIndex].c_str() ) );
+		g_clangState->args.add( tprintf( "-D%s", context->config.defines[defineIndex].c_str() ) );
 	}
 
 	For ( u32, includeIndex, 0, context->config.additional_includes.size() ) {
-		args.add( tprintf( "-I%s", context->config.additional_includes[includeIndex].c_str() ) );
+		g_clangState->args.add( tprintf( "-I%s", context->config.additional_includes[includeIndex].c_str() ) );
 	}
 
 	// must come before ignored warnings
 	if ( context->config.warnings_as_errors ) {
-		args.add( "-Werror" );
+		g_clangState->args.add( "-Werror" );
 	}
 
 	// warning levels
@@ -184,15 +183,15 @@ static bool8 Clang_CompileSourceFile( buildContext_t* context, const char* sourc
 				return false;
 			}
 
-			args.add( warningLevel.c_str() );
+			g_clangState->args.add( warningLevel.c_str() );
 		}
 	}
 
 	For ( u64, ignoreWarningIndex, 0, context->config.ignore_warnings.size() ) {
-		args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
+		g_clangState->args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
 	}
 
-	s32 exitCode = RunProc( &args, NULL, procFlags );
+	s32 exitCode = RunProc( &g_clangState->args, NULL, procFlags );
 
 	return exitCode == 0;
 }
@@ -204,10 +203,7 @@ static bool8 Clang_LinkIntermediateFiles( buildContext_t* context, const Array<c
 
 	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
 
-	// DM!!! dont make this args list every time
-	// store this somewhere and just reset it
-	Array<const char*> args;
-	args.reserve(
+	g_clangState->args.reserve(
 		1 + // lld-link
 		1 + // /lib or -shared
 		1 + // -g
@@ -218,44 +214,44 @@ static bool8 Clang_LinkIntermediateFiles( buildContext_t* context, const Array<c
 		context->config.additional_libs.size()
 	);
 
-	args.reset();
+	g_clangState->args.reset();
 
 	// in clang: static libraries are just an archive of .o files
 	// so there is no real "link" step, instead the .o files are bundled together
 	// so there must be a separate codepath for "linking" a static library
 	if ( context->config.binary_type == BINARY_TYPE_STATIC_LIBRARY ) {
-		args.add( g_clangBackend.linkerName );
-		args.add( "/lib" );
+		g_clangState->args.add( g_clangBackend.linkerName );
+		g_clangState->args.add( "/lib" );
 
-		args.add( tprintf( "/OUT:%s", fullBinaryName ) );
+		g_clangState->args.add( tprintf( "/OUT:%s", fullBinaryName ) );
 
-		args.add_range( &intermediateFiles );
+		g_clangState->args.add_range( &intermediateFiles );
 	} else {
-		args.add( context->compilerPath.data );
+		g_clangState->args.add( context->compilerPath.data );
 
 		if ( context->config.binary_type == BINARY_TYPE_DYNAMIC_LIBRARY ) {
-			args.add( "-shared" );
+			g_clangState->args.add( "-shared" );
 		}
 
 		if ( !context->config.remove_symbols ) {
-			args.add( "-g" );
+			g_clangState->args.add( "-g" );
 		}
 
-		args.add( "-o" );
-		args.add( fullBinaryName );
+		g_clangState->args.add( "-o" );
+		g_clangState->args.add( fullBinaryName );
 
-		args.add_range( &intermediateFiles );
+		g_clangState->args.add_range( &intermediateFiles );
 
 		For ( u32, libPathIndex, 0, context->config.additional_lib_paths.size() ) {
-			args.add( tprintf( "-L%s", context->config.additional_lib_paths[libPathIndex].c_str() ) );
+			g_clangState->args.add( tprintf( "-L%s", context->config.additional_lib_paths[libPathIndex].c_str() ) );
 		}
 
 		For ( u32, libIndex, 0, context->config.additional_libs.size() ) {
-			args.add( tprintf( "-l%s", context->config.additional_libs[libIndex].c_str() ) );
+			g_clangState->args.add( tprintf( "-l%s", context->config.additional_libs[libIndex].c_str() ) );
 		}
 	}
 
-	s32 exitCode = RunProc( &args, NULL, procFlags );
+	s32 exitCode = RunProc( &g_clangState->args, NULL, procFlags );
 
 	return exitCode == 0;
 }

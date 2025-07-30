@@ -34,6 +34,7 @@ SOFTWARE.
 #include "core/include/array.inl"
 #include "core/include/string_builder.h"
 #include "core/include/core_process.h"
+#include "core/include/file.h"
 
 // TODO(DM): 20/07/2025: do we want to ignore this warning via the build script?
 #pragma clang diagnostic push
@@ -78,16 +79,134 @@ struct msvcState_t {
 static msvcState_t* g_msvcState = NULL;
 
 static bool8 MSVC_Init() {
+	auto ParseTagString = []( const char* fileBuffer, const char* tag ) -> std::string {
+		const char* lineStart = strstr( fileBuffer, tag );
+		assert( lineStart );
+		lineStart += strlen( tag );
+
+		while ( *lineStart == ' ' ) {
+			lineStart++;
+		}
+
+		const char* lineEnd = NULL;
+		if ( !lineEnd ) lineEnd = strchr( lineStart, '\r' );
+		if ( !lineEnd ) lineEnd = strchr( lineStart, '\n' );
+
+		return std::string( lineStart, lineEnd );
+	};
+
+	auto ParseTagArray = []( const char* fileBuffer, const char* tag ) -> std::vector<std::string> {
+		std::vector<std::string> paths;
+
+		const char* lineStart = strstr( fileBuffer, tag );
+		assert( lineStart );
+		lineStart += strlen( tag );
+
+		while ( *lineStart == ' ' ) {
+			lineStart++;
+		}
+
+		const char* lineEnd = strchr( lineStart, '\n' );
+
+		const char* semicolon = strchr( lineStart, ';' );
+
+		while ( cast( u64, semicolon ) < cast( u64, lineEnd ) ) {
+			u64 pathLength = cast( u64, semicolon ) - cast( u64, lineStart );
+			std::string path( lineStart, pathLength );
+
+			paths.push_back( path );
+
+			lineStart = semicolon + 1;
+			semicolon = strchr( lineStart, ';' );
+		}
+
+		return paths;
+	};
+
 	// DM!!! 29/07/2025: this never gets freed - clean it up
 	g_msvcState = cast( msvcState_t*, mem_alloc( sizeof( msvcState_t ) ) );
 	new( g_msvcState ) msvcState_t;
 
-	// microsoft need us to tell their own compiler that runs on their own platform (specifically FOR their own platform) where their own include and library folders are, sigh...
+	std::string msvcRootFolder;
+	String clPath;
+
+	// call vswhere.exe to get the MSVC root folder
+	{
+		const char* defaultVSWherePath = "C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe";
+
+		Array<const char*> args;
+		args.add( defaultVSWherePath );
+
+		Process* process = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
+
+		if ( !process ) {
+			error( "I can't find vswhere.exe in teh default install directory on your PC (\"%s\").  I need this to be able to build with MSVC.  Sorry.\n" );
+			return false;
+		}
+
+		StringBuilder processStdout = {};
+		string_builder_reset( &processStdout );
+		defer( string_builder_destroy( &processStdout ) );
+
+		char buffer[1024] = {};
+		u64 bytesRead = U64_MAX;
+		while ( ( bytesRead = process_read_stdout( process, buffer, 1024 ) ) ) {
+			buffer[bytesRead] = 0;
+
+			string_builder_appendf( &processStdout, "%s", buffer );
+		}
+
+		s32 exitCode = process_join( process );
+
+		const char* outputBuffer = string_builder_to_string( &processStdout );
+
+		msvcRootFolder = ParseTagString( outputBuffer, "installationPath:" );
+
+		process_destroy( process );
+		process = NULL;
+	}
+
+	// get latest version of msvc
+	String latestMSVCVersion;
+	{
+		const char* msvcVersionSearchFolder = tprintf( "%s\\VC\\Tools\\MSVC\\*", msvcRootFolder.c_str() );
+
+		FileInfo fileInfo;
+		File file = file_find_first( msvcVersionSearchFolder, &fileInfo );
+
+		u32 highestVersion = 0;
+		do {
+			if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) ) {
+				continue;
+			}
+
+			if ( !fileInfo.is_directory ) {
+				continue;
+			}
+
+			u32 version0 = 0;
+			u32 version1 = 0;
+			u32 version2 = 0;
+			sscanf( fileInfo.filename, "%u.%u.%u", &version0, &version1, &version2 );
+
+			u32 mask = ( version0 << 24 ) | ( version1 << 16 ) | ( version2 );
+
+			if ( mask > highestVersion ) {
+				highestVersion = mask;
+
+				latestMSVCVersion = fileInfo.filename;
+			}
+		} while ( file_find_next( &file, &fileInfo ) );
+	}
+
+	// now use MSVC root folder and the correct MSVC version to get the path to cl.exe
+	string_printf( &clPath, "%s\\VC\\Tools\\MSVC\\%s\\bin\\Hostx64\\x64", msvcRootFolder.c_str(), latestMSVCVersion.data );
+
+	// now microsoft need us to tell their own compiler that runs on their own platform (specifically FOR their own platform) where their own include and library folders are, sigh...
 	// the way we do that is by manually calling a vcvars*.bat script and using the information it gives us back to know which include and lib folders to look for
 	// and even then we still have to manually construct the windows SDK folders! AAARGH!
-	// DM!!! 25/07/2025: clean this shit up!
 	Array<const char*> args;
-	args.add( "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvars64.bat" );
+	args.add( tprintf( "%s\\VC\\Auxiliary\\Build\\vcvars64.bat", msvcRootFolder.c_str() ) );
 	args.add( "&&" );
 	args.add( "set" );
 
@@ -113,42 +232,6 @@ static bool8 MSVC_Init() {
 	const char* outputBuffer = string_builder_to_string( &vcvarsOutput );
 
 	{
-		auto ParseTagString = []( const char* fileBuffer, const char* tag ) -> std::string {
-			const char* lineStart = strstr( fileBuffer, tag );
-			assert( lineStart );
-			lineStart += strlen( tag );
-
-			const char* lineEnd = NULL;
-			if ( !lineEnd ) lineEnd = strchr( lineStart, '\r' );
-			if ( !lineEnd ) lineEnd = strchr( lineStart, '\n' );
-
-			return std::string( lineStart, lineEnd );
-		};
-
-		auto ParseTagArray = []( const char* fileBuffer, const char* tag ) -> std::vector<std::string> {
-			std::vector<std::string> paths;
-
-			const char* lineStart = strstr( fileBuffer, tag );
-			assert( lineStart );
-			lineStart += strlen( tag );
-
-			const char* lineEnd = strchr( lineStart, '\n' );
-
-			const char* semicolon = strchr( lineStart, ';' );
-
-			while ( cast( u64, semicolon ) < cast( u64, lineEnd ) ) {
-				u64 pathLength = cast( u64, semicolon ) - cast( u64, lineStart );
-				std::string path( lineStart, pathLength );
-
-				paths.push_back( path );
-
-				lineStart = semicolon + 1;
-				semicolon = strchr( lineStart, ';' );
-			}
-
-			return paths;
-		};
-
 		g_msvcState->windowsIncludes = ParseTagArray( outputBuffer, "INCLUDE=" );
 		g_msvcState->windowsLibPaths = ParseTagArray( outputBuffer, "LIB=" );
 
@@ -162,6 +245,10 @@ static bool8 MSVC_Init() {
 		std::string windowsSDKLibFolder = windowsSDKRootFolder + PATH_SEPARATOR + "Lib" + PATH_SEPARATOR + windowsSDKVersion + PATH_SEPARATOR + "um" + PATH_SEPARATOR + "x64";
 		g_msvcState->windowsLibPaths.push_back( windowsSDKLibFolder );
 
+		// set PATH environment variable
+		SetEnvironmentVariable( "PATH", clPath.data );
+
+		// set include environment variable
 		StringBuilder msvcIncludes = {};
 		string_builder_reset( &msvcIncludes );
 		For ( u64, includeIndex, 0, g_msvcState->windowsIncludes.size() - 1 ) {
@@ -171,6 +258,7 @@ static bool8 MSVC_Init() {
 		const char* includeEnvVar = string_builder_to_string( &msvcIncludes );
 		SetEnvironmentVariable( "INCLUDE", includeEnvVar );	// DM!!! 25/07/2025: make an os level wrapper for this
 
+		// set lib path environment variable
 		StringBuilder msvcLibs = {};
 		string_builder_reset( &msvcLibs );
 		For ( u64, libPathIndex, 0, g_msvcState->windowsLibPaths.size() - 1 ) {
@@ -187,6 +275,11 @@ static bool8 MSVC_Init() {
 	vcvarsProcess = NULL;
 
 	return exitCode == 0;
+}
+
+static void MSVC_Shutdown() {
+	mem_free( g_msvcState );
+	g_msvcState = NULL;
 }
 
 static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* sourceFile ) {
@@ -469,6 +562,7 @@ compilerBackend_t g_msvcBackend = {
 	.linkerName									= "link",
 	.data										= &g_msvcState,
 	.Init										= MSVC_Init,
+	.Shutdown									= MSVC_Shutdown,
 	.CompileSourceFile							= MSVC_CompileSourceFile,
 	.LinkIntermediateFiles						= MSVC_LinkIntermediateFiles,
 	.GetIncludeDependenciesFromSourceFileBuild	= MSVC_GetIncludeDependenciesFromSourceFileBuild,

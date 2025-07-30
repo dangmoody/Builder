@@ -182,6 +182,7 @@ struct VisualStudioSolution {
 
 struct BuilderOptions {
 	// The path to the compiler that you want to build with.
+	// If you want to use MSVC then just set this to "cl.exe" or "cl".
 	// If you leave this unset then Builder will use the portable install of Clang that it came with.
 	std::string					compiler_path;
 

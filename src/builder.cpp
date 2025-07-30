@@ -1052,14 +1052,17 @@ int main( int argc, char** argv ) {
 
 	printf( "Builder v%d.%d.%d RC0\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
-	buildContext_t context = {};
-	context.configIndices = hashmap_create( 1 );	// TODO(DM): 30/03/2025: whats a reasonable default here?
-	context.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS | BUILD_CONTEXT_FLAG_SHOW_STDOUT | BUILD_CONTEXT_FLAG_GENERATE_INCLUDE_DEPENDENCIES;
+	buildContext_t context = {
+		.configIndices	= hashmap_create( 1 ),	// TODO(DM): 30/03/2025: whats a reasonable default here?
+		.flags			= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS | BUILD_CONTEXT_FLAG_SHOW_STDOUT | BUILD_CONTEXT_FLAG_GENERATE_INCLUDE_DEPENDENCIES,
 #ifdef _DEBUG
-	context.verbose = true;
+		.verbose		= true,
 #else
-	context.verbose = false;
+		.verbose		= false,
 #endif
+	};
+
+	defer( context.compilerBackend->Shutdown() );
 
 	// parse command line args
 	const char* inputConfigName = NULL;
@@ -1280,6 +1283,7 @@ int main( int argc, char** argv ) {
 
 		userConfigBuildContext.compilerBackend = &g_clangBackend;
 		userConfigBuildContext.compilerBackend->Init();
+		defer( userConfigBuildContext.compilerBackend->Shutdown() );
 
 		userConfigBuildResult = BuildBinary( &userConfigBuildContext );
 
@@ -1384,6 +1388,7 @@ int main( int argc, char** argv ) {
 		buildInfoData.configs.push_back( config );
 	}
 
+	float64 compilerBackendInitTimeMS = -1.0f;
 	{
 		// if the user never specified a compiler, we can build with the default compiler that we just built the user config DLL with
 		if ( options.compiler_path.empty() ) {
@@ -1412,8 +1417,16 @@ int main( int argc, char** argv ) {
 			QUIT_ERROR();
 		}
 
-		if ( !context.compilerBackend->Init() ) {
-			QUIT_ERROR();
+		{
+			float64 compilerBackInitStart = time_ms();
+
+			if ( !context.compilerBackend->Init() ) {
+				QUIT_ERROR();
+			}
+
+			float64 compilerBackInitEnd = time_ms();
+
+			compilerBackendInitTimeMS = compilerBackInitEnd - compilerBackInitStart;
 		}
 
 		// get the linker program that we need
@@ -1652,6 +1665,7 @@ int main( int argc, char** argv ) {
 	float64 totalTimeEnd = time_ms();
 
 	printf( "Build finished:\n" );
+	printf( "    Compiler init time:  %f ms\n", compilerBackendInitTimeMS );
 	if ( doUserConfigBuild ) {
 		printf( "    User config build:   %f ms%s\n", userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? " (skipped)" : "" );
 	}

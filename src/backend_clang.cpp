@@ -78,6 +78,11 @@ static bool8 Clang_Init() {
 	return true;
 }
 
+static void Clang_Shutdown() {
+	mem_free( g_clangState );
+	g_clangState = NULL;
+}
+
 static bool8 Clang_CompileSourceFile( buildContext_t* context, const char* sourceFile ) {
 	assert( context );
 	assert( sourceFile );
@@ -355,6 +360,7 @@ compilerBackend_t g_clangBackend = {
 	.linkerName									= "lld-link",
 	.data										= NULL,
 	.Init										= Clang_Init,
+	.Shutdown									= Clang_Shutdown,
 	.CompileSourceFile							= Clang_CompileSourceFile,
 	.LinkIntermediateFiles						= Clang_LinkIntermediateFiles,
 	.GetIncludeDependenciesFromSourceFileBuild	= Clang_GetIncludeDependenciesFromSourceFileBuild,

@@ -98,6 +98,7 @@ struct compilerBackend_t {
 	void*		data;
 
 	bool8		( *Init )( void );
+	void		( *Shutdown )( void );
 	bool8		( *CompileSourceFile )( buildContext_t* context, const char* sourceFile );
 	bool8		( *LinkIntermediateFiles )( buildContext_t* context, const Array<const char*>& intermediateFiles );
 	void		( *GetIncludeDependenciesFromSourceFileBuild )( std::vector<std::string>& includeDependencies );

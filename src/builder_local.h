@@ -86,7 +86,6 @@ enum buildContextFlagBits_t {
 };
 typedef u32 buildContextFlags_t;
 
-// DM!!! 22/07/2025: refactor this in such a way where we dont have 3 different flag types representing the same thing!!!
 enum procFlagBits_t {
 	PROC_FLAG_SHOW_ARGS		= bit( 0 ),
 	PROC_FLAG_SHOW_STDOUT	= bit( 1 ),

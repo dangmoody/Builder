@@ -170,7 +170,7 @@ static bool8 MSVC_Init() {
 	}
 
 	// get latest version of msvc
-	String latestMSVCVersion;
+	//String latestMSVCVersion;
 	{
 		const char* msvcVersionSearchFolder = tprintf( "%s\\VC\\Tools\\MSVC\\*", msvcRootFolder.c_str() );
 
@@ -197,13 +197,13 @@ static bool8 MSVC_Init() {
 			if ( mask > highestVersion ) {
 				highestVersion = mask;
 
-				latestMSVCVersion = fileInfo.filename;
+				g_msvcBackend.compilerVersion = tprintf( "%s", fileInfo.filename );
 			}
 		} while ( file_find_next( &file, &fileInfo ) );
 	}
 
 	// now use MSVC root folder and the correct MSVC version to get the path to cl.exe
-	string_printf( &clPath, "%s\\VC\\Tools\\MSVC\\%s\\bin\\Hostx64\\x64", msvcRootFolder.c_str(), latestMSVCVersion.data );
+	string_printf( &clPath, "%s\\VC\\Tools\\MSVC\\%s\\bin\\Hostx64\\x64", msvcRootFolder.c_str(), g_msvcBackend.compilerVersion );
 
 	// now microsoft need us to tell their own compiler that runs on their own platform (specifically FOR their own platform) where their own include and library folders are, sigh...
 	// the way we do that is by manually calling a vcvars*.bat script and using the information it gives us back to know which include and lib folders to look for

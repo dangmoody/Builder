@@ -186,6 +186,13 @@ struct BuilderOptions {
 	// If you leave this unset then Builder will use the portable install of Clang that it came with.
 	std::string					compiler_path;
 
+	// What version of your compiler are you using?
+	// When the compiler version you specify in set_builder_options() doesn't match the version we get when we run your compiler then this will generate a warning.
+	// This is useful when working in a team and you want to make sure that people use the same compiler version.
+	// For Clang this would be something like "20.1.5".
+	// For MSVC this would be something like "14.44.35207".
+	std::string					compiler_version;
+
 	// All the possible configs that you could build with.
 	// Pass the one you actually want to build with via the --config= command line argument.
 	// If you want use Visual Studio only, then don't fill this out.

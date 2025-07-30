@@ -93,6 +93,7 @@ enum procFlagBits_t {
 typedef u32 procFlags_t;
 
 struct compilerBackend_t {
+	const char*	compilerVersion;
 	const char*	linkerName;
 	void*		data;
 

@@ -1397,6 +1397,49 @@ int main( int argc, char** argv ) {
 
 		if ( string_ends_with( options.compiler_path.c_str(), "clang" ) ) {
 			context.compilerBackend = &g_clangBackend;
+
+			// get the users clang compiler version
+			// use that to check against the version set in set_builder_options() later (if they set a version there)
+			{
+				const char* clangVersionPrefix = "clang version ";
+
+				Array<const char*> args;
+				args.add( options.compiler_path.c_str() );
+				args.add( "-v" );
+
+				Process* process = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
+
+				char buffer[1024] = {};
+				u64 bytesRead = U64_MAX;
+				while ( ( bytesRead = process_read_stdout( process, buffer, 1024 ) ) ) {
+					buffer[bytesRead] = 0;
+
+					if ( string_starts_with( buffer, clangVersionPrefix ) ) {
+						char* versionStart = buffer;
+						versionStart += strlen( clangVersionPrefix );
+
+						/*const char* versionEnd = strchr( versionStart, '\n' );
+						assert( versionEnd );
+
+						u64 versionLength = cast( u64, versionEnd ) - cast( u64, versionStart );*/
+						u64 versionLength = strlen( versionStart );
+
+						// DM!!! 30/07/2025: this never gets freed!
+						char* clangVersionString = cast( char*, mem_alloc( ( versionLength + 1 ) * sizeof( char ) ) );
+						strncpy( clangVersionString, versionStart, versionLength );
+						clangVersionString[versionLength] = 0;
+
+						context.compilerBackend->compilerVersion = clangVersionString;
+
+						break;
+					}
+				}
+
+				process_join( process );
+
+				process_destroy( process );
+				process = NULL;
+			}
 		} else if ( string_ends_with( options.compiler_path.c_str(), "cl" ) ) {
 #if _WIN32
 			context.compilerBackend = &g_msvcBackend;
@@ -1434,6 +1477,17 @@ int main( int argc, char** argv ) {
 			float64 compilerBackInitEnd = time_ms();
 
 			compilerBackendInitTimeMS = compilerBackInitEnd - compilerBackInitStart;
+		}
+
+		// check that version of the compiler the user actually has is what they expect it to be
+		if ( !options.compiler_version.empty() ) {
+			if ( !string_equals( context.compilerBackend->compilerVersion, options.compiler_version.c_str() ) ) {
+				warning(
+					"I see that you are using compiler version \"%s\", but compiler version \"%s\" was set in %s.\n"
+					"I will still compile, but things may not work as you expect!\n"
+					, context.compilerBackend->compilerVersion, options.compiler_version.c_str(), SET_BUILDER_OPTIONS_FUNC_NAME
+				);
+			}
 		}
 
 		// get the linker program that we need

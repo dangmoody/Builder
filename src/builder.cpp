@@ -445,8 +445,6 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 
 		numCompiledFiles += 1;
 
-		// DM!!! 28/07/2025: we dont need the separate array here, just write the output of the function directly into context->includeDependencies[sourceFileIndex]
-		// get the new include dependencies after recompiling this source file
 		if ( context->flags & BUILD_CONTEXT_FLAG_GENERATE_INCLUDE_DEPENDENCIES ) {
 			context->compilerBackend->GetIncludeDependenciesFromSourceFileBuild( context->includeDependencies[sourceFileIndex] );
 

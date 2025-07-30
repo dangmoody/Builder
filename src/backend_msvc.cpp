@@ -314,7 +314,7 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 		( context->config.additional_includes.size() * 2 ) +	// /I <include>
 		context->config.additional_lib_paths.size() +
 		context->config.additional_libs.size() +
-		1 + // /WX
+		1 +	// /WX
 		context->config.warning_levels.size() +
 		context->config.ignore_warnings.size()
 	);

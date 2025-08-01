@@ -170,7 +170,6 @@ static bool8 MSVC_Init() {
 	}
 
 	// get latest version of msvc
-	//String latestMSVCVersion;
 	{
 		const char* msvcVersionSearchFolder = tprintf( "%s\\VC\\Tools\\MSVC\\*", msvcRootFolder.c_str() );
 

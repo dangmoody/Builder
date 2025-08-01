@@ -36,7 +36,7 @@ REM if /I [%config%]==[debug] (
 REM 	set symbols=-g
 REM )
 
-set optimisation=""
+set optimisation=-O0
 if /I [%config%]==[release] (
 	set optimisation=-O3
 )

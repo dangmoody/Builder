@@ -1235,67 +1235,69 @@ int main( int argc, char** argv ) {
 		}
 	}
 
-	// build config step
+	// user config build step
 	// see if they have set_builder_options() overridden
 	// if they do, then build a DLL first and call that function to set some more build options
 	buildResult_t userConfigBuildResult = BUILD_RESULT_SKIPPED;
 	if ( doUserConfigBuild ) {
 		float64 userConfigBuildTimeStart = time_ms();
 
-		// TODO(DM): 01/08/2025: tidy this shit up
-		buildContext_t userConfigBuildContext = {};
-		userConfigBuildContext.flags = BUILD_CONTEXT_FLAG_SHOW_STDOUT;
-
-		userConfigBuildContext.compilerPath = DEFAULT_COMPILER_PATH;
-
-		userConfigBuildContext.dotBuilderFolder = context.dotBuilderFolder;
+		buildContext_t userConfigBuildContext = {
+			.compilerBackend		= &g_clangBackend,
+			.config = {
+				.source_files = {
+					buildInfoData.userConfigSourceFilename,
+				},
+				.defines = {
+					"_CRT_SECURE_NO_WARNINGS",
+					"BUILDER_DOING_USER_CONFIG_BUILD",
+#if defined( _DEBUG )
+					"_DEBUG",
+#else
+					"NDEBUG",
+#endif
+				},
+				// add the folder that builder lives in as an additional include path otherwise people have no real way of being able to include it
+				.additional_includes = {
+					path_app_path()
+				},
+				.additional_libs = {
+#if defined( _WIN64 )
+					"user32.lib",
+					// MSVCRT is needed for ABI compatibility between builder and the user config DLL
+#if defined( _DEBUG )
+					"msvcrtd.lib",
+#else
+					"msvcrt.lib",
+#endif
+#endif
+				},
+				.ignore_warnings = {
+					"-Wno-missing-prototypes",	// otherwise the user has to forward declare functions like set_builder_options and thats annoying
+					"-Wno-reorder-init-list",	// allow users to initialize struct members in whatever order they want
+				},
+				.binary_name		= path_remove_path_from_file( path_remove_file_extension( buildInfoData.userConfigSourceFilename.c_str() ) ),
+				.binary_folder		= context.dotBuilderFolder.data,
+				.binary_type		= BINARY_TYPE_DYNAMIC_LIBRARY,
+				// this is needed because this tells the compiler what to set _ITERATOR_DEBUG_LEVEL to
+				// ABI compatibility will be broken if this is not the same between all binaries
+#if defined( _DEBUG )
+				.optimization_level	= OPTIMIZATION_LEVEL_O0,
+#else
+				.optimization_level	= OPTIMIZATION_LEVEL_O3,
+#endif
+			},
+			.flags					= BUILD_CONTEXT_FLAG_SHOW_STDOUT,
+			.compilerPath			= DEFAULT_COMPILER_PATH,
+			.dotBuilderFolder		= context.dotBuilderFolder,
+		};
 
 		if ( context.verbose ) {
 			userConfigBuildContext.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS;
 		}
 
-		userConfigBuildContext.config.source_files.push_back( buildInfoData.userConfigSourceFilename );
-
-		userConfigBuildContext.config.binary_type = BINARY_TYPE_DYNAMIC_LIBRARY;
-		userConfigBuildContext.config.binary_name = path_remove_path_from_file( path_remove_file_extension( buildInfoData.userConfigSourceFilename.c_str() ) );
-		userConfigBuildContext.config.binary_folder = context.dotBuilderFolder.data;
-		userConfigBuildContext.config.defines.insert( userConfigBuildContext.config.defines.end(), {
-			"_CRT_SECURE_NO_WARNINGS",
-			"BUILDER_DOING_USER_CONFIG_BUILD"
-		} );
-
-		// this is needed because this tells the compiler what to set _ITERATOR_DEBUG_LEVEL to
-		// ABI compatibility will be broken if this is not the same between all binaries
-#if defined( _DEBUG )
-		userConfigBuildContext.config.defines.push_back( "_DEBUG" );
-		userConfigBuildContext.config.optimization_level = OPTIMIZATION_LEVEL_O0;
-#elif defined( NDEBUG )
-		userConfigBuildContext.config.defines.push_back( "NDEBUG" );
-		userConfigBuildContext.config.optimization_level = OPTIMIZATION_LEVEL_O3;
-#endif
-
-		// add the folder that builder lives in as an additional include path
-		// so that people can just include builder.h without having to add the include path manually every time
-		userConfigBuildContext.config.additional_includes.push_back( path_app_path() );
-
-#if defined( _WIN64 )
-		userConfigBuildContext.config.additional_libs.push_back( "user32.lib" );
-
-		// MSVCRT is needed for ABI compatibility between builder and the user config DLL
-		// TODO(DM): 20/07/2025: if its only the user config DLL that needs to care about this then maybe dont make every config include these libraries?
-#if defined( _DEBUG )
-		userConfigBuildContext.config.additional_libs.push_back( "msvcrtd.lib" );
-#elif defined( NDEBUG )
-		userConfigBuildContext.config.additional_libs.push_back( "msvcrt.lib" );
-#endif
-#endif // defined( _WIN64 )
-
-		userConfigBuildContext.config.ignore_warnings.push_back( "-Wno-missing-prototypes" );	// otherwise the user has to forward declare functions like set_builder_options and thats annoying
-		userConfigBuildContext.config.ignore_warnings.push_back( "-Wno-reorder-init-list" );	// allow users to initialize struct members in whatever order they want
-
 		buildInfoData.userConfigDLLFilename = BuildConfig_GetFullBinaryName( &userConfigBuildContext.config );
 
-		userConfigBuildContext.compilerBackend = &g_clangBackend;
 		userConfigBuildContext.compilerBackend->Init();
 		defer( userConfigBuildContext.compilerBackend->Shutdown() );
 

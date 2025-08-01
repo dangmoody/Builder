@@ -514,7 +514,7 @@ static bool8 MSVC_LinkIntermediateFiles( buildContext_t* context, const Array<co
 
 	const char* compilerPathOnly = path_remove_file_from_path( context->compilerPath.data );
 	if ( compilerPathOnly ) {
-		g_msvcState->args.add( tprintf( "%s%c%s", compilerPathOnly, PATH_SEPARATOR, g_msvcBackend.linkerName ) );
+		g_msvcState->args.add( tprintf( "%s%c%s", compilerPathOnly, PATH_SEPARATOR, context->linkerPath.data ) );
 	} else {
 		g_msvcState->args.add( g_msvcBackend.linkerName );
 	}

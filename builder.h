@@ -29,6 +29,7 @@ SOFTWARE.
 #pragma once
 
 #include <vector>
+#include <string.h>
 #include <string>
 
 // If you override set_builder_options() you will need preface the function with the BUILDER_CALLBACK #define.

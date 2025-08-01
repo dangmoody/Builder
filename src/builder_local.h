@@ -105,7 +105,7 @@ struct compilerBackend_t {
 };
 
 extern compilerBackend_t	g_clangBackend;
-//extern compilerBackend_t	g_gccBackend;
+extern compilerBackend_t	g_gccBackend;
 extern compilerBackend_t	g_msvcBackend;
 
 struct buildContext_t {
@@ -143,7 +143,7 @@ bool8		FileIsSourceFile( const char* filename );
 bool8		FileIsHeaderFile( const char* filename );
 
 const char*	BuildConfig_GetFullBinaryName( const BuildConfig* config );
-void		BuildConfig_AddDefaults( BuildConfig* outConfig );
+//void		BuildConfig_AddDefaults( BuildConfig* outConfig );
 
 procFlags_t	GetProcFlagsFromBuildContextFlags( buildContextFlags_t flags );
 

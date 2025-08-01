@@ -89,6 +89,9 @@ static bool8 Clang_CompileSourceFile( buildContext_t* context, const char* sourc
 	assert( context );
 	assert( sourceFile );
 
+	bool8 isClang = string_ends_with( context->compilerPath.data, "clang" ) || string_ends_with( context->compilerPath.data, "clang++" );
+	bool8 isGCC = string_ends_with( context->compilerPath.data, "gcc" ) || string_ends_with( context->compilerPath.data, "g++" );
+
 	const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
 
 	const char* intermediatePath = tprintf( "%s%c%s", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
@@ -99,7 +102,7 @@ static bool8 Clang_CompileSourceFile( buildContext_t* context, const char* sourc
 	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
 
 	g_clangState->args.reserve(
-		1 +	// clang
+		1 +	// clang/gcc
 		1 +	// -shared/-lib
 		1 +	// -c
 		1 +	// std=
@@ -160,11 +163,15 @@ static bool8 Clang_CompileSourceFile( buildContext_t* context, const char* sourc
 	// warning levels
 	{
 		std::vector<std::string> allowedWarningLevels = {
-			"-Weverything",
 			"-Wall",
 			"-Wextra",
 			"-Wpedantic",
 		};
+
+		// gcc doesnt have this as a warning level but clang does
+		if ( isClang ) {
+			allowedWarningLevels.push_back( "-Weverything" );
+		}
 
 		For ( u64, warningLevelIndex, 0, context->config.warning_levels.size() ) {
 			const std::string& warningLevel = context->config.warning_levels[warningLevelIndex];
@@ -354,6 +361,16 @@ static void Clang_GetIncludeDependenciesFromSourceFileBuild( std::vector<std::st
 
 compilerBackend_t g_clangBackend = {
 	.linkerName									= "lld-link",
+	.data										= NULL,
+	.Init										= Clang_Init,
+	.Shutdown									= Clang_Shutdown,
+	.CompileSourceFile							= Clang_CompileSourceFile,
+	.LinkIntermediateFiles						= Clang_LinkIntermediateFiles,
+	.GetIncludeDependenciesFromSourceFileBuild	= Clang_GetIncludeDependenciesFromSourceFileBuild,
+};
+
+compilerBackend_t g_gccBackend = {
+	.linkerName									= "ld",
 	.data										= NULL,
 	.Init										= Clang_Init,
 	.Shutdown									= Clang_Shutdown,

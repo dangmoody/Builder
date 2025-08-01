@@ -242,25 +242,25 @@ static const char* BuildConfig_ToString( const BuildConfig* config ) {
 	return string_builder_to_string( &builder );
 }
 
-void BuildConfig_AddDefaults( BuildConfig* outConfig ) {
+/*void BuildConfig_AddDefaults( BuildConfig* outConfig ) {
 	// add the folder that builder lives in as an additional include path
 	// so that people can just include builder.h without having to add the include path manually every time
 	outConfig->additional_includes.push_back( path_app_path() );
 
 	outConfig->additional_includes.push_back( "." );
 
-#if defined( _WIN64 )
-	outConfig->additional_libs.push_back( "user32.lib" );
-
-	// MSVCRT is needed for ABI compatibility between builder and the user config DLL
-	// TODO(DM): 20/07/2025: if its only the user config DLL that needs to care about this then maybe dont make every config include these libraries?
-#if defined( _DEBUG )
-	outConfig->additional_libs.push_back( "msvcrtd.lib" );
-#elif defined( NDEBUG )
-	outConfig->additional_libs.push_back( "msvcrt.lib" );
-#endif
-#endif // defined( _WIN64 )
-}
+//#if defined( _WIN64 )
+//	outConfig->additional_libs.push_back( "user32.lib" );
+//
+//	// MSVCRT is needed for ABI compatibility between builder and the user config DLL
+//	// TODO(DM): 20/07/2025: if its only the user config DLL that needs to care about this then maybe dont make every config include these libraries?
+//#if defined( _DEBUG )
+//	outConfig->additional_libs.push_back( "msvcrtd.lib" );
+//#elif defined( NDEBUG )
+//	outConfig->additional_libs.push_back( "msvcrt.lib" );
+//#endif
+//#endif // defined( _WIN64 )
+}*/
 
 const char* BuildConfig_GetFullBinaryName( const BuildConfig* config ) {
 	assert( !config->binary_name.empty() );
@@ -1242,8 +1242,8 @@ int main( int argc, char** argv ) {
 	if ( doUserConfigBuild ) {
 		float64 userConfigBuildTimeStart = time_ms();
 
+		// TODO(DM): 01/08/2025: tidy this shit up
 		buildContext_t userConfigBuildContext = {};
-		BuildConfig_AddDefaults( &userConfigBuildContext.config );
 		userConfigBuildContext.flags = BUILD_CONTEXT_FLAG_SHOW_STDOUT;
 
 		userConfigBuildContext.compilerPath = DEFAULT_COMPILER_PATH;
@@ -1274,6 +1274,22 @@ int main( int argc, char** argv ) {
 		userConfigBuildContext.config.optimization_level = OPTIMIZATION_LEVEL_O3;
 #endif
 
+		// add the folder that builder lives in as an additional include path
+		// so that people can just include builder.h without having to add the include path manually every time
+		userConfigBuildContext.config.additional_includes.push_back( path_app_path() );
+
+#if defined( _WIN64 )
+		userConfigBuildContext.config.additional_libs.push_back( "user32.lib" );
+
+		// MSVCRT is needed for ABI compatibility between builder and the user config DLL
+		// TODO(DM): 20/07/2025: if its only the user config DLL that needs to care about this then maybe dont make every config include these libraries?
+#if defined( _DEBUG )
+		userConfigBuildContext.config.additional_libs.push_back( "msvcrtd.lib" );
+#elif defined( NDEBUG )
+		userConfigBuildContext.config.additional_libs.push_back( "msvcrt.lib" );
+#endif
+#endif // defined( _WIN64 )
+
 		userConfigBuildContext.config.ignore_warnings.push_back( "-Wno-missing-prototypes" );	// otherwise the user has to forward declare functions like set_builder_options and thats annoying
 		userConfigBuildContext.config.ignore_warnings.push_back( "-Wno-reorder-init-list" );	// allow users to initialize struct members in whatever order they want
 
@@ -1288,14 +1304,14 @@ int main( int argc, char** argv ) {
 		if ( userConfigBuildResult == BUILD_RESULT_FAILED ) {
 			error( "Pre-build failed!\n" );
 			QUIT_ERROR();
+		} else {
+			printf( "\n" );
 		}
 
 		float64 userConfigBuildTimeEnd = time_ms();
 
 		userConfigBuildTimeMS = userConfigBuildTimeEnd - userConfigBuildTimeStart;
 	}
-
-	//printf( "\n" );
 
 	BuilderOptions options = {};
 
@@ -1319,8 +1335,6 @@ int main( int argc, char** argv ) {
 				float64 setBuilderOptionsTimeEnd = time_ms();
 
 				setBuilderOptionsTimeMS = setBuilderOptionsTimeEnd - setBuilderOptionsTimeStart;
-
-				context.compilerPath = options.compiler_path.c_str();
 
 				buildInfoData.configs = options.configs;
 
@@ -1347,7 +1361,7 @@ int main( int argc, char** argv ) {
 						For ( u64, configIndex, 0, project->configs.size() ) {
 							VisualStudioConfig* config = &project->configs[configIndex];
 
-							BuildConfig_AddDefaults( &config->options );
+							//BuildConfig_AddDefaults( &config->options );
 
 							AddBuildConfigAndDependenciesUnique( &context, &config->options, options.configs );
 						}
@@ -1395,6 +1409,8 @@ int main( int argc, char** argv ) {
 			options.compiler_path = path_remove_file_extension( options.compiler_path.c_str() );
 		}
 
+		context.compilerPath = options.compiler_path.c_str();
+
 		if ( string_ends_with( options.compiler_path.c_str(), "clang" ) ) {
 			context.compilerBackend = &g_clangBackend;
 
@@ -1409,30 +1425,38 @@ int main( int argc, char** argv ) {
 
 				Process* process = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
 
+				assert( process );
+
+				StringBuilder clangOutput = {};
+				string_builder_reset( &clangOutput );
+				defer( string_builder_destroy( &clangOutput ) );
+
 				char buffer[1024] = {};
 				u64 bytesRead = U64_MAX;
 				while ( ( bytesRead = process_read_stdout( process, buffer, 1024 ) ) ) {
 					buffer[bytesRead] = 0;
 
-					if ( string_starts_with( buffer, clangVersionPrefix ) ) {
-						char* versionStart = buffer;
-						versionStart += strlen( clangVersionPrefix );
+					string_builder_appendf( &clangOutput, "%s", buffer );
+				}
 
-						/*const char* versionEnd = strchr( versionStart, '\n' );
-						assert( versionEnd );
+				const char* clangOutputString = string_builder_to_string( &clangOutput );
 
-						u64 versionLength = cast( u64, versionEnd ) - cast( u64, versionStart );*/
-						u64 versionLength = strlen( versionStart );
+				const char* versionStart = strstr( clangOutputString, clangVersionPrefix );
 
-						// DM!!! 30/07/2025: this never gets freed!
-						char* clangVersionString = cast( char*, mem_alloc( ( versionLength + 1 ) * sizeof( char ) ) );
-						strncpy( clangVersionString, versionStart, versionLength );
-						clangVersionString[versionLength] = 0;
+				if ( versionStart ) {
+					versionStart += strlen( clangVersionPrefix );
 
-						context.compilerBackend->compilerVersion = clangVersionString;
+					const char* versionEnd = strchr( versionStart, ' ' );
+					assert( versionEnd );
 
-						break;
-					}
+					u64 versionLength = cast( u64, versionEnd ) - cast( u64, versionStart );
+
+					// DM!!! 30/07/2025: this never gets freed!
+					char* clangVersionString = cast( char*, mem_alloc( ( versionLength + 1 ) * sizeof( char ) ) );
+					strncpy( clangVersionString, versionStart, versionLength );
+					clangVersionString[versionLength] = 0;
+
+					context.compilerBackend->compilerVersion = clangVersionString;
 				}
 
 				process_join( process );
@@ -1451,12 +1475,60 @@ int main( int argc, char** argv ) {
 
 			QUIT_ERROR();
 #endif
-		}
-		// TODO(DM): 24/07/2025: add gcc backend
-		/*else if ( string_ends_with( options.compiler_path.c_str(), "gcc" ) ) {
-			context.backend = &g_gccBackend;
-		}*/
-		else {
+		} else if ( string_ends_with( options.compiler_path.c_str(), "gcc" ) ) {
+			context.compilerBackend = &g_gccBackend;
+
+			// get the users gcc compiler version
+			// use that to check against the version set in set_builder_options() later (if they set a version there)
+			{
+				const char* gccVersionPrefix = "gcc version ";
+
+				Array<const char*> args;
+				args.add( options.compiler_path.c_str() );
+				args.add( "-v" );
+
+				Process* process = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
+
+				assert( process );
+
+				StringBuilder gccOutput = {};
+				string_builder_reset( &gccOutput );
+				defer( string_builder_destroy( &gccOutput ) );
+
+				char buffer[1024] = {};
+				u64 bytesRead = U64_MAX;
+				while ( ( bytesRead = process_read_stdout( process, buffer, 1024 ) ) ) {
+					buffer[bytesRead] = 0;
+
+					string_builder_appendf( &gccOutput, "%s", buffer );
+				}
+
+				const char* gccOutputString = string_builder_to_string( &gccOutput );
+
+				const char* versionStart = strstr( gccOutputString, gccVersionPrefix );
+
+				if ( versionStart ) {
+					versionStart += strlen( gccVersionPrefix );
+
+					const char* versionEnd = strchr( versionStart, ' ' );
+					assert( versionEnd );
+
+					u64 versionLength = cast( u64, versionEnd ) - cast( u64, versionStart );
+
+					// DM!!! 30/07/2025: this never gets freed!
+					char* gccVersionString = cast( char*, mem_alloc( ( versionLength + 1 ) * sizeof( char ) ) );
+					strncpy( gccVersionString, versionStart, versionLength );
+					gccVersionString[versionLength] = 0;
+
+					context.compilerBackend->compilerVersion = gccVersionString;
+				}
+
+				process_join( process );
+
+				process_destroy( process );
+				process = NULL;
+			}
+		} else {
 			error(
 				"The compiler you want to build with (\"%s\") is not one that I recognise.\n"
 				"Currently, I only support: Clang, GCC, and MSVC.\n"
@@ -1598,7 +1670,7 @@ int main( int argc, char** argv ) {
 		u64 configNameHash = hash_string( config->name.c_str(), 0 );
 		u64 actualConfigIndex = hashmap_get_value( context.configIndices, configNameHash );
 
-		BuildConfig_AddDefaults( config );
+		//BuildConfig_AddDefaults( config );
 
 		// make sure that the binary folder and binary name are at least set to defaults
 		if ( !config->binary_folder.empty() ) {

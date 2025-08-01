@@ -223,9 +223,9 @@ static bool8 Clang_LinkIntermediateFiles( buildContext_t* context, const Array<c
 
 	g_clangState->args.reset();
 
-	// in clang: static libraries are just an archive of .o files
-	// so there is no real "link" step, instead the .o files are bundled together
-	// so there must be a separate codepath for "linking" a static library
+	// clang and gcc treat static libraries as just an archive of .o files
+	// so there is no real "link" step in this case, the .o files are just "archived" together
+	// for dynamic libraries and executables clang and gcc recommend you call the compiler again and just pass in all the intermediate files
 	if ( context->config.binary_type == BINARY_TYPE_STATIC_LIBRARY ) {
 		g_clangState->args.add( context->linkerPath.data );
 		g_clangState->args.add( "/lib" );

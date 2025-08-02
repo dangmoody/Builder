@@ -71,11 +71,6 @@ enum buildResult_t {
 	BUILD_RESULT_SKIPPED
 };
 
-enum doingBuildFrom_t {
-	DOING_BUILD_FROM_SOURCE_FILE	= 0,
-	DOING_BUILD_FROM_BUILD_INFO_FILE
-};
-
 #define SET_BUILDER_OPTIONS_FUNC_NAME	"set_builder_options"
 #define PRE_BUILD_FUNC_NAME				"on_pre_build"
 #define POST_BUILD_FUNC_NAME			"on_post_build"
@@ -159,32 +154,30 @@ bool8 FileIsHeaderFile( const char* filename ) {
 	return false;
 }
 
-static const char* BinaryTypeToString( const BinaryType type ) {
-	switch ( type ) {
-		case BINARY_TYPE_EXE:				return "BINARY_TYPE_EXE";
-		case BINARY_TYPE_DYNAMIC_LIBRARY:	return "BINARY_TYPE_DYNAMIC_LIBRARY";
-		case BINARY_TYPE_STATIC_LIBRARY:	return "BINARY_TYPE_STATIC_LIBRARY";
-	}
-}
-
-static const char* OptimizationLevelToString( OptimizationLevel level ) {
-	switch ( level ) {
-		case OPTIMIZATION_LEVEL_O0: return "OPTIMIZATION_LEVEL_00";
-		case OPTIMIZATION_LEVEL_O1: return "OPTIMIZATION_LEVEL_01";
-		case OPTIMIZATION_LEVEL_O2: return "OPTIMIZATION_LEVEL_02";
-		case OPTIMIZATION_LEVEL_O3: return "OPTIMIZATION_LEVEL_03";
-	}
-}
-
 static const char* BuildConfig_ToString( const BuildConfig* config ) {
+	auto BinaryTypeToString = []( const BinaryType type ) -> const char* {
+		switch ( type ) {
+			case BINARY_TYPE_EXE:				return "BINARY_TYPE_EXE";
+			case BINARY_TYPE_DYNAMIC_LIBRARY:	return "BINARY_TYPE_DYNAMIC_LIBRARY";
+			case BINARY_TYPE_STATIC_LIBRARY:	return "BINARY_TYPE_STATIC_LIBRARY";
+		}
+	};
+
+	auto OptimizationLevelToString = []( OptimizationLevel level ) -> const char* {
+		switch ( level ) {
+			case OPTIMIZATION_LEVEL_O0: return "OPTIMIZATION_LEVEL_00";
+			case OPTIMIZATION_LEVEL_O1: return "OPTIMIZATION_LEVEL_01";
+			case OPTIMIZATION_LEVEL_O2: return "OPTIMIZATION_LEVEL_02";
+			case OPTIMIZATION_LEVEL_O3: return "OPTIMIZATION_LEVEL_03";
+		}
+	};
+
 	StringBuilder builder = {};
 	string_builder_reset( &builder );
 
-	string_builder_appendf( &builder, "%s: {\n", config->name.c_str() );
-
 	auto PrintCStringArray = [&builder]( const char* name, const std::vector<const char*>& array ) {
 		string_builder_appendf( &builder, "\t%s: { ", name );
-		For ( u64, i, 0, array.size() ) {
+		For( u64, i, 0, array.size() ) {
 			string_builder_appendf( &builder, "%s", array[i] );
 
 			if ( i < array.size() - 1 ) {
@@ -196,7 +189,7 @@ static const char* BuildConfig_ToString( const BuildConfig* config ) {
 
 	auto PrintSTDStringArray = [&builder]( const char* name, const std::vector<std::string>& array ) {
 		string_builder_appendf( &builder, "\t%s: { ", name );
-		For ( u64, i, 0, array.size() ) {
+		For( u64, i, 0, array.size() ) {
 			string_builder_appendf( &builder, "%s", array[i].c_str() );
 
 			if ( i < array.size() - 1 ) {
@@ -209,6 +202,8 @@ static const char* BuildConfig_ToString( const BuildConfig* config ) {
 	auto PrintField = [&builder]( const char* key, const char* value ) {
 		string_builder_appendf( &builder, "\t%s: %s\n", key, value );
 	};
+
+	string_builder_appendf( &builder, "%s: {\n", config->name.c_str() );
 
 	if ( config->depends_on.size() > 0 ) {
 		string_builder_appendf( &builder, "\tdepends_on: { " );
@@ -241,26 +236,6 @@ static const char* BuildConfig_ToString( const BuildConfig* config ) {
 
 	return string_builder_to_string( &builder );
 }
-
-/*void BuildConfig_AddDefaults( BuildConfig* outConfig ) {
-	// add the folder that builder lives in as an additional include path
-	// so that people can just include builder.h without having to add the include path manually every time
-	outConfig->additional_includes.push_back( path_app_path() );
-
-	outConfig->additional_includes.push_back( "." );
-
-//#if defined( _WIN64 )
-//	outConfig->additional_libs.push_back( "user32.lib" );
-//
-//	// MSVCRT is needed for ABI compatibility between builder and the user config DLL
-//	// TODO(DM): 20/07/2025: if its only the user config DLL that needs to care about this then maybe dont make every config include these libraries?
-//#if defined( _DEBUG )
-//	outConfig->additional_libs.push_back( "msvcrtd.lib" );
-//#elif defined( NDEBUG )
-//	outConfig->additional_libs.push_back( "msvcrt.lib" );
-//#endif
-//#endif // defined( _WIN64 )
-}*/
 
 const char* BuildConfig_GetFullBinaryName( const BuildConfig* config ) {
 	assert( !config->binary_name.empty() );
@@ -1066,8 +1041,6 @@ int main( int argc, char** argv ) {
 	const char* inputConfigName = NULL;
 	u64 inputConfigNameHash = 0;
 
-	doingBuildFrom_t doingBuildFrom = DOING_BUILD_FROM_SOURCE_FILE;
-
 	For ( s32, argIndex, 1, argc ) {
 		const char* arg = argv[argIndex];
 		const u64 argLen = strlen( arg );
@@ -1081,26 +1054,13 @@ int main( int argc, char** argv ) {
 			continue;
 		}
 
-		if ( string_ends_with( arg, ".c" ) || string_ends_with( arg, ".cpp" ) ) {
+		if ( FileIsSourceFile( arg ) ) {
 			if ( context.inputFile != NULL ) {
 				error( "You've already specified a file for me to build.  If you want me to build more than one source file, specify it via %s().\n", SET_BUILDER_OPTIONS_FUNC_NAME );
 				QUIT_ERROR();
 			}
 
 			context.inputFile = arg;
-			doingBuildFrom = DOING_BUILD_FROM_SOURCE_FILE;
-
-			continue;
-		}
-
-		if ( string_ends_with( arg, BUILD_INFO_FILE_EXTENSION ) ) {
-			if ( context.inputFile != NULL ) {
-				error( "You've already specified a file for me to build.  If you want me to build more than one source file, specify it via %s().\n", SET_BUILDER_OPTIONS_FUNC_NAME );
-				QUIT_ERROR();
-			}
-
-			context.inputFile = arg;
-			doingBuildFrom = DOING_BUILD_FROM_BUILD_INFO_FILE;
 
 			continue;
 		}
@@ -1173,20 +1133,13 @@ int main( int argc, char** argv ) {
 			inputFilePath = path_current_working_directory();
 		}
 
-		if ( doingBuildFrom == DOING_BUILD_FROM_BUILD_INFO_FILE ) {
-			string_printf( &context.inputFilePath, "%s%c..", inputFilePath, PATH_SEPARATOR );
+		const char* inputFileNoPath = path_remove_path_from_file( context.inputFile );
+		const char* inputFileNoPathOrExtension = path_remove_file_extension( inputFileNoPath );
 
-			context.dotBuilderFolder = inputFilePath;
-			context.buildInfoFilename = context.inputFile;
-		} else {
-			const char* inputFileNoPath = path_remove_path_from_file( context.inputFile );
-			const char* inputFileNoPathOrExtension = path_remove_file_extension( inputFileNoPath );
+		context.inputFilePath = inputFilePath;
 
-			context.inputFilePath = inputFilePath;
-
-			string_printf( &context.dotBuilderFolder, "%s%c.builder", context.inputFilePath.data, PATH_SEPARATOR );
-			string_printf( &context.buildInfoFilename, "%s%c%s%s", context.dotBuilderFolder.data, PATH_SEPARATOR, inputFileNoPathOrExtension, BUILD_INFO_FILE_EXTENSION );
-		}
+		string_printf( &context.dotBuilderFolder, "%s%c.builder", context.inputFilePath.data, PATH_SEPARATOR );
+		string_printf( &context.buildInfoFilename, "%s%c%s%s", context.dotBuilderFolder.data, PATH_SEPARATOR, inputFileNoPathOrExtension, BUILD_INFO_FILE_EXTENSION );
 	}
 
 	const char* defaultBinaryName = path_remove_file_extension( path_remove_path_from_file( context.inputFile ) );
@@ -1204,42 +1157,13 @@ int main( int argc, char** argv ) {
 		buildInfoReadTimeMS = end - start;
 	}
 
-	if ( doingBuildFrom == DOING_BUILD_FROM_BUILD_INFO_FILE ) {
-		if ( !readBuildInfo ) {
-			error( "Can't find \"%s\".  Does this file exist?\n", context.buildInfoFilename.data );
-			QUIT_ERROR();
-		}
-	} else {
-		buildInfoData.userConfigSourceFilename = context.inputFile;
-	}
-
-	Library library = {};
-	defer( if ( library.ptr ) library_unload( &library ) );
-
-	typedef void ( *setBuilderOptionsFunc_t )( BuilderOptions* options );
-	typedef void ( *preBuildFunc_t )();
-	typedef void ( *postBuildFunc_t )();
-
-	preBuildFunc_t preBuildFunc = NULL;
-	postBuildFunc_t postBuildFunc = NULL;
-
-	bool8 doUserConfigBuild = doingBuildFrom == DOING_BUILD_FROM_SOURCE_FILE;
-
-	// even when building from a .build_info file we still need the user config dll
-	// in case the user has on_*_build() filled out, for example
-	if ( doingBuildFrom == DOING_BUILD_FROM_BUILD_INFO_FILE ) {
-		library = library_load( buildInfoData.userConfigDLLFilename.c_str() );
-
-		if ( library.ptr == INVALID_HANDLE_VALUE ) {
-			doUserConfigBuild = true;
-		}
-	}
+	buildInfoData.userConfigSourceFilename = context.inputFile;
 
 	// user config build step
 	// see if they have set_builder_options() overridden
 	// if they do, then build a DLL first and call that function to set some more build options
 	buildResult_t userConfigBuildResult = BUILD_RESULT_SKIPPED;
-	if ( doUserConfigBuild ) {
+	{
 		float64 userConfigBuildTimeStart = time_ms();
 
 		buildContext_t userConfigBuildContext = {
@@ -1302,11 +1226,18 @@ int main( int argc, char** argv ) {
 
 		userConfigBuildResult = BuildBinary( &userConfigBuildContext );
 
-		if ( userConfigBuildResult == BUILD_RESULT_FAILED ) {
-			error( "Pre-build failed!\n" );
-			QUIT_ERROR();
-		} else {
-			printf( "\n" );
+		switch ( userConfigBuildResult ) {
+			case BUILD_RESULT_SUCCESS:
+				printf( "\n" );
+				break;
+
+			case BUILD_RESULT_FAILED:
+				error( "Pre-build failed!\n" );
+				QUIT_ERROR();
+
+			case BUILD_RESULT_SKIPPED:
+				// nothing
+				break;
 		}
 
 		float64 userConfigBuildTimeEnd = time_ms();
@@ -1316,77 +1247,75 @@ int main( int argc, char** argv ) {
 
 	BuilderOptions options = {};
 
+	Library library = library = library_load( buildInfoData.userConfigDLLFilename.c_str() );
+	defer( library_unload( &library ) );
+
+	typedef void ( *setBuilderOptionsFunc_t )( BuilderOptions* options );
+	typedef void ( *preBuildFunc_t )();
+	typedef void ( *postBuildFunc_t )();
+
+	preBuildFunc_t preBuildFunc = cast( preBuildFunc_t, library_get_proc_address( library, PRE_BUILD_FUNC_NAME ) );
+	postBuildFunc_t postBuildFunc = cast( postBuildFunc_t, library_get_proc_address( library, POST_BUILD_FUNC_NAME ) );
+
 	{
-		if ( library.ptr == INVALID_HANDLE_VALUE || library.ptr == NULL ) {
-			library = library_load( buildInfoData.userConfigDLLFilename.c_str() );
-			assert( library.ptr != INVALID_HANDLE_VALUE );
-		}
+		// now get the user-specified options
+		setBuilderOptionsFunc_t setBuilderOptionsFunc = cast( setBuilderOptionsFunc_t, library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME ) );
+		if ( setBuilderOptionsFunc ) {
+			float64 setBuilderOptionsTimeStart = time_ms();
 
-		preBuildFunc = cast( preBuildFunc_t, library_get_proc_address( library, PRE_BUILD_FUNC_NAME ) );
-		postBuildFunc = cast( postBuildFunc_t, library_get_proc_address( library, POST_BUILD_FUNC_NAME ) );
+			setBuilderOptionsFunc( &options );
 
-		if ( doingBuildFrom == DOING_BUILD_FROM_SOURCE_FILE ) {
-			// now get the user-specified options
-			setBuilderOptionsFunc_t setBuilderOptionsFunc = cast( setBuilderOptionsFunc_t, library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME ) );
-			if ( setBuilderOptionsFunc ) {
-				float64 setBuilderOptionsTimeStart = time_ms();
+			float64 setBuilderOptionsTimeEnd = time_ms();
 
-				setBuilderOptionsFunc( &options );
+			setBuilderOptionsTimeMS = setBuilderOptionsTimeEnd - setBuilderOptionsTimeStart;
 
-				float64 setBuilderOptionsTimeEnd = time_ms();
+			buildInfoData.configs = options.configs;
 
-				setBuilderOptionsTimeMS = setBuilderOptionsTimeEnd - setBuilderOptionsTimeStart;
+			buildInfoData.includeDependencies.resize( buildInfoData.configs.size() );
 
-				buildInfoData.configs = options.configs;
+			// if the user wants to generate a visual studio solution then do that now
+			if ( options.generate_solution ) {
+				// you either want to generate a visual studio solution or build this config, but not both
+				if ( inputConfigName ) {
+					error(
+						"I see you want to generate a Visual Studio Solution, but you've also specified a config that you want to build.\n"
+						"You must do one or the other, you can't do both.\n\n"
+					);
 
-				buildInfoData.includeDependencies.resize( buildInfoData.configs.size() );
-
-				// if the user wants to generate a visual studio solution then do that now
-				if ( options.generate_solution ) {
-					// you either want to generate a visual studio solution or build this config, but not both
-					if ( inputConfigName ) {
-						error(
-							"I see you want to generate a Visual Studio Solution, but you've also specified a config that you want to build.\n"
-							"You must do one or the other, you can't do both.\n\n"
-						);
-
-						QUIT_ERROR();
-					}
-
-					// make sure BuilderOptions::configs and configs from visual studio match
-					// we will need this list later for validation
-					options.configs.clear();
-					For ( u64, projectIndex, 0, options.solution.projects.size() ) {
-						VisualStudioProject* project = &options.solution.projects[projectIndex];
-
-						For ( u64, configIndex, 0, project->configs.size() ) {
-							VisualStudioConfig* config = &project->configs[configIndex];
-
-							//BuildConfig_AddDefaults( &config->options );
-
-							AddBuildConfigAndDependenciesUnique( &context, &config->options, options.configs );
-						}
-					}
-
-					printf( "Generating Visual Studio files\n" );
-
-					float64 start = time_ms();
-
-					bool8 generated = GenerateVisualStudioSolution( &context, &options );
-
-					float64 end = time_ms();
-
-					visualStudioGenerationTimeMS = end - start;
-
-					if ( !generated ) {
-						error( "Failed to generate Visual Studio solution.\n" );	// TODO(DM): better error message
-						QUIT_ERROR();
-					}
-
-					printf( "Done.\n" );
-
-					return 0;
+					QUIT_ERROR();
 				}
+
+				// make sure BuilderOptions::configs and configs from visual studio match
+				// we will need this list later for validation
+				options.configs.clear();
+				For ( u64, projectIndex, 0, options.solution.projects.size() ) {
+					VisualStudioProject* project = &options.solution.projects[projectIndex];
+
+					For ( u64, configIndex, 0, project->configs.size() ) {
+						VisualStudioConfig* config = &project->configs[configIndex];
+
+						AddBuildConfigAndDependenciesUnique( &context, &config->options, options.configs );
+					}
+				}
+
+				printf( "Generating Visual Studio files\n" );
+
+				float64 start = time_ms();
+
+				bool8 generated = GenerateVisualStudioSolution( &context, &options );
+
+				float64 end = time_ms();
+
+				visualStudioGenerationTimeMS = end - start;
+
+				if ( !generated ) {
+					error( "Failed to generate Visual Studio solution.\n" );	// TODO(DM): better error message
+					QUIT_ERROR();
+				}
+
+				printf( "Done.\n" );
+
+				return 0;
 			}
 		}
 	}
@@ -1447,7 +1376,9 @@ int main( int argc, char** argv ) {
 				if ( versionStart ) {
 					versionStart += strlen( clangVersionPrefix );
 
-					const char* versionEnd = strchr( versionStart, ' ' );
+					const char* versionEnd = NULL;
+					if ( !versionEnd ) versionEnd = strchr( versionStart, '\r' );
+					if ( !versionEnd ) versionEnd = strchr( versionStart, '\n' );
 					assert( versionEnd );
 
 					u64 versionLength = cast( u64, versionEnd ) - cast( u64, versionStart );
@@ -1557,7 +1488,7 @@ int main( int argc, char** argv ) {
 			if ( !string_equals( context.compilerBackend->compilerVersion, options.compiler_version.c_str() ) ) {
 				warning(
 					"I see that you are using compiler version \"%s\", but compiler version \"%s\" was set in %s.\n"
-					"I will still compile, but things may not work as you expect!\n"
+					"I will still compile, but things may not work as you expect.\n\n"
 					, context.compilerBackend->compilerVersion, options.compiler_version.c_str(), SET_BUILDER_OPTIONS_FUNC_NAME
 				);
 			}
@@ -1670,8 +1601,6 @@ int main( int argc, char** argv ) {
 
 		u64 configNameHash = hash_string( config->name.c_str(), 0 );
 		u64 actualConfigIndex = hashmap_get_value( context.configIndices, configNameHash );
-
-		//BuildConfig_AddDefaults( config );
 
 		// make sure that the binary folder and binary name are at least set to defaults
 		if ( !config->binary_folder.empty() ) {
@@ -1800,9 +1729,7 @@ int main( int argc, char** argv ) {
 
 	printf( "Build finished:\n" );
 	printf( "    Compiler init time:  %f ms\n", compilerBackendInitTimeMS );
-	if ( doUserConfigBuild ) {
-		printf( "    User config build:   %f ms%s\n", userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? " (skipped)" : "" );
-	}
+	printf( "    User config build:   %f ms%s\n", userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? " (skipped)" : "" );
 	if ( !doubleeq( setBuilderOptionsTimeMS, -1.0 ) ) {
 		printf( "    set_builder_options: %f ms\n", setBuilderOptionsTimeMS );
 	}

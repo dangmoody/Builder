@@ -1257,14 +1257,13 @@ int main( int argc, char** argv ) {
 					"NDEBUG",
 #endif
 				},
-				// add the folder that builder lives in as an additional include path otherwise people have no real way of being able to include it
 				.additional_includes = {
-					path_app_path()
+					path_app_path()	// add the folder that builder lives in as an additional include path otherwise people have no real way of being able to include it
 				},
 				.additional_libs = {
 #if defined( _WIN64 )
 					"user32.lib",
-					// MSVCRT is needed for ABI compatibility between builder and the user config DLL
+					// MSVCRT is needed for ABI compatibility between builder and the user config DLL on windows
 #if defined( _DEBUG )
 					"msvcrtd.lib",
 #else

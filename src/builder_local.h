@@ -97,11 +97,11 @@ struct compilerBackend_t {
 	const char*	linkerName;
 	void*		data;
 
-	bool8		( *Init )( void );
-	void		( *Shutdown )( void );
+	bool8		( *Init )( compilerBackend_t* backend );
+	void		( *Shutdown )( compilerBackend_t* backend );
 	bool8		( *CompileSourceFile )( buildContext_t* context, const char* sourceFile );
 	bool8		( *LinkIntermediateFiles )( buildContext_t* context, const Array<const char*>& intermediateFiles );
-	void		( *GetIncludeDependenciesFromSourceFileBuild )( std::vector<std::string>& includeDependencies );
+	void		( *GetIncludeDependenciesFromSourceFileBuild )( compilerBackend_t* backend, std::vector<std::string>& includeDependencies );
 };
 
 extern compilerBackend_t	g_clangBackend;

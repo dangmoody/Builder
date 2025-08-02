@@ -35,12 +35,10 @@ SOFTWARE.
 #include "core/include/file.h"
 
 struct clangState_t {
-	Array<const char*>	args;
+	Array<const char*>			args;
 
-	const char*			depFilename;
+	std::vector<std::string>	includeDependencies;
 };
-
-static clangState_t* g_clangState = NULL;
 
 // TODO(DM): 20/07/2025: do we want to ignore this warning via the build script?
 #pragma clang diagnostic push
@@ -73,202 +71,7 @@ static const char* OptimizationLevelToCompilerArg( const OptimizationLevel level
 	}
 }
 
-static bool8 Clang_Init() {
-	g_clangState = cast( clangState_t*, mem_alloc( sizeof( clangState_t ) ) );
-	new( g_clangState ) clangState_t;
-
-	return true;
-}
-
-static void Clang_Shutdown() {
-	mem_free( g_clangState );
-	g_clangState = NULL;
-}
-
-static bool8 Clang_CompileSourceFile( buildContext_t* context, const char* sourceFile ) {
-	assert( context );
-	assert( sourceFile );
-
-	bool8 isClang = string_ends_with( context->compilerPath.data, "clang" ) || string_ends_with( context->compilerPath.data, "clang++" );
-	bool8 isGCC = string_ends_with( context->compilerPath.data, "gcc" ) || string_ends_with( context->compilerPath.data, "g++" );
-
-	const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
-
-	const char* intermediatePath = tprintf( "%s%c%s", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
-	const char* intermediateFilename = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
-
-	g_clangState->depFilename = tprintf( "%s%c%s.d", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
-
-	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
-
-	g_clangState->args.reserve(
-		1 +	// clang/gcc
-		1 +	// -shared/-lib
-		1 +	// -c
-		1 +	// std=
-		1 +	// symbols
-		1 +	// optimisation
-		1 +	// -o
-		1 +	// intermediate filename
-		3 +	// -MD -MF <filename>
-		1 +	// source file
-		context->config.defines.size() +
-		context->config.additional_includes.size() +
-		context->config.additional_lib_paths.size() +
-		context->config.additional_libs.size() +
-		context->config.warning_levels.size() +
-		context->config.ignore_warnings.size()
-	);
-
-	g_clangState->args.reset();
-
-	g_clangState->args.add( context->compilerPath.data );
-
-	g_clangState->args.add( "-c" );
-
-	if ( context->config.language_version != LANGUAGE_VERSION_UNSET ) {
-		g_clangState->args.add( LanguageVersionToCompilerArg( context->config.language_version ) );
-	}
-
-	if ( !context->config.remove_symbols ) {
-		g_clangState->args.add( "-g" );
-	}
-
-	g_clangState->args.add( OptimizationLevelToCompilerArg( context->config.optimization_level ) );
-
-	g_clangState->args.add( "-o" );
-	g_clangState->args.add( intermediateFilename );
-
-	if ( context->flags & BUILD_CONTEXT_FLAG_GENERATE_INCLUDE_DEPENDENCIES ) {
-		g_clangState->args.add( "-MMD" );						// generate the dependency file
-		g_clangState->args.add( "-MF" );						// set the name of the dependency file to...
-		g_clangState->args.add( g_clangState->depFilename );	// ...this
-	}
-
-	g_clangState->args.add( sourceFile );
-
-	For ( u32, defineIndex, 0, context->config.defines.size() ) {
-		g_clangState->args.add( tprintf( "-D%s", context->config.defines[defineIndex].c_str() ) );
-	}
-
-	For ( u32, includeIndex, 0, context->config.additional_includes.size() ) {
-		g_clangState->args.add( tprintf( "-I%s", context->config.additional_includes[includeIndex].c_str() ) );
-	}
-
-	// must come before ignored warnings
-	if ( context->config.warnings_as_errors ) {
-		g_clangState->args.add( "-Werror" );
-	}
-
-	// warning levels
-	{
-		std::vector<std::string> allowedWarningLevels = {
-			"-Wall",
-			"-Wextra",
-			"-Wpedantic",
-		};
-
-		// gcc doesnt have this as a warning level but clang does
-		if ( isClang ) {
-			allowedWarningLevels.push_back( "-Weverything" );
-		}
-
-		For ( u64, warningLevelIndex, 0, context->config.warning_levels.size() ) {
-			const std::string& warningLevel = context->config.warning_levels[warningLevelIndex];
-
-			bool8 found = false;
-
-			For ( u64, allowedWarningLevelIndex, 0, allowedWarningLevels.size() ) {
-				if ( allowedWarningLevels[allowedWarningLevelIndex] == warningLevel ) {	// TODO(DM): 14/06/2025: better to compare hashes here instead?
-					found = true;
-					break;
-				}
-			}
-
-			if ( !found ) {
-				error( "\"%s\" is not allowed as a warning level.\n", warningLevel.c_str() );
-				return false;
-			}
-
-			g_clangState->args.add( warningLevel.c_str() );
-		}
-	}
-
-	For ( u64, ignoreWarningIndex, 0, context->config.ignore_warnings.size() ) {
-		g_clangState->args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
-	}
-
-	s32 exitCode = RunProc( &g_clangState->args, NULL, procFlags );
-
-	return exitCode == 0;
-}
-
-static bool8 Clang_LinkIntermediateFiles( buildContext_t* context, const Array<const char*>& intermediateFiles ) {
-	assert( context );
-
-	const char* fullBinaryName = BuildConfig_GetFullBinaryName( &context->config );
-
-	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
-
-	g_clangState->args.reserve(
-		1 + // lld-link
-		1 + // /lib or -shared
-		1 + // -g
-		1 + // -o
-		1 + // binary name
-		intermediateFiles.count +
-		context->config.additional_lib_paths.size() +
-		context->config.additional_libs.size()
-	);
-
-	g_clangState->args.reset();
-
-	// clang and gcc treat static libraries as just an archive of .o files
-	// so there is no real "link" step in this case, the .o files are just "archived" together
-	// for dynamic libraries and executables clang and gcc recommend you call the compiler again and just pass in all the intermediate files
-	if ( context->config.binary_type == BINARY_TYPE_STATIC_LIBRARY ) {
-		g_clangState->args.add( context->linkerPath.data );
-		g_clangState->args.add( "/lib" );
-
-		g_clangState->args.add( tprintf( "/OUT:%s", fullBinaryName ) );
-
-		g_clangState->args.add_range( &intermediateFiles );
-	} else {
-		g_clangState->args.add( context->compilerPath.data );
-
-		if ( context->config.binary_type == BINARY_TYPE_DYNAMIC_LIBRARY ) {
-			g_clangState->args.add( "-shared" );
-		}
-
-		if ( !context->config.remove_symbols ) {
-			g_clangState->args.add( "-g" );
-		}
-
-		g_clangState->args.add( "-o" );
-		g_clangState->args.add( fullBinaryName );
-
-		g_clangState->args.add_range( &intermediateFiles );
-
-		For ( u32, libPathIndex, 0, context->config.additional_lib_paths.size() ) {
-			g_clangState->args.add( tprintf( "-L%s", context->config.additional_lib_paths[libPathIndex].c_str() ) );
-		}
-
-		For ( u32, libIndex, 0, context->config.additional_libs.size() ) {
-			g_clangState->args.add( tprintf( "-l%s", context->config.additional_libs[libIndex].c_str() ) );
-		}
-	}
-
-	s32 exitCode = RunProc( &g_clangState->args, NULL, procFlags );
-
-	return exitCode == 0;
-}
-
-// only call this after compilation has finished successfully
-// parse the dependency file that we generated for every dependency thats in there
-// add those to a list - we need to put those in the .build_info file
-static void Clang_GetIncludeDependenciesFromSourceFileBuild( std::vector<std::string>& outIncludeDependencies ) {
-	const char* depFilename = g_clangState->depFilename;
-
+static void ReadDependencyFile( const char* depFilename, std::vector<std::string>& outIncludeDependencies ) {
 	char* depFileBuffer = NULL;
 	bool8 read = file_read_entire( depFilename, &depFileBuffer );
 
@@ -327,7 +130,7 @@ static void Clang_GetIncludeDependenciesFromSourceFileBuild( std::vector<std::st
 
 		// get the substring we actually need
 		std::string dependencyFilename( dependencyStart, dependencyFilenameLength );
-		For ( u64, i, 0, dependencyFilename.size() ) {
+		For( u64, i, 0, dependencyFilename.size() ) {
 			if ( dependencyFilename[i] == PATH_SEPARATOR && dependencyFilename[i + 1] == ' ' ) {
 				dependencyFilename.erase( i, 1 );
 			}
@@ -357,6 +160,215 @@ static void Clang_GetIncludeDependenciesFromSourceFileBuild( std::vector<std::st
 			current += 1;
 		}
 	}
+}
+
+//================================================================
+
+static bool8 Clang_Init( compilerBackend_t* backend ) {
+	backend->data = cast( clangState_t*, mem_alloc( sizeof( clangState_t ) ) );
+	new( backend->data ) clangState_t;
+
+	return true;
+}
+
+static void Clang_Shutdown( compilerBackend_t* backend ) {
+	mem_free( backend->data );
+	backend->data = NULL;
+}
+
+static bool8 Clang_CompileSourceFile( buildContext_t* context, const char* sourceFile ) {
+	assert( context );
+	assert( sourceFile );
+
+	bool8 isClang = string_ends_with( context->compilerPath.data, "clang" ) || string_ends_with( context->compilerPath.data, "clang++" );
+	bool8 isGCC = string_ends_with( context->compilerPath.data, "gcc" ) || string_ends_with( context->compilerPath.data, "g++" );
+
+	const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
+
+	const char* intermediatePath = tprintf( "%s%c%s", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
+	const char* intermediateFilename = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
+
+	const char* depFilename = tprintf( "%s%c%s.d", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
+
+	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
+
+	clangState_t* clangState = cast( clangState_t*, context->compilerBackend->data );
+	Array<const char*>& args = clangState->args;
+	args.reserve(
+		1 +	// clang/gcc
+		1 +	// -shared/-lib
+		1 +	// -c
+		1 +	// std=
+		1 +	// symbols
+		1 +	// optimisation
+		1 +	// -o
+		1 +	// intermediate filename
+		3 +	// -MD -MF <filename>
+		1 +	// source file
+		context->config.defines.size() +
+		context->config.additional_includes.size() +
+		context->config.additional_lib_paths.size() +
+		context->config.additional_libs.size() +
+		context->config.warning_levels.size() +
+		context->config.ignore_warnings.size()
+	);
+
+	args.reset();
+
+	args.add( context->compilerPath.data );
+
+	args.add( "-c" );
+
+	if ( context->config.language_version != LANGUAGE_VERSION_UNSET ) {
+		args.add( LanguageVersionToCompilerArg( context->config.language_version ) );
+	}
+
+	if ( !context->config.remove_symbols ) {
+		args.add( "-g" );
+	}
+
+	args.add( OptimizationLevelToCompilerArg( context->config.optimization_level ) );
+
+	args.add( "-o" );
+	args.add( intermediateFilename );
+
+	if ( context->flags & BUILD_CONTEXT_FLAG_GENERATE_INCLUDE_DEPENDENCIES ) {
+		args.add( "-MMD" );			// generate the dependency file
+		args.add( "-MF" );			// set the name of the dependency file to...
+		args.add( depFilename );	// ...this
+	}
+
+	args.add( sourceFile );
+
+	For ( u32, defineIndex, 0, context->config.defines.size() ) {
+		args.add( tprintf( "-D%s", context->config.defines[defineIndex].c_str() ) );
+	}
+
+	For ( u32, includeIndex, 0, context->config.additional_includes.size() ) {
+		args.add( tprintf( "-I%s", context->config.additional_includes[includeIndex].c_str() ) );
+	}
+
+	// must come before ignored warnings
+	if ( context->config.warnings_as_errors ) {
+		args.add( "-Werror" );
+	}
+
+	// warning levels
+	{
+		std::vector<std::string> allowedWarningLevels = {
+			"-Wall",
+			"-Wextra",
+			"-Wpedantic",
+		};
+
+		// gcc doesnt have this as a warning level but clang does
+		if ( isClang ) {
+			allowedWarningLevels.push_back( "-Weverything" );
+		}
+
+		For ( u64, warningLevelIndex, 0, context->config.warning_levels.size() ) {
+			const std::string& warningLevel = context->config.warning_levels[warningLevelIndex];
+
+			bool8 found = false;
+
+			For ( u64, allowedWarningLevelIndex, 0, allowedWarningLevels.size() ) {
+				if ( allowedWarningLevels[allowedWarningLevelIndex] == warningLevel ) {	// TODO(DM): 14/06/2025: better to compare hashes here instead?
+					found = true;
+					break;
+				}
+			}
+
+			if ( !found ) {
+				error( "\"%s\" is not allowed as a warning level.\n", warningLevel.c_str() );
+				return false;
+			}
+
+			args.add( warningLevel.c_str() );
+		}
+	}
+
+	For ( u64, ignoreWarningIndex, 0, context->config.ignore_warnings.size() ) {
+		args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
+	}
+
+	s32 exitCode = RunProc( &args, NULL, procFlags );
+
+	if ( ( exitCode == 0 ) && ( context->flags & BUILD_CONTEXT_FLAG_GENERATE_INCLUDE_DEPENDENCIES ) ) {
+		ReadDependencyFile( depFilename, clangState->includeDependencies );
+	}
+
+	return exitCode == 0;
+}
+
+static bool8 Clang_LinkIntermediateFiles( buildContext_t* context, const Array<const char*>& intermediateFiles ) {
+	assert( context );
+
+	const char* fullBinaryName = BuildConfig_GetFullBinaryName( &context->config );
+
+	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
+
+	clangState_t* clangState = cast( clangState_t*, context->compilerBackend->data );
+	Array<const char*>& args = clangState->args;
+	args.reserve(
+		1 + // lld-link
+		1 + // /lib or -shared
+		1 + // -g
+		1 + // -o
+		1 + // binary name
+		intermediateFiles.count +
+		context->config.additional_lib_paths.size() +
+		context->config.additional_libs.size()
+	);
+
+	args.reset();
+
+	// clang and gcc treat static libraries as just an archive of .o files
+	// so there is no real "link" step in this case, the .o files are just "archived" together
+	// for dynamic libraries and executables clang and gcc recommend you call the compiler again and just pass in all the intermediate files
+	if ( context->config.binary_type == BINARY_TYPE_STATIC_LIBRARY ) {
+		args.add( context->linkerPath.data );
+		args.add( "/lib" );
+
+		args.add( tprintf( "/OUT:%s", fullBinaryName ) );
+
+		args.add_range( &intermediateFiles );
+	} else {
+		args.add( context->compilerPath.data );
+
+		if ( context->config.binary_type == BINARY_TYPE_DYNAMIC_LIBRARY ) {
+			args.add( "-shared" );
+		}
+
+		if ( !context->config.remove_symbols ) {
+			args.add( "-g" );
+		}
+
+		args.add( "-o" );
+		args.add( fullBinaryName );
+
+		args.add_range( &intermediateFiles );
+
+		For ( u32, libPathIndex, 0, context->config.additional_lib_paths.size() ) {
+			args.add( tprintf( "-L%s", context->config.additional_lib_paths[libPathIndex].c_str() ) );
+		}
+
+		For ( u32, libIndex, 0, context->config.additional_libs.size() ) {
+			args.add( tprintf( "-l%s", context->config.additional_libs[libIndex].c_str() ) );
+		}
+	}
+
+	s32 exitCode = RunProc( &args, NULL, procFlags );
+
+	return exitCode == 0;
+}
+
+// only call this after compilation has finished successfully
+// parse the dependency file that we generated for every dependency thats in there
+// add those to a list - we need to put those in the .build_info file
+static void Clang_GetIncludeDependenciesFromSourceFileBuild( compilerBackend_t* compilerBackend, std::vector<std::string>& outIncludeDependencies ) {
+	clangState_t* clangState = cast( clangState_t*, compilerBackend->data );
+
+	outIncludeDependencies = clangState->includeDependencies;
 }
 
 compilerBackend_t g_clangBackend = {

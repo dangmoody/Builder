@@ -446,7 +446,7 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 		numCompiledFiles += 1;
 
 		if ( context->flags & BUILD_CONTEXT_FLAG_GENERATE_INCLUDE_DEPENDENCIES ) {
-			context->compilerBackend->GetIncludeDependenciesFromSourceFileBuild( context->includeDependencies[sourceFileIndex] );
+			context->compilerBackend->GetIncludeDependenciesFromSourceFileBuild( context->compilerBackend, context->includeDependencies[sourceFileIndex] );
 
 			// TODO(DM): 29/07/2025: do we want to log this in verbose mode? will the user get anything out of that?
 			/*printf( "    include_dependencies = {\n" );
@@ -1060,7 +1060,7 @@ int main( int argc, char** argv ) {
 #endif
 	};
 
-	defer( context.compilerBackend->Shutdown() );
+	defer( context.compilerBackend->Shutdown( context.compilerBackend ) );
 
 	// parse command line args
 	const char* inputConfigName = NULL;
@@ -1297,8 +1297,8 @@ int main( int argc, char** argv ) {
 
 		buildInfoData.userConfigDLLFilename = BuildConfig_GetFullBinaryName( &userConfigBuildContext.config );
 
-		userConfigBuildContext.compilerBackend->Init();
-		defer( userConfigBuildContext.compilerBackend->Shutdown() );
+		userConfigBuildContext.compilerBackend->Init( userConfigBuildContext.compilerBackend );
+		defer( userConfigBuildContext.compilerBackend->Shutdown( userConfigBuildContext.compilerBackend ) );
 
 		userConfigBuildResult = BuildBinary( &userConfigBuildContext );
 
@@ -1543,7 +1543,7 @@ int main( int argc, char** argv ) {
 		{
 			float64 compilerBackInitStart = time_ms();
 
-			if ( !context.compilerBackend->Init() ) {
+			if ( !context.compilerBackend->Init( context.compilerBackend ) ) {
 				QUIT_ERROR();
 			}
 

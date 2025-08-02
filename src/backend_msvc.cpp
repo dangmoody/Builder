@@ -80,9 +80,7 @@ struct msvcState_t {
 	std::vector<std::string>	includeDependencies;
 };
 
-static msvcState_t* g_msvcState = NULL;
-
-static bool8 MSVC_Init() {
+static bool8 MSVC_Init( compilerBackend_t* backend ) {
 	auto ParseTagString = []( const char* fileBuffer, const char* tag ) -> std::string {
 		const char* lineStart = strstr( fileBuffer, tag );
 		assert( lineStart );
@@ -127,8 +125,10 @@ static bool8 MSVC_Init() {
 		return paths;
 	};
 
-	g_msvcState = cast( msvcState_t*, mem_alloc( sizeof( msvcState_t ) ) );
-	new( g_msvcState ) msvcState_t;
+	msvcState_t* msvcState = cast( msvcState_t*, mem_alloc( sizeof( msvcState_t ) ) );
+	new( msvcState ) msvcState_t;
+
+	backend->data = msvcState;
 
 	std::string msvcRootFolder;
 	String clPath;
@@ -234,8 +234,8 @@ static bool8 MSVC_Init() {
 	const char* outputBuffer = string_builder_to_string( &vcvarsOutput );
 
 	{
-		g_msvcState->windowsIncludes = ParseTagArray( outputBuffer, "INCLUDE=" );
-		g_msvcState->windowsLibPaths = ParseTagArray( outputBuffer, "LIB=" );
+		msvcState->windowsIncludes = ParseTagArray( outputBuffer, "INCLUDE=" );
+		msvcState->windowsLibPaths = ParseTagArray( outputBuffer, "LIB=" );
 
 		std::string windowsSDKVersion = ParseTagString( outputBuffer, "WindowsSDKLibVersion=" );
 		windowsSDKVersion.pop_back();		// remove trailing slash
@@ -245,7 +245,7 @@ static bool8 MSVC_Init() {
 
 		// add windows sdk lib folders that we need too
 		std::string windowsSDKLibFolder = windowsSDKRootFolder + PATH_SEPARATOR + "Lib" + PATH_SEPARATOR + windowsSDKVersion + PATH_SEPARATOR + "um" + PATH_SEPARATOR + "x64";
-		g_msvcState->windowsLibPaths.push_back( windowsSDKLibFolder );
+		msvcState->windowsLibPaths.push_back( windowsSDKLibFolder );
 
 		// set PATH environment variable
 		SetEnvironmentVariable( "PATH", clPath.data );
@@ -253,20 +253,20 @@ static bool8 MSVC_Init() {
 		// set include environment variable
 		StringBuilder msvcIncludes = {};
 		string_builder_reset( &msvcIncludes );
-		For ( u64, includeIndex, 0, g_msvcState->windowsIncludes.size() - 1 ) {
-			string_builder_appendf( &msvcIncludes, "%s;", g_msvcState->windowsIncludes[includeIndex].c_str() );
+		For ( u64, includeIndex, 0, msvcState->windowsIncludes.size() - 1 ) {
+			string_builder_appendf( &msvcIncludes, "%s;", msvcState->windowsIncludes[includeIndex].c_str() );
 		}
-		string_builder_appendf( &msvcIncludes, "%s", g_msvcState->windowsIncludes[g_msvcState->windowsIncludes.size() - 1].c_str() );
+		string_builder_appendf( &msvcIncludes, "%s", msvcState->windowsIncludes[msvcState->windowsIncludes.size() - 1].c_str() );
 		const char* includeEnvVar = string_builder_to_string( &msvcIncludes );
 		SetEnvironmentVariable( "INCLUDE", includeEnvVar );	// TODO(DM): 25/07/2025: do we want an os level wrapper for this?
 
 		// set lib path environment variable
 		StringBuilder msvcLibs = {};
 		string_builder_reset( &msvcLibs );
-		For ( u64, libPathIndex, 0, g_msvcState->windowsLibPaths.size() - 1 ) {
-			string_builder_appendf( &msvcLibs, "%s;", g_msvcState->windowsLibPaths[libPathIndex].c_str() );
+		For ( u64, libPathIndex, 0, msvcState->windowsLibPaths.size() - 1 ) {
+			string_builder_appendf( &msvcLibs, "%s;", msvcState->windowsLibPaths[libPathIndex].c_str() );
 		}
-		string_builder_appendf( &msvcLibs, "%s", g_msvcState->windowsLibPaths[g_msvcState->windowsLibPaths.size() - 1].c_str() );
+		string_builder_appendf( &msvcLibs, "%s", msvcState->windowsLibPaths[msvcState->windowsLibPaths.size() - 1].c_str() );
 		const char* libsEnvVar = string_builder_to_string( &msvcLibs );
 		SetEnvironmentVariable( "LIB", libsEnvVar );	// TODO(DM): 25/07/2025: do we want an os level wrapper for this?
 	}
@@ -279,9 +279,9 @@ static bool8 MSVC_Init() {
 	return exitCode == 0;
 }
 
-static void MSVC_Shutdown() {
-	mem_free( g_msvcState );
-	g_msvcState = NULL;
+static void MSVC_Shutdown( compilerBackend_t* backend ) {
+	mem_free( backend->data );
+	backend->data = NULL;
 }
 
 static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* sourceFile ) {
@@ -297,9 +297,12 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 
 	context->config.additional_includes.push_back( "." );
 
-	g_msvcState->includeDependencies.clear();
+	msvcState_t* msvcState = cast( msvcState_t*, context->compilerBackend->data );
 
-	g_msvcState->args.reserve(
+	msvcState->includeDependencies.clear();
+
+	Array<const char*>& args = msvcState->args;
+	args.reserve(
 		1 +	// cl
 		1 +	// /c
 		1 +	// /std=
@@ -318,41 +321,41 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 		context->config.ignore_warnings.size()
 	);
 
-	g_msvcState->args.reset();
+	args.reset();
 
-	g_msvcState->args.add( context->compilerPath.data );
+	args.add( context->compilerPath.data );
 
-	g_msvcState->args.add( "/c" );
+	args.add( "/c" );
 
 	if ( context->config.language_version != LANGUAGE_VERSION_UNSET ) {
-		g_msvcState->args.add( LanguageVersionToCompilerArg( context->config.language_version ) );
+		args.add( LanguageVersionToCompilerArg( context->config.language_version ) );
 	}
 
 	if ( !context->config.remove_symbols ) {
-		g_msvcState->args.add( "/DEBUG" );
+		args.add( "/DEBUG" );
 	}
 
-	g_msvcState->args.add( OptimizationLevelToCompilerArg( context->config.optimization_level ) );
+	args.add( OptimizationLevelToCompilerArg( context->config.optimization_level ) );
 
-	g_msvcState->args.add( tprintf( "/Fo%s", intermediateFilename ) );
+	args.add( tprintf( "/Fo%s", intermediateFilename ) );
 
 	if ( context->flags & BUILD_CONTEXT_FLAG_GENERATE_INCLUDE_DEPENDENCIES ) {
-		g_msvcState->args.add( "/showIncludes" );
+		args.add( "/showIncludes" );
 	}
 
-	g_msvcState->args.add( sourceFile );
+	args.add( sourceFile );
 
 	For ( u32, defineIndex, 0, context->config.defines.size() ) {
-		g_msvcState->args.add( tprintf( "/D%s", context->config.defines[defineIndex].c_str() ) );
+		args.add( tprintf( "/D%s", context->config.defines[defineIndex].c_str() ) );
 	}
 
 	For ( u32, includeIndex, 0, context->config.additional_includes.size() ) {
-		g_msvcState->args.add( tprintf( "/I%s", context->config.additional_includes[includeIndex].c_str() ) );
+		args.add( tprintf( "/I%s", context->config.additional_includes[includeIndex].c_str() ) );
 	}
 
 	// must come before ignored warnings
 	if ( context->config.warnings_as_errors ) {
-		g_msvcState->args.add( "/WX" );
+		args.add( "/WX" );
 	}
 
 	// warning levels
@@ -400,17 +403,17 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 				return false;
 			}
 
-			g_msvcState->args.add( warningLevel.c_str() );
+			args.add( warningLevel.c_str() );
 		}
 	}
 
 	For ( u64, ignoreWarningIndex, 0, context->config.ignore_warnings.size() ) {
-		g_msvcState->args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
+		args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
 	}
 
 	if ( procFlags & PROC_FLAG_SHOW_ARGS ) {
-		For ( u64, argIndex, 0, g_msvcState->args.count ) {
-			printf( "%s ", g_msvcState->args[argIndex] );
+		For ( u64, argIndex, 0, args.count ) {
+			printf( "%s ", msvcState->args[argIndex] );
 		}
 		printf( "\n" );
 	}
@@ -423,7 +426,7 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 	defer( string_builder_destroy( &processStdout ) );
 	{
 		u32 processFlags = PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR;
-		Process* process = process_create( &g_msvcState->args, NULL, processFlags );
+		Process* process = process_create( &args, NULL, processFlags );
 
 		string_builder_reset( &processStdout );
 
@@ -479,7 +482,7 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 					bufferLine.erase( 0, 1 );
 				}
 
-				g_msvcState->includeDependencies.push_back( bufferLine );
+				msvcState->includeDependencies.push_back( bufferLine );
 			} else {
 				printf( "%s\n", bufferLine.c_str() );
 			}
@@ -500,7 +503,9 @@ static bool8 MSVC_LinkIntermediateFiles( buildContext_t* context, const Array<co
 
 	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
 
-	g_msvcState->args.reserve(
+	msvcState_t* msvcState = cast( msvcState_t*, context->compilerBackend->data );
+	Array<const char*>& args = msvcState->args;
+	args.reserve(
 		1 +	// link
 		1 +	// /lib or /shared
 		1 +	// /DEBUG
@@ -510,49 +515,51 @@ static bool8 MSVC_LinkIntermediateFiles( buildContext_t* context, const Array<co
 		context->config.additional_libs.size()
 	);
 
-	g_msvcState->args.reset();
+	args.reset();
 
 	const char* compilerPathOnly = path_remove_file_from_path( context->compilerPath.data );
 	if ( compilerPathOnly ) {
-		g_msvcState->args.add( tprintf( "%s%c%s", compilerPathOnly, PATH_SEPARATOR, context->linkerPath.data ) );
+		args.add( tprintf( "%s%c%s", compilerPathOnly, PATH_SEPARATOR, context->linkerPath.data ) );
 	} else {
-		g_msvcState->args.add( g_msvcBackend.linkerName );
+		args.add( g_msvcBackend.linkerName );
 	}
 
 	if ( context->config.binary_type == BINARY_TYPE_STATIC_LIBRARY ) {
-		g_msvcState->args.add( "/lib" );
+		args.add( "/lib" );
 	} else if ( context->config.binary_type == BINARY_TYPE_DYNAMIC_LIBRARY ) {
-		g_msvcState->args.add( "/shared" );
+		args.add( "/shared" );
 	}
 
 	if ( !context->config.remove_symbols ) {
-		g_msvcState->args.add( "/DEBUG" );
+		args.add( "/DEBUG" );
 	}
 
-	g_msvcState->args.add( tprintf( "/OUT:%s", fullBinaryName ) );
+	args.add( tprintf( "/OUT:%s", fullBinaryName ) );
 
-	g_msvcState->args.add_range( &intermediateFiles );
+	args.add_range( &intermediateFiles );
 
 	For ( u32, libPathIndex, 0, context->config.additional_lib_paths.size() ) {
-		g_msvcState->args.add( tprintf( "/LIBPATH:\"%s\"", context->config.additional_lib_paths[libPathIndex].c_str() ) );
+		args.add( tprintf( "/LIBPATH:\"%s\"", context->config.additional_lib_paths[libPathIndex].c_str() ) );
 	}
 
 	For ( u32, libIndex, 0, context->config.additional_libs.size() ) {
-		g_msvcState->args.add( context->config.additional_libs[libIndex].c_str() );
+		args.add( context->config.additional_libs[libIndex].c_str() );
 	}
 
-	s32 exitCode = RunProc( &g_msvcState->args, NULL, procFlags );
+	s32 exitCode = RunProc( &args, NULL, procFlags );
 
 	return exitCode == 0;
 }
 
-static void MSVC_GetIncludeDependenciesFromSourceFileBuild( std::vector<std::string>& outIncludeDependencies ) {
-	outIncludeDependencies = g_msvcState->includeDependencies;
+static void MSVC_GetIncludeDependenciesFromSourceFileBuild( compilerBackend_t* backend, std::vector<std::string>& outIncludeDependencies ) {
+	msvcState_t* msvcState = cast( msvcState_t*, backend->data );
+
+	outIncludeDependencies = msvcState->includeDependencies;
 }
 
 compilerBackend_t g_msvcBackend = {
 	.linkerName									= "link",
-	.data										= &g_msvcState,
+	.data										= NULL,
 	.Init										= MSVC_Init,
 	.Shutdown									= MSVC_Shutdown,
 	.CompileSourceFile							= MSVC_CompileSourceFile,

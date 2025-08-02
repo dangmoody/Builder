@@ -42,6 +42,8 @@ SOFTWARE.
 #include <vector>
 //#include <string>
 
+#define USE_BUILD_INFO_FILES 0
+
 // cmd line args
 #define ARG_HELP_SHORT					"-h"
 #define ARG_HELP_LONG					"--help"
@@ -77,14 +79,6 @@ typedef DWORD errorCode_t;
 struct buildContext_t;
 
 struct Hashmap;
-struct buildInfoData_t;
-
-enum buildContextFlagBits_t {
-	BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS				= bit( 0 ),
-	BUILD_CONTEXT_FLAG_SHOW_STDOUT						= bit( 1 ),
-	BUILD_CONTEXT_FLAG_GENERATE_INCLUDE_DEPENDENCIES	= bit( 2 ),
-};
-typedef u32 buildContextFlags_t;
 
 enum procFlagBits_t {
 	PROC_FLAG_SHOW_ARGS		= bit( 0 ),
@@ -93,42 +87,31 @@ enum procFlagBits_t {
 typedef u32 procFlags_t;
 
 struct compilerBackend_t {
-	const char*	compilerVersion;
-	const char*	linkerName;
+	const char*	compilerPath;
+	String		linkerPath;
 	void*		data;
 
 	bool8		( *Init )( compilerBackend_t* backend );
 	void		( *Shutdown )( compilerBackend_t* backend );
-	bool8		( *CompileSourceFile )( buildContext_t* context, const char* sourceFile );
-	bool8		( *LinkIntermediateFiles )( buildContext_t* context, const Array<const char*>& intermediateFiles );
+	bool8		( *CompileSourceFile )( compilerBackend_t* backend, const char* sourceFile, BuildConfig* config );
+	bool8		( *LinkIntermediateFiles )( compilerBackend_t* backend, const Array<const char*>& intermediateFiles, BuildConfig* config );
 	void		( *GetIncludeDependenciesFromSourceFileBuild )( compilerBackend_t* backend, std::vector<std::string>& includeDependencies );
 };
 
-extern compilerBackend_t	g_clangBackend;
-extern compilerBackend_t	g_gccBackend;
-extern compilerBackend_t	g_msvcBackend;
+void			CreateCompilerBackend_Clang( compilerBackend_t* outBackend );
+void			CreateCompilerBackend_MSVC( compilerBackend_t* outBackend );
+void			CreateCompilerBackend_GCC( compilerBackend_t* outBackend );
 
 struct buildContext_t {
-	compilerBackend_t*						compilerBackend;
-
-	BuildConfig								config;
-
 	Hashmap*								configIndices;
-
 	std::vector<std::vector<std::string>>	includeDependencies;	// [sourceFileIndex][dependencyIndex]
-
-	// TODO(DM): 10/08/2024: does this want to be inside BuilderOptions?
-	// it would give users more control over their build
-	buildContextFlags_t						flags;
-
-	String									compilerPath;
-	String									linkerPath;
 
 	const char*								inputFile;
 	String									inputFilePath;
-
 	String									dotBuilderFolder;
+#if USE_BUILD_INFO_FILES
 	String									buildInfoFilename;
+#endif
 
 	bool8									verbose;
 };
@@ -143,9 +126,6 @@ bool8		FileIsSourceFile( const char* filename );
 bool8		FileIsHeaderFile( const char* filename );
 
 const char*	BuildConfig_GetFullBinaryName( const BuildConfig* config );
-//void		BuildConfig_AddDefaults( BuildConfig* outConfig );
-
-procFlags_t	GetProcFlagsFromBuildContextFlags( buildContextFlags_t flags );
 
 s32			RunProc( Array<const char*>* args, Array<const char*>* environmentVariables, const procFlags_t procFlags = 0 );
 

@@ -170,6 +170,7 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 	}
 
 	// get latest version of msvc
+	String compilerVersion;
 	{
 		const char* msvcVersionSearchFolder = tprintf( "%s\\VC\\Tools\\MSVC\\*", msvcRootFolder.c_str() );
 
@@ -196,13 +197,13 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 			if ( mask > highestVersion ) {
 				highestVersion = mask;
 
-				g_msvcBackend.compilerVersion = tprintf( "%s", fileInfo.filename );
+				compilerVersion = fileInfo.filename;
 			}
 		} while ( file_find_next( &file, &fileInfo ) );
 	}
 
 	// now use MSVC root folder and the correct MSVC version to get the path to cl.exe
-	string_printf( &clPath, "%s\\VC\\Tools\\MSVC\\%s\\bin\\Hostx64\\x64", msvcRootFolder.c_str(), g_msvcBackend.compilerVersion );
+	string_printf( &clPath, "%s\\VC\\Tools\\MSVC\\%s\\bin\\Hostx64\\x64", msvcRootFolder.c_str(), compilerVersion.data );
 
 	// now microsoft need us to tell their own compiler that runs on their own platform (specifically FOR their own platform) where their own include and library folders are, sigh...
 	// the way we do that is by manually calling a vcvars*.bat script and using the information it gives us back to know which include and lib folders to look for
@@ -284,20 +285,19 @@ static void MSVC_Shutdown( compilerBackend_t* backend ) {
 	backend->data = NULL;
 }
 
-static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* sourceFile ) {
-	assert( context );
+static bool8 MSVC_CompileSourceFile( compilerBackend_t* backend, const char* sourceFile, BuildConfig* config ) {
+	assert( backend );
 	assert( sourceFile );
+	assert( config );
 
 	const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
 
-	const char* intermediatePath = tprintf( "%s%c%s", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
+	const char* intermediatePath = tprintf( "%s%c%s", config->binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
 	const char* intermediateFilename = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
 
-	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
+	config->additional_includes.push_back( "." );
 
-	context->config.additional_includes.push_back( "." );
-
-	msvcState_t* msvcState = cast( msvcState_t*, context->compilerBackend->data );
+	msvcState_t* msvcState = cast( msvcState_t*, backend->data );
 
 	msvcState->includeDependencies.clear();
 
@@ -312,49 +312,47 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 		1 + // /showIncludes
 		3 +	// -MD -MF <filename>
 		1 +	// source file
-		context->config.defines.size() +
-		context->config.additional_includes.size() +	// /I <include>
-		context->config.additional_lib_paths.size() +
-		context->config.additional_libs.size() +
+		config->defines.size() +
+		config->additional_includes.size() +	// /I <include>
+		config->additional_lib_paths.size() +
+		config->additional_libs.size() +
 		1 +	// /WX
-		context->config.warning_levels.size() +
-		context->config.ignore_warnings.size()
+		config->warning_levels.size() +
+		config->ignore_warnings.size()
 	);
 
 	args.reset();
 
-	args.add( context->compilerPath.data );
+	args.add( backend->compilerPath );
 
 	args.add( "/c" );
 
-	if ( context->config.language_version != LANGUAGE_VERSION_UNSET ) {
-		args.add( LanguageVersionToCompilerArg( context->config.language_version ) );
+	if ( config->language_version != LANGUAGE_VERSION_UNSET ) {
+		args.add( LanguageVersionToCompilerArg( config->language_version ) );
 	}
 
-	if ( !context->config.remove_symbols ) {
+	if ( !config->remove_symbols ) {
 		args.add( "/DEBUG" );
 	}
 
-	args.add( OptimizationLevelToCompilerArg( context->config.optimization_level ) );
+	args.add( OptimizationLevelToCompilerArg( config->optimization_level ) );
 
 	args.add( tprintf( "/Fo%s", intermediateFilename ) );
 
-	if ( context->flags & BUILD_CONTEXT_FLAG_GENERATE_INCLUDE_DEPENDENCIES ) {
-		args.add( "/showIncludes" );
-	}
+	args.add( "/showIncludes" );
 
 	args.add( sourceFile );
 
-	For ( u32, defineIndex, 0, context->config.defines.size() ) {
-		args.add( tprintf( "/D%s", context->config.defines[defineIndex].c_str() ) );
+	For ( u32, defineIndex, 0, config->defines.size() ) {
+		args.add( tprintf( "/D%s", config->defines[defineIndex].c_str() ) );
 	}
 
-	For ( u32, includeIndex, 0, context->config.additional_includes.size() ) {
-		args.add( tprintf( "/I%s", context->config.additional_includes[includeIndex].c_str() ) );
+	For ( u32, includeIndex, 0, config->additional_includes.size() ) {
+		args.add( tprintf( "/I%s", config->additional_includes[includeIndex].c_str() ) );
 	}
 
 	// must come before ignored warnings
-	if ( context->config.warnings_as_errors ) {
+	if ( config->warnings_as_errors ) {
 		args.add( "/WX" );
 	}
 
@@ -371,7 +369,7 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 		};
 
 		// MSVC only allows one warning level to be set
-		if ( context->config.warning_levels.size() > 1 ) {
+		if ( config->warning_levels.size() > 1 ) {
 			StringBuilder builder;
 			string_builder_reset( &builder );
 
@@ -386,8 +384,8 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 			return false;
 		}
 
-		For ( u64, warningLevelIndex, 0, context->config.warning_levels.size() ) {
-			const std::string& warningLevel = context->config.warning_levels[warningLevelIndex];
+		For ( u64, warningLevelIndex, 0, config->warning_levels.size() ) {
+			const std::string& warningLevel = config->warning_levels[warningLevelIndex];
 
 			bool8 found = false;
 
@@ -407,11 +405,11 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 		}
 	}
 
-	For ( u64, ignoreWarningIndex, 0, context->config.ignore_warnings.size() ) {
-		args.add( context->config.ignore_warnings[ignoreWarningIndex].c_str() );
+	For ( u64, ignoreWarningIndex, 0, config->ignore_warnings.size() ) {
+		args.add( config->ignore_warnings[ignoreWarningIndex].c_str() );
 	}
 
-	if ( procFlags & PROC_FLAG_SHOW_ARGS ) {
+	{
 		For ( u64, argIndex, 0, args.count ) {
 			printf( "%s ", msvcState->args[argIndex] );
 		}
@@ -430,7 +428,7 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 
 		string_builder_reset( &processStdout );
 
-		if ( procFlags & PROC_FLAG_SHOW_STDOUT ) {
+		{
 			char buffer[1024] = { 0 };
 			u64 bytesRead = U64_MAX;
 
@@ -447,12 +445,12 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 		process = NULL;
 	}
 
-	const char* buffer = string_builder_to_string( &processStdout );
+	// now parse the stdout
+	// all include dependencies are on their own line
+	// the line always starts with a specific prefix
+	{
+		const char* buffer = string_builder_to_string( &processStdout );
 
-	if ( context->flags & BUILD_CONTEXT_FLAG_GENERATE_INCLUDE_DEPENDENCIES ) {
-		// now parse the stdout
-		// all include dependencies are on their own line
-		// the line always starts with a specific prefix
 		const char* includeDependencyPrefix = "Note: including file: ";
 		const u64 includeDependencyPrefixLength = strlen( includeDependencyPrefix );
 
@@ -489,21 +487,18 @@ static bool8 MSVC_CompileSourceFile( buildContext_t* context, const char* source
 
 			lineStart = lineEnd + 1;
 		}
-	} else {
-		printf( "%s", buffer );
 	}
 
 	return exitCode == 0;
 }
 
-static bool8 MSVC_LinkIntermediateFiles( buildContext_t* context, const Array<const char*>& intermediateFiles ) {
-	assert( context );
+static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t* backend, const Array<const char*>& intermediateFiles, BuildConfig* config ) {
+	assert( backend );
+	assert( config );
 
-	const char* fullBinaryName = BuildConfig_GetFullBinaryName( &context->config );
+	const char* fullBinaryName = BuildConfig_GetFullBinaryName( config );
 
-	procFlags_t procFlags = GetProcFlagsFromBuildContextFlags( context->flags );
-
-	msvcState_t* msvcState = cast( msvcState_t*, context->compilerBackend->data );
+	msvcState_t* msvcState = cast( msvcState_t*, backend->data );
 	Array<const char*>& args = msvcState->args;
 	args.reserve(
 		1 +	// link
@@ -511,26 +506,26 @@ static bool8 MSVC_LinkIntermediateFiles( buildContext_t* context, const Array<co
 		1 +	// /DEBUG
 		1 +	// /OUT:<name>
 		intermediateFiles.count +
-		context->config.additional_lib_paths.size() +
-		context->config.additional_libs.size()
+		config->additional_lib_paths.size() +
+		config->additional_libs.size()
 	);
 
 	args.reset();
 
-	const char* compilerPathOnly = path_remove_file_from_path( context->compilerPath.data );
+	const char* compilerPathOnly = path_remove_file_from_path( backend->compilerPath );
 	if ( compilerPathOnly ) {
-		args.add( tprintf( "%s%c%s", compilerPathOnly, PATH_SEPARATOR, context->linkerPath.data ) );
+		args.add( tprintf( "%s%c%s", compilerPathOnly, PATH_SEPARATOR, backend->linkerPath.data ) );
 	} else {
-		args.add( g_msvcBackend.linkerName );
+		args.add( backend->linkerPath.data );
 	}
 
-	if ( context->config.binary_type == BINARY_TYPE_STATIC_LIBRARY ) {
+	if ( config->binary_type == BINARY_TYPE_STATIC_LIBRARY ) {
 		args.add( "/lib" );
-	} else if ( context->config.binary_type == BINARY_TYPE_DYNAMIC_LIBRARY ) {
+	} else if ( config->binary_type == BINARY_TYPE_DYNAMIC_LIBRARY ) {
 		args.add( "/shared" );
 	}
 
-	if ( !context->config.remove_symbols ) {
+	if ( !config->remove_symbols ) {
 		args.add( "/DEBUG" );
 	}
 
@@ -538,15 +533,15 @@ static bool8 MSVC_LinkIntermediateFiles( buildContext_t* context, const Array<co
 
 	args.add_range( &intermediateFiles );
 
-	For ( u32, libPathIndex, 0, context->config.additional_lib_paths.size() ) {
-		args.add( tprintf( "/LIBPATH:\"%s\"", context->config.additional_lib_paths[libPathIndex].c_str() ) );
+	For ( u32, libPathIndex, 0, config->additional_lib_paths.size() ) {
+		args.add( tprintf( "/LIBPATH:\"%s\"", config->additional_lib_paths[libPathIndex].c_str() ) );
 	}
 
-	For ( u32, libIndex, 0, context->config.additional_libs.size() ) {
-		args.add( context->config.additional_libs[libIndex].c_str() );
+	For ( u32, libIndex, 0, config->additional_libs.size() ) {
+		args.add( config->additional_libs[libIndex].c_str() );
 	}
 
-	s32 exitCode = RunProc( &args, NULL, procFlags );
+	s32 exitCode = RunProc( &args, NULL, PROC_FLAG_SHOW_ARGS | PROC_FLAG_SHOW_STDOUT );
 
 	return exitCode == 0;
 }
@@ -557,14 +552,16 @@ static void MSVC_GetIncludeDependenciesFromSourceFileBuild( compilerBackend_t* b
 	outIncludeDependencies = msvcState->includeDependencies;
 }
 
-compilerBackend_t g_msvcBackend = {
-	.linkerName									= "link",
-	.data										= NULL,
-	.Init										= MSVC_Init,
-	.Shutdown									= MSVC_Shutdown,
-	.CompileSourceFile							= MSVC_CompileSourceFile,
-	.LinkIntermediateFiles						= MSVC_LinkIntermediateFiles,
-	.GetIncludeDependenciesFromSourceFileBuild	= MSVC_GetIncludeDependenciesFromSourceFileBuild,
-};
+void CreateCompilerBackend_MSVC( compilerBackend_t* outBackend ) {
+	*outBackend = compilerBackend_t {
+		.linkerPath									= "link",
+		.data										= NULL,
+		.Init										= MSVC_Init,
+		.Shutdown									= MSVC_Shutdown,
+		.CompileSourceFile							= MSVC_CompileSourceFile,
+		.LinkIntermediateFiles						= MSVC_LinkIntermediateFiles,
+		.GetIncludeDependenciesFromSourceFileBuild	= MSVC_GetIncludeDependenciesFromSourceFileBuild,
+	};
+}
 
 #endif // _WIN32

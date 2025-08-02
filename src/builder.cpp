@@ -79,6 +79,7 @@ enum buildResult_t {
 	debug_break(); \
 	return 1
 
+#if USE_BUILD_INFO_FILES
 struct builderVersion_t {
 	s32	major;
 	s32	minor;
@@ -92,6 +93,7 @@ struct buildInfoData_t {
 	std::string											userConfigDLLFilename;
 	std::vector<std::vector<std::vector<std::string>>>	includeDependencies;	// [configIndex][sourceFileIndex][dependencyIndex]
 };
+#endif // USE_BUILD_INFO_FILES
 
 errorCode_t GetLastErrorCode() {
 #ifdef _WIN64
@@ -277,7 +279,7 @@ s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVariables,
 			, ( *args )[0]
 		);
 
-		// DM: 20/07/2025: I'm not 100% sure that its totally OK to have -1 as our own special exit code to mean that the process couldnt be found
+		// DM: 20/07/2025: I'm not 100% sure that its totally ok to have -1 as our own special exit code to mean that the process couldnt be found
 		// its totally possible for other processes to return -1 and have it mean something else
 		// the interpretation of the exit code of the processes we run is the responsibility of the calling code and were probably making a lot of assumptions there
 		return -1;
@@ -319,39 +321,34 @@ static s32 ShowUsage( const s32 exitCode ) {
 		"\n"
 		"    <file> (required):\n"
 		"        The file you want to build with.  There can only be one.\n"
+#if USE_BUILD_INFO_FILES
 		"        This file can either be a C++ code file (which is recommended) or a \"" BUILD_INFO_FILE_EXTENSION "\" file.\n"
+#else
+		"        This file must be a C++ code file.\n"
+#endif
 		"\n"
 		"    " ARG_CONFIG "<config> (optional):\n"
-		"        Sets the config to whatever you specify.  The config value can be whatever you want.\n"
-		"        By settings this here you can then use it inside \"" SET_BUILDER_OPTIONS_FUNC_NAME "\".\n"
+		"        Sets the config to whatever you specify.\n"
+		"        This must match the name of a config that you set inside \"" SET_BUILDER_OPTIONS_FUNC_NAME "\".\n"
 		"\n"
 		"    " ARG_NUKE " <folder> (optional):\n"
-		"        Deletes every file in <folder> and all subfolders.\n"
+		"        Deletes every file in <folder> and all subfolders, but does not delete <folder>.\n"
 		"\n"
 	);
 
 	return exitCode;
 }
 
-procFlags_t GetProcFlagsFromBuildContextFlags( const buildContextFlags_t buildContextFlags ) {
-	procFlags_t result = 0;
-
-	if ( buildContextFlags & BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS ) result |= PROC_FLAG_SHOW_ARGS;
-	if ( buildContextFlags & BUILD_CONTEXT_FLAG_SHOW_STDOUT )        result |= PROC_FLAG_SHOW_STDOUT;
-
-	return result;
-}
-
-static buildResult_t BuildBinary( buildContext_t* context ) {
+static buildResult_t BuildBinary( BuildConfig* config, compilerBackend_t* compilerBackend, std::vector<std::vector<std::string>>& outIncludeDependencies ) {
 	// create binary folder
-	if ( !folder_create_if_it_doesnt_exist( context->config.binary_folder.c_str() ) ) {
+	if ( !folder_create_if_it_doesnt_exist( config->binary_folder.c_str() ) ) {
 		errorCode_t errorCode = GetLastErrorCode();
-		fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".  Error code: " ERROR_CODE_FORMAT "\n", SET_BUILDER_OPTIONS_FUNC_NAME, context->config.binary_folder.c_str(), errorCode );
+		fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".  Error code: " ERROR_CODE_FORMAT "\n", SET_BUILDER_OPTIONS_FUNC_NAME, config->binary_folder.c_str(), errorCode );
 		return BUILD_RESULT_FAILED;
 	}
 
 	// create intermediate folder
-	const char* intermediatePath = tprintf( "%s%c%s", context->config.binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
+	const char* intermediatePath = tprintf( "%s%c%s", config->binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
 	if ( !folder_create_if_it_doesnt_exist( intermediatePath ) ) {
 		errorCode_t errorCode = GetLastErrorCode();
 		fatal_error( "Failed to create intermediate binary folder.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
@@ -361,15 +358,15 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 	s32 exitCode = 0;
 
 	Array<const char*> intermediateFiles;
-	intermediateFiles.reserve( context->config.source_files.size() );
+	intermediateFiles.reserve( config->source_files.size() );
 
 	u32 numCompiledFiles = 0;
 
 	// compile
 	// make .o files for all compilation units
 	// TODO(DM): 14/06/2025: embarrassingly parallel
-	For ( u64, sourceFileIndex, 0, context->config.source_files.size() ) {
-		const char* sourceFile = context->config.source_files[sourceFileIndex].c_str();
+	For ( u64, sourceFileIndex, 0, config->source_files.size() ) {
+		const char* sourceFile = config->source_files[sourceFileIndex].c_str();
 		const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
 
 		const char* intermediateFilename = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
@@ -393,8 +390,9 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 			// if the source file wasnt newer than the .o file then do the same timestamp check for all the files that this source file depends on
 			// just because the source file didnt change doesnt mean we dont want to recompile it
 			// what if one of the header files it relies on changed? we still want to recompile that file!
-			if ( !context->config.name.empty() ) {
-				std::vector<std::string>& includeDependencies = context->includeDependencies[sourceFileIndex];
+			//if ( !config->name.empty() )
+			{
+				std::vector<std::string>& includeDependencies = outIncludeDependencies[sourceFileIndex];
 
 				For ( u64, dependencyIndex, 0, includeDependencies.size() ) {
 					u64 dependencyLastWriteTime = GetLastFileWriteTime( includeDependencies[dependencyIndex].c_str() );
@@ -413,30 +411,45 @@ static buildResult_t BuildBinary( buildContext_t* context ) {
 			}
 		}
 
-		if ( !context->compilerBackend->CompileSourceFile( context, sourceFile ) ) {
+		if ( !compilerBackend->CompileSourceFile( compilerBackend, sourceFile, config ) ) {
 			error( "Compile failed.\n" );
 			return BUILD_RESULT_FAILED;
 		}
 
 		numCompiledFiles += 1;
 
-		if ( context->flags & BUILD_CONTEXT_FLAG_GENERATE_INCLUDE_DEPENDENCIES ) {
-			context->compilerBackend->GetIncludeDependenciesFromSourceFileBuild( context->compilerBackend, context->includeDependencies[sourceFileIndex] );
+		compilerBackend->GetIncludeDependenciesFromSourceFileBuild( compilerBackend, outIncludeDependencies[sourceFileIndex] );
+	}
 
-			// TODO(DM): 29/07/2025: do we want to log this in verbose mode? will the user get anything out of that?
-			/*printf( "    include_dependencies = {\n" );
-			For ( u64, i, 0, context->includeDependencies.size() ) {
-				printf( "        %s,\n", context->includeDependencies[i].c_str() );
+	// if the binary doesnt exist or if any of the intermediate files are newer than the binary then we want to link
+	// otherwise we can skip it
+	{
+		bool8 doLinking = false;
+
+		const char* fullBinaryName = BuildConfig_GetFullBinaryName( config );
+
+		FileInfo binaryFileInfo = {};
+		File binaryFile = file_find_first( fullBinaryName, &binaryFileInfo );
+
+		if ( binaryFile.ptr == INVALID_HANDLE_VALUE ) {
+			doLinking = true;
+		} else {
+			For ( u64, intermediateFileIndex, 0, intermediateFiles.count ) {
+				u64 intermediateFileLastWriteTime = GetLastFileWriteTime( intermediateFiles[intermediateFileIndex] );
+
+				if ( intermediateFileLastWriteTime > binaryFileInfo.last_write_time ) {
+					doLinking = true;
+					break;
+				}
 			}
-			printf( "    }\n" );*/
+		}
+
+		if ( !doLinking ) {
+			return BUILD_RESULT_SKIPPED;
 		}
 	}
 
-	if ( numCompiledFiles == 0 ) {
-		return BUILD_RESULT_SKIPPED;
-	}
-
-	if ( !context->compilerBackend->LinkIntermediateFiles( context, intermediateFiles ) ) {
+	if ( !compilerBackend->LinkIntermediateFiles( compilerBackend, intermediateFiles, config ) ) {
 		error( "Linking failed.\n" );
 		return BUILD_RESULT_FAILED;
 	}
@@ -681,6 +694,7 @@ static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContex
 	return sourceFiles;
 }
 
+#if USE_BUILD_INFO_FILES
 struct byteBuffer_t {
 	Array<u8>	data;
 	u64			readOffset;
@@ -995,8 +1009,9 @@ static bool8 BuildInfo_Write( const buildContext_t* context, const buildInfoData
 
 	return true;
 }
+#endif // USE_BUILD_INFO_FILES
 
-static void AddBuildConfigAndDependenciesUnique( buildContext_t* context, BuildConfig* config, std::vector<BuildConfig>& outConfigs ) {
+static void AddBuildConfigAndDependenciesUnique( buildContext_t* context, const BuildConfig* config, std::vector<BuildConfig>& outConfigs ) {
 	u64 configNameHash = hash_string( config->name.c_str(), 0 );
 
 	if ( hashmap_get_value( context->configIndices, configNameHash ) == HASHMAP_INVALID_VALUE ) {
@@ -1027,7 +1042,6 @@ int main( int argc, char** argv ) {
 
 	buildContext_t context = {
 		.configIndices	= hashmap_create( 1 ),	// TODO(DM): 30/03/2025: whats a reasonable default here?
-		.flags			= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS | BUILD_CONTEXT_FLAG_SHOW_STDOUT | BUILD_CONTEXT_FLAG_GENERATE_INCLUDE_DEPENDENCIES,
 #ifdef _DEBUG
 		.verbose		= true,
 #else
@@ -1035,11 +1049,13 @@ int main( int argc, char** argv ) {
 #endif
 	};
 
-	defer( context.compilerBackend->Shutdown( context.compilerBackend ) );
+	context.includeDependencies.resize( 1 );
 
 	// parse command line args
 	const char* inputConfigName = NULL;
 	u64 inputConfigNameHash = 0;
+
+	bool8 isVisualStudioBuild = false;
 
 	For ( s32, argIndex, 1, argc ) {
 		const char* arg = argv[argIndex];
@@ -1109,12 +1125,19 @@ int main( int argc, char** argv ) {
 			return 0;
 		}
 
+		if ( string_equals( arg, "--visual-studio-build" ) ) {
+			isVisualStudioBuild = true;
+
+			continue;
+		}
+
 		// unrecognised arg, show error
 		error( "Unrecognised argument \"%s\".\n", arg );
 		QUIT_ERROR();
 	}
 
-	// validate input file
+	// we need a source file specified at the command line
+	// otherwise we dont know what to build!
 	if ( context.inputFile == NULL ) {
 		error(
 			"You haven't told me what source files I need to build.  I need one.\n"
@@ -1139,11 +1162,22 @@ int main( int argc, char** argv ) {
 		context.inputFilePath = inputFilePath;
 
 		string_printf( &context.dotBuilderFolder, "%s%c.builder", context.inputFilePath.data, PATH_SEPARATOR );
+#if USE_BUILD_INFO_FILES
 		string_printf( &context.buildInfoFilename, "%s%c%s%s", context.dotBuilderFolder.data, PATH_SEPARATOR, inputFileNoPathOrExtension, BUILD_INFO_FILE_EXTENSION );
+#endif
 	}
 
 	const char* defaultBinaryName = path_remove_file_extension( path_remove_path_from_file( context.inputFile ) );
 
+	// init default compiler backend (the version of clang that builder came with)
+	compilerBackend_t compilerBackend;
+	CreateCompilerBackend_Clang( &compilerBackend );
+	compilerBackend.compilerPath = DEFAULT_COMPILER_PATH;
+
+	compilerBackend.Init( &compilerBackend );
+	defer( compilerBackend.Shutdown( &compilerBackend ) );
+
+#if USE_BUILD_INFO_FILES
 	// read .build_info file
 	buildInfoData_t buildInfoData = {};
 	bool8 readBuildInfo = false;
@@ -1158,73 +1192,69 @@ int main( int argc, char** argv ) {
 	}
 
 	buildInfoData.userConfigSourceFilename = context.inputFile;
+#endif // USE_BUILD_INFO_FILES
 
 	// user config build step
 	// see if they have set_builder_options() overridden
 	// if they do, then build a DLL first and call that function to set some more build options
 	buildResult_t userConfigBuildResult = BUILD_RESULT_SKIPPED;
+	const char* userConfigFullBinaryName = NULL;
 	{
 		float64 userConfigBuildTimeStart = time_ms();
 
-		buildContext_t userConfigBuildContext = {
-			.compilerBackend		= &g_clangBackend,
-			.config = {
-				.source_files = {
-					buildInfoData.userConfigSourceFilename,
-				},
-				.defines = {
-					"_CRT_SECURE_NO_WARNINGS",
-					"BUILDER_DOING_USER_CONFIG_BUILD",
-#if defined( _DEBUG )
-					"_DEBUG",
+		BuildConfig userConfigBuildConfig = {
+			.source_files = {
+#if USE_BUILD_INFO_FILES
+				buildInfoData.userConfigSourceFilename,
 #else
-					"NDEBUG",
-#endif
-				},
-				.additional_includes = {
-					path_app_path()	// add the folder that builder lives in as an additional include path otherwise people have no real way of being able to include it
-				},
-				.additional_libs = {
-#if defined( _WIN64 )
-					"user32.lib",
-					// MSVCRT is needed for ABI compatibility between builder and the user config DLL on windows
-#if defined( _DEBUG )
-					"msvcrtd.lib",
-#else
-					"msvcrt.lib",
-#endif
-#endif
-				},
-				.ignore_warnings = {
-					"-Wno-missing-prototypes",	// otherwise the user has to forward declare functions like set_builder_options and thats annoying
-					"-Wno-reorder-init-list",	// allow users to initialize struct members in whatever order they want
-				},
-				.binary_name		= path_remove_path_from_file( path_remove_file_extension( buildInfoData.userConfigSourceFilename.c_str() ) ),
-				.binary_folder		= context.dotBuilderFolder.data,
-				.binary_type		= BINARY_TYPE_DYNAMIC_LIBRARY,
-				// this is needed because this tells the compiler what to set _ITERATOR_DEBUG_LEVEL to
-				// ABI compatibility will be broken if this is not the same between all binaries
-#if defined( _DEBUG )
-				.optimization_level	= OPTIMIZATION_LEVEL_O0,
-#else
-				.optimization_level	= OPTIMIZATION_LEVEL_O3,
+				context.inputFile,
 #endif
 			},
-			.flags					= BUILD_CONTEXT_FLAG_SHOW_STDOUT,
-			.compilerPath			= DEFAULT_COMPILER_PATH,
-			.dotBuilderFolder		= context.dotBuilderFolder,
+			.defines = {
+				"_CRT_SECURE_NO_WARNINGS",
+				"BUILDER_DOING_USER_CONFIG_BUILD",
+#if defined( _DEBUG )
+				"_DEBUG",
+#else
+				"NDEBUG",
+#endif
+			},
+			.additional_includes = {
+				path_app_path()	// add the folder that builder lives in as an additional include path otherwise people have no real way of being able to include it
+			},
+			.additional_libs = {
+#if defined( _WIN64 )
+				"user32.lib",
+				// MSVCRT is needed for ABI compatibility between builder and the user config DLL on windows
+#if defined( _DEBUG )
+				"msvcrtd.lib",
+#else
+				"msvcrt.lib",
+#endif
+#endif
+			},
+			.ignore_warnings = {
+				"-Wno-missing-prototypes",	// otherwise the user has to forward declare functions like set_builder_options and thats annoying
+				"-Wno-reorder-init-list",	// allow users to initialize struct members in whatever order they want
+			},
+			.binary_name = defaultBinaryName,//path_remove_path_from_file( path_remove_file_extension( buildInfoData.userConfigSourceFilename.c_str() ) ),
+			.binary_folder = context.dotBuilderFolder.data,
+			.binary_type = BINARY_TYPE_DYNAMIC_LIBRARY,
+			// this is needed because this tells the compiler what to set _ITERATOR_DEBUG_LEVEL to
+			// ABI compatibility will be broken if this is not the same between all binaries
+#if defined( _DEBUG )
+			.optimization_level = OPTIMIZATION_LEVEL_O0,
+#else
+			.optimization_level = OPTIMIZATION_LEVEL_O3,
+#endif
 		};
 
-		if ( context.verbose ) {
-			userConfigBuildContext.flags |= BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS;
-		}
+		userConfigFullBinaryName = BuildConfig_GetFullBinaryName( &userConfigBuildConfig );
+#if USE_BUILD_INFO_FILES
+		buildInfoData.userConfigDLLFilename = userConfigFullBinaryName;
+#endif
 
-		buildInfoData.userConfigDLLFilename = BuildConfig_GetFullBinaryName( &userConfigBuildContext.config );
-
-		userConfigBuildContext.compilerBackend->Init( userConfigBuildContext.compilerBackend );
-		defer( userConfigBuildContext.compilerBackend->Shutdown( userConfigBuildContext.compilerBackend ) );
-
-		userConfigBuildResult = BuildBinary( &userConfigBuildContext );
+		userConfigBuildResult = BuildBinary( &userConfigBuildConfig, &compilerBackend, context.includeDependencies );
 
 		switch ( userConfigBuildResult ) {
 			case BUILD_RESULT_SUCCESS:
@@ -1247,7 +1277,11 @@ int main( int argc, char** argv ) {
 
 	BuilderOptions options = {};
 
-	Library library = library = library_load( buildInfoData.userConfigDLLFilename.c_str() );
+#if USE_BUILD_INFO_FILES
+	Library library = library_load( buildInfoData.userConfigDLLFilename.c_str() );
+#else
+	Library library = library_load( userConfigFullBinaryName );
+#endif
 	defer( library_unload( &library ) );
 
 	typedef void ( *setBuilderOptionsFunc_t )( BuilderOptions* options );
@@ -1269,12 +1303,14 @@ int main( int argc, char** argv ) {
 
 			setBuilderOptionsTimeMS = setBuilderOptionsTimeEnd - setBuilderOptionsTimeStart;
 
+#if USE_BUILD_INFO_FILES
 			buildInfoData.configs = options.configs;
 
 			buildInfoData.includeDependencies.resize( buildInfoData.configs.size() );
+#endif // USE_BUILD_INFO_FILES
 
 			// if the user wants to generate a visual studio solution then do that now
-			if ( options.generate_solution ) {
+			if ( options.generate_solution && !isVisualStudioBuild ) {
 				// you either want to generate a visual studio solution or build this config, but not both
 				if ( inputConfigName ) {
 					error(
@@ -1321,175 +1357,183 @@ int main( int argc, char** argv ) {
 	}
 
 	// if no configs were manually added then assume we are just doing a default build with no user-specified options
+#if USE_BUILD_INFO_FILES
 	if ( buildInfoData.configs.size() == 0 ) {
+#else
+	if ( options.configs.size() == 0 ) {
+#endif
 		BuildConfig config = {
 			.source_files = { context.inputFile },
 			.binary_name = defaultBinaryName
 		};
 
+#if USE_BUILD_INFO_FILES
 		buildInfoData.configs.push_back( config );
+#else
+		options.configs.push_back( config );
+#endif
 	}
 
 	float64 compilerBackendInitTimeMS = -1.0f;
+	String compilerVersion;
 	{
 		// if the user never specified a compiler, we can build with the default compiler that we just built the user config DLL with
 		if ( options.compiler_path.empty() ) {
 			options.compiler_path = DEFAULT_COMPILER_PATH;
 		} else {
 			options.compiler_path = path_remove_file_extension( options.compiler_path.c_str() );
-		}
 
-		context.compilerPath = options.compiler_path.c_str();
+			compilerBackend.compilerPath = options.compiler_path.c_str();
 
-		if ( string_ends_with( options.compiler_path.c_str(), "clang" ) ) {
-			context.compilerBackend = &g_clangBackend;
+			if ( string_ends_with( options.compiler_path.c_str(), "clang" ) ) {
+				// get the users clang compiler version
+				// use that to check against the version set in set_builder_options() later (if they set a version there)
+				{
+					const char* clangVersionPrefix = "clang version ";
 
-			// get the users clang compiler version
-			// use that to check against the version set in set_builder_options() later (if they set a version there)
-			{
-				const char* clangVersionPrefix = "clang version ";
+					Array<const char*> args;
+					args.add( options.compiler_path.c_str() );
+					args.add( "-v" );
 
-				Array<const char*> args;
-				args.add( options.compiler_path.c_str() );
-				args.add( "-v" );
+					Process* process = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
 
-				Process* process = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
+					assert( process );
 
-				assert( process );
+					StringBuilder clangOutput = {};
+					string_builder_reset( &clangOutput );
+					defer( string_builder_destroy( &clangOutput ) );
 
-				StringBuilder clangOutput = {};
-				string_builder_reset( &clangOutput );
-				defer( string_builder_destroy( &clangOutput ) );
+					char buffer[1024] = {};
+					u64 bytesRead = U64_MAX;
+					while ( ( bytesRead = process_read_stdout( process, buffer, 1024 ) ) ) {
+						buffer[bytesRead] = 0;
 
-				char buffer[1024] = {};
-				u64 bytesRead = U64_MAX;
-				while ( ( bytesRead = process_read_stdout( process, buffer, 1024 ) ) ) {
-					buffer[bytesRead] = 0;
+						string_builder_appendf( &clangOutput, "%s", buffer );
+					}
 
-					string_builder_appendf( &clangOutput, "%s", buffer );
+					const char* clangOutputString = string_builder_to_string( &clangOutput );
+
+					const char* versionStart = strstr( clangOutputString, clangVersionPrefix );
+
+					if ( versionStart ) {
+						versionStart += strlen( clangVersionPrefix );
+
+						const char* versionEnd = NULL;
+						if ( !versionEnd ) versionEnd = strchr( versionStart, '\r' );
+						if ( !versionEnd ) versionEnd = strchr( versionStart, '\n' );
+						assert( versionEnd );
+
+						u64 versionLength = cast( u64, versionEnd ) - cast( u64, versionStart );
+
+						// DM!!! 30/07/2025: this never gets freed!
+						char* clangVersionString = cast( char*, mem_alloc( ( versionLength + 1 ) * sizeof( char ) ) );
+						strncpy( clangVersionString, versionStart, versionLength );
+						clangVersionString[versionLength] = 0;
+
+						compilerVersion = clangVersionString;
+					}
+
+					process_join( process );
+
+					process_destroy( process );
+					process = NULL;
 				}
-
-				const char* clangOutputString = string_builder_to_string( &clangOutput );
-
-				const char* versionStart = strstr( clangOutputString, clangVersionPrefix );
-
-				if ( versionStart ) {
-					versionStart += strlen( clangVersionPrefix );
-
-					const char* versionEnd = NULL;
-					if ( !versionEnd ) versionEnd = strchr( versionStart, '\r' );
-					if ( !versionEnd ) versionEnd = strchr( versionStart, '\n' );
-					assert( versionEnd );
-
-					u64 versionLength = cast( u64, versionEnd ) - cast( u64, versionStart );
-
-					// DM!!! 30/07/2025: this never gets freed!
-					char* clangVersionString = cast( char*, mem_alloc( ( versionLength + 1 ) * sizeof( char ) ) );
-					strncpy( clangVersionString, versionStart, versionLength );
-					clangVersionString[versionLength] = 0;
-
-					context.compilerBackend->compilerVersion = clangVersionString;
-				}
-
-				process_join( process );
-
-				process_destroy( process );
-				process = NULL;
-			}
-		} else if ( string_ends_with( options.compiler_path.c_str(), "cl" ) ) {
+			} else if ( string_ends_with( options.compiler_path.c_str(), "cl" ) ) {
 #if _WIN32
-			context.compilerBackend = &g_msvcBackend;
+				CreateCompilerBackend_MSVC( &compilerBackend );
 #else
-			error(
-				"It appears you want to compile with MSVC on a non-Windows platform.\n"
-				"MSVC only supports Windows.  Sorry.\n"
-			);
+				error(
+					"It appears you want to compile with MSVC on a non-Windows platform.\n"
+					"MSVC only supports Windows.  Sorry.\n"
+				);
 
-			QUIT_ERROR();
+				QUIT_ERROR();
 #endif
-		} else if ( string_ends_with( options.compiler_path.c_str(), "gcc" ) ) {
-			context.compilerBackend = &g_gccBackend;
+			} else if ( string_ends_with( options.compiler_path.c_str(), "gcc" ) ) {
+				CreateCompilerBackend_GCC( &compilerBackend );
 
-			// get the users gcc compiler version
-			// use that to check against the version set in set_builder_options() later (if they set a version there)
-			{
-				const char* gccVersionPrefix = "gcc version ";
+				// get the users gcc compiler version
+				// use that to check against the version set in set_builder_options() later (if they set a version there)
+				{
+					const char* gccVersionPrefix = "gcc version ";
 
-				Array<const char*> args;
-				args.add( options.compiler_path.c_str() );
-				args.add( "-v" );
+					Array<const char*> args;
+					args.add( options.compiler_path.c_str() );
+					args.add( "-v" );
 
-				Process* process = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
+					Process* process = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
 
-				assert( process );
+					assert( process );
 
-				StringBuilder gccOutput = {};
-				string_builder_reset( &gccOutput );
-				defer( string_builder_destroy( &gccOutput ) );
+					StringBuilder gccOutput = {};
+					string_builder_reset( &gccOutput );
+					defer( string_builder_destroy( &gccOutput ) );
 
-				char buffer[1024] = {};
-				u64 bytesRead = U64_MAX;
-				while ( ( bytesRead = process_read_stdout( process, buffer, 1024 ) ) ) {
-					buffer[bytesRead] = 0;
+					char buffer[1024] = {};
+					u64 bytesRead = U64_MAX;
+					while ( ( bytesRead = process_read_stdout( process, buffer, 1024 ) ) ) {
+						buffer[bytesRead] = 0;
 
-					string_builder_appendf( &gccOutput, "%s", buffer );
+						string_builder_appendf( &gccOutput, "%s", buffer );
+					}
+
+					const char* gccOutputString = string_builder_to_string( &gccOutput );
+
+					const char* versionStart = strstr( gccOutputString, gccVersionPrefix );
+
+					if ( versionStart ) {
+						versionStart += strlen( gccVersionPrefix );
+
+						const char* versionEnd = strchr( versionStart, ' ' );
+						assert( versionEnd );
+
+						u64 versionLength = cast( u64, versionEnd ) - cast( u64, versionStart );
+
+						// DM!!! 30/07/2025: this never gets freed!
+						char* gccVersionString = cast( char*, mem_alloc( ( versionLength + 1 ) * sizeof( char ) ) );
+						strncpy( gccVersionString, versionStart, versionLength );
+						gccVersionString[versionLength] = 0;
+
+						compilerVersion = gccVersionString;
+					}
+
+					process_join( process );
+
+					process_destroy( process );
+					process = NULL;
 				}
+			} else {
+				error(
+					"The compiler you want to build with (\"%s\") is not one that I recognise.\n"
+					"Currently, I only support: Clang, GCC, and MSVC.\n"
+					"So you must use one of those compilers and make the compiler path end with the name of the executable.  Sorry!\n"
+					, options.compiler_path.c_str()
+				);
 
-				const char* gccOutputString = string_builder_to_string( &gccOutput );
-
-				const char* versionStart = strstr( gccOutputString, gccVersionPrefix );
-
-				if ( versionStart ) {
-					versionStart += strlen( gccVersionPrefix );
-
-					const char* versionEnd = strchr( versionStart, ' ' );
-					assert( versionEnd );
-
-					u64 versionLength = cast( u64, versionEnd ) - cast( u64, versionStart );
-
-					// DM!!! 30/07/2025: this never gets freed!
-					char* gccVersionString = cast( char*, mem_alloc( ( versionLength + 1 ) * sizeof( char ) ) );
-					strncpy( gccVersionString, versionStart, versionLength );
-					gccVersionString[versionLength] = 0;
-
-					context.compilerBackend->compilerVersion = gccVersionString;
-				}
-
-				process_join( process );
-
-				process_destroy( process );
-				process = NULL;
-			}
-		} else {
-			error(
-				"The compiler you want to build with (\"%s\") is not one that I recognise.\n"
-				"Currently, I only support: Clang, GCC, and MSVC.\n"
-				"So you must use one of those compilers and make the compiler path end with the name of the executable.  Sorry!\n"
-				, options.compiler_path.c_str()
-			);
-
-			QUIT_ERROR();
-		}
-
-		{
-			float64 compilerBackInitStart = time_ms();
-
-			if ( !context.compilerBackend->Init( context.compilerBackend ) ) {
 				QUIT_ERROR();
 			}
 
-			float64 compilerBackInitEnd = time_ms();
+			// init new compiler backend
+			{
+				float64 compilerBackInitStart = time_ms();
 
-			compilerBackendInitTimeMS = compilerBackInitEnd - compilerBackInitStart;
+				if ( !compilerBackend.Init( &compilerBackend ) ) {
+					QUIT_ERROR();
+				}
+
+				float64 compilerBackInitEnd = time_ms();
+
+				compilerBackendInitTimeMS = compilerBackInitEnd - compilerBackInitStart;
+			}
 		}
 
 		// check that version of the compiler the user actually has is what they expect it to be
 		if ( !options.compiler_version.empty() ) {
-			if ( !string_equals( context.compilerBackend->compilerVersion, options.compiler_version.c_str() ) ) {
+			if ( !string_equals( compilerVersion.data, options.compiler_version.c_str() ) ) {
 				warning(
 					"I see that you are using compiler version \"%s\", but compiler version \"%s\" was set in %s.\n"
 					"I will still compile, but things may not work as you expect.\n\n"
-					, context.compilerBackend->compilerVersion, options.compiler_version.c_str(), SET_BUILDER_OPTIONS_FUNC_NAME
+					, compilerVersion.data, options.compiler_version.c_str(), SET_BUILDER_OPTIONS_FUNC_NAME
 				);
 			}
 		}
@@ -1498,19 +1542,22 @@ int main( int argc, char** argv ) {
 		const char* compilerPathOnly = path_remove_file_from_path( options.compiler_path.c_str() );
 
 		if ( compilerPathOnly ) {
-			// in this case assume theres no path specified because the user wants to use a compiler thats in their PATH
-			// so we can automatically find the linker program too because of that
-			context.linkerPath = context.compilerBackend->linkerName;
-		} else {
-			string_printf( &context.linkerPath, "%s%c%s", compilerPathOnly, PATH_SEPARATOR, context.compilerBackend->linkerName );
+			String linkerPathOld = compilerBackend.linkerPath;
+			string_printf( &compilerBackend.linkerPath, "%s%c%s", compilerPathOnly, PATH_SEPARATOR, linkerPathOld.data );
 		}
 	}
 
 	std::vector<BuildConfig> configsToBuild;
 
+#if USE_BUILD_INFO_FILES
+	const std::vector<BuildConfig>& dan_configs = buildInfoData.configs;
+#else
+	const std::vector<BuildConfig>& dan_configs = options.configs;
+#endif
+
 	// if only one config was added (either by user or as a default build) then we know we just want that one, no config command line arg is needed
-	if ( buildInfoData.configs.size() == 1 ) {
-		AddBuildConfigAndDependenciesUnique( &context, &buildInfoData.configs[0], configsToBuild );
+	if ( dan_configs.size() == 1 ) {
+		AddBuildConfigAndDependenciesUnique( &context, &dan_configs[0], configsToBuild );
 	} else {
 		if ( !inputConfigName ) {
 			error(
@@ -1522,8 +1569,8 @@ int main( int argc, char** argv ) {
 			QUIT_ERROR();
 		}
 
-		For ( size_t, configIndex, 0, buildInfoData.configs.size() ) {
-			if ( buildInfoData.configs[configIndex].name.empty() ) {
+		For ( size_t, configIndex, 0, dan_configs.size() ) {
+			if ( dan_configs[configIndex].name.empty() ) {
 				error(
 					"You have multiple BuildConfigs in your build source file, but some of them have empty names.\n"
 					"When you have multiple BuildConfigs, ALL of them MUST have non-empty names.\n"
@@ -1535,20 +1582,22 @@ int main( int argc, char** argv ) {
 		}
 	}
 
-	buildInfoData.includeDependencies.resize( buildInfoData.configs.size() );
+#if USE_BUILD_INFO_FILES
+	buildInfoData.includeDependencies.resize( dan_configs.size() );
+#endif
 
 	// none of the configs can have the same name
 	// TODO(DM): 14/11/2024: can we do better than o(n^2) here?
-	For ( size_t, configIndexA, 0, buildInfoData.configs.size() ) {
-		const char* configNameA = buildInfoData.configs[configIndexA].name.c_str();
+	For ( size_t, configIndexA, 0, dan_configs.size() ) {
+		const char* configNameA = dan_configs[configIndexA].name.c_str();
 		u64 configNameHashA = hash_string( configNameA, 0 );
 
-		For ( size_t, configIndexB, 0, buildInfoData.configs.size() ) {
+		For ( size_t, configIndexB, 0, dan_configs.size() ) {
 			if ( configIndexA == configIndexB ) {
 				continue;
 			}
 
-			const char* configNameB = buildInfoData.configs[configIndexB].name.c_str();
+			const char* configNameB = dan_configs[configIndexB].name.c_str();
 			u64 configNameHashB = hash_string( configNameB, 0 );
 
 			if ( configNameHashA == configNameHashB ) {
@@ -1562,8 +1611,8 @@ int main( int argc, char** argv ) {
 	// find the one the user asked for in the command line
 	if ( inputConfigName ) {
 		bool8 foundConfig = false;
-		For ( u64, configIndex, 0, buildInfoData.configs.size() ) {
-			BuildConfig* config = &buildInfoData.configs[configIndex];
+		For ( u64, configIndex, 0, dan_configs.size() ) {
+			const BuildConfig* config = &dan_configs[configIndex];
 
 			if ( hash_string( config->name.c_str(), 0 ) == inputConfigNameHash ) {
 				AddBuildConfigAndDependenciesUnique( &context, config, configsToBuild );
@@ -1609,48 +1658,46 @@ int main( int argc, char** argv ) {
 			config->binary_folder = context.inputFilePath.data;
 		}
 
-		context.config = *config;
-
 		{
-			printf( "Building \"%s\"", context.config.binary_name.c_str() );
+			printf( "Building \"%s\"", config->binary_name.c_str() );
 
-			if ( !context.config.name.empty() ) {
-				printf( ", config \"%s\"", context.config.name.c_str() );
+			if ( !config->name.empty() ) {
+				printf( ", config \"%s\"", config->name.c_str() );
 			}
 
 			printf( "\n" );
 		}
 
 		// make all non-absolute additional include paths relative to the build source file
-		For ( u64, includeIndex, 0, context.config.additional_includes.size() ) {
-			const char* additionalInclude = context.config.additional_includes[includeIndex].c_str();
+		For ( u64, includeIndex, 0, config->additional_includes.size() ) {
+			const char* additionalInclude = config->additional_includes[includeIndex].c_str();
 
 			if ( path_is_absolute( additionalInclude ) ) {
-				context.config.additional_includes[includeIndex] = additionalInclude;
+				config->additional_includes[includeIndex] = additionalInclude;
 			} else {
-				context.config.additional_includes[includeIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalInclude );
+				config->additional_includes[includeIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalInclude );
 			}
 		}
 
 		// make all non-absolute additional library paths relative to the build source file
-		For ( u64, libPathIndex, 0, context.config.additional_lib_paths.size() ) {
-			const char* additionalLibPath = context.config.additional_lib_paths[libPathIndex].c_str();
+		For ( u64, libPathIndex, 0, config->additional_lib_paths.size() ) {
+			const char* additionalLibPath = config->additional_lib_paths[libPathIndex].c_str();
 
 			if ( path_is_absolute( additionalLibPath ) ) {
-				context.config.additional_lib_paths[libPathIndex] = additionalLibPath;
+				config->additional_lib_paths[libPathIndex] = additionalLibPath;
 			} else {
-				context.config.additional_lib_paths[libPathIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalLibPath );
+				config->additional_lib_paths[libPathIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalLibPath );
 			}
 		}
 
 		// get all the "compilation units" that we are actually going to give to the compiler
 		// if no source files were added in set_builder_options() then assume they only want to build the same file as the one specified via the command line
-		if ( context.config.source_files.size() == 0 ) {
-			context.config.source_files.push_back( context.inputFile );
+		if ( config->source_files.size() == 0 ) {
+			config->source_files.push_back( context.inputFile );
 		} else {
 			// otherwise the user told us to build other source files, so go find and build those instead
 			// keep this as a std::vector because this gets fed back into BuilderOptions::source_files
-			std::vector<std::string> finalSourceFilesToBuild = BuildConfig_GetAllSourceFiles( &context, &context.config );
+			std::vector<std::string> finalSourceFilesToBuild = BuildConfig_GetAllSourceFiles( &context, config );
 
 			// at this point its totally acceptable for finalSourceFilesToBuild to be empty
 			// this is because the compiler should be the one that tells the user they specified no valid source files to build with
@@ -1662,27 +1709,35 @@ int main( int argc, char** argv ) {
 				finalSourceFilesToBuild[sourceFileIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, finalSourceFilesToBuild[sourceFileIndex].c_str() );
 			}
 
-			context.config.source_files = finalSourceFilesToBuild;
+			config->source_files = finalSourceFilesToBuild;
 		}
 
-		buildInfoData.includeDependencies[actualConfigIndex].resize( context.config.source_files.size() );
+#if USE_BUILD_INFO_FILES
+		buildInfoData.includeDependencies[actualConfigIndex].resize( config->source_files.size() );
+#else
+		context.includeDependencies.resize( config->source_files.size() );
+#endif
 
 		// now do the actual build
 		{
 			float64 buildTimeStart = time_ms();
 
+#if USE_BUILD_INFO_FILES
 			context.includeDependencies = buildInfoData.includeDependencies[actualConfigIndex];
+#endif
 
-			buildResult_t buildResult = BuildBinary( &context );
+			buildResult_t buildResult = BuildBinary( config, &compilerBackend, context.includeDependencies );
 
+#if USE_BUILD_INFO_FILES
 			buildInfoData.includeDependencies[actualConfigIndex] = context.includeDependencies;
+#endif
 
 			float64 buildTimeEnd = time_ms();
 
 			switch ( buildResult ) {
 				case BUILD_RESULT_SUCCESS:
 					numSuccessfulBuilds++;
-					printf( "Finished building \"%s\", %f ms\n\n", context.config.binary_name.c_str(), buildTimeEnd - buildTimeStart );
+					printf( "Finished building \"%s\", %f ms\n\n", config->binary_name.c_str(), buildTimeEnd - buildTimeStart );
 					break;
 
 				case BUILD_RESULT_FAILED:
@@ -1710,6 +1765,7 @@ int main( int argc, char** argv ) {
 		postBuildFunc();
 	}
 
+#if USE_BUILD_INFO_FILES
 	// only dont want to write the .build_info if all the builds skipped or if a build failed
 	bool shouldWriteBuildInfo = ( numSuccessfulBuilds > 0 ) && ( numFailedBuilds == 0 );
 
@@ -1724,24 +1780,29 @@ int main( int argc, char** argv ) {
 
 		buildInfoWriteTimeMS = end - start;
 	}
+#endif
 
 	float64 totalTimeEnd = time_ms();
 
 	printf( "Build finished:\n" );
-	printf( "    Compiler init time:  %f ms\n", compilerBackendInitTimeMS );
 	printf( "    User config build:   %f ms%s\n", userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? " (skipped)" : "" );
+	if ( !doubleeq( compilerBackendInitTimeMS, -1.0 ) ) {
+		printf( "    Compiler init time:  %f ms\n", compilerBackendInitTimeMS );
+	}
 	if ( !doubleeq( setBuilderOptionsTimeMS, -1.0 ) ) {
 		printf( "    set_builder_options: %f ms\n", setBuilderOptionsTimeMS );
 	}
-	if ( options.generate_solution ) {
+	if ( options.generate_solution && !isVisualStudioBuild ) {
 		printf( "    Generate solution:   %f ms\n", visualStudioGenerationTimeMS );
 	}
+#if USE_BUILD_INFO_FILES
 	if ( readBuildInfo ) {
 		printf( "    Read .build_info:    %f ms\n", buildInfoReadTimeMS );
 	}
 	if ( shouldWriteBuildInfo ) {
 		printf( "    Write .build_info:   %f ms\n", buildInfoWriteTimeMS );
 	}
+#endif
 	printf( "    Total time:          %f ms\n", totalTimeEnd - totalTimeStart );
 	printf( "\n" );
 

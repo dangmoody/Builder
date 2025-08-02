@@ -4,15 +4,17 @@
 
 #include <builder.h>
 
-#define CLANG	0
-#define MSVC	1
-#define GCC		2
-#define USE_COMPILER CLANG
+#define DEFAULT			0
+#define CLANG			1
+#define MSVC			2
+#define GCC				3
+
+#define USE_COMPILER	MSVC
 
 BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 #if USE_COMPILER == CLANG
 	options->compiler_path = "C:\\Program Files\\LLVM\\bin\\clang.exe";
-	options->compiler_version = "18.1.8";
+	options->compiler_version = "20.1.5";
 #elif USE_COMPILER == MSVC
 	// MSVC compiler path can be absolute
 	//options->compiler_path = "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe";

@@ -323,7 +323,7 @@ static s32 ShowUsage( const s32 exitCode ) {
 	return exitCode;
 }
 
-static buildResult_t BuildBinary( BuildConfig* config, compilerBackend_t* compilerBackend, std::vector<std::vector<std::string>>& outIncludeDependencies ) {
+static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, compilerBackend_t* compilerBackend ) {
 	// create binary folder
 	if ( !folder_create_if_it_doesnt_exist( config->binary_folder.c_str() ) ) {
 		errorCode_t errorCode = GetLastErrorCode();
@@ -339,14 +339,44 @@ static buildResult_t BuildBinary( BuildConfig* config, compilerBackend_t* compil
 		return BUILD_RESULT_FAILED;
 	}
 
-	s32 exitCode = 0;
-
 	Array<const char*> intermediateFiles;
 	intermediateFiles.reserve( config->source_files.size() );
 
-	u32 numCompiledFiles = 0;
+	// TODO(DM): 03/08/2025: this is kinda ugly
+	auto ShouldRebuildSourceFile = [context]( const char* sourceFile, const char* intermediateFilename, u32 sourceFileHashmapIndex ) -> bool8 {
+		// if source file doesnt exist in hashmap then its a new file and we havent built this one before
+		if ( sourceFileHashmapIndex == HASHMAP_INVALID_VALUE ) {
+			return true;
+		}
 
-	// compile
+		FileInfo intermediateFileInfo;
+		File intermediateFile = file_find_first( intermediateFilename, &intermediateFileInfo );
+
+		// if the .o file doesnt exist then assume we havent built this file yet
+		// if the .o file does exist but the source file was written to it more recently then we know we want to rebuild
+		if ( ( intermediateFile.ptr == INVALID_HANDLE_VALUE ) || ( GetLastFileWriteTime( sourceFile ) > intermediateFileInfo.last_write_time ) ) {
+			return true;
+		}
+
+		// if the source file wasnt newer than the .o file then do the same timestamp check for all the files that this source file depends on
+		// just because the source file didnt change doesnt mean we dont want to recompile it
+		// what if one of the header files it relies on changed? we still want to recompile that file!
+		{
+			const std::vector<std::string>& includeDependencies = context->sourceFileIncludeDependencies[sourceFileHashmapIndex].includeDependencies;
+
+			For ( u64, dependencyIndex, 0, includeDependencies.size() ) {
+				u64 dependencyLastWriteTime = GetLastFileWriteTime( includeDependencies[dependencyIndex].c_str() );
+
+				if ( dependencyLastWriteTime > intermediateFileInfo.last_write_time ) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	};
+
+	// compile step
 	// make .o files for all compilation units
 	// TODO(DM): 14/06/2025: embarrassingly parallel
 	For ( u64, sourceFileIndex, 0, config->source_files.size() ) {
@@ -358,40 +388,11 @@ static buildResult_t BuildBinary( BuildConfig* config, compilerBackend_t* compil
 
 		const char* depFilename = tprintf( "%s%c%s.d", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
 
+		u32 sourceFileHashmapIndex = hashmap_get_value( context->sourceFileIndices, hash_string( sourceFile, 0 ) );
+
 		// only rebuild the .o file if the source file (or any of the files that source file depends on) was written to more recently or it doesnt exist
-		{
-			bool8 anyFileIsNewer = false;
-
-			FileInfo intermediateFileInfo;
-			File intermediateFile = file_find_first( intermediateFilename, &intermediateFileInfo );
-
-			// if the .o file doesnt exist then assume we havent built this file yet
-			// if the .o file does exist but the source file was written to it more recently then we know we want to rebuild
-			if ( ( intermediateFile.ptr == INVALID_HANDLE_VALUE ) || ( GetLastFileWriteTime( sourceFile ) > intermediateFileInfo.last_write_time ) ) {
-				anyFileIsNewer = true;
-			}
-
-			// if the source file wasnt newer than the .o file then do the same timestamp check for all the files that this source file depends on
-			// just because the source file didnt change doesnt mean we dont want to recompile it
-			// what if one of the header files it relies on changed? we still want to recompile that file!
-			{
-				std::vector<std::string>& includeDependencies = outIncludeDependencies[sourceFileIndex];
-
-				For ( u64, dependencyIndex, 0, includeDependencies.size() ) {
-					u64 dependencyLastWriteTime = GetLastFileWriteTime( includeDependencies[dependencyIndex].c_str() );
-
-					if ( dependencyLastWriteTime > intermediateFileInfo.last_write_time ) {
-						anyFileIsNewer = true;
-						break;
-					}
-				}
-			}
-
-			// the .o file exists and none of the files it relies on have been changed more recently
-			// no need to rebuild
-			if ( !anyFileIsNewer ) {
-				continue;
-			}
+		if ( !ShouldRebuildSourceFile( sourceFile, intermediateFilename, sourceFileHashmapIndex ) ) {
+			continue;
 		}
 
 		if ( !compilerBackend->CompileSourceFile( compilerBackend, sourceFile, config ) ) {
@@ -399,12 +400,14 @@ static buildResult_t BuildBinary( BuildConfig* config, compilerBackend_t* compil
 			return BUILD_RESULT_FAILED;
 		}
 
-		numCompiledFiles += 1;
+		std::vector<std::string> includeDependencies;
+		compilerBackend->GetIncludeDependenciesFromSourceFileBuild( compilerBackend, includeDependencies );
 
-		compilerBackend->GetIncludeDependenciesFromSourceFileBuild( compilerBackend, outIncludeDependencies[sourceFileIndex] );
+		context->sourceFileIncludeDependencies.push_back( { sourceFile, includeDependencies } );
 	}
 
-	// if the binary doesnt exist or if any of the intermediate files are newer than the binary then we want to link
+	// link step
+	// we only want to link if the binary doesnt exist or if any of the intermediate files are newer than the binary
 	// otherwise we can skip it
 	{
 		bool8 doLinking = false;
@@ -430,11 +433,11 @@ static buildResult_t BuildBinary( BuildConfig* config, compilerBackend_t* compil
 		if ( !doLinking ) {
 			return BUILD_RESULT_SKIPPED;
 		}
-	}
 
-	if ( !compilerBackend->LinkIntermediateFiles( compilerBackend, intermediateFiles, config ) ) {
-		error( "Linking failed.\n" );
-		return BUILD_RESULT_FAILED;
+		if ( !compilerBackend->LinkIntermediateFiles( compilerBackend, intermediateFiles, config ) ) {
+			error( "Linking failed.\n" );
+			return BUILD_RESULT_FAILED;
+		}
 	}
 
 	return BUILD_RESULT_SUCCESS;
@@ -571,8 +574,6 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, const 
 		if ( fileInfo.is_directory ) {
 			GetAllSourceFiles_r( path, fileInFolder, searchFilter, outSourceFiles );
 		} else {
-			debug_break_here_if( string_equals( fileInFolder, "src/core/allocation_context.cpp" ) );
-
 			if ( FileMatchesFilter( fileInFolder, searchFilter ) ) {
 				outSourceFiles.push_back( fileInFolder );
 			}
@@ -620,6 +621,121 @@ static void AddBuildConfigAndDependenciesUnique( buildContext_t* context, const 
 	}
 }
 
+struct byteBuffer_t {
+	Array<u8>	data;
+	u64			readOffset;
+};
+
+static const char* GetIncludeDepsFilename( buildContext_t* context ) {
+	const char* inputFileStripped = path_remove_path_from_file( path_remove_file_extension( context->inputFile ) );
+	const char* includeDepsFilename = tprintf( "%s%c%s.include_dependencies", context->dotBuilderFolder.data, PATH_SEPARATOR, inputFileStripped );
+
+	return includeDepsFilename;
+}
+
+static void ReadIncludeDependenciesFile( buildContext_t* context ) {
+	const char* includeDepsFilename = GetIncludeDepsFilename( context );
+
+	byteBuffer_t byteBuffer = {};
+	byteBuffer.data.allocator = mem_get_current_allocator();
+
+	// there wont be an include dependencies file on the first build or if you nuked the binaries folder (for instance)
+	// so this is allowed to fail
+	if ( !file_read_entire( includeDepsFilename, cast( char**, &byteBuffer.data.data ), &byteBuffer.data.count ) ) {
+		context->sourceFileIndices = hashmap_create( 1, 1.0f );
+		return;
+	}
+
+	auto ByteBuffer_Read_U32 = []( byteBuffer_t* buffer ) -> u32 {
+		u32* result = cast( u32*, &buffer->data[buffer->readOffset] );
+
+		buffer->readOffset += sizeof( u32 );
+
+		return *result;
+	};
+
+	auto ByteBuffer_Read_String = [&ByteBuffer_Read_U32]( byteBuffer_t* buffer ) -> std::string {
+		u32 stringLength = ByteBuffer_Read_U32( buffer );
+
+		std::string result( cast( char*, &buffer->data[buffer->readOffset] ), stringLength );
+
+		buffer->readOffset += stringLength;
+
+		return result;
+	};
+
+	u32 numSourceFiles = ByteBuffer_Read_U32( &byteBuffer );
+
+	context->sourceFileIndices = hashmap_create( numSourceFiles, 1.0f );
+
+	context->sourceFileIncludeDependencies.resize( numSourceFiles );
+
+	For ( u64, sourceFileIndex, 0, context->sourceFileIncludeDependencies.size() ) {
+		includeDependencies_t* sourceFileIncludeDependencies = &context->sourceFileIncludeDependencies[sourceFileIndex];
+
+		std::string sourceFilename = ByteBuffer_Read_String( &byteBuffer );
+		u64 sourceFilenameHash = hash_string( sourceFilename.c_str(), 0 );
+		u32 sourceFileIndexU32 = trunc_cast( u32, sourceFileIndex );
+		hashmap_set_value( context->sourceFileIndices, sourceFilenameHash, sourceFileIndexU32 );
+
+		sourceFileIncludeDependencies->filename = sourceFilename;
+
+		u64 numIncludeDependencies = ByteBuffer_Read_U32( &byteBuffer );
+		sourceFileIncludeDependencies->includeDependencies.resize( numIncludeDependencies );
+
+		For ( u64, dependencyIndex, 0, numIncludeDependencies ) {
+			sourceFileIncludeDependencies->includeDependencies[dependencyIndex] = ByteBuffer_Read_String( &byteBuffer );
+		}
+	}
+}
+
+static bool8 WriteIncludeDependenciesFile( buildContext_t* context ) {
+	const char* includeDepsFilename = GetIncludeDepsFilename( context );
+
+	byteBuffer_t byteBuffer = {};
+
+	auto ByteBuffer_Write_U32 = []( byteBuffer_t* buffer, const u32 x ) {
+		buffer->data.reserve( buffer->data.alloced + sizeof( u32 ) );
+
+		buffer->data.add( ( x ) & 0xFF );
+		buffer->data.add( ( x >> 8 ) & 0xFF );
+		buffer->data.add( ( x >> 16 ) & 0xFF );
+		buffer->data.add( ( x >> 24 ) & 0xFF );
+	};
+
+	auto ByteBuffer_Write_String = [&ByteBuffer_Write_U32]( byteBuffer_t* buffer, const std::string& string ) {
+		u32 stringLength = trunc_cast( u32, string.size() );
+
+		ByteBuffer_Write_U32( buffer, stringLength );
+
+		buffer->data.add_range( cast( const u8*, string.data() ), stringLength );
+	};
+
+	ByteBuffer_Write_U32( &byteBuffer, trunc_cast( u32, context->sourceFileIncludeDependencies.size() ) );
+
+	For ( u64, sourceFileIndex, 0, context->sourceFileIncludeDependencies.size() ) {
+		const includeDependencies_t* sourceFileIncludeDependencies = &context->sourceFileIncludeDependencies[sourceFileIndex];
+
+		ByteBuffer_Write_String( &byteBuffer, context->sourceFileIncludeDependencies[sourceFileIndex].filename );
+
+		ByteBuffer_Write_U32( &byteBuffer, trunc_cast( u32, sourceFileIncludeDependencies->includeDependencies.size() ) );
+
+		For ( u64, dependencyIndex, 0, sourceFileIncludeDependencies->includeDependencies.size() ) {
+			const std::string& dependencyFilename = sourceFileIncludeDependencies->includeDependencies[dependencyIndex];
+
+			ByteBuffer_Write_String( &byteBuffer, dependencyFilename );
+		}
+	}
+
+	if ( !file_write_entire( includeDepsFilename, byteBuffer.data.data, byteBuffer.data.count ) ) {
+		errorCode_t errorCode = GetLastErrorCode();
+		error( "Failed to write file \"%s\".  Error code: " ERROR_CODE_FORMAT ".\n", errorCode );
+		return false;
+	}
+
+	return true;
+}
+
 int main( int argc, char** argv ) {
 	float64 totalTimeStart = time_ms();
 
@@ -642,8 +758,6 @@ int main( int argc, char** argv ) {
 		.verbose		= false,
 #endif
 	};
-
-	context.includeDependencies.resize( 1 );
 
 	// parse command line args
 	const char* inputConfigName = NULL;
@@ -760,6 +874,8 @@ int main( int argc, char** argv ) {
 
 	const char* defaultBinaryName = path_remove_file_extension( path_remove_path_from_file( context.inputFile ) );
 
+	ReadIncludeDependenciesFile( &context );
+
 	// init default compiler backend (the version of clang that builder came with)
 	compilerBackend_t compilerBackend;
 	CreateCompilerBackend_Clang( &compilerBackend );
@@ -821,7 +937,7 @@ int main( int argc, char** argv ) {
 
 		userConfigFullBinaryName = BuildConfig_GetFullBinaryName( &userConfigBuildConfig );
 
-		userConfigBuildResult = BuildBinary( &userConfigBuildConfig, &compilerBackend, context.includeDependencies );
+		userConfigBuildResult = BuildBinary( &context, &userConfigBuildConfig, &compilerBackend );
 
 		switch ( userConfigBuildResult ) {
 			case BUILD_RESULT_SUCCESS:
@@ -1215,7 +1331,7 @@ int main( int argc, char** argv ) {
 		For ( u64, libPathIndex, 0, config->additional_lib_paths.size() ) {
 			const char* additionalLibPath = config->additional_lib_paths[libPathIndex].c_str();
 
-			if ( path_is_absolute( additionalLibPath ) ) {
+			if ( !path_is_absolute( additionalLibPath ) ) {
 				config->additional_lib_paths[libPathIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalLibPath );
 			}
 		}
@@ -1242,13 +1358,13 @@ int main( int argc, char** argv ) {
 			config->source_files = finalSourceFilesToBuild;
 		}
 
-		context.includeDependencies.resize( config->source_files.size() );
+		//context.includeDependencies.resize( config->source_files.size() );
 
 		// now do the actual build
 		{
 			float64 buildTimeStart = time_ms();
 
-			buildResult_t buildResult = BuildBinary( config, &compilerBackend, context.includeDependencies );
+			buildResult_t buildResult = BuildBinary( &context, config, &compilerBackend );
 
 			float64 buildTimeEnd = time_ms();
 
@@ -1283,21 +1399,29 @@ int main( int argc, char** argv ) {
 		postBuildFunc();
 	}
 
+	if ( numSuccessfulBuilds > 0 && numFailedBuilds == 0 ) {
+		if ( !WriteIncludeDependenciesFile( &context ) ) {
+			QUIT_ERROR();
+		}
+	}
+
 	float64 totalTimeEnd = time_ms();
 
-	printf( "Build finished:\n" );
-	printf( "    User config build:   %f ms%s\n", userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? " (skipped)" : "" );
-	if ( !doubleeq( compilerBackendInitTimeMS, -1.0 ) ) {
-		printf( "    Compiler init time:  %f ms\n", compilerBackendInitTimeMS );
+	{
+		printf( "Build finished:\n" );
+		printf( "    User config build:   %f ms%s\n", userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? " (skipped)" : "" );
+		if ( !doubleeq( compilerBackendInitTimeMS, -1.0 ) ) {
+			printf( "    Compiler init time:  %f ms\n", compilerBackendInitTimeMS );
+		}
+		if ( !doubleeq( setBuilderOptionsTimeMS, -1.0 ) ) {
+			printf( "    set_builder_options: %f ms\n", setBuilderOptionsTimeMS );
+		}
+		if ( options.generate_solution && !isVisualStudioBuild ) {
+			printf( "    Generate solution:   %f ms\n", visualStudioGenerationTimeMS );
+		}
+		printf( "    Total time:          %f ms\n", totalTimeEnd - totalTimeStart );
+		printf( "\n" );
 	}
-	if ( !doubleeq( setBuilderOptionsTimeMS, -1.0 ) ) {
-		printf( "    set_builder_options: %f ms\n", setBuilderOptionsTimeMS );
-	}
-	if ( options.generate_solution && !isVisualStudioBuild ) {
-		printf( "    Generate solution:   %f ms\n", visualStudioGenerationTimeMS );
-	}
-	printf( "    Total time:          %f ms\n", totalTimeEnd - totalTimeStart );
-	printf( "\n" );
 
 	return 0;
 }

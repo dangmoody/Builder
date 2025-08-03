@@ -101,15 +101,21 @@ void			CreateCompilerBackend_Clang( compilerBackend_t* outBackend );
 void			CreateCompilerBackend_MSVC( compilerBackend_t* outBackend );
 void			CreateCompilerBackend_GCC( compilerBackend_t* outBackend );
 
+struct includeDependencies_t {
+	std::string					filename;
+	std::vector<std::string>	includeDependencies;
+};
+
 struct buildContext_t {
-	Hashmap*								configIndices;
-	std::vector<std::vector<std::string>>	includeDependencies;	// [sourceFileIndex][dependencyIndex]
+	Hashmap*							configIndices;
+	Hashmap*							sourceFileIndices;
+	std::vector<includeDependencies_t>	sourceFileIncludeDependencies;
 
-	const char*								inputFile;
-	String									inputFilePath;
-	String									dotBuilderFolder;
+	const char*							inputFile;
+	String								inputFilePath;
+	String								dotBuilderFolder;
 
-	bool8									verbose;
+	bool8								verbose;
 };
 
 errorCode_t	GetLastErrorCode();

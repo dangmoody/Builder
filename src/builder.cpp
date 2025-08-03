@@ -497,18 +497,24 @@ void NukeFolder_r( const char* folder, const bool8 deleteRoot, const bool8 verbo
 	}
 }
 
-// TODO(DM): redo this so that we get the next forward and backslash, then check which one comes first, and return that
-// if neither then return NULL
-const char* GetSlashInPath( const char* path ) {
-	const char* slash = NULL;
+const char* GetNextSlashInPath( const char* path ) {
+	const char* nextSlash = NULL;
+	const char* nextBackSlash = strrchr( path, '\\' );
+	const char* nextForwardSlash = strrchr( path, '/' );
 
-	if ( !slash ) slash = strchr( path, '/' );
-	if ( !slash ) slash = strchr( path, '\\' );
+	if ( !nextBackSlash && !nextForwardSlash ) {
+		return NULL;
+	}
 
-	return slash;
+	if ( cast( u64, nextBackSlash ) > cast( u64, nextForwardSlash ) ) {
+		nextSlash = nextBackSlash;
+	} else {
+		nextSlash = nextForwardSlash;
+	}
+
+	return nextSlash;
 }
 
-static void GetAllSourceFiles_r( const char* path, const char* subfolder, const String& searchFilter, std::vector<std::string>& outSourceFiles ) {
 static bool8 FileMatchesFilter( const char* filename, const char* filter ) {
 	const char* filenameCopy = filename;
 	const char* filterCopy = filter;
@@ -536,9 +542,9 @@ static bool8 FileMatchesFilter( const char* filename, const char* filter ) {
 	return *filterCopy == 0;
 }
 
-static void GetAllSourceFiles_r( const char* path, const char* subfolder, const String& searchFilter, std::vector<std::string>& outSourceFiles ) {
+static void GetAllSourceFiles_r( const char* path, const char* subfolder, const char* searchFilter, std::vector<std::string>& outSourceFiles ) {
 	assert( path );
-	assert( searchFilter.data );
+	assert( searchFilter );
 
 	const char* fullSearchPath = NULL;
 	if ( subfolder ) {
@@ -567,7 +573,7 @@ static void GetAllSourceFiles_r( const char* path, const char* subfolder, const 
 		} else {
 			debug_break_here_if( string_equals( fileInFolder, "src/core/allocation_context.cpp" ) );
 
-			if ( FileMatchesFilter( fileInFolder, searchFilter.data ) ) {
+			if ( FileMatchesFilter( fileInFolder, searchFilter ) ) {
 				outSourceFiles.push_back( fileInFolder );
 			}
 		}

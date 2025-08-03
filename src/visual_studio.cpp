@@ -309,7 +309,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 				while ( *folderStart ) {
 					// get the end of the folder
-					const char* folderEnd = GetSlashInPath( folderStart );
+					const char* folderEnd = GetNextSlashInPath( folderStart );
 
 					if ( !folderEnd ) {
 						folderEnd = folderStart + strlen( folderStart );

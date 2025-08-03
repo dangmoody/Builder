@@ -116,7 +116,7 @@ errorCode_t	GetLastErrorCode();
 
 void		NukeFolder_r( const char* folder, const bool8 deleteRoot, const bool8 verbose );
 
-const char*	GetSlashInPath( const char* path );
+const char*	GetNextSlashInPath( const char* path );
 
 bool8		FileIsSourceFile( const char* filename );
 bool8		FileIsHeaderFile( const char* filename );

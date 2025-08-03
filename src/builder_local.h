@@ -98,9 +98,9 @@ struct compilerBackend_t {
 	String	( *GetCompilerVersion )( compilerBackend_t* backend );
 };
 
-void			CreateCompilerBackend_Clang( compilerBackend_t* outBackend );
-void			CreateCompilerBackend_MSVC( compilerBackend_t* outBackend );
-void			CreateCompilerBackend_GCC( compilerBackend_t* outBackend );
+void			CreateCompilerBackend_Clang( compilerBackend_t* outBackend, const char* compilerPath );
+void			CreateCompilerBackend_MSVC( compilerBackend_t* outBackend, const char* compilerPath );
+void			CreateCompilerBackend_GCC( compilerBackend_t* outBackend, const char* compilerPath );
 
 struct includeDependencies_t {
 	std::string					filename;

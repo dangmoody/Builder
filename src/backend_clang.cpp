@@ -469,8 +469,9 @@ static String GCC_GetCompilerVersion( compilerBackend_t* backend ) {
 	return compilerVersion;
 }
 
-void CreateCompilerBackend_Clang( compilerBackend_t* outBackend ) {
+void CreateCompilerBackend_Clang( compilerBackend_t* outBackend, const char* compilerPath ) {
 	*outBackend = compilerBackend_t {
+		.compilerPath								= compilerPath,
 		.linkerPath									= "lld-link",
 		.data										= NULL,
 		.Init										= Clang_Init,
@@ -482,8 +483,9 @@ void CreateCompilerBackend_Clang( compilerBackend_t* outBackend ) {
 	};
 }
 
-void CreateCompilerBackend_GCC( compilerBackend_t* outBackend ) {
+void CreateCompilerBackend_GCC( compilerBackend_t* outBackend, const char* compilerPath ) {
 	*outBackend = compilerBackend_t {
+		.compilerPath								= compilerPath,
 		.linkerPath									= "ld",
 		.data										= NULL,
 		.Init										= Clang_Init,

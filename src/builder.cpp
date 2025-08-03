@@ -589,7 +589,9 @@ static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContex
 		const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
 		const char* sourceFilePath = NULL;
 
-		if ( !inputFileIsSameAsSourceFile ) {
+		if ( inputFileIsSameAsSourceFile ) {
+			GetAllSourceFiles_r( context->inputFilePath.data, NULL, sourceFileNoPath, sourceFiles );
+		} else {
 			sourceFilePath = path_remove_file_from_path( sourceFile );
 
 			if ( !sourceFilePath ) {
@@ -875,8 +877,7 @@ int main( int argc, char** argv ) {
 
 	// init default compiler backend (the version of clang that builder came with)
 	compilerBackend_t compilerBackend;
-	CreateCompilerBackend_Clang( &compilerBackend );
-	compilerBackend.compilerPath = DEFAULT_COMPILER_PATH;
+	CreateCompilerBackend_Clang( &compilerBackend, DEFAULT_COMPILER_PATH );
 
 	compilerBackend.Init( &compilerBackend );
 	defer( compilerBackend.Shutdown( &compilerBackend ) );
@@ -1029,9 +1030,7 @@ int main( int argc, char** argv ) {
 	float64 compilerBackendInitTimeMS = -1.0f;
 	{
 		// if the user never specified a compiler, we can build with the default compiler that we just built the user config DLL with
-		if ( options.compiler_path.empty() ) {
-			options.compiler_path = DEFAULT_COMPILER_PATH;
-		} else {
+		if ( !options.compiler_path.empty() ) {
 			options.compiler_path = path_remove_file_extension( options.compiler_path.c_str() );
 
 			compilerBackend.compilerPath = options.compiler_path.c_str();
@@ -1048,7 +1047,7 @@ int main( int argc, char** argv ) {
 				// nothing, clang already got initialized
 			} else if ( string_ends_with( options.compiler_path.c_str(), "cl" ) ) {
 #if _WIN32
-				CreateCompilerBackend_MSVC( &compilerBackend );
+				CreateCompilerBackend_MSVC( &compilerBackend, options.compiler_path.c_str() );
 #else
 				error(
 					"It appears you want to compile with MSVC on a non-Windows platform.\n"
@@ -1058,7 +1057,7 @@ int main( int argc, char** argv ) {
 				QUIT_ERROR();
 #endif
 			} else if ( string_ends_with( options.compiler_path.c_str(), "gcc" ) ) {
-				CreateCompilerBackend_GCC( &compilerBackend );
+				CreateCompilerBackend_GCC( &compilerBackend, options.compiler_path.c_str() );
 			} else {
 				error(
 					"The compiler you want to build with (\"%s\") is not one that I recognise.\n"

@@ -422,22 +422,18 @@ static bool8 MSVC_CompileSourceFile( compilerBackend_t* backend, const char* sou
 	// so we have to parse the stdout of the process ourselves
 	s32 exitCode = 0;
 	StringBuilder processStdout = {};
+	string_builder_reset( &processStdout );
 	defer( string_builder_destroy( &processStdout ) );
 	{
-		u32 processFlags = PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR;
-		Process* process = process_create( &args, NULL, processFlags );
+		Process* process = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
 
-		string_builder_reset( &processStdout );
+		char buffer[1024] = { 0 };
+		u64 bytesRead = U64_MAX;
 
-		{
-			char buffer[1024] = { 0 };
-			u64 bytesRead = U64_MAX;
+		while ( ( bytesRead = process_read_stdout( process, buffer, 1024 ) ) ) {
+			buffer[bytesRead] = 0;
 
-			while ( ( bytesRead = process_read_stdout( process, buffer, 1024 ) ) ) {
-				buffer[bytesRead] = 0;
-
-				string_builder_appendf( &processStdout, "%s", buffer );
-			}
+			string_builder_appendf( &processStdout, "%s", buffer );
 		}
 
 		exitCode = process_join( process );
@@ -559,8 +555,9 @@ static String MSVC_GetCompilerVersion( compilerBackend_t* backend ) {
 	return msvcState->compilerVersion;
 }
 
-void CreateCompilerBackend_MSVC( compilerBackend_t* outBackend ) {
+void CreateCompilerBackend_MSVC( compilerBackend_t* outBackend, const char* compilerPath ) {
 	*outBackend = compilerBackend_t {
+		.compilerPath								= compilerPath,
 		.linkerPath									= "link",
 		.data										= NULL,
 		.Init										= MSVC_Init,

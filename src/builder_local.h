@@ -42,8 +42,6 @@ SOFTWARE.
 #include <vector>
 //#include <string>
 
-#define USE_BUILD_INFO_FILES 0
-
 // cmd line args
 #define ARG_HELP_SHORT					"-h"
 #define ARG_HELP_LONG					"--help"
@@ -110,9 +108,6 @@ struct buildContext_t {
 	const char*								inputFile;
 	String									inputFilePath;
 	String									dotBuilderFolder;
-#if USE_BUILD_INFO_FILES
-	String									buildInfoFilename;
-#endif
 
 	bool8									verbose;
 };

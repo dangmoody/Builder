@@ -79,22 +79,6 @@ enum buildResult_t {
 	debug_break(); \
 	return 1
 
-#if USE_BUILD_INFO_FILES
-struct builderVersion_t {
-	s32	major;
-	s32	minor;
-	s32	patch;
-};
-
-struct buildInfoData_t {
-	builderVersion_t									builderVersion;
-	std::vector<BuildConfig>							configs;
-	std::string											userConfigSourceFilename;
-	std::string											userConfigDLLFilename;
-	std::vector<std::vector<std::vector<std::string>>>	includeDependencies;	// [configIndex][sourceFileIndex][dependencyIndex]
-};
-#endif // USE_BUILD_INFO_FILES
-
 errorCode_t GetLastErrorCode() {
 #ifdef _WIN64
 	return GetLastError();
@@ -321,11 +305,7 @@ static s32 ShowUsage( const s32 exitCode ) {
 		"\n"
 		"    <file> (required):\n"
 		"        The file you want to build with.  There can only be one.\n"
-#if USE_BUILD_INFO_FILES
-		"        This file can either be a C++ code file (which is recommended) or a \"" BUILD_INFO_FILE_EXTENSION "\" file.\n"
-#else
 		"        This file must be a C++ code file.\n"
-#endif
 		"\n"
 		"    " ARG_CONFIG "<config> (optional):\n"
 		"        Sets the config to whatever you specify.\n"
@@ -697,323 +677,6 @@ static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContex
 	return sourceFiles;
 }
 
-#if USE_BUILD_INFO_FILES
-struct byteBuffer_t {
-	Array<u8>	data;
-	u64			readOffset;
-};
-
-static void ByteBuffer_SkipReadTo( byteBuffer_t* buffer, const char c ) {
-	while ( buffer->data[buffer->readOffset] != c ) {
-		buffer->readOffset++;
-	}
-}
-
-static void ByteBuffer_SkipReadPast( byteBuffer_t* buffer, const char c ) {
-	ByteBuffer_SkipReadTo( buffer, c );
-	buffer->readOffset++;
-}
-
-static bool8 ByteBuffer_Read_Bool8( byteBuffer_t* buffer ) {
-	bool8* result = cast( bool8*, &buffer->data[buffer->readOffset] );
-
-	buffer->readOffset += sizeof( bool8 );
-
-	return *result;
-}
-
-static void ByteBuffer_Write_Bool8( byteBuffer_t* buffer, const bool8 x ) {
-	buffer->data.add( x );
-}
-
-static s32 ByteBuffer_Read_S32( byteBuffer_t* buffer ) {
-	s32* result = cast( s32*, &buffer->data[buffer->readOffset] );
-
-	buffer->readOffset += sizeof( s32 );
-
-	return *result;
-}
-
-static void ByteBuffer_Write_S32( byteBuffer_t* buffer, const s32 x ) {
-	buffer->data.reserve( buffer->data.alloced + sizeof( s32 ) );
-
-	buffer->data.add( ( x ) & 0xFF );
-	buffer->data.add( ( x >> 8 ) & 0xFF );
-	buffer->data.add( ( x >> 16 ) & 0xFF );
-	buffer->data.add( ( x >> 24 ) & 0xFF );
-}
-
-static u64 ByteBuffer_Read_U64( byteBuffer_t* buffer ) {
-	u64* result = cast( u64*, &buffer->data[buffer->readOffset] );
-
-	buffer->readOffset += sizeof( u64 );
-
-	return *result;
-}
-
-static void ByteBuffer_Write_U64( byteBuffer_t* buffer, const u64 x ) {
-	buffer->data.reserve( buffer->data.alloced + sizeof( u64 ) );
-
-	buffer->data.add( ( x ) & 0xFF );
-	buffer->data.add( ( x >> 8 ) & 0xFF );
-	buffer->data.add( ( x >> 16 ) & 0xFF );
-	buffer->data.add( ( x >> 24 ) & 0xFF );
-	buffer->data.add( ( x >> 32 ) & 0xFF );
-	buffer->data.add( ( x >> 40 ) & 0xFF );
-	buffer->data.add( ( x >> 48 ) & 0xFF );
-	buffer->data.add( ( x >> 56 ) & 0xFF );
-}
-
-static char* ByteBuffer_Read_CString( byteBuffer_t* buffer ) {
-	u8* bufferPos = &buffer->data[buffer->readOffset];
-
-	const char* lineEnd = cast( const char*, memchr( bufferPos, '\n', buffer->data.count - buffer->readOffset ) );
-	u64 stringLength = cast( u64, lineEnd ) - cast( u64, bufferPos );
-
-	char* string = cast( char*, mem_alloc( ( stringLength + 1 ) * sizeof( char ) ) );	// + 1 for null terminator
-	memcpy( string, bufferPos, stringLength * sizeof( char ) );
-	string[stringLength] = 0;
-
-	ByteBuffer_SkipReadPast( buffer, '\n' );
-
-	return string;
-}
-
-static void ByteBuffer_Write_CString( byteBuffer_t* buffer, const char* str ) {
-	assert( str );
-
-	buffer->data.add_range( cast( const u8*, str ), strlen( str ) );
-	buffer->data.add_range( cast( const u8*, "\n" ), strlen( "\n" ) );
-}
-
-static std::vector<const char*> ByteBuffer_Read_CStringArray( byteBuffer_t* buffer ) {
-	u64 arrayCount = ByteBuffer_Read_U64( buffer );
-	std::vector<const char*> result( arrayCount );
-
-	For ( u64, i, 0, result.size() ) {
-		result[i] = ByteBuffer_Read_CString( buffer );
-	}
-
-	return result;
-}
-
-static std::vector<std::string> ByteBuffer_Read_STDStringArray( byteBuffer_t* buffer ) {
-	u64 arrayCount = ByteBuffer_Read_U64( buffer );
-	std::vector<std::string> result( arrayCount );
-
-	For ( u64, i, 0, result.size() ) {
-		result[i] = ByteBuffer_Read_CString( buffer );
-	}
-
-	return result;
-}
-
-static void ByteBuffer_Write_STDStringArray( byteBuffer_t* buffer, const std::vector<std::string>& array ) {
-	ByteBuffer_Write_U64( buffer, array.size() );
-
-	For ( u64, i, 0, array.size() ) {
-		ByteBuffer_Write_CString( buffer, array[i].c_str() );
-	}
-}
-
-static bool8 BuildInfo_Read( const char* buildInfoFilename, buildInfoData_t* outBuildInfoData ) {
-	byteBuffer_t buffer = {};
-
-	// do this to avoid crash in ~Array() because it expects the allocator to not be NULL
-	// we are not using the members of buffer::data (Array<T>) in a "standard" way here
-	buffer.data.allocator = mem_get_current_allocator();
-
-	bool8 read = file_read_entire( buildInfoFilename, cast( char**, &buffer.data.data ), &buffer.data.count );
-
-	// the first time you build a source file with builder there wont be a .build_info file
-	if ( !read ) {
-		return false;
-	}
-
-	outBuildInfoData->builderVersion.major = ByteBuffer_Read_S32( &buffer );
-	outBuildInfoData->builderVersion.minor = ByteBuffer_Read_S32( &buffer );
-	outBuildInfoData->builderVersion.patch = ByteBuffer_Read_S32( &buffer );
-
-	outBuildInfoData->userConfigSourceFilename = ByteBuffer_Read_CString( &buffer );
-	outBuildInfoData->userConfigDLLFilename = ByteBuffer_Read_CString( &buffer );
-
-	// parse all BuilderOptions
-	{
-		u64 totalNumConfigs = ByteBuffer_Read_U64( &buffer );
-
-		outBuildInfoData->configs.resize( totalNumConfigs );
-		outBuildInfoData->includeDependencies.resize( totalNumConfigs );
-
-		For ( u64, configIndex, 0, outBuildInfoData->configs.size() ) {
-			// parse the config itself
-			{
-				BuildConfig* config = &outBuildInfoData->configs[configIndex];
-
-				config->name = ByteBuffer_Read_CString( &buffer );
-				ByteBuffer_Read_U64( &buffer );	// name hash, skip
-
-				{
-					u64 numDependsOn = ByteBuffer_Read_U64( &buffer );
-
-					config->depends_on.resize( numDependsOn );
-
-					For ( u64, dependencyIndex, 0, numDependsOn ) {
-						config->depends_on[dependencyIndex].name = ByteBuffer_Read_CString( &buffer );
-					}
-				}
-
-				config->source_files = ByteBuffer_Read_STDStringArray( &buffer );
-				config->defines = ByteBuffer_Read_STDStringArray( &buffer );
-				config->additional_includes = ByteBuffer_Read_STDStringArray( &buffer );
-				config->additional_lib_paths = ByteBuffer_Read_STDStringArray( &buffer );
-				config->additional_libs = ByteBuffer_Read_STDStringArray( &buffer );
-				config->ignore_warnings = ByteBuffer_Read_STDStringArray( &buffer );
-
-				config->binary_name = ByteBuffer_Read_CString( &buffer );
-				config->binary_folder = ByteBuffer_Read_CString( &buffer );
-
-				config->binary_type = cast( BinaryType, ByteBuffer_Read_S32( &buffer ) );
-				config->optimization_level = cast( OptimizationLevel, ByteBuffer_Read_S32( &buffer ) );
-				config->remove_symbols = ByteBuffer_Read_Bool8( &buffer );
-				config->remove_file_extension = ByteBuffer_Read_Bool8( &buffer );
-				config->warnings_as_errors = ByteBuffer_Read_Bool8( &buffer );
-			}
-
-			// parse all compilation units
-			{
-				u64 numConfigIncludeDependencies = ByteBuffer_Read_U64( &buffer );
-
-				outBuildInfoData->includeDependencies[configIndex].resize( numConfigIncludeDependencies );
-
-				For ( u64, sourceFileIndex, 0, numConfigIncludeDependencies ) {
-					u64 numIncludeDependencies = ByteBuffer_Read_U64( &buffer );
-
-					outBuildInfoData->includeDependencies[configIndex][sourceFileIndex].resize( numIncludeDependencies );
-
-					For ( u64, includeDependencyIndex, 0, numIncludeDependencies ) {
-						outBuildInfoData->includeDependencies[configIndex][sourceFileIndex][includeDependencyIndex] = ByteBuffer_Read_CString( &buffer );
-					}
-				}
-			}
-		}
-	}
-
-	// reconstruct all build dependencies after we have deserialized them all from the file
-	For ( u64, configIndex, 0, outBuildInfoData->configs.size() ) {
-		BuildConfig* config = &outBuildInfoData->configs[configIndex];
-
-		For ( u64, dependencyIndex, 0, config->depends_on.size() ) {
-			BuildConfig* dependency = &config->depends_on[dependencyIndex];
-
-			bool8 found = false;
-
-			For ( u64, otherConfigIndex, 0, outBuildInfoData->configs.size() ) {
-				BuildConfig* otherConfig = &outBuildInfoData->configs[otherConfigIndex];
-
-				if ( otherConfig->name == dependency->name ) {
-					config->depends_on[dependencyIndex] = *otherConfig;
-
-					found = true;
-					break;
-				}
-			}
-
-			if ( !found ) {
-				error( "Failed to find the build dependency \"%s\".\n", dependency->name.c_str() );	// TODO(DM): 26/11/2024: better error msg here!
-				return false;
-			}
-		}
-	}
-
-	return true;
-}
-
-static bool8 BuildInfo_Write( const buildContext_t* context, const buildInfoData_t* buildInfoData ) {
-	assert( context );
-	assert( buildInfoData );
-	assert( !buildInfoData->configs.empty() );
-	assert( !buildInfoData->userConfigSourceFilename.empty() );
-	assert( !buildInfoData->userConfigDLLFilename.empty() );
-
-	printf( "Writing \"%s\"...\n", context->buildInfoFilename.data );
-
-	byteBuffer_t buffer = {};
-
-	ByteBuffer_Write_S32( &buffer, BUILDER_VERSION_MAJOR );
-	ByteBuffer_Write_S32( &buffer, BUILDER_VERSION_MINOR );
-	ByteBuffer_Write_S32( &buffer, BUILDER_VERSION_PATCH );
-
-	ByteBuffer_Write_CString( &buffer, buildInfoData->userConfigSourceFilename.c_str() );
-	ByteBuffer_Write_CString( &buffer, buildInfoData->userConfigDLLFilename.c_str() );
-
-	ByteBuffer_Write_U64( &buffer, buildInfoData->configs.size() );
-
-	For ( u64, configIndex, 0, buildInfoData->configs.size() ) {
-		const BuildConfig* config = &buildInfoData->configs[configIndex];
-
-		ByteBuffer_Write_CString( &buffer, config->name.c_str() );
-
-		u64 configNameHash = hash_string( config->name.c_str(), 0 );
-		ByteBuffer_Write_U64( &buffer, configNameHash );
-
-		// serialize names of all build dependencies
-		{
-			ByteBuffer_Write_U64( &buffer, config->depends_on.size() );
-
-			For ( u64, dependencyIndex, 0, config->depends_on.size() ) {
-				ByteBuffer_Write_CString( &buffer, config->depends_on[dependencyIndex].name.c_str() );
-			}
-		}
-
-		ByteBuffer_Write_STDStringArray( &buffer, config->source_files );
-		ByteBuffer_Write_STDStringArray( &buffer, config->defines );
-		ByteBuffer_Write_STDStringArray( &buffer, config->additional_includes );
-		ByteBuffer_Write_STDStringArray( &buffer, config->additional_lib_paths );
-		ByteBuffer_Write_STDStringArray( &buffer, config->additional_libs );
-		ByteBuffer_Write_STDStringArray( &buffer, config->ignore_warnings );
-
-		ByteBuffer_Write_CString( &buffer, config->binary_name.c_str() );
-		ByteBuffer_Write_CString( &buffer, config->binary_folder.c_str() );
-
-		ByteBuffer_Write_S32( &buffer, config->binary_type );
-		ByteBuffer_Write_S32( &buffer, config->optimization_level );
-		ByteBuffer_Write_Bool8( &buffer, config->remove_symbols );
-		ByteBuffer_Write_Bool8( &buffer, config->remove_file_extension );
-		ByteBuffer_Write_Bool8( &buffer, config->warnings_as_errors );
-
-		// serialize all compilation units
-		// for each compilation unit, serialize all the included files it depends on and when their last write time
-		{
-			std::vector<std::vector<std::string>> configIncludeDependencies = buildInfoData->includeDependencies[configIndex];
-
-			ByteBuffer_Write_U64( &buffer, configIncludeDependencies.size() );
-
-			For ( u64, sourceFileIndex, 0, configIncludeDependencies.size() ) {
-				std::vector<std::string> includeDependencies = configIncludeDependencies[sourceFileIndex];
-
-				ByteBuffer_Write_U64( &buffer, includeDependencies.size() );
-
-				For ( u64, includeDepdendencyIndex, 0, includeDependencies.size() ) {
-					ByteBuffer_Write_CString( &buffer, includeDependencies[includeDepdendencyIndex].c_str() );
-				}
-			}
-		}
-
-		mem_reset_temp_storage();
-	}
-
-	// write to the file
-	if ( !file_write_entire( context->buildInfoFilename.data, buffer.data.data, buffer.data.count ) ) {
-		error( "Failed to write %s!\n", context->buildInfoFilename.data );
-		return false;
-	}
-
-	printf( "\n" );
-
-	return true;
-}
-#endif // USE_BUILD_INFO_FILES
-
 static void AddBuildConfigAndDependenciesUnique( buildContext_t* context, const BuildConfig* config, std::vector<BuildConfig>& outConfigs ) {
 	u64 configNameHash = hash_string( config->name.c_str(), 0 );
 
@@ -1165,9 +828,6 @@ int main( int argc, char** argv ) {
 		context.inputFilePath = inputFilePath;
 
 		string_printf( &context.dotBuilderFolder, "%s%c.builder", context.inputFilePath.data, PATH_SEPARATOR );
-#if USE_BUILD_INFO_FILES
-		string_printf( &context.buildInfoFilename, "%s%c%s%s", context.dotBuilderFolder.data, PATH_SEPARATOR, inputFileNoPathOrExtension, BUILD_INFO_FILE_EXTENSION );
-#endif
 	}
 
 	const char* defaultBinaryName = path_remove_file_extension( path_remove_path_from_file( context.inputFile ) );
@@ -1180,23 +840,6 @@ int main( int argc, char** argv ) {
 	compilerBackend.Init( &compilerBackend );
 	defer( compilerBackend.Shutdown( &compilerBackend ) );
 
-#if USE_BUILD_INFO_FILES
-	// read .build_info file
-	buildInfoData_t buildInfoData = {};
-	bool8 readBuildInfo = false;
-	{
-		float64 start = time_ms();
-
-		readBuildInfo = BuildInfo_Read( context.buildInfoFilename.data, &buildInfoData );
-
-		float64 end = time_ms();
-
-		buildInfoReadTimeMS = end - start;
-	}
-
-	buildInfoData.userConfigSourceFilename = context.inputFile;
-#endif // USE_BUILD_INFO_FILES
-
 	// user config build step
 	// see if they have set_builder_options() overridden
 	// if they do, then build a DLL first and call that function to set some more build options
@@ -1207,11 +850,7 @@ int main( int argc, char** argv ) {
 
 		BuildConfig userConfigBuildConfig = {
 			.source_files = {
-#if USE_BUILD_INFO_FILES
-				buildInfoData.userConfigSourceFilename,
-#else
 				context.inputFile,
-#endif
 			},
 			.defines = {
 				"_CRT_SECURE_NO_WARNINGS",
@@ -1253,9 +892,6 @@ int main( int argc, char** argv ) {
 		};
 
 		userConfigFullBinaryName = BuildConfig_GetFullBinaryName( &userConfigBuildConfig );
-#if USE_BUILD_INFO_FILES
-		buildInfoData.userConfigDLLFilename = userConfigFullBinaryName;
-#endif
 
 		userConfigBuildResult = BuildBinary( &userConfigBuildConfig, &compilerBackend, context.includeDependencies );
 
@@ -1280,11 +916,7 @@ int main( int argc, char** argv ) {
 
 	BuilderOptions options = {};
 
-#if USE_BUILD_INFO_FILES
-	Library library = library_load( buildInfoData.userConfigDLLFilename.c_str() );
-#else
 	Library library = library_load( userConfigFullBinaryName );
-#endif
 	defer( library_unload( &library ) );
 
 	typedef void ( *setBuilderOptionsFunc_t )( BuilderOptions* options );
@@ -1305,12 +937,6 @@ int main( int argc, char** argv ) {
 			float64 setBuilderOptionsTimeEnd = time_ms();
 
 			setBuilderOptionsTimeMS = setBuilderOptionsTimeEnd - setBuilderOptionsTimeStart;
-
-#if USE_BUILD_INFO_FILES
-			buildInfoData.configs = options.configs;
-
-			buildInfoData.includeDependencies.resize( buildInfoData.configs.size() );
-#endif // USE_BUILD_INFO_FILES
 
 			// if the user wants to generate a visual studio solution then do that now
 			if ( options.generate_solution && !isVisualStudioBuild ) {
@@ -1360,21 +986,13 @@ int main( int argc, char** argv ) {
 	}
 
 	// if no configs were manually added then assume we are just doing a default build with no user-specified options
-#if USE_BUILD_INFO_FILES
-	if ( buildInfoData.configs.size() == 0 ) {
-#else
 	if ( options.configs.size() == 0 ) {
-#endif
 		BuildConfig config = {
 			.source_files = { context.inputFile },
 			.binary_name = defaultBinaryName
 		};
 
-#if USE_BUILD_INFO_FILES
-		buildInfoData.configs.push_back( config );
-#else
 		options.configs.push_back( config );
-#endif
 	}
 
 	float64 compilerBackendInitTimeMS = -1.0f;
@@ -1552,15 +1170,9 @@ int main( int argc, char** argv ) {
 
 	std::vector<BuildConfig> configsToBuild;
 
-#if USE_BUILD_INFO_FILES
-	const std::vector<BuildConfig>& dan_configs = buildInfoData.configs;
-#else
-	const std::vector<BuildConfig>& dan_configs = options.configs;
-#endif
-
 	// if only one config was added (either by user or as a default build) then we know we just want that one, no config command line arg is needed
-	if ( dan_configs.size() == 1 ) {
-		AddBuildConfigAndDependenciesUnique( &context, &dan_configs[0], configsToBuild );
+	if ( options.configs.size() == 1 ) {
+		AddBuildConfigAndDependenciesUnique( &context, &options.configs[0], configsToBuild );
 	} else {
 		if ( !inputConfigName ) {
 			error(
@@ -1572,8 +1184,8 @@ int main( int argc, char** argv ) {
 			QUIT_ERROR();
 		}
 
-		For ( size_t, configIndex, 0, dan_configs.size() ) {
-			if ( dan_configs[configIndex].name.empty() ) {
+		For ( size_t, configIndex, 0, options.configs.size() ) {
+			if ( options.configs[configIndex].name.empty() ) {
 				error(
 					"You have multiple BuildConfigs in your build source file, but some of them have empty names.\n"
 					"When you have multiple BuildConfigs, ALL of them MUST have non-empty names.\n"
@@ -1585,22 +1197,18 @@ int main( int argc, char** argv ) {
 		}
 	}
 
-#if USE_BUILD_INFO_FILES
-	buildInfoData.includeDependencies.resize( dan_configs.size() );
-#endif
-
 	// none of the configs can have the same name
 	// TODO(DM): 14/11/2024: can we do better than o(n^2) here?
-	For ( size_t, configIndexA, 0, dan_configs.size() ) {
-		const char* configNameA = dan_configs[configIndexA].name.c_str();
+	For ( size_t, configIndexA, 0, options.configs.size() ) {
+		const char* configNameA = options.configs[configIndexA].name.c_str();
 		u64 configNameHashA = hash_string( configNameA, 0 );
 
-		For ( size_t, configIndexB, 0, dan_configs.size() ) {
+		For ( size_t, configIndexB, 0, options.configs.size() ) {
 			if ( configIndexA == configIndexB ) {
 				continue;
 			}
 
-			const char* configNameB = dan_configs[configIndexB].name.c_str();
+			const char* configNameB = options.configs[configIndexB].name.c_str();
 			u64 configNameHashB = hash_string( configNameB, 0 );
 
 			if ( configNameHashA == configNameHashB ) {
@@ -1614,8 +1222,8 @@ int main( int argc, char** argv ) {
 	// find the one the user asked for in the command line
 	if ( inputConfigName ) {
 		bool8 foundConfig = false;
-		For ( u64, configIndex, 0, dan_configs.size() ) {
-			const BuildConfig* config = &dan_configs[configIndex];
+		For ( u64, configIndex, 0, options.configs.size() ) {
+			const BuildConfig* config = &options.configs[configIndex];
 
 			if ( hash_string( config->name.c_str(), 0 ) == inputConfigNameHash ) {
 				AddBuildConfigAndDependenciesUnique( &context, config, configsToBuild );
@@ -1648,11 +1256,6 @@ int main( int argc, char** argv ) {
 
 	For ( u64, configToBuildIndex, 0, configsToBuild.size() ) {
 		BuildConfig* config = &configsToBuild[configToBuildIndex];
-
-		assert( !config->binary_name.empty() );
-
-		u64 configNameHash = hash_string( config->name.c_str(), 0 );
-		u64 actualConfigIndex = hashmap_get_value( context.configIndices, configNameHash );
 
 		// make sure that the binary folder and binary name are at least set to defaults
 		if ( !config->binary_folder.empty() ) {
@@ -1715,25 +1318,13 @@ int main( int argc, char** argv ) {
 			config->source_files = finalSourceFilesToBuild;
 		}
 
-#if USE_BUILD_INFO_FILES
-		buildInfoData.includeDependencies[actualConfigIndex].resize( config->source_files.size() );
-#else
 		context.includeDependencies.resize( config->source_files.size() );
-#endif
 
 		// now do the actual build
 		{
 			float64 buildTimeStart = time_ms();
 
-#if USE_BUILD_INFO_FILES
-			context.includeDependencies = buildInfoData.includeDependencies[actualConfigIndex];
-#endif
-
 			buildResult_t buildResult = BuildBinary( config, &compilerBackend, context.includeDependencies );
-
-#if USE_BUILD_INFO_FILES
-			buildInfoData.includeDependencies[actualConfigIndex] = context.includeDependencies;
-#endif
 
 			float64 buildTimeEnd = time_ms();
 
@@ -1768,23 +1359,6 @@ int main( int argc, char** argv ) {
 		postBuildFunc();
 	}
 
-#if USE_BUILD_INFO_FILES
-	// only dont want to write the .build_info if all the builds skipped or if a build failed
-	bool shouldWriteBuildInfo = ( numSuccessfulBuilds > 0 ) && ( numFailedBuilds == 0 );
-
-	if ( shouldWriteBuildInfo ) {
-		float64 start = time_ms();
-
-		if ( !BuildInfo_Write( &context, &buildInfoData ) ) {
-			QUIT_ERROR();
-		}
-
-		float64 end = time_ms();
-
-		buildInfoWriteTimeMS = end - start;
-	}
-#endif
-
 	float64 totalTimeEnd = time_ms();
 
 	printf( "Build finished:\n" );
@@ -1798,14 +1372,6 @@ int main( int argc, char** argv ) {
 	if ( options.generate_solution && !isVisualStudioBuild ) {
 		printf( "    Generate solution:   %f ms\n", visualStudioGenerationTimeMS );
 	}
-#if USE_BUILD_INFO_FILES
-	if ( readBuildInfo ) {
-		printf( "    Read .build_info:    %f ms\n", buildInfoReadTimeMS );
-	}
-	if ( shouldWriteBuildInfo ) {
-		printf( "    Write .build_info:   %f ms\n", buildInfoWriteTimeMS );
-	}
-#endif
 	printf( "    Total time:          %f ms\n", totalTimeEnd - totalTimeStart );
 	printf( "\n" );
 

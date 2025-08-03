@@ -128,9 +128,6 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 	assert( context );
 	assert( context->inputFile );
 	assert( context->inputFilePath.data );
-#if USE_BUILD_INFO_FILES
-	assert( context->buildInfoFilename.data );
-#endif
 	assert( options );
 
 	Array<char*> projectFolders;
@@ -144,11 +141,6 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 	};
 
 	Array<guidParentMapping_t> guidParentMappings;
-
-#if USE_BUILD_INFO_FILES
-	// TODO(DM): 18/11/2024: dont use abs path here
-	string_printf( &context->buildInfoFilename, "%s%c.builder%c%s%s", context->inputFilePath.data, PATH_SEPARATOR, PATH_SEPARATOR, options->solution.name.c_str(), BUILD_INFO_FILE_EXTENSION );
-#endif
 
 	// validate the solution
 	{
@@ -610,11 +602,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 					const char* fullConfigName = config->options.name.c_str();
 
-#if USE_BUILD_INFO_FILES
-					const char* inputFileRelative = tprintf( "%s%c.builder%c%s%s", pathFromSolutionToInputFile, PATH_SEPARATOR, PATH_SEPARATOR, options->solution.name.c_str(), BUILD_INFO_FILE_EXTENSION );
-#else
 					const char* inputFileRelative = tprintf( "%s%c.builder%c%s", pathFromSolutionToInputFile, PATH_SEPARATOR, PATH_SEPARATOR, context->inputFile );
-#endif
 
 					string_builder_appendf( &vcxprojContent, "\t\t<NMakeBuildCommandLine>%s%cbuilder.exe %s %s%s</NMakeBuildCommandLine>\n", path_app_path(), PATH_SEPARATOR, inputFileRelative, ARG_CONFIG, fullConfigName );
 					string_builder_appendf( &vcxprojContent, "\t\t<NMakeReBuildCommandLine>%s%cbuilder.exe %s %s%s</NMakeReBuildCommandLine>\n", path_app_path(), PATH_SEPARATOR, inputFileRelative, ARG_CONFIG, fullConfigName );

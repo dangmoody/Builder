@@ -51,6 +51,7 @@ SOFTWARE.
 #define ARG_VERBOSE_LONG				"--verbose"
 #define ARG_NUKE						"--nuke"
 #define ARG_CONFIG						"--config="
+#define ARG_VISUAL_STUDIO_BUILD			"--visual-studio-build"
 
 #define BUILD_INFO_FILE_EXTENSION		".build_info"
 

@@ -334,6 +334,10 @@ static s32 ShowUsage( const s32 exitCode ) {
 		"    " ARG_NUKE " <folder> (optional):\n"
 		"        Deletes every file in <folder> and all subfolders, but does not delete <folder>.\n"
 		"\n"
+		"    " ARG_VISUAL_STUDIO_BUILD " (optional):\n"
+		"        Specifies that the build is being done from Visual Studio.\n"
+		"        So even if BuilderOptions::generate_solution is set to true in the build settings source file we shouldn't generate Visual Studio project files and instead should just do a build using the specified config.\n"
+		"\n"
 	);
 
 	return exitCode;
@@ -390,7 +394,6 @@ static buildResult_t BuildBinary( BuildConfig* config, compilerBackend_t* compil
 			// if the source file wasnt newer than the .o file then do the same timestamp check for all the files that this source file depends on
 			// just because the source file didnt change doesnt mean we dont want to recompile it
 			// what if one of the header files it relies on changed? we still want to recompile that file!
-			//if ( !config->name.empty() )
 			{
 				std::vector<std::string>& includeDependencies = outIncludeDependencies[sourceFileIndex];
 
@@ -1125,7 +1128,7 @@ int main( int argc, char** argv ) {
 			return 0;
 		}
 
-		if ( string_equals( arg, "--visual-studio-build" ) ) {
+		if ( string_equals( arg, ARG_VISUAL_STUDIO_BUILD ) ) {
 			isVisualStudioBuild = true;
 
 			continue;

@@ -1027,7 +1027,6 @@ int main( int argc, char** argv ) {
 	}
 
 	float64 compilerBackendInitTimeMS = -1.0f;
-	String compilerVersion;
 	{
 		// if the user never specified a compiler, we can build with the default compiler that we just built the user config DLL with
 		if ( options.compiler_path.empty() ) {
@@ -1037,59 +1036,16 @@ int main( int argc, char** argv ) {
 
 			compilerBackend.compilerPath = options.compiler_path.c_str();
 
+			// get the linker program that we need
+			const char* compilerPathOnly = path_remove_file_from_path( options.compiler_path.c_str() );
+
+			if ( compilerPathOnly ) {
+				String linkerPathOld = compilerBackend.linkerPath;
+				string_printf( &compilerBackend.linkerPath, "%s%c%s", compilerPathOnly, PATH_SEPARATOR, linkerPathOld.data );
+			}
+
 			if ( string_ends_with( options.compiler_path.c_str(), "clang" ) ) {
-				// get the users clang compiler version
-				// use that to check against the version set in set_builder_options() later (if they set a version there)
-				{
-					const char* clangVersionPrefix = "clang version ";
-
-					Array<const char*> args;
-					args.add( options.compiler_path.c_str() );
-					args.add( "-v" );
-
-					Process* process = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
-
-					assert( process );
-
-					StringBuilder clangOutput = {};
-					string_builder_reset( &clangOutput );
-					defer( string_builder_destroy( &clangOutput ) );
-
-					char buffer[1024] = {};
-					u64 bytesRead = U64_MAX;
-					while ( ( bytesRead = process_read_stdout( process, buffer, 1024 ) ) ) {
-						buffer[bytesRead] = 0;
-
-						string_builder_appendf( &clangOutput, "%s", buffer );
-					}
-
-					const char* clangOutputString = string_builder_to_string( &clangOutput );
-
-					const char* versionStart = strstr( clangOutputString, clangVersionPrefix );
-
-					if ( versionStart ) {
-						versionStart += strlen( clangVersionPrefix );
-
-						const char* versionEnd = NULL;
-						if ( !versionEnd ) versionEnd = strchr( versionStart, '\r' );
-						if ( !versionEnd ) versionEnd = strchr( versionStart, '\n' );
-						assert( versionEnd );
-
-						u64 versionLength = cast( u64, versionEnd ) - cast( u64, versionStart );
-
-						// DM!!! 30/07/2025: this never gets freed!
-						char* clangVersionString = cast( char*, mem_alloc( ( versionLength + 1 ) * sizeof( char ) ) );
-						strncpy( clangVersionString, versionStart, versionLength );
-						clangVersionString[versionLength] = 0;
-
-						compilerVersion = clangVersionString;
-					}
-
-					process_join( process );
-
-					process_destroy( process );
-					process = NULL;
-				}
+				// nothing, clang already got initialized
 			} else if ( string_ends_with( options.compiler_path.c_str(), "cl" ) ) {
 #if _WIN32
 				CreateCompilerBackend_MSVC( &compilerBackend );
@@ -1103,57 +1059,6 @@ int main( int argc, char** argv ) {
 #endif
 			} else if ( string_ends_with( options.compiler_path.c_str(), "gcc" ) ) {
 				CreateCompilerBackend_GCC( &compilerBackend );
-
-				// get the users gcc compiler version
-				// use that to check against the version set in set_builder_options() later (if they set a version there)
-				{
-					const char* gccVersionPrefix = "gcc version ";
-
-					Array<const char*> args;
-					args.add( options.compiler_path.c_str() );
-					args.add( "-v" );
-
-					Process* process = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
-
-					assert( process );
-
-					StringBuilder gccOutput = {};
-					string_builder_reset( &gccOutput );
-					defer( string_builder_destroy( &gccOutput ) );
-
-					char buffer[1024] = {};
-					u64 bytesRead = U64_MAX;
-					while ( ( bytesRead = process_read_stdout( process, buffer, 1024 ) ) ) {
-						buffer[bytesRead] = 0;
-
-						string_builder_appendf( &gccOutput, "%s", buffer );
-					}
-
-					const char* gccOutputString = string_builder_to_string( &gccOutput );
-
-					const char* versionStart = strstr( gccOutputString, gccVersionPrefix );
-
-					if ( versionStart ) {
-						versionStart += strlen( gccVersionPrefix );
-
-						const char* versionEnd = strchr( versionStart, ' ' );
-						assert( versionEnd );
-
-						u64 versionLength = cast( u64, versionEnd ) - cast( u64, versionStart );
-
-						// DM!!! 30/07/2025: this never gets freed!
-						char* gccVersionString = cast( char*, mem_alloc( ( versionLength + 1 ) * sizeof( char ) ) );
-						strncpy( gccVersionString, versionStart, versionLength );
-						gccVersionString[versionLength] = 0;
-
-						compilerVersion = gccVersionString;
-					}
-
-					process_join( process );
-
-					process_destroy( process );
-					process = NULL;
-				}
 			} else {
 				error(
 					"The compiler you want to build with (\"%s\") is not one that I recognise.\n"
@@ -1181,6 +1086,8 @@ int main( int argc, char** argv ) {
 
 		// check that version of the compiler the user actually has is what they expect it to be
 		if ( !options.compiler_version.empty() ) {
+			String compilerVersion = compilerBackend.GetCompilerVersion( &compilerBackend );
+
 			if ( !string_equals( compilerVersion.data, options.compiler_version.c_str() ) ) {
 				warning(
 					"I see that you are using compiler version \"%s\", but compiler version \"%s\" was set in %s.\n"
@@ -1188,14 +1095,6 @@ int main( int argc, char** argv ) {
 					, compilerVersion.data, options.compiler_version.c_str(), SET_BUILDER_OPTIONS_FUNC_NAME
 				);
 			}
-		}
-
-		// get the linker program that we need
-		const char* compilerPathOnly = path_remove_file_from_path( options.compiler_path.c_str() );
-
-		if ( compilerPathOnly ) {
-			String linkerPathOld = compilerBackend.linkerPath;
-			string_printf( &compilerBackend.linkerPath, "%s%c%s", compilerPathOnly, PATH_SEPARATOR, linkerPathOld.data );
 		}
 	}
 

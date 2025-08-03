@@ -33,6 +33,8 @@ SOFTWARE.
 #include "core/include/paths.h"
 #include "core/include/array.inl"
 #include "core/include/file.h"
+#include "core/include/core_process.h"
+#include "core/include/string_builder.h"
 
 struct clangState_t {
 	Array<const char*>			args;
@@ -182,8 +184,8 @@ static bool8 Clang_CompileSourceFile( compilerBackend_t* backend, const char* so
 
 	clangState_t* clangState = cast( clangState_t*, backend->data );
 
-	bool8 isClang = string_ends_with( backend->compilerPath, "clang" ) || string_ends_with( backend->compilerPath, "clang++" );
-	bool8 isGCC = string_ends_with( backend->compilerPath, "gcc" ) || string_ends_with( backend->compilerPath, "g++" );
+	bool8 isClang = string_ends_with( backend->compilerPath.data, "clang" ) || string_ends_with( backend->compilerPath.data, "clang++" );
+	bool8 isGCC = string_ends_with( backend->compilerPath.data, "gcc" ) || string_ends_with( backend->compilerPath.data, "g++" );
 
 	const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
 
@@ -214,7 +216,7 @@ static bool8 Clang_CompileSourceFile( compilerBackend_t* backend, const char* so
 
 	args.reset();
 
-	args.add( backend->compilerPath );
+	args.add( backend->compilerPath.data );
 
 	args.add( "-c" );
 
@@ -327,7 +329,7 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t* backend, const Arra
 
 		args.add_range( &intermediateFiles );
 	} else {
-		args.add( backend->compilerPath );
+		args.add( backend->compilerPath.data );
 
 		if ( config->binary_type == BINARY_TYPE_DYNAMIC_LIBRARY ) {
 			args.add( "-shared" );
@@ -359,10 +361,112 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t* backend, const Arra
 // only call this after compilation has finished successfully
 // parse the dependency file that we generated for every dependency thats in there
 // add those to a list - we need to put those in the .build_info file
-static void Clang_GetIncludeDependenciesFromSourceFileBuild( compilerBackend_t* compilerBackend, std::vector<std::string>& outIncludeDependencies ) {
-	clangState_t* clangState = cast( clangState_t*, compilerBackend->data );
+static void Clang_GetIncludeDependenciesFromSourceFileBuild( compilerBackend_t* backend, std::vector<std::string>& outIncludeDependencies ) {
+	clangState_t* clangState = cast( clangState_t*, backend->data );
 
 	outIncludeDependencies = clangState->includeDependencies;
+}
+
+static String Clang_GetCompilerVersion( compilerBackend_t* backend ) {
+	clangState_t* clangState = cast( clangState_t*, backend->data );
+
+	String compilerVersion;
+
+	const char* clangVersionPrefix = "clang version ";
+
+	Array<const char*> args;
+	args.add( backend->compilerPath.data );
+	args.add( "-v" );
+
+	Process* process = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
+
+	assert( process );
+
+	StringBuilder clangOutput = {};
+	string_builder_reset( &clangOutput );
+	defer( string_builder_destroy( &clangOutput ) );
+
+	char buffer[1024] = {};
+	u64 bytesRead = U64_MAX;
+	while ( ( bytesRead = process_read_stdout( process, buffer, 1024 ) ) ) {
+		buffer[bytesRead] = 0;
+
+		string_builder_appendf( &clangOutput, "%s", buffer );
+	}
+
+	const char* clangOutputString = string_builder_to_string( &clangOutput );
+
+	const char* versionStart = strstr( clangOutputString, clangVersionPrefix );
+
+	if ( versionStart ) {
+		versionStart += strlen( clangVersionPrefix );
+
+		const char* versionEnd = NULL;
+		if ( !versionEnd ) versionEnd = strchr( versionStart, '\r' );
+		if ( !versionEnd ) versionEnd = strchr( versionStart, '\n' );
+		assert( versionEnd );
+
+		u64 versionLength = cast( u64, versionEnd ) - cast( u64, versionStart );
+
+		string_copy_from_c_string( &compilerVersion, versionStart, versionLength );
+	}
+
+	process_join( process );
+
+	process_destroy( process );
+	process = NULL;
+
+	return compilerVersion;
+}
+
+static String GCC_GetCompilerVersion( compilerBackend_t* backend ) {
+	clangState_t* clangState = cast( clangState_t*, backend->data );
+
+	String compilerVersion;
+
+	const char* gccVersionPrefix = "gcc version ";
+
+	Array<const char*> args;
+	args.add( backend->compilerPath.data );
+	args.add( "-v" );
+
+	Process* process = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
+
+	assert( process );
+
+	StringBuilder gccOutput = {};
+	string_builder_reset( &gccOutput );
+	defer( string_builder_destroy( &gccOutput ) );
+
+	char buffer[1024] = {};
+	u64 bytesRead = U64_MAX;
+	while ( ( bytesRead = process_read_stdout( process, buffer, 1024 ) ) ) {
+		buffer[bytesRead] = 0;
+
+		string_builder_appendf( &gccOutput, "%s", buffer );
+	}
+
+	const char* gccOutputString = string_builder_to_string( &gccOutput );
+
+	const char* versionStart = strstr( gccOutputString, gccVersionPrefix );
+
+	if ( versionStart ) {
+		versionStart += strlen( gccVersionPrefix );
+
+		const char* versionEnd = strchr( versionStart, ' ' );
+		assert( versionEnd );
+
+		u64 versionLength = cast( u64, versionEnd ) - cast( u64, versionStart );
+
+		string_copy_from_c_string( &compilerVersion, versionStart, versionLength );
+	}
+
+	process_join( process );
+
+	process_destroy( process );
+	process = NULL;
+
+	return compilerVersion;
 }
 
 void CreateCompilerBackend_Clang( compilerBackend_t* outBackend ) {
@@ -374,6 +478,7 @@ void CreateCompilerBackend_Clang( compilerBackend_t* outBackend ) {
 		.CompileSourceFile							= Clang_CompileSourceFile,
 		.LinkIntermediateFiles						= Clang_LinkIntermediateFiles,
 		.GetIncludeDependenciesFromSourceFileBuild	= Clang_GetIncludeDependenciesFromSourceFileBuild,
+		.GetCompilerVersion							= Clang_GetCompilerVersion,
 	};
 }
 
@@ -386,5 +491,6 @@ void CreateCompilerBackend_GCC( compilerBackend_t* outBackend ) {
 		.CompileSourceFile							= Clang_CompileSourceFile,
 		.LinkIntermediateFiles						= Clang_LinkIntermediateFiles,
 		.GetIncludeDependenciesFromSourceFileBuild	= Clang_GetIncludeDependenciesFromSourceFileBuild,
+		.GetCompilerVersion							= GCC_GetCompilerVersion,
 	};
 }

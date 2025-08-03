@@ -78,10 +78,12 @@ struct msvcState_t {
 	std::vector<std::string>	windowsLibPaths;
 
 	std::vector<std::string>	includeDependencies;
+
+	String						compilerVersion;
 };
 
 static bool8 MSVC_Init( compilerBackend_t* backend ) {
-	auto ParseTagString = []( const char* fileBuffer, const char* tag ) -> std::string {
+	auto ParseTagString = []( const char* fileBuffer, const char* tag, std::string& outString ) {
 		const char* lineStart = strstr( fileBuffer, tag );
 		assert( lineStart );
 		lineStart += strlen( tag );
@@ -94,12 +96,10 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 		if ( !lineEnd ) lineEnd = strchr( lineStart, '\r' );
 		if ( !lineEnd ) lineEnd = strchr( lineStart, '\n' );
 
-		return std::string( lineStart, lineEnd );
+		outString = std::string( lineStart, lineEnd );
 	};
 
-	auto ParseTagArray = []( const char* fileBuffer, const char* tag ) -> std::vector<std::string> {
-		std::vector<std::string> paths;
-
+	auto ParseTagArray = []( const char* fileBuffer, const char* tag, std::vector<std::string>& outArray ) {
 		const char* lineStart = strstr( fileBuffer, tag );
 		assert( lineStart );
 		lineStart += strlen( tag );
@@ -116,13 +116,13 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 			u64 pathLength = cast( u64, semicolon ) - cast( u64, lineStart );
 			std::string path( lineStart, pathLength );
 
-			paths.push_back( path );
+			outArray.push_back( path );
 
 			lineStart = semicolon + 1;
 			semicolon = strchr( lineStart, ';' );
 		}
 
-		return paths;
+		return outArray;
 	};
 
 	msvcState_t* msvcState = cast( msvcState_t*, mem_alloc( sizeof( msvcState_t ) ) );
@@ -163,14 +163,13 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 
 		const char* outputBuffer = string_builder_to_string( &processStdout );
 
-		msvcRootFolder = ParseTagString( outputBuffer, "installationPath:" );
+		ParseTagString( outputBuffer, "installationPath:", msvcRootFolder );
 
 		process_destroy( process );
 		process = NULL;
 	}
 
 	// get latest version of msvc
-	String compilerVersion;
 	{
 		const char* msvcVersionSearchFolder = tprintf( "%s\\VC\\Tools\\MSVC\\*", msvcRootFolder.c_str() );
 
@@ -197,13 +196,13 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 			if ( mask > highestVersion ) {
 				highestVersion = mask;
 
-				compilerVersion = fileInfo.filename;
+				msvcState->compilerVersion = fileInfo.filename;
 			}
 		} while ( file_find_next( &file, &fileInfo ) );
 	}
 
 	// now use MSVC root folder and the correct MSVC version to get the path to cl.exe
-	string_printf( &clPath, "%s\\VC\\Tools\\MSVC\\%s\\bin\\Hostx64\\x64", msvcRootFolder.c_str(), compilerVersion.data );
+	string_printf( &clPath, "%s\\VC\\Tools\\MSVC\\%s\\bin\\Hostx64\\x64", msvcRootFolder.c_str(), msvcState->compilerVersion.data );
 
 	// now microsoft need us to tell their own compiler that runs on their own platform (specifically FOR their own platform) where their own include and library folders are, sigh...
 	// the way we do that is by manually calling a vcvars*.bat script and using the information it gives us back to know which include and lib folders to look for
@@ -235,13 +234,15 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 	const char* outputBuffer = string_builder_to_string( &vcvarsOutput );
 
 	{
-		msvcState->windowsIncludes = ParseTagArray( outputBuffer, "INCLUDE=" );
-		msvcState->windowsLibPaths = ParseTagArray( outputBuffer, "LIB=" );
+		ParseTagArray( outputBuffer, "INCLUDE=", msvcState->windowsIncludes );
+		ParseTagArray( outputBuffer, "LIB=", msvcState->windowsLibPaths );
 
-		std::string windowsSDKVersion = ParseTagString( outputBuffer, "WindowsSDKLibVersion=" );
+		std::string windowsSDKVersion;
+		ParseTagString( outputBuffer, "WindowsSDKLibVersion=", windowsSDKVersion );
 		windowsSDKVersion.pop_back();		// remove trailing slash
 
-		std::string windowsSDKRootFolder = ParseTagString( outputBuffer, "WindowsSdkDir=" );
+		std::string windowsSDKRootFolder;
+		ParseTagString( outputBuffer, "WindowsSdkDir=", windowsSDKRootFolder );
 		windowsSDKRootFolder.pop_back();	// remove trailing slash
 
 		// add windows sdk lib folders that we need too
@@ -323,7 +324,7 @@ static bool8 MSVC_CompileSourceFile( compilerBackend_t* backend, const char* sou
 
 	args.reset();
 
-	args.add( backend->compilerPath );
+	args.add( backend->compilerPath.data );
 
 	args.add( "/c" );
 
@@ -512,7 +513,7 @@ static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t* backend, const Array
 
 	args.reset();
 
-	const char* compilerPathOnly = path_remove_file_from_path( backend->compilerPath );
+	const char* compilerPathOnly = path_remove_file_from_path( backend->compilerPath.data );
 	if ( compilerPathOnly ) {
 		args.add( tprintf( "%s%c%s", compilerPathOnly, PATH_SEPARATOR, backend->linkerPath.data ) );
 	} else {
@@ -552,6 +553,12 @@ static void MSVC_GetIncludeDependenciesFromSourceFileBuild( compilerBackend_t* b
 	outIncludeDependencies = msvcState->includeDependencies;
 }
 
+static String MSVC_GetCompilerVersion( compilerBackend_t* backend ) {
+	msvcState_t* msvcState = cast( msvcState_t*, backend->data );
+
+	return msvcState->compilerVersion;
+}
+
 void CreateCompilerBackend_MSVC( compilerBackend_t* outBackend ) {
 	*outBackend = compilerBackend_t {
 		.linkerPath									= "link",
@@ -561,6 +568,7 @@ void CreateCompilerBackend_MSVC( compilerBackend_t* outBackend ) {
 		.CompileSourceFile							= MSVC_CompileSourceFile,
 		.LinkIntermediateFiles						= MSVC_LinkIntermediateFiles,
 		.GetIncludeDependenciesFromSourceFileBuild	= MSVC_GetIncludeDependenciesFromSourceFileBuild,
+		.GetCompilerVersion							= MSVC_GetCompilerVersion,
 	};
 }
 

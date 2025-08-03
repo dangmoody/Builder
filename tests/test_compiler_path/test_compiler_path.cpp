@@ -9,7 +9,7 @@
 #define MSVC			2
 #define GCC				3
 
-#define USE_COMPILER	MSVC
+#define USE_COMPILER	CLANG
 
 BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 #if USE_COMPILER == CLANG

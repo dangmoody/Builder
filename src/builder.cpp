@@ -443,13 +443,6 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 	return BUILD_RESULT_SUCCESS;
 }
 
-static bool8 FileExists( const char* filename ) {
-	FileInfo fileInfo = {};
-	File file = file_find_first( filename, &fileInfo );
-
-	return file.ptr != INVALID_HANDLE_VALUE;
-}
-
 static void NukeFolderInternal_r( const char* folder, const bool8 verbose ) {
 	const char* searchPattern = tprintf( "%s%c*", folder, PATH_SEPARATOR );
 

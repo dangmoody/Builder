@@ -403,7 +403,11 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 		std::vector<std::string> includeDependencies;
 		compilerBackend->GetIncludeDependenciesFromSourceFileBuild( compilerBackend, includeDependencies );
 
-		context->sourceFileIncludeDependencies.push_back( { sourceFile, includeDependencies } );
+		if ( sourceFileHashmapIndex != HASHMAP_INVALID_VALUE ) {
+			context->sourceFileIncludeDependencies[sourceFileHashmapIndex].includeDependencies = includeDependencies;
+		} else {
+			context->sourceFileIncludeDependencies.push_back( { sourceFile, includeDependencies } );
+		}
 	}
 
 	// link step

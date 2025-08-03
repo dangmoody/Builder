@@ -1026,16 +1026,6 @@ int main( int argc, char** argv ) {
 		}
 	}
 
-	// if no configs were manually added then assume we are just doing a default build with no user-specified options
-	if ( options.configs.size() == 0 ) {
-		BuildConfig config = {
-			.source_files = { context.inputFile },
-			.binary_name = defaultBinaryName
-		};
-
-		options.configs.push_back( config );
-	}
-
 	float64 compilerBackendInitTimeMS = -1.0f;
 	String compilerVersion;
 	{
@@ -1211,6 +1201,16 @@ int main( int argc, char** argv ) {
 
 	std::vector<BuildConfig> configsToBuild;
 
+	// if no configs were manually added then assume we are just doing a default build with no user-specified options
+	if ( options.configs.size() == 0 ) {
+		BuildConfig config = {
+			.source_files	= { context.inputFile },
+			.binary_name	= defaultBinaryName
+		};
+
+		options.configs.push_back( config );
+	}
+
 	// if only one config was added (either by user or as a default build) then we know we just want that one, no config command line arg is needed
 	if ( options.configs.size() == 1 ) {
 		AddBuildConfigAndDependenciesUnique( &context, &options.configs[0], configsToBuild );
@@ -1354,8 +1354,6 @@ int main( int argc, char** argv ) {
 
 			config->source_files = finalSourceFilesToBuild;
 		}
-
-		//context.includeDependencies.resize( config->source_files.size() );
 
 		// now do the actual build
 		{

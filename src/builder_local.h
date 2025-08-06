@@ -51,8 +51,6 @@ SOFTWARE.
 #define ARG_CONFIG						"--config="
 #define ARG_VISUAL_STUDIO_BUILD			"--visual-studio-build"
 
-#define BUILD_INFO_FILE_EXTENSION		".build_info"
-
 #define INTERMEDIATE_PATH				"intermediate"
 
 #ifdef _DEBUG

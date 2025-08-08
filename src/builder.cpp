@@ -904,7 +904,7 @@ int main( int argc, char** argv ) {
 #endif
 			},
 			.additional_includes = {
-				path_app_path()	// add the folder that builder lives in as an additional include path otherwise people have no real way of being able to include it
+				tprintf( "%s%c..%cinclude", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR )	// add the folder that builder lives in as an additional include path otherwise people have no real way of being able to include it
 			},
 			.additional_libs = {
 #if defined( _WIN64 )

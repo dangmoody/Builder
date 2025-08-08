@@ -123,7 +123,7 @@
     <ClCompile Include="test_sln\src\test_sln.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="builder.h" />
+    <ClInclude Include="include\builder.h" />
     <ClInclude Include="src\builder_local.h" />
     <ClInclude Include="src\core\include\allocation_context.h" />
     <ClInclude Include="src\core\include\allocator.h" />

@@ -160,6 +160,14 @@
     <None Include="src\core\include\ring.inl" />
     <None Include="src\core\include\typecast.inl" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="build.bat" />
+    <Content Include="build_tests.bat" />
+    <Content Include="doc\CHANGELOG.txt" />
+    <Content Include="doc\Contributing.md" />
+    <Content Include="download_default_compiler.bat" />
+    <Content Include="make_release.bat" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

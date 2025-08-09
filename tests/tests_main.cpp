@@ -35,11 +35,10 @@ static void DoBuildInfoPreTest( const char* buildInfoFilename ) {
 	TEMPER_CHECK_TRUE( !FileExists( buildInfoFilename ) );
 }
 
-static void DoBuildInfoPostTest( const char* testName, const char* buildSourceFile ) {
+static void DoBinaryFilesPostCheck( const char* testName, const char* buildSourceFile ) {
 	const char* buildSourceFileNoExtension = path_remove_file_extension( buildSourceFile );
 
 	TEMPER_CHECK_TRUE( folder_exists( tprintf( "tests\\%s\\.builder", testName ) ) );
-	TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests\\%s\\.builder\\%s.build_info", testName, buildSourceFileNoExtension ) ) );
 	TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests\\%s\\.builder\\%s.dll", testName, buildSourceFileNoExtension ) ) );
 	//TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests\\%s\\.builder\\%s.exp", testName, buildSourceFileNoExtension ) ) );	// optional
 	TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests\\%s\\.builder\\%s.ilk", testName, buildSourceFileNoExtension ) ) );
@@ -66,7 +65,7 @@ TEMPER_TEST( Compile_Basic, TEMPER_FLAG_SHOULD_RUN ) {
 	TEMPER_CHECK_TRUE( FileExists( "tests\\test_basic\\test_basic.pdb" ) );
 	TEMPER_CHECK_TRUE( FileExists( "tests\\test_basic\\test_basic.ilk" ) );
 
-	DoBuildInfoPostTest( "test_basic", "test_basic.cpp" );
+	DoBinaryFilesPostCheck( "test_basic", "test_basic.cpp" );
 }
 
 TEMPER_TEST_PARAMETRIC( Compile_SetBuilderOptions, TEMPER_FLAG_SHOULD_RUN, const char* config ) {
@@ -96,7 +95,7 @@ TEMPER_TEST_PARAMETRIC( Compile_SetBuilderOptions, TEMPER_FLAG_SHOULD_RUN, const
 		TEMPER_CHECK_TRUE( !FileExists( tprintf( "tests\\test_set_builder_options\\bin\\%s\\kenneth.ilk", config ) ) );
 	}
 
-	DoBuildInfoPostTest( "test_set_builder_options", "test_set_builder_options.cpp" );
+	DoBinaryFilesPostCheck( "test_set_builder_options", "test_set_builder_options.cpp" );
 }
 
 TEMPER_INVOKE_PARAMETRIC_TEST( Compile_SetBuilderOptions, "release" );
@@ -119,7 +118,7 @@ TEMPER_TEST( Compile_MultipleSourceFiles, TEMPER_FLAG_SHOULD_RUN ) {
 
 	TEMPER_CHECK_TRUE( FileExists( "tests\\test_multiple_source_files\\bin\\marco_polo.exe" ) );
 
-	DoBuildInfoPostTest( "test_multiple_source_files", "build.cpp" );
+	DoBinaryFilesPostCheck( "test_multiple_source_files", "build.cpp" );
 }
 
 TEMPER_TEST( SetThirdPartyLibrariesViaSetBuilderOptions, TEMPER_FLAG_SHOULD_RUN ) {
@@ -141,7 +140,7 @@ TEMPER_TEST( SetThirdPartyLibrariesViaSetBuilderOptions, TEMPER_FLAG_SHOULD_RUN 
 
 	TEMPER_CHECK_TRUE( FileExists( "tests\\test_third_party_libraries\\bin\\sdl_test.exe" ) );
 
-	DoBuildInfoPostTest( "test_third_party_libraries", "build.cpp" );
+	DoBinaryFilesPostCheck( "test_third_party_libraries", "build.cpp" );
 
 	{
 		Array<const char*> args;
@@ -167,7 +166,7 @@ TEMPER_TEST( Compile_StaticLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 
-		DoBuildInfoPostTest( "test_static_lib", "build.cpp" );
+		DoBinaryFilesPostCheck( "test_static_lib", "build.cpp" );
 	}
 
 	// run the program to make sure everything actually works
@@ -202,7 +201,7 @@ TEMPER_TEST( Compile_DynamicLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 
-		DoBuildInfoPostTest( "test_dynamic_lib", "build.cpp" );
+		DoBinaryFilesPostCheck( "test_dynamic_lib", "build.cpp" );
 	}
 
 	// run the program to make sure everything actually works

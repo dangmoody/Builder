@@ -735,6 +735,20 @@ static bool8 WriteIncludeDependenciesFile( buildContext_t* context ) {
 	return true;
 }
 
+static const char* GetDefaultCompilerPath() {
+#ifdef BUILDER_RELEASE
+	return tprintf( "%s%c../clang/bin/clang", path_app_path() );
+#else
+	#if defined( _WIN64 )
+		const char* defaultCompilerPath = "clang_win64/bin/clang";
+	#elif defined( __linux__ )
+		const char* defaultCompilerPath = "clang_linux/bin/clang";
+	#endif
+
+	return tprintf( "%s%c..%c..%c..%c%s", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, defaultCompilerPath );
+#endif
+}
+
 int main( int argc, char** argv ) {
 	float64 totalTimeStart = time_ms();
 
@@ -877,7 +891,7 @@ int main( int argc, char** argv ) {
 
 	// init default compiler backend (the version of clang that builder came with)
 	compilerBackend_t compilerBackend;
-	CreateCompilerBackend_Clang( &compilerBackend, DEFAULT_COMPILER_PATH );
+	CreateCompilerBackend_Clang( &compilerBackend, GetDefaultCompilerPath() );
 
 	compilerBackend.Init( &compilerBackend );
 	defer( compilerBackend.Shutdown( &compilerBackend ) );
@@ -904,7 +918,12 @@ int main( int argc, char** argv ) {
 #endif
 			},
 			.additional_includes = {
-				tprintf( "%s%c..%cinclude", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR )	// add the folder that builder lives in as an additional include path otherwise people have no real way of being able to include it
+				// add the folder that builder lives in as an additional include path otherwise people have no real way of being able to include it
+#ifdef BUILDER_RELEASE
+				tprintf( "%s%c..%cinclude", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR ),
+#else
+				tprintf( "%s%c..%c..%c..%cinclude", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR ),
+#endif
 			},
 			.additional_libs = {
 #if defined( _WIN64 )
@@ -921,7 +940,7 @@ int main( int argc, char** argv ) {
 				"-Wno-missing-prototypes",	// otherwise the user has to forward declare functions like set_builder_options and thats annoying
 				"-Wno-reorder-init-list",	// allow users to initialize struct members in whatever order they want
 			},
-			.binary_name = defaultBinaryName,//path_remove_path_from_file( path_remove_file_extension( buildInfoData.userConfigSourceFilename.c_str() ) ),
+			.binary_name = defaultBinaryName,
 			.binary_folder = context.dotBuilderFolder.data,
 			.binary_type = BINARY_TYPE_DYNAMIC_LIBRARY,
 			// this is needed because this tells the compiler what to set _ITERATOR_DEBUG_LEVEL to
@@ -971,6 +990,7 @@ int main( int argc, char** argv ) {
 	{
 		// now get the user-specified options
 		setBuilderOptionsFunc_t setBuilderOptionsFunc = cast( setBuilderOptionsFunc_t, library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME ) );
+
 		if ( setBuilderOptionsFunc ) {
 			float64 setBuilderOptionsTimeStart = time_ms();
 

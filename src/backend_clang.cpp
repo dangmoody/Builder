@@ -75,10 +75,10 @@ static const char* OptimizationLevelToCompilerArg( const OptimizationLevel level
 
 static void ReadDependencyFile( const char* depFilename, std::vector<std::string>& outIncludeDependencies ) {
 	char* depFileBuffer = NULL;
-	bool8 read = file_read_entire( depFilename, &depFileBuffer );
 
-	if ( !read ) {
-		fatal_error( "Failed to read \"%s\".  This should never happen!\n", depFilename );
+	if ( !file_read_entire( depFilename, &depFileBuffer ) ) {
+		errorCode_t errorCode = GetLastErrorCode();
+		fatal_error( "Failed to read \"%s\".  This should never happen! Error code: " ERROR_CODE_FORMAT "\n", depFilename, errorCode );
 		return;
 	}
 
@@ -132,7 +132,7 @@ static void ReadDependencyFile( const char* depFilename, std::vector<std::string
 
 		// get the substring we actually need
 		std::string dependencyFilename( dependencyStart, dependencyFilenameLength );
-		For( u64, i, 0, dependencyFilename.size() ) {
+		For ( u64, i, 0, dependencyFilename.size() ) {
 			if ( dependencyFilename[i] == PATH_SEPARATOR && dependencyFilename[i + 1] == ' ' ) {
 				dependencyFilename.erase( i, 1 );
 			}

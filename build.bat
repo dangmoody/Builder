@@ -49,7 +49,7 @@ if /I [%config%]==[debug] (
 )
 
 if /I [%config%]==[release] (
-	set defines=!defines! -DNDEBUG
+	set defines=!defines! -DNDEBUG -DBUILDER_RELEASE
 )
 
 set includes=-Isrc\\core\\include
@@ -69,7 +69,7 @@ set args=clang_win64\\bin\\clang -std=c++20 -o %bin_folder%\\builder.exe %symbol
 echo %args%
 %args%
 
-xcopy /v /y /f %bin_folder%\\builder.exe .\\
+@REM xcopy /v /y /f %bin_folder%\\builder.exe .\\
 
 popd
 

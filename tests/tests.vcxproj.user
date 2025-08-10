@@ -5,12 +5,12 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommand>$(SolutionDir)builder_tests.exe</LocalDebuggerCommand>
     <LocalDebuggerWorkingDirectory>$(SolutionDir)</LocalDebuggerWorkingDirectory>
+    <LocalDebuggerCommand>$(SolutionDir)bin\win64\$(Configuration)\$(TargetFileName)</LocalDebuggerCommand>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LocalDebuggerWorkingDirectory>$(SolutionDir)</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommand>$(SolutionDir)builder_tests.exe</LocalDebuggerCommand>
+    <LocalDebuggerCommand>$(SolutionDir)bin\win64\$(Configuration)\$(TargetFileName)</LocalDebuggerCommand>
   </PropertyGroup>
 </Project>

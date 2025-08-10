@@ -602,10 +602,10 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 					const char* fullConfigName = config->options.name.c_str();
 
-					const char* inputFileRelative = tprintf( "%s%c.builder%c%s", pathFromSolutionToInputFile, PATH_SEPARATOR, PATH_SEPARATOR, context->inputFile );
+					const char* inputFileRelative = tprintf( "%s%c%s", pathFromSolutionToInputFile, PATH_SEPARATOR, context->inputFile );
 
-					string_builder_appendf( &vcxprojContent, "\t\t<NMakeBuildCommandLine>%s%cbuilder.exe %s %s%s</NMakeBuildCommandLine>\n", path_app_path(), PATH_SEPARATOR, inputFileRelative, ARG_CONFIG, fullConfigName );
-					string_builder_appendf( &vcxprojContent, "\t\t<NMakeReBuildCommandLine>%s%cbuilder.exe %s %s%s</NMakeReBuildCommandLine>\n", path_app_path(), PATH_SEPARATOR, inputFileRelative, ARG_CONFIG, fullConfigName );
+					string_builder_appendf( &vcxprojContent, "\t\t<NMakeBuildCommandLine>%s%cbuilder.exe %s %s%s %s</NMakeBuildCommandLine>\n", path_app_path(), PATH_SEPARATOR, inputFileRelative, ARG_CONFIG, fullConfigName, ARG_VISUAL_STUDIO_BUILD );
+					string_builder_appendf( &vcxprojContent, "\t\t<NMakeReBuildCommandLine>%s%cbuilder.exe %s %s%s %s</NMakeReBuildCommandLine>\n", path_app_path(), PATH_SEPARATOR, inputFileRelative, ARG_CONFIG, fullConfigName, ARG_VISUAL_STUDIO_BUILD );
 
 					string_builder_appendf( &vcxprojContent, "\t\t<NMakeCleanCommandLine>%s%cbuilder.exe --nuke %s</NMakeCleanCommandLine>\n", path_app_path(), PATH_SEPARATOR, config->options.binary_folder.c_str() );
 

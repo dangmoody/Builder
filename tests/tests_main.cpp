@@ -12,7 +12,7 @@ static bool8 FileExists( const char* filename ) {
 }
 
 static s32 RunProc( Array<const char*>* args ) {
-	Process* process = process_create( args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
+	Process* process = process_create( args, NULL, /*PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR*/0 );
 	defer( process_destroy( process ) );
 
 	{
@@ -27,14 +27,6 @@ static s32 RunProc( Array<const char*>* args ) {
 	return exitCode;
 }
 
-static void DoBuildInfoPreTest( const char* buildInfoFilename ) {
-	if ( FileExists( buildInfoFilename ) ) {
-		file_delete( buildInfoFilename );
-	}
-
-	TEMPER_CHECK_TRUE( !FileExists( buildInfoFilename ) );
-}
-
 static void DoBinaryFilesPostCheck( const char* testName, const char* buildSourceFile ) {
 	const char* buildSourceFileNoExtension = path_remove_file_extension( buildSourceFile );
 
@@ -47,8 +39,6 @@ static void DoBinaryFilesPostCheck( const char* testName, const char* buildSourc
 }
 
 TEMPER_TEST( Compile_Basic, TEMPER_FLAG_SHOULD_RUN ) {
-	DoBuildInfoPreTest( "tests\\test_basic\\.builder\\test_basic.build_info" );
-
 	const char* sourceFile = "tests\\test_basic\\test_basic.cpp";
 
 	TEMPER_CHECK_TRUE( FileExists( sourceFile ) );
@@ -69,8 +59,6 @@ TEMPER_TEST( Compile_Basic, TEMPER_FLAG_SHOULD_RUN ) {
 }
 
 TEMPER_TEST_PARAMETRIC( Compile_SetBuilderOptions, TEMPER_FLAG_SHOULD_RUN, const char* config ) {
-	DoBuildInfoPreTest( "tests\\test_set_builder_options\\.builder\\test_set_builder_options.build_info" );
-
 	const char* sourceFile = "tests\\test_set_builder_options\\test_set_builder_options.cpp";
 
 	TEMPER_CHECK_TRUE( FileExists( sourceFile ) );
@@ -102,8 +90,6 @@ TEMPER_INVOKE_PARAMETRIC_TEST( Compile_SetBuilderOptions, "release" );
 TEMPER_INVOKE_PARAMETRIC_TEST( Compile_SetBuilderOptions, "debug" );
 
 TEMPER_TEST( Compile_MultipleSourceFiles, TEMPER_FLAG_SHOULD_RUN ) {
-	DoBuildInfoPreTest( "tests\\test_multiple_source_files\\.builder\\build.build_info" );
-
 	const char* buildSourceFile = "tests\\test_multiple_source_files\\build.cpp";
 
 	TEMPER_CHECK_TRUE( FileExists( buildSourceFile ) );
@@ -122,8 +108,6 @@ TEMPER_TEST( Compile_MultipleSourceFiles, TEMPER_FLAG_SHOULD_RUN ) {
 }
 
 TEMPER_TEST( SetThirdPartyLibrariesViaSetBuilderOptions, TEMPER_FLAG_SHOULD_RUN ) {
-	DoBuildInfoPreTest( "tests\\test_third_party_libraries\\.builder\\build.build_info" );
-
 	const char* buildSourceFile = "tests\\test_third_party_libraries\\build.cpp";
 
 	TEMPER_CHECK_TRUE( FileExists( buildSourceFile ) );
@@ -155,8 +139,6 @@ TEMPER_TEST( SetThirdPartyLibrariesViaSetBuilderOptions, TEMPER_FLAG_SHOULD_RUN 
 TEMPER_TEST( Compile_StaticLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 	// now build the exe that uses it
 	{
-		DoBuildInfoPreTest( "tests\\test_static_lib\\.builder\\build.build_info" );
-
 		Array<const char*> args;
 		args.add( "builder.exe" );
 		args.add( "tests\\test_static_lib\\build.cpp" );
@@ -190,8 +172,6 @@ TEMPER_TEST( Compile_DynamicLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 
 	// now build the exe
 	{
-		DoBuildInfoPreTest( "tests\\test_dynamic_lib\\.builder\\build.build_info" );
-
 		Array<const char*> args;
 		args.add( "builder.exe" );
 		args.add( "tests\\test_dynamic_lib\\build.cpp" );

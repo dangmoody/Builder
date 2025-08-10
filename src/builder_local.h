@@ -53,19 +53,6 @@ SOFTWARE.
 
 #define INTERMEDIATE_PATH				"intermediate"
 
-#ifdef _DEBUG
-	#if defined( _WIN64 )
-		#define DEFAULT_COMPILER_PATH	"clang_win64/bin/clang"
-		#define DEFAULT_LINKER_PATH		"clang_win64/bin/lld-link"
-	#elif defined( __linux__ )
-		#define DEFAULT_COMPILER_PATH	"clang_linux/bin/clang"
-		#define DEFAULT_LINKER_PATH		"clang_linux/bin/lld-link"
-	#endif
-#else
-	#define DEFAULT_COMPILER_PATH		"clang/bin/clang"
-	#define DEFAULT_LINKER_PATH			"clang/bin/lld-link"
-#endif
-
 #ifdef _WIN64
 #define ERROR_CODE_FORMAT "0x%X"
 typedef DWORD errorCode_t;

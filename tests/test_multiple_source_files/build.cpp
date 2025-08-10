@@ -9,11 +9,11 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 
 		.source_files = {
 			// you can add individual files
-			"src\\main.cpp",
+			"src/main.cpp",
 
 			// or entire folders at a time
 			// you can also filter by wildcard
-			"src\\*.win64.cpp"
+			"src/*.win64.cpp"
 		},
 	};
 

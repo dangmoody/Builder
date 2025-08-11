@@ -344,6 +344,10 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 
 	// TODO(DM): 03/08/2025: this is kinda ugly
 	auto ShouldRebuildSourceFile = [context]( const char* sourceFile, const char* intermediateFilename, u32 sourceFileHashmapIndex ) -> bool8 {
+		if ( context->forceRebuild ) {
+			return true;
+		}
+
 		// if source file doesnt exist in hashmap then its a new file and we havent built this one before
 		if ( sourceFileHashmapIndex == HASHMAP_INVALID_VALUE ) {
 			return true;
@@ -973,6 +977,12 @@ int main( int argc, char** argv ) {
 		float64 userConfigBuildTimeEnd = time_ms();
 
 		userConfigBuildTimeMS = userConfigBuildTimeEnd - userConfigBuildTimeStart;
+	}
+
+	// if the user config DLL got rebuilt then compile settings might have changed
+	// force a rebuild of everything
+	if ( userConfigBuildResult == BUILD_RESULT_SUCCESS ) {
+		context.forceRebuild = true;
 	}
 
 	BuilderOptions options = {};

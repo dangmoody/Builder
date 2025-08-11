@@ -101,6 +101,7 @@ struct buildContext_t {
 	String								inputFilePath;
 	String								dotBuilderFolder;
 
+	bool8								forceRebuild;
 	bool8								verbose;
 };
 

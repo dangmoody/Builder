@@ -6,8 +6,8 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LocalDebuggerCommand>$(TargetPath)</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>../generate_solution.cpp --config=app-debug --visual-studio-build</LocalDebuggerCommandArguments>
-    <LocalDebuggerWorkingDirectory>$(ProjectDir)tests/test_generate_visual_studio_files/visual_studio</LocalDebuggerWorkingDirectory>
+    <LocalDebuggerCommandArguments>build.cpp</LocalDebuggerCommandArguments>
+    <LocalDebuggerWorkingDirectory>C:/dev/TEF</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LocalDebuggerCommand>$(TargetPath)</LocalDebuggerCommand>

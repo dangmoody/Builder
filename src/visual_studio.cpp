@@ -524,7 +524,6 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 					string_builder_appendf( &vcxprojContent, "\t\t<ConfigurationType>Makefile</ConfigurationType>\n" );
 					string_builder_appendf( &vcxprojContent, "\t\t<UseDebugLibraries>false</UseDebugLibraries>\n" );
 					string_builder_appendf( &vcxprojContent, "\t\t<PlatformToolset>v143</PlatformToolset>\n" );
-
 					string_builder_appendf( &vcxprojContent, "\t\t<OutDir>%s</OutDir>\n", pathFromSolutionToBinary );
 					string_builder_appendf( &vcxprojContent, "\t\t<IntDir>%s%cintermediate</IntDir>\n", config->options.binary_folder.c_str(), PATH_SEPARATOR );
 					string_builder_appendf( &vcxprojContent, "\t</PropertyGroup>\n" );
@@ -607,7 +606,6 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 					string_builder_appendf( &vcxprojContent, "\t\t<NMakeBuildCommandLine>\"%s%cbuilder.exe\" %s %s%s %s</NMakeBuildCommandLine>\n", path_app_path(), PATH_SEPARATOR, inputFileRelative, ARG_CONFIG, fullConfigName, ARG_VISUAL_STUDIO_BUILD );
 					string_builder_appendf( &vcxprojContent, "\t\t<NMakeReBuildCommandLine>\"%s%cbuilder.exe\" %s %s%s %s</NMakeReBuildCommandLine>\n", path_app_path(), PATH_SEPARATOR, inputFileRelative, ARG_CONFIG, fullConfigName, ARG_VISUAL_STUDIO_BUILD );
-
 					string_builder_appendf( &vcxprojContent, "\t\t<NMakeCleanCommandLine>\"%s%cbuilder.exe\" %s %s</NMakeCleanCommandLine>\n", path_app_path(), PATH_SEPARATOR, ARG_NUKE, config->options.binary_folder.c_str() );
 
 					// preprocessor definitions

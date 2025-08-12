@@ -741,7 +741,7 @@ static bool8 WriteIncludeDependenciesFile( buildContext_t* context ) {
 
 static const char* GetDefaultCompilerPath() {
 #ifdef BUILDER_RELEASE
-	return tprintf( "%s%c../clang/bin/clang", path_app_path() );
+	return tprintf( "%s%c../clang/bin/clang", path_app_path(), PATH_SEPARATOR );
 #else
 	#if defined( _WIN64 )
 		const char* defaultCompilerPath = "clang_win64/bin/clang";

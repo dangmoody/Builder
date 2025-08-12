@@ -7,7 +7,7 @@ by Dan Moody.
 
 Builder is a build tool that lets you configure the compilation of your C++ program by writing C++ code.
 
-**BUILDER IS NOT A COMPILER.**  Builder will just call the compiler under the hood.  Builder just turns some C++ code into compiler arguments.
+**BUILDER IS NOT A COMPILER.**  Builder just turns some C++ code into compiler arguments and then calls the compiler to build your code
 
 Builder supports Clang, MSVC, and GCC.
 

@@ -217,5 +217,20 @@
     <None Include="src\core\include\typecast.inl">
       <Filter>Header Files</Filter>
     </None>
+    <None Include="README.md" />
+    <None Include=".gitignore" />
+    <None Include="build.bat">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="build_tests.bat">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="download_default_compiler.bat">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="LICENSE" />
+    <None Include="make_release.bat">
+      <Filter>Source Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

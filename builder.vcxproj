@@ -156,6 +156,13 @@
     <ClInclude Include="test_sln\src\library\library.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include=".gitignore" />
+    <None Include="build.bat" />
+    <None Include="build_tests.bat" />
+    <None Include="download_default_compiler.bat" />
+    <None Include="LICENSE" />
+    <None Include="make_release.bat" />
+    <None Include="README.md" />
     <None Include="src\core\include\array.inl" />
     <None Include="src\core\include\ring.inl" />
     <None Include="src\core\include\typecast.inl" />

@@ -224,3 +224,5 @@ Builder would not have been possible without the following people who deserve, a
 
 * Tom Whitcombe (Visual Studio project generation)
 * Mike Young (Linux port)
+* Dale Green
+* Yann Richeux

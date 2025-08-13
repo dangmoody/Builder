@@ -1,4 +1,4 @@
-v0.8.0, <RELEASE DATE HERE>:
+v0.8.0, 13/08/2025:
 
 WARNING: There are a lot of big changes in this release.  Some of them make this version of Builder very incompatible with previous versions.
 

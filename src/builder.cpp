@@ -81,6 +81,11 @@ enum buildResult_t {
 	debug_break(); \
 	return 1
 
+#ifdef __linux__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpadded"
+#endif
+
 static u64 GetLastFileWriteTime( const char* filename ) {
 	FileInfo fileInfo;
 	File file = file_find_first( filename, &fileInfo );

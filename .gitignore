@@ -2,11 +2,16 @@
 # project specific stuff
 #
 bin
-clang
-
 .builder
-
 *.o
+
+#
+# default compiler
+#
+clang
+clang_win64
+clang_linux
+
 
 builder.exe
 builder_tests.exe

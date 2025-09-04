@@ -36,12 +36,12 @@ REM if /I [%config%]==[debug] (
 REM 	set symbols=-g
 REM )
 
-set optimisation=""
+set optimisation=-O0
 if /I [%config%]==[release] (
 	set optimisation=-O3
 )
 
-set source_files=src\\builder.cpp src\\visual_studio.cpp src\\core\\src\\core.suc.cpp
+set source_files=src\\builder.cpp src\\visual_studio.cpp src\\core\\src\\core.suc.cpp src\\backend_clang.cpp src\\backend_msvc.cpp
 
 set defines=-D_CRT_SECURE_NO_WARNINGS -DCORE_USE_XXHASH -DCORE_USE_SUBPROCESS -DCORE_SUC -DHASHMAP_HIDE_MISSING_KEY_WARNING -DHLML_NAMESPACE
 if /I [%config%]==[debug] (
@@ -49,7 +49,7 @@ if /I [%config%]==[debug] (
 )
 
 if /I [%config%]==[release] (
-	set defines=!defines! -DNDEBUG
+	set defines=!defines! -DNDEBUG -DBUILDER_RELEASE
 )
 
 set includes=-Isrc\\core\\include
@@ -63,13 +63,13 @@ if /I [%config%]==[debug] (
 
 set warning_levels=-Werror -Wall -Wextra -Weverything -Wpedantic
 
-set ignore_warnings=-Wno-newline-eof -Wno-format-nonliteral -Wno-gnu-zero-variadic-macro-arguments -Wno-declaration-after-statement -Wno-unsafe-buffer-usage -Wno-zero-as-null-pointer-constant -Wno-c++98-compat-pedantic -Wno-old-style-cast -Wno-missing-field-initializers -Wno-switch-default -Wno-covered-switch-default -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-cast-align -Wno-double-promotion
+set ignore_warnings=-Wno-newline-eof -Wno-format-nonliteral -Wno-gnu-zero-variadic-macro-arguments -Wno-declaration-after-statement -Wno-unsafe-buffer-usage -Wno-zero-as-null-pointer-constant -Wno-c++98-compat-pedantic -Wno-old-style-cast -Wno-missing-field-initializers -Wno-switch-default -Wno-covered-switch-default -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-cast-align -Wno-double-promotion -Wno-nontrivial-memcall
 
-set args=clang -std=c++20 -o %bin_folder%\\builder.exe %symbols% %optimisation% %source_files% !defines! %includes% !libraries! %warning_levels% %ignore_warnings%
+set args=clang_win64\\bin\\clang -std=c++20 -o %bin_folder%\\builder.exe %symbols% %optimisation% %source_files% !defines! %includes% !libraries! %warning_levels% %ignore_warnings%
 echo %args%
 %args%
 
-xcopy /v /y /f %bin_folder%\\builder.exe .\\
+@REM xcopy /v /y /f %bin_folder%\\builder.exe .\\
 
 popd
 

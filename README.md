@@ -2,46 +2,38 @@
 
 by Dan Moody.
 
+
 ## What is Builder?
 
-Builder is a build tool that lets you configure the compilation of your program by writing C++ code.
+Builder is a build tool that lets you configure the compilation of your C++ program by writing C++ code.
 
-## Motivation
+**BUILDER IS NOT A COMPILER.**  Builder just turns some C++ code into compiler arguments and then calls the compiler to build your code
 
-If you're a C++ programmer you've almost certainly had some trouble with your build system at one point or another.  As an example: CMake, while popular, requires you to learn a whole other language and has a ton of friction that comes with it.
+Builder supports Clang, MSVC, and GCC.
 
-It's easy to see why tools like CMake have appeal on the surface.  Using C++ compilers from just the command line for even small sized codebases is not feasible given the sheer number of arguments that they require.  This is why things like Visual Studio project configurations exist.  There's a whole host of alternative options though: programs like Ninja, build scripts written in shell/bash script, Makefiles, Python, the list goes on.  Unreal Engine uses C# for this for some reason.
-
-Why don't we just configure our builds in the same language we write our programs in? It's so much more intuitive, there's a lot less friction, and you don't have to learn another language.  Enter Builder.
-
-With Builder you can build your program from the same language you write your program with, given a single C++ source file containing some code that configures your build.  This is a much more intuitive way of programmers configuring builds.
 
 ## Installation
 
 1. Download the latest release.
-2. Extract `builder.exe` and `builder.h` to anywhere on your computer that you like.  They MUST be in the same folder as each other.
+2. Extract the archive somewhere.
+3. **Optional:** Add Builder to your PATH.
+
 
 ## Usage
 
-Instead of compiling your program like this:
-
-```
-clang -std=c++20 -g -o my-program.exe -DIS_AWESOME=1 game.cpp ...
-```
-
-Or suffering through the Visual Studio project settings, or CMake, or whatever you were doing before, you instead now do it like this:
+Builds are configured via a source file which you pass as an argument when calling `builder.exe`.
 
 ```cpp
 // build.cpp
 
-#include <builder.h> // builder will automatically resolve this include for you
+#include <builder.h> // Builder will automatically resolve this include for you.
 
-// this function MUST be called set_builder_options, MUST be void, and MUST use the BUILDER_CALLBACK modifier
+// This is the entry point that Builder searches for.
 BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	BuildConfig config = {
-		.binary_name = "my-program",
+		.binary_name = "my-awesome-program",
 		.binary_folder = "bin/win64",
-		.source_files = { "src/*.cpp" },
+		.source_files = { "src/**/*.cpp" },
 		.defines = { "IS_AWESOME=1" },
 	};
 
@@ -55,19 +47,15 @@ And then at a command line, do this:
 builder build.cpp
 ```
 
-On the first run, Builder will detect if you have the version of Clang installed that it requires.  If you don't then Builder will download and install it for you (it will go in the `clang` folder).  It will install it in the same folder that `builder.exe` lives.  This requires an internet connection (but only for the first time setup).
-
-You'll also probably want to add the `clang` folder that Builder creates to your Version Control's list of ignored files.
-
 Builder will now build your program.
 
-**NOTE: BUILDER IS NOT A COMPILER.**  Builder will just call Clang under the hood.  Builder just figures out what to tell Clang to do based on your build source file that you specify.
-
 If you don't write `set_builder_options` then Builder can still build your program, it will just use the defaults:
+* Builder will use the portable install of Clang that it comes with as the compiler.
 * The program name will be the name of the source file you specified, except it will end with `.exe` instead of `.cpp`.
 * The program will be put in the same folder as the source file.
 
 Run `builder -h` or `builder --help` for help in the command line.
+
 
 ### Configs
 
@@ -105,6 +93,8 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 }
 ```
 
+And then at the command line add the `--config=` arg:
+
 ```
 builder build.cpp --config=debug
 ```
@@ -120,6 +110,33 @@ When the build source file is getting compiled, Builder will a custom `#define` 
 Builder also has other entry points:
 * `on_pre_build()` - This gets run just before your program gets compiled.
 * `on_post_build()` - This gets run just after your program gets compiled.
+
+
+### Changing compilers
+
+By default, Builder comes with it's own portable install of Clang and, by default, Builder will use that to compile with (if no compiler is set manually).  However, you absolutely don't have to use this as your compiler if you don't want to.
+
+To override this, and to make Builder use whatever compiler you want (so long as it's either Clang, MSVC, or GCC) then do the following inside `set_builder_options`:
+
+```cpp
+options->compiler_path = "C:/Program Files/mingw64/bin/gcc.exe";
+```
+
+You can also tell Builder that you want to use a specific compiler version like so:
+
+```cpp
+options->compiler_version = "15.1.0";
+```
+
+If Builder detects that your compiler version doesn't match the one specified it will throw a warning before trying to build your program.  This can be useful (for example) for teams who need to make sure they're using the same toolchain.
+
+
+#### MSVC
+
+Because of the completely ridiculous way Microsoft has structured the folder layout of all its tools, we recommend just setting the compiler path to `cl` and then setting the compiler version that you want to use and let Builder figure out everything for you.
+
+You don't have to do this, and you can totally use a hard-coded path to `cl` if you want to, but Builder does support automatic resolution of MSVC and the Windows SDK files on its own if you pass just `cl` as the compiler path.
+
 
 ## Visual Studio
 
@@ -180,7 +197,19 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 }
 ```
 
-Every project that Builder generates is a Makefile project.  Therefore, changes that you make to any of the project properties in Visual Studio will not actually do anything (this is a Visual Studio problem).  If you want to change your project properties you must re-generate your Visual Studio solution.
+Every project that Builder generates is a Makefile project that calls `builder.exe`.  Therefore, changes that you make to any of the project properties in Visual Studio will not actually do anything (this is a Visual Studio problem).  If you want to change your project properties you must re-generate your Visual Studio solution.
+
+
+## Motivation
+
+If you're a C++ programmer you've almost certainly had some trouble with your build system at one point or another.  As an example: CMake, while popular, requires you to learn a whole other language and has a ton of friction that comes with it.
+
+It's easy to see why tools like CMake have appeal on the surface.  Using C++ compilers from just the command line for even small sized codebases is not feasible given the sheer number of arguments that they require.  This is why things like Visual Studio project configurations exist.  There's a whole host of alternative options though: programs like Ninja, build scripts written in shell/bash script, Makefiles, Python, the list goes on.  Unreal Engine uses C# for this for some reason.
+
+Why don't we just configure our builds in the same language we write our programs in? It's so much more intuitive, there's a lot less friction, and you don't have to learn another language.  Enter Builder.
+
+With Builder you can build your program from the same language you write your program with, given a single C++ source file containing some code that configures your build.  This is a much more intuitive way of programmers configuring builds.
+
 
 ## Contributing
 
@@ -188,9 +217,12 @@ Yes!
 
 Please see [Contributing.md](doc/Contributing.md).
 
+
 ## Credits
 
 Builder would not have been possible without the following people who deserve, at the very least, a special thanks:
 
 * Tom Whitcombe (Visual Studio project generation)
 * Mike Young (Linux port)
+* Dale Green
+* Yann Richeux

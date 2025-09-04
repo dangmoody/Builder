@@ -1,6 +1,42 @@
-v0.7.1, <RELEASE DATE HERE>:
+v0.8.0, 13/08/2025:
 
-* Added a timer for first time setup, if it runs.
+WARNING: There are a lot of big changes in this release.  Some of them make this version of Builder very incompatible with previous versions.
+
+* "First time setup" (downloading and installing Clang for you) has been entirely removed.
+	* Users must now set the path to whatever compiler they want to use via BuilderOptions::compiler_path.  If one is not set, then Builder will use the default portable install of Clang that it comes with (more on that below).
+	* Having Builder download and manage a Clang install for you has been an experiment from day one, but we're finding that it causes friction because people are now being forced into a specific Clang install which can cause issues with other tools.
+		* Visual Studio, for instance, has a dependency to a specific Clang version depending on what version of the IDE you are using.
+	* The automated Clang download has proven to be quite brittle for various users depending on their internet connection.  If the download failed then the user would either have to manually install Clang at the correct location or Builder would be unusable; this is unacceptable.
+	* Letting the user specify the path to their own compiler means none of this is an issue anymore.
+	* Builder is a build tool, not a compiler.  So let's stop pretending that it is one.
+	* The user should have full control over their system and Builder shouldn't be dictating what software they use.
+	* Thanks @DaleGreen, @Yann4, and @Mike430 for the feedback and helping me see sense.
+* Added support for compiling with MSVC and GCC.
+	* Because you can now set the path to your own compiler, it only makes sense to add multi-compiler support now.
+	* If your BuildConfig::compiler_path ends with "gcc" or "gcc.exe" then Builder will know to build with GCC.
+		* For GCC, as with Clang, you can either set BuilderOptions::compiler_path to the absolute path of your compiler, or you can add the compiler to your PATH and just put the name of the compiler in BuilderOptions::compiler_path.  It's entirely your choice.
+	* For MSVC, just set BuilderOptions::compiler_path to "cl" or "cl.exe" and let Builder detect the version(s) of MSVC you have.  You can use absolute paths if you want, but then you'll also have to get all the paths to all the correct Windows SDK includes and libraries and it's a bit of pain.
+* Builder now comes with a portable install of Clang.
+	* Users are now the ones who dictate what compiler Builder will compile their own code with, but Builder needs to know about a compiler beforehand when compiling the build source file into a DLL.
+	* This is strictly for compiling the user config DLL ONLY and nothing else (but there's obviously nothing stopping you from compiling your own code with it if you wanted to).
+	* Giving Builder it's own copy of Clang that it only uses in that specific case is the only solution I can think of that means Builder can still build its user config DLLs without forcing the user to have a specific compiler installed on their machine (If you have a better idea, do let me know!).
+	* Therefore:
+		* BUILDER_CLANG_VERSION_MAJOR, BUILDER_CLANG_VERSION_MINOR, and BUILDER_CLANG_VERSION_PATCH have all been removed.
+		* Builder is no longer small enough to fit inside a single GitHub repository without using Git LFS.  Therefore, you should treat Builder as a program that you install centrally on your PC instead of a program that you can drop into an individual repository.
+* Removed .build_info files.
+	* The only reason we initially had these was because we thought it was a good idea to read from these when doing a build from Visual Studio, but the fact of the matter is that the only data that actually needs to get cached is the include dependencies for each source file that gets built.
+	* We instead now have .include_dependencies files which cache this information, but that's it.
+	* We have all the caching we need already in the form the build settings DLL.  If that DLL exists then Builder runs it, if it doesn't then Builder compiles it beforehand.  _This_ is what tells us what build settings we have and it's all we need.  We don't need a config file or a DSL for this.
+	* This also means that all building behaviour for both the build settings DLL and the actual code build you want to do has been completely unified.  This means that Builder now has less code in it than before and runs faster.
+* Added BuildConfig::language_version.
+	* This lets you explicitly set what version of C or C++ you want to build your program with.
+	* For example, LANGUAGE_VERSION_C99 will set -std=c99 in the command line args when calling Clang, and so on.
+* Added BuilderOptions::compiler_version.
+	* This lets you set the expected version of the compiler that you're using.
+	* If this doesn't match the version that your compiler actually is then Builder will generate a warning.
+	* This is useful in teams where you want people to be on the same compiler version.
+	* Different compiler versions can introduce new features/warnings and generally otherwise break things, so having something that highlights that two people are on a different compiler version can help against weird behaviour that exists on one machine but not another.
+* Fixed very out of date help text when passing -h or --help (whoops!).
 
 ----------------------------------------------------------------
 

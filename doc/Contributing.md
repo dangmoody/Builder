@@ -2,23 +2,36 @@
 
 We are accepting PRs for Builder!
 
+
 ## House Rules
 
 * Your PR must be submitted in the form of a fork.
 * Your PR fixes one of the issues in the repo's [issues list](https://github.com/dangmoody/Builder/issues).
 * I am grateful for any and all PRs that get submitted, but it's entirely my discretion as to whether or not the PR gets accepted.  I will do my best to work with you on the changes before rejecting a PR.
 
+
+## Git Branches
+
+The naming convention for branches is `lower-case-separated-by-hyphens`.
+
+* Development branches are prefixed `dev-`.
+* Experimental branches are prefixed `exp-`.
+
+
 ## Developer Setup
+
 
 ### Pre-requisites
 
-You'll need the same version of Clang installed that Builder is currently building with as a separate install.  This is because you need a compiler to build Builder with.  You can check which version Builder is using inside `builder.h`.
+Builder is built with [Clang 20.1.5](https://github.com/llvm/llvm-project/releases/tag/llvmorg-20.1.5).
+
 
 #### Linux
 
 You'll need `libuuid` (we are working to remove this dependency in future, but for now you will need it).
 
 If you want to use an IDE to open `builder.sln` then you'll also need MSBuild as, somehow, the solution is dependent on it (we are working to remove this dependency in future, but for now you will need it).
+
 
 ### Compiling Builder
 

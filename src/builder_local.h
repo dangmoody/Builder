@@ -28,7 +28,7 @@ SOFTWARE.
 
 #pragma once
 
-#include "../builder.h"
+#include "../include/builder.h"
 
 #include "core/include/core_types.h"
 #include "core/include/array.h"
@@ -42,64 +42,77 @@ SOFTWARE.
 #include <vector>
 //#include <string>
 
-#define ARG_HELP_SHORT		"-h"
-#define ARG_HELP_LONG		"--help"
-#define ARG_VERBOSE_SHORT	"-v"
-#define ARG_VERBOSE_LONG	"--verbose"
-#define ARG_NUKE			"--nuke"
-#define ARG_CONFIG			"--config="
+// cmd line args
+#define ARG_HELP_SHORT					"-h"
+#define ARG_HELP_LONG					"--help"
+#define ARG_VERBOSE_SHORT				"-v"
+#define ARG_VERBOSE_LONG				"--verbose"
+#define ARG_NUKE						"--nuke"
+#define ARG_CONFIG						"--config="
+#define ARG_VISUAL_STUDIO_BUILD			"--visual-studio-build"
 
-#define BUILD_INFO_FILE_EXTENSION	".build_info"
+#define INTERMEDIATE_PATH				"intermediate"
 
 #ifdef __linux__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wpadded"
 #endif //__linux__
 
-struct Hashmap;
-struct buildInfoData_t;
+struct buildContext_t;
 
-enum buildContextFlagBits_t {
-	BUILD_CONTEXT_FLAG_SHOW_COMPILER_ARGS					= bit( 0 ),
-	BUILD_CONTEXT_FLAG_SHOW_STDOUT							= bit( 1 ),
-	BUILD_CONTEXT_FLAG_GENERATING_VISUAL_STUDIO_SOLUTION	= bit( 2 ),
+struct Hashmap;
+
+enum procFlagBits_t {
+	PROC_FLAG_SHOW_ARGS		= bit( 0 ),
+	PROC_FLAG_SHOW_STDOUT	= bit( 1 ),
 };
-typedef u32 buildContextFlags_t;
+typedef u32 procFlags_t;
+
+struct compilerBackend_t {
+	String	compilerPath;
+	String	linkerPath;
+	void*	data;
+
+	bool8	( *Init )( compilerBackend_t* backend );
+	void	( *Shutdown )( compilerBackend_t* backend );
+	bool8	( *CompileSourceFile )( compilerBackend_t* backend, const char* sourceFile, BuildConfig* config );
+	bool8	( *LinkIntermediateFiles )( compilerBackend_t* backend, const Array<const char*>& intermediateFiles, BuildConfig* config );
+	void	( *GetIncludeDependenciesFromSourceFileBuild )( compilerBackend_t* backend, std::vector<std::string>& includeDependencies );
+	String	( *GetCompilerVersion )( compilerBackend_t* backend );
+};
+
+void			CreateCompilerBackend_Clang( compilerBackend_t* outBackend, const char* compilerPath );
+void			CreateCompilerBackend_MSVC( compilerBackend_t* outBackend, const char* compilerPath );
+void			CreateCompilerBackend_GCC( compilerBackend_t* outBackend, const char* compilerPath );
+
+struct includeDependencies_t {
+	std::string					filename;
+	std::vector<std::string>	includeDependencies;
+};
 
 struct buildContext_t {
-	BuildConfig			config;
+	Hashmap*							configIndices;
+	Hashmap*							sourceFileIndices;
+	std::vector<includeDependencies_t>	sourceFileIncludeDependencies;
 
-	Hashmap*			configIndices;
+	const char*							inputFile;
+	String								inputFilePath;
+	String								dotBuilderFolder;
 
-	std::vector<std::vector<std::string>>	includeDependencies;
-
-	// TODO(DM): 10/08/2024: does this want to be inside BuilderOptions?
-	// it would give users more control over their build
-	buildContextFlags_t	flags;
-
-	const char*			fullBinaryName;
-
-	const char*			inputFile;
-	String				inputFilePath;
-
-	String				dotBuilderFolder;
-	String				buildInfoFilename;
-
-	bool8				verbose;
+	bool8								forceRebuild;
+	bool8								verbose;
 };
 
 void		NukeFolder_r( const char* folder, const bool8 deleteRoot, const bool8 verbose );
 
-const char*	GetSlashInPath( const char* path );
-//bool8		PathHasSlash( const char* path );
+const char*	GetNextSlashInPath( const char* path );
 
 bool8		FileIsSourceFile( const char* filename );
 bool8		FileIsHeaderFile( const char* filename );
-//void		GetAllSubfolders_r( const char* basePath, const char* folder, Array<const char*>* outSubfolders );
 
 const char*	BuildConfig_GetFullBinaryName( const BuildConfig* config );
-void		BuildConfig_AddDefaults( BuildConfig* outConfig );
 
+s32			RunProc( Array<const char*>* args, Array<const char*>* environmentVariables, const procFlags_t procFlags = 0 );
 
 bool8		GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* options );
 

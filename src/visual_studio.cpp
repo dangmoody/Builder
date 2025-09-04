@@ -147,8 +147,6 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 	assert( context );
 	assert( context->inputFile );
 	assert( context->inputFilePath.data );
-	assert( context->dotBuilderFolder.data );
-	assert( context->buildInfoFilename.data );
 	assert( options );
 
 	Array<char*> projectFolders;
@@ -162,9 +160,6 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 	};
 
 	Array<guidParentMapping_t> guidParentMappings;
-
-	// TODO(DM): 18/11/2024: dont use abs path here
-	string_printf( &context->buildInfoFilename, "%s%c.builder%c%s%s", context->inputFilePath.data, PATH_SEPARATOR, PATH_SEPARATOR, options->solution.name.c_str(), BUILD_INFO_FILE_EXTENSION );
 
 	// validate the solution
 	{
@@ -333,7 +328,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 				while ( *folderStart ) {
 					// get the end of the folder
-					const char* folderEnd = GetSlashInPath( folderStart );
+					const char* folderEnd = GetNextSlashInPath( folderStart );
 
 					if ( !folderEnd ) {
 						folderEnd = folderStart + strlen( folderStart );
@@ -548,7 +543,6 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 					string_builder_appendf( &vcxprojContent, "\t\t<ConfigurationType>Makefile</ConfigurationType>\n" );
 					string_builder_appendf( &vcxprojContent, "\t\t<UseDebugLibraries>false</UseDebugLibraries>\n" );
 					string_builder_appendf( &vcxprojContent, "\t\t<PlatformToolset>v143</PlatformToolset>\n" );
-
 					string_builder_appendf( &vcxprojContent, "\t\t<OutDir>%s</OutDir>\n", pathFromSolutionToBinary );
 					string_builder_appendf( &vcxprojContent, "\t\t<IntDir>%s%cintermediate</IntDir>\n", config->options.binary_folder.c_str(), PATH_SEPARATOR );
 					string_builder_appendf( &vcxprojContent, "\t</PropertyGroup>\n" );
@@ -624,14 +618,14 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 					// output path
 					string_builder_appendf( &vcxprojContent, "\t\t<NMakeOutput>%s</NMakeOutput>\n", config->options.binary_folder.c_str() );
 
-					const char* buildInfoFileRelative = tprintf( "%s%c.builder%c%s%s", pathFromSolutionToInputFile, PATH_SEPARATOR, PATH_SEPARATOR, options->solution.name.c_str(), BUILD_INFO_FILE_EXTENSION );
-
 					const char* fullConfigName = config->options.name.c_str();
 
-					string_builder_appendf( &vcxprojContent, "\t\t<NMakeBuildCommandLine>%s%cbuilder.exe %s %s%s</NMakeBuildCommandLine>\n", path_app_path(), PATH_SEPARATOR, buildInfoFileRelative, ARG_CONFIG, fullConfigName );
-					string_builder_appendf( &vcxprojContent, "\t\t<NMakeReBuildCommandLine>%s%cbuilder.exe %s %s%s</NMakeReBuildCommandLine>\n", path_app_path(), PATH_SEPARATOR, buildInfoFileRelative, ARG_CONFIG, fullConfigName );
+					const char* inputFileNoPath = path_remove_path_from_file( context->inputFile );
+					const char* inputFileRelative = tprintf( "%s%c%s", pathFromSolutionToInputFile, PATH_SEPARATOR, inputFileNoPath );
 
-					string_builder_appendf( &vcxprojContent, "\t\t<NMakeCleanCommandLine>%s%cbuilder.exe --nuke %s</NMakeCleanCommandLine>\n", path_app_path(), PATH_SEPARATOR, config->options.binary_folder.c_str() );
+					string_builder_appendf( &vcxprojContent, "\t\t<NMakeBuildCommandLine>\"%s%cbuilder.exe\" %s %s%s %s</NMakeBuildCommandLine>\n", path_app_path(), PATH_SEPARATOR, inputFileRelative, ARG_CONFIG, fullConfigName, ARG_VISUAL_STUDIO_BUILD );
+					string_builder_appendf( &vcxprojContent, "\t\t<NMakeReBuildCommandLine>\"%s%cbuilder.exe\" %s %s%s %s</NMakeReBuildCommandLine>\n", path_app_path(), PATH_SEPARATOR, inputFileRelative, ARG_CONFIG, fullConfigName, ARG_VISUAL_STUDIO_BUILD );
+					string_builder_appendf( &vcxprojContent, "\t\t<NMakeCleanCommandLine>\"%s%cbuilder.exe\" %s %s</NMakeCleanCommandLine>\n", path_app_path(), PATH_SEPARATOR, ARG_NUKE, config->options.binary_folder.c_str() );
 
 					// preprocessor definitions
 					string_builder_appendf( &vcxprojContent, "\t\t<NMakePreprocessorDefinitions>" );

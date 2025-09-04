@@ -63,7 +63,7 @@ set ignore_warnings=-Wno-newline-eof -Wno-format-nonliteral -Wno-gnu-zero-variad
 
 clang -std=c++20 -o %bin_folder%\\builder_tests.exe %symbols% %optimisation% %source_files% !defines! %includes% !libraries! %warning_levels% %ignore_warnings%
 
-xcopy /v /y /f %bin_folder%\\builder_tests.exe .\\
+@REM xcopy /v /y /f %bin_folder%\\builder_tests.exe .\\
 
 popd
 

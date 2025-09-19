@@ -89,11 +89,12 @@ static void assert_dialog_internal( const char* file, const int line, const char
 	set_console_text_color( CONSOLE_TEXT_COLOR_DEFAULT );
 
 #ifdef _DEBUG
-	_CrtDbgReport( _CRT_ASSERT, file, line, NULL, msg );
+	//_CrtDbgReport( _CRT_ASSERT, file, line, NULL, msg );
 #else
 	// TODO (MY) - maybe consider revisiting
 	// MessageBox( NULL, msg, "ASSERTION ERROR", MB_OK );
 #endif
+    printf( "FATAL ERROR!\n" );    // DM!!! whats the linux equivalent of MessageBox()?
 }
 
 errorCode_t get_last_error_code() {

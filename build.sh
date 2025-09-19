@@ -1,7 +1,6 @@
 #!/bin/bash
 
-ShowUsage()
-{
+ShowUsage() {
 	echo Usage: build.bat \[debug\|release\]
 	exit 1
 }
@@ -40,7 +39,7 @@ if [[ "$config" != "release" ]]; then
 	optimisation="-O3"
 fi
 
-source_files="$source_folder/builder.cpp $source_folder/visual_studio.cpp $source_folder/core/src/core.suc.cpp"
+source_files="$source_folder/builder.cpp $source_folder/visual_studio.cpp $source_folder/backend_clang.cpp $source_folder/core/src/core.suc.cpp"
 
 defines="-D_CRT_SECURE_NO_WARNINGS -DCORE_USE_XXHASH -DCORE_SUC -DCORE_USE_SUBPROCESS -DHASHMAP_HIDE_MISSING_KEY_WARNING -DHLML_NAMESPACE"
 if [[ "$config" == "debug" ]]; then
@@ -58,13 +57,12 @@ libraries="-lstdc++ -luuid"
 warning_levels="-Werror -Wall -Wextra -Weverything -Wpedantic"
 ignore_warnings="-Wno-newline-eof -Wno-format-nonliteral -Wno-gnu-zero-variadic-macro-arguments -Wno-declaration-after-statement -Wno-unsafe-buffer-usage -Wno-zero-as-null-pointer-constant -Wno-c++98-compat-pedantic -Wno-old-style-cast -Wno-missing-field-initializers -Wno-switch-default -Wno-covered-switch-default -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-cast-align -Wno-double-promotion -Wno-alloca"
 
-args="clang -std=c++20 -ferror-limit=0 -o $bin_folder/builder.exe $symbols $optimisation $source_files $defines $includes $libraries $warning_levels $ignore_warnings"
+args="clang -std=c++20 -ferror-limit=0 -o $bin_folder/builder $symbols $optimisation $source_files $defines $includes $libraries $warning_levels $ignore_warnings"
 echo $args
-#echo -n -e $args
 $args
 
-echo "Copying $bin_folder/builder.exe -> ./builder.exe"
-cp $bin_folder/builder.exe ./builder.exe
+#echo "Copying $bin_folder/builder.exe -> ./builder.exe"
+#cp $bin_folder/builder.exe ./builder.exe
 
 
 exit 0

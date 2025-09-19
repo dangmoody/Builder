@@ -325,8 +325,8 @@ static s32 ShowUsage( const s32 exitCode ) {
 static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, compilerBackend_t* compilerBackend ) {
 	// create binary folder
 	if ( !folder_create_if_it_doesnt_exist( config->binary_folder.c_str() ) ) {
-		errorCode_t errorCode = GetLastErrorCode();
-		fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".  Error code: " ERROR_CODE_FORMAT "\n", SET_BUILDER_OPTIONS_FUNC_NAME, config->binary_folder.c_str(), errorCode );
+		errorCode_t errorCode = get_last_error_code();
+		fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".  %s\n", SET_BUILDER_OPTIONS_FUNC_NAME, config->binary_folder.c_str(), strerror( errorCode ) );
 		return BUILD_RESULT_FAILED;
 	}
 
@@ -334,7 +334,7 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 	const char* intermediatePath = tprintf( "%s%c%s", config->binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
 	if ( !folder_create_if_it_doesnt_exist( intermediatePath ) ) {
 		errorCode_t errorCode = get_last_error_code();
-		fatal_error( "Failed to create intermediate binary folder.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
+		fatal_error( "Failed to create intermediate binary folder.  %s\n", strerror( errorCode ) );
 		return BUILD_RESULT_FAILED;
 	}
 
@@ -357,7 +357,7 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 
 		// if the .o file doesnt exist then assume we havent built this file yet
 		// if the .o file does exist but the source file was written to it more recently then we know we want to rebuild
-		if ( ( intermediateFile.ptr == INVALID_HANDLE_VALUE ) || ( GetLastFileWriteTime( sourceFile ) > intermediateFileInfo.last_write_time ) ) {
+		if ( ( intermediateFile.handle == INVALID_FILE_HANDLE ) || ( GetLastFileWriteTime( sourceFile ) > intermediateFileInfo.last_write_time ) ) {
 			return true;
 		}
 
@@ -424,7 +424,7 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 		FileInfo binaryFileInfo = {};
 		File binaryFile = file_find_first( fullBinaryName, &binaryFileInfo );
 
-		if ( binaryFile.ptr == INVALID_HANDLE_VALUE ) {
+		if ( binaryFile.handle == INVALID_FILE_HANDLE ) {
 			doLinking = true;
 		} else {
 			For ( u64, intermediateFileIndex, 0, intermediateFiles.count ) {
@@ -730,8 +730,8 @@ static bool8 WriteIncludeDependenciesFile( buildContext_t* context ) {
 	}
 
 	if ( !file_write_entire( includeDepsFilename, byteBuffer.data.data, byteBuffer.data.count ) ) {
-		errorCode_t errorCode = GetLastErrorCode();
-		error( "Failed to write file \"%s\".  Error code: " ERROR_CODE_FORMAT ".\n", errorCode );
+		errorCode_t errorCode = get_last_error_code();
+		error( "Failed to write file \"%s\".  %s.\n", strerror( errorCode ) );
 		return false;
 	}
 
@@ -1075,7 +1075,7 @@ int main( int argc, char** argv ) {
 			if ( string_ends_with( options.compiler_path.c_str(), "clang" ) ) {
 				// nothing, clang already got initialized
 			} else if ( string_ends_with( options.compiler_path.c_str(), "cl" ) ) {
-#if _WIN32
+#ifdef _WIN32
 				CreateCompilerBackend_MSVC( &compilerBackend, options.compiler_path.c_str() );
 #else
 				error(
@@ -1212,8 +1212,8 @@ int main( int argc, char** argv ) {
 		printf( "Running pre-build code...\n" );
 
 		const char* oldCWD = path_current_working_directory();
-		SetCurrentDirectory( context.inputFilePath.data );
-		defer( SetCurrentDirectory( oldCWD ) );
+		path_set_current_directory( context.inputFilePath.data );
+		defer( path_set_current_directory( oldCWD ) );
 
 		preBuildFunc();
 	}
@@ -1315,8 +1315,8 @@ int main( int argc, char** argv ) {
 		printf( "Running post-build code...\n" );
 
 		const char* oldCWD = path_current_working_directory();
-		SetCurrentDirectory( context.inputFilePath.data );
-		defer( SetCurrentDirectory( oldCWD ) );
+		path_set_current_directory( context.inputFilePath.data );
+		defer( path_set_current_directory( oldCWD ) );
 
 		postBuildFunc();
 	}
@@ -1330,6 +1330,8 @@ int main( int argc, char** argv ) {
 	float64 totalTimeEnd = time_ms();
 
 	{
+	    using namespace hlml;
+
 		printf( "Build finished:\n" );
 		printf( "    User config build:   %f ms%s\n", userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? " (skipped)" : "" );
 		if ( !doubleeq( compilerBackendInitTimeMS, -1.0 ) ) {

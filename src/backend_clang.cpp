@@ -77,8 +77,9 @@ static void ReadDependencyFile( const char* depFilename, std::vector<std::string
 	char* depFileBuffer = NULL;
 
 	if ( !file_read_entire( depFilename, &depFileBuffer ) ) {
-		errorCode_t errorCode = GetLastErrorCode();
-		fatal_error( "Failed to read \"%s\".  This should never happen! Error code: " ERROR_CODE_FORMAT "\n", depFilename, errorCode );
+		errorCode_t errorCode = get_last_error_code();
+		//fatal_error( "Failed to read \"%s\".  This should never happen! Error code: " ERROR_CODE_FORMAT "\n", depFilename, errorCode );
+		fatal_error( "Failed to read \"%s\".  This should never happen! %s\n", depFilename, strerror( errorCode ) );
 		return;
 	}
 
@@ -141,7 +142,7 @@ static void ReadDependencyFile( const char* depFilename, std::vector<std::string
 		// get the file timestamp
 		FileInfo fileInfo;
 		File foundFile = file_find_first( dependencyFilename.c_str(), &fileInfo );
-		assert( foundFile.ptr != INVALID_HANDLE_VALUE );
+		assert( foundFile.handle != INVALID_FILE_HANDLE );
 		u64 lastWriteTime = fileInfo.last_write_time;
 
 		//printf( "Parsing dependency %s, last write time = %llu\n", dependencyFilename.c_str(), lastWriteTime );

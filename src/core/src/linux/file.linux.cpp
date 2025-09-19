@@ -86,7 +86,7 @@ bool8 file_rename( const char* old_filename, const char* new_filename ) {
 	int result = rename( old_filename, new_filename );
 	int err = errno;
 
-	assertf( "Failed to rename file \"%s\" to \"%s\": %s.\n", strerror( err ) );
+	assertf( result, "Failed to rename file \"%s\" to \"%s\": %s.\n", strerror( err ) );
 
 	return result == 0;
 }
@@ -99,7 +99,7 @@ bool8 file_read( File* file, const u64 offset, const u64 size, void* out_data ) 
 	ssize_t bytes_read = pread( trunc_cast( int, file->handle ), out_data, size, trunc_cast( off_t, offset ) );
 	int err = errno;
 
-	assertf( bytes_read == size, "Failed to read %llu bytes of file at offset %llu: %s.\n", size, offset, strerror( err ) );
+	assertf( trunc_cast( u64, bytes_read ) == size, "Failed to read %llu bytes of file at offset %llu: %s.\n", size, offset, strerror( err ) );
 
 	return trunc_cast( u64, bytes_read ) == size;
 }
@@ -112,7 +112,7 @@ bool8 file_write( File* file, const void* data, const u64 offset, const u64 size
 	ssize_t bytes_written = pwrite( trunc_cast( int, file->handle ), data, size, trunc_cast( off_t, offset ) );
 	int err = errno;
 
-	assertf( bytes_written == size, "Failed to write %llu bytes of file at offset %llu: %s.\n", size, offset, strerror( err ) );
+	assertf( trunc_cast( u64, bytes_written ) == size, "Failed to write %llu bytes of file at offset %llu: %s.\n", size, offset, strerror( err ) );
 
 	return trunc_cast( u64, bytes_written ) == size;
 }

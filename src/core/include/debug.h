@@ -45,7 +45,7 @@ SOFTWARE.
 #define ERROR_CODE_FORMAT "0x%X"
 typedef DWORD errorCode_t;
 #elif defined(__linux__)
-#define ERROR_CODE_FORMAT "0x%d"
+#define ERROR_CODE_FORMAT "%d"
 typedef s32 errorCode_t;
 #else
 #error Unrecognised platform!
@@ -110,8 +110,7 @@ CORE_API errorCode_t			get_last_error_code();
 				} \
 			} while ( 0 )
 	#elif defined( __linux__ )
-		#define debug_break() \
-			raise( SIGTRAP )
+		#define debug_break() raise( SIGTRAP )
 	#else
 		#error Unrecognised platform.
 	#endif
@@ -136,7 +135,7 @@ CORE_API errorCode_t			get_last_error_code();
 	#define assertf( x, fmt, ... ) \
 		do { \
 			if ( !(x) ) { \
-				fatal_error_internal( __FUNCTION__, __LINE__, "ASSERT FAILED", fmt, __VA_ARGS__ ); \
+				fatal_error_internal( __FUNCTION__, __LINE__, "ASSERT FAILED", fmt, ## __VA_ARGS__ ); \
 				debug_break(); \
 			} \
 		} while ( 0 )

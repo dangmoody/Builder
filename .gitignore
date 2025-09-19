@@ -38,6 +38,14 @@ x64
 #
 .idea
 
+
+#
+# zed stuff
+#
+
+.zed
+
+
 # ignore test-generated visual studio solutions
 tests/**/*.sln
 tests/**/*.vcxproj

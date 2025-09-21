@@ -23,7 +23,7 @@
     <ProjectGuid>{4D70CC96-67F5-4087-8589-FB43C7E2CA75}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
   </PropertyGroup>
-  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" Condition="'$(OS)' == 'Windows_NT'" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Makefile</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
@@ -44,7 +44,7 @@
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
-  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" Condition="'$(OS)' == 'Windows_NT'" />
   <ImportGroup Label="ExtensionSettings">
   </ImportGroup>
   <ImportGroup Label="Shared">
@@ -91,6 +91,7 @@
   <ItemGroup>
     <ClCompile Include="src\backend_msvc.cpp" />
     <ClCompile Include="src\builder.cpp" />
+    <ClCompile Include="src\core\src\3rdparty\xxhash\xxhash.c" />
     <ClCompile Include="src\core\src\allocation_context.cpp" />
     <ClCompile Include="src\core\src\allocator_linear.cpp" />
     <ClCompile Include="src\core\src\allocator_malloc.cpp" />
@@ -102,6 +103,13 @@
     <ClCompile Include="src\core\src\core_string.cpp" />
     <ClCompile Include="src\core\src\hash.xxhash.cpp" />
     <ClCompile Include="src\core\src\hashmap.cpp" />
+    <ClCompile Include="src\core\src\linux\allocator_malloc.linux.cpp" />
+    <ClCompile Include="src\core\src\linux\debug.linux.cpp" />
+    <ClCompile Include="src\core\src\linux\file.linux.cpp" />
+    <ClCompile Include="src\core\src\linux\init.linux.cpp" />
+    <ClCompile Include="src\core\src\linux\library.linux.cpp" />
+    <ClCompile Include="src\core\src\linux\paths.linux.cpp" />
+    <ClCompile Include="src\core\src\linux\timer.linux.cpp" />
     <ClCompile Include="src\core\src\math.cpp" />
     <ClCompile Include="src\core\src\memory_tracking.cpp" />
     <ClCompile Include="src\core\src\random.cpp" />
@@ -152,6 +160,9 @@
     <ClInclude Include="src\core\include\string_helpers.h" />
     <ClInclude Include="src\core\include\temp_storage.h" />
     <ClInclude Include="src\core\include\timer.h" />
+    <ClInclude Include="src\core\src\3rdparty\stb\stb_sprintf.h" />
+    <ClInclude Include="src\core\src\3rdparty\subprocess\subprocess.h" />
+    <ClInclude Include="src\core\src\3rdparty\xxhash\xxhash.h" />
     <ClInclude Include="src\core\src\core_local.h" />
     <ClInclude Include="test_sln\src\library\library.h" />
   </ItemGroup>
@@ -175,7 +186,7 @@
     <Content Include="download_default_compiler.bat" />
     <Content Include="make_release.bat" />
   </ItemGroup>
-  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" Condition="'$(OS)' == 'Windows_NT'" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
 </Project>

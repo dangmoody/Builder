@@ -29,6 +29,7 @@ SOFTWARE.
 #pragma once
 
 #ifdef __linux__
+#include "../../include/paths.h"
 
 #include <core_types.h>
 #include <debug.h>
@@ -49,8 +50,6 @@ SOFTWARE.
 ================================================================================================
 */
 
-// TODO: most functions in this file
-
 const char* path_app_path() {
 	char* result = cast( char*, mem_temp_alloc( PATH_MAX * sizeof( char ) ) );
 	s64 length = readlink( "/proc/self/exe", result, PATH_MAX );
@@ -62,7 +61,7 @@ const char* path_app_path() {
 
 	result[length] = 0;
 
-	return result;
+	return path_remove_file_from_path( result );
 }
 
 const char* path_current_working_directory() {
@@ -81,6 +80,8 @@ const char* path_current_working_directory() {
 const char* path_absolute_path( const char* file ) {
 	unused( file );
 
+	assert( false );
+
 	return NULL;
 }
 
@@ -93,6 +94,8 @@ bool8 path_is_absolute( const char* path ) {
 const char* path_canonicalise( const char* path ) {
 	unused( path );
 
+	assert( false );
+
 	return NULL;
 }
 
@@ -101,6 +104,8 @@ char* path_relative_path_to( const char* path_from, const char* path_to ) {
 	unused( path_to );
 
 	char* result = nullptr;
+
+	assert( false );
 
 	return result;
 }

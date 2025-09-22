@@ -69,7 +69,10 @@ void set_console_text_color( const ConsoleTextColor color ) {
 
 #ifdef _DEBUG
 void dump_callstack( void ) {
-	assert( false && "TODO: write the linux impl of dump_callstack()!\n" );
+	printf(
+		"Callstack:\n"
+		"TODO(DM): this\n"
+	);
 }
 #endif // _DEBUG
 

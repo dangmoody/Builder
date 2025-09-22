@@ -104,6 +104,7 @@
     <ClCompile Include="src\core\src\hash.xxhash.cpp" />
     <ClCompile Include="src\core\src\hashmap.cpp" />
     <ClCompile Include="src\core\src\linux\allocator_malloc.linux.cpp" />
+    <ClCompile Include="src\core\src\linux\core_process.linux.cpp" />
     <ClCompile Include="src\core\src\linux\debug.linux.cpp" />
     <ClCompile Include="src\core\src\linux\file.linux.cpp" />
     <ClCompile Include="src\core\src\linux\init.linux.cpp" />
@@ -112,6 +113,7 @@
     <ClCompile Include="src\core\src\linux\timer.linux.cpp" />
     <ClCompile Include="src\core\src\math.cpp" />
     <ClCompile Include="src\core\src\memory_tracking.cpp" />
+    <ClCompile Include="src\core\src\paths.cpp" />
     <ClCompile Include="src\core\src\random.cpp" />
     <ClCompile Include="src\core\src\string_builder.cpp" />
     <ClCompile Include="src\core\src\string_helpers.cpp" />
@@ -180,6 +182,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="build.bat" />
+    <Content Include="build.sh" />
     <Content Include="build_tests.bat" />
     <Content Include="doc\CHANGELOG.txt" />
     <Content Include="doc\Contributing.md" />

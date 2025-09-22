@@ -42,6 +42,7 @@ SOFTWARE.
 #include "core/include/library.h"
 #include "core/include/core_string.h"
 #include "core/include/hashmap.h"
+#include "core/include/file.h"
 
 #ifdef _WIN64
 #include <Shlwapi.h>
@@ -253,7 +254,8 @@ s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVariables,
 		printf( "\n" );
 	}
 
-	Process* process = process_create( args, environmentVariables, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
+	// DM!!! put the async flag back when done getting this running
+	Process* process = process_create( args, environmentVariables, /*PROCESS_FLAG_ASYNC |*/ PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
 
 	if ( !process ) {
 		error(
@@ -738,20 +740,6 @@ static bool8 WriteIncludeDependenciesFile( buildContext_t* context ) {
 	return true;
 }
 
-static const char* GetDefaultCompilerPath() {
-#ifdef BUILDER_RELEASE
-	return tprintf( "%s%c../clang/bin/clang", path_app_path(), PATH_SEPARATOR );
-#else
-	#if defined( _WIN64 )
-		const char* defaultCompilerPath = "clang_win64/bin/clang";
-	#elif defined( __linux__ )
-		const char* defaultCompilerPath = "clang_linux/bin/clang";
-	#endif
-
-	return tprintf( "%s%c..%c..%c..%c%s", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, defaultCompilerPath );
-#endif
-}
-
 int main( int argc, char** argv ) {
 	float64 totalTimeStart = time_ms();
 
@@ -894,7 +882,29 @@ int main( int argc, char** argv ) {
 
 	// init default compiler backend (the version of clang that builder came with)
 	compilerBackend_t compilerBackend;
-	CreateCompilerBackend_Clang( &compilerBackend, GetDefaultCompilerPath() );
+	{
+#ifdef BUILDER_RELEASE
+		const char* defaultCompilerPath = tprintf( "%s%c../clang/bin/clang", path_app_path(), PATH_SEPARATOR );
+#else // BUILDER_RELEASE
+	#if defined( _WIN64 )
+		const char* defaultCompilerPath = "clang_win64/bin/clang";
+	#elif defined( __linux__ )
+		// TODO(DM): 22/09/2025: not sure if we want to do this all clang installs on linux yet
+		// but we definitely want to do it for our default local copy
+		char* realClangBinaryName = NULL;
+		defer( file_free_buffer( &realClangBinaryName ) );
+		{
+			bool8 read = file_read_entire( "clang_linux/bin/clang", &realClangBinaryName );
+			assert( read );
+		}
+		const char* defaultCompilerPath = tprintf( "clang_linux/bin/%s", realClangBinaryName );
+	#endif
+#endif // BUILDER_RELEASE
+
+		const char* defaultCompilerPathFull = tprintf( "%s%c..%c..%c..%c%s", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, defaultCompilerPath );
+
+		CreateCompilerBackend_Clang( &compilerBackend, defaultCompilerPathFull );
+	}
 
 	compilerBackend.Init( &compilerBackend );
 	defer( compilerBackend.Shutdown( &compilerBackend ) );

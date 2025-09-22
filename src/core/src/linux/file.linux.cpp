@@ -30,6 +30,9 @@ SOFTWARE.
 
 #include <file.h>
 
+#include <unistd.h>
+#include <fcntl.h>
+
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
@@ -41,6 +44,21 @@ SOFTWARE.
 
 ================================================================================================
 */
+
+static File open_file_internal( const char* filename, int flags ) {
+	assert( filename );
+
+	int handle = open( filename, flags );
+	if ( handle == -1 ) {
+		int err = errno;
+
+		error( "Failed to open file \"%s\": %s\n", filename, strerror( err ) );
+
+		return { INVALID_FILE_HANDLE, 0 };
+	}
+
+	return { trunc_cast( u64, handle ), 0 };
+}
 
 static bool8 create_folder_internal( const char* path ) {
 	int result = mkdir( path, S_IRWXU | S_IRWXG | S_IRWXO );
@@ -54,28 +72,44 @@ static bool8 create_folder_internal( const char* path ) {
 }
 
 File file_open( const char* filename ) {
-	unused( filename );
+	assert( filename );
 
-	return { INVALID_FILE_HANDLE, 0 };
+	return open_file_internal( filename, 0 );
 }
 
 File file_open_or_create( const char* filename, const bool8 keep_existing_content ) {
-	unused( filename );
-	unused( keep_existing_content );
+	assert( filename );
 
-	return { INVALID_FILE_HANDLE, 0 };
+	int flags = O_CREAT;
+
+	if ( !keep_existing_content ) {
+		flags |= O_TRUNC;
+	}
+
+	return open_file_internal( filename, flags );
 }
 
 bool8 file_close( File* file ) {
-	unused( file );
+	assert( file );
+	assert( file->handle != INVALID_FILE_HANDLE );
 
-	return false;
+	if ( close( trunc_cast( int, file->handle ) ) != 0 ) {
+		int err = errno;
+
+		error( "Failed to close file \"%s\": %s\n", strerror( err ) );
+
+		return false;
+	}
+
+	return true;
 }
 
 bool8 file_copy( const char* original_path, const char* new_path ) {
 	unused( original_path );
 	unused( new_path );
 
+	assert( false );
+	
 	return false;
 }
 
@@ -142,12 +176,16 @@ File file_find_first( const char* path, FileInfo* out_file_info ) {
 	unused( path );
 	unused( out_file_info );
 
+	assert( false );
+
 	return { INVALID_FILE_HANDLE, 0 };
 }
 
 bool8 file_find_next( File* first_file, FileInfo* out_file_info ) {
 	unused( first_file );
 	unused( out_file_info );
+
+	assert( false );
 
 	return false;
 }
@@ -183,6 +221,8 @@ bool8 folder_exists( const char* path ) {
 // TODO(DM): 09/07/2025: do we still want this?
 u64 folder_get_num_files( const char* path ) {
 	unused( path );
+
+	assert( false );
 
 	return 0;
 }

@@ -6,6 +6,7 @@
 
 #define TEMPERDEV_ASSERT assert
 #define TEMPER_IMPLEMENTATION
+#include "src/core/include/file.h"
 #include "temper/temper.h"
 
 // TODO (MY) - Ensure that we remove this and add an appropriate system agnostic null file handle later.
@@ -17,9 +18,7 @@
 
 static bool8 FileExists( const char* filename ) {
 	FileInfo fileInfo;
-	File file = file_find_first( filename, &fileInfo );
-
-	return file.ptr != DEAD_HANDLE;
+	return file_get_info( filename, &fileInfo );
 }
 
 static s32 RunProc( Array<const char*>* args ) {

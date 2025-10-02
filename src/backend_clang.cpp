@@ -140,11 +140,7 @@ static void ReadDependencyFile( const char* depFilename, std::vector<std::string
 		}
 
 		// get the file timestamp
-		FileInfo fileInfo;
-		File foundFile = file_find_first( dependencyFilename.c_str(), &fileInfo );
-		assert( foundFile.handle != INVALID_FILE_HANDLE );
-		u64 lastWriteTime = fileInfo.last_write_time;
-
+		//u64 lastWriteTime = GetLastFileWriteTime( dependencyFilename.c_str() );
 		//printf( "Parsing dependency %s, last write time = %llu\n", dependencyFilename.c_str(), lastWriteTime );
 
 		outIncludeDependencies.push_back( dependencyFilename.c_str() );

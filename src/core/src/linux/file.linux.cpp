@@ -162,32 +162,55 @@ bool8 file_delete( const char* filename ) {
 	return result == 0;
 }
 
-u64 file_get_size( const File file ) {
+bool8 file_get_info( const char* filename, FileInfo* out_file_info ) {
+	assert( filename );
+	assert( out_file_info );
+
 	struct stat file_stat = {};
-	int result = fstat( trunc_cast( int, file.handle ), &file_stat );
-	int err = errno;
+	if ( !stat( entry->d_name, &file_stat ) ) {
+		return false;
+	}
 
-	assertf( result == 0, "Failed to get size of file: %s\n", strerror( err ) );
+	*out_file_info = FileInfo {
+		.is_directory		= S_ISDIR( file_stat.st_mode ),
+		.last_write_time	= file_stat.st_mtime,
+		.size_bytes			= file_stat.st_size,
+		.filename			= entry->d_name,
+	};
 
-	return trunc_cast( u64, file_stat.st_size );
+	return true;
 }
 
-File file_find_first( const char* path, FileInfo* out_file_info ) {
-	unused( path );
-	unused( out_file_info );
+bool8 file_visit( const char* path, FileVisitCallback file_visit_callback ) {
+	assert( path );
+	assert( file_visit_callback );
 
-	assert( false );
+	DIR* dir = opendir( path );
 
-	return { INVALID_FILE_HANDLE, 0 };
-}
+	if ( !dir ) {
+		return false;
+	}
 
-bool8 file_find_next( File* first_file, FileInfo* out_file_info ) {
-	unused( first_file );
-	unused( out_file_info );
+	struct dirent* entry = NULL;
+	while ( ( entry = readdir( dir ) ) != NULL ) {
+		if ( string_equals( entry->d_name, "." ) || string_equals( entry->d_name, ".." ) ) {
+			continue;
+		}
 
-	assert( false );
+		FileInfo file_info = {};
 
-	return false;
+		if ( !file_get_info( entry->d_name, &file_info ) ) {
+			return false;
+		}
+
+		file_visit_callback( &file_info );
+	}
+
+	if ( !closedir( dir ) ) {
+		return false;
+	}
+
+	return true;
 }
 
 bool8 folder_delete( const char* path ) {

@@ -57,6 +57,7 @@ struct File {
 struct FileInfo {
 	bool8	is_directory;	// TODO(DM): change to fileAttributeFlags_t bit mask
 	u64		last_write_time;
+	u64		size_bytes;
 	char	filename[1024];	// TODO(DM): do this properly
 };
 
@@ -113,17 +114,14 @@ CORE_API bool8	file_write_line(File* file, const char* line);
 // Returns true if successfully deletes the file, otherwise returns false.
 CORE_API bool8	file_delete( const char* filename );
 
-// Returns the size of the file in bytes.
-CORE_API u64	file_get_size( const File file );
+typedef void ( *FileVisitCallback )( const FileInfo* file_info );
 
-// Returns the first file found in the path 'path'.
-// Supports wildcard searches.
-CORE_API File	file_find_first( const char* path, FileInfo* out_file_info );
+// Returns true and fills out_file_info if the file can be found, otherwise returns false.
+CORE_API bool8	file_get_info( const char* filename, FileInfo* out_file_info );
 
-// After calling 'file_find_first()' returns the next file found, if any.
-// Returns true if a next file was found and fills in 'out_file_info'.
-// Returns false if no next file was found.
-CORE_API bool8	file_find_next( File* first_file, FileInfo* out_file_info );
+// Returns true if all files found in path can be successfully visited, otherwise returns false.
+// For each successful visit, file_visit_callback will be called.
+CORE_API bool8	file_visit( const char* path, FileVisitCallback file_visit_callback );
 
 // If the folder at the given path already exists then returns true.
 // If the folder at the given path does NOT exist but was successfully created then returns true.

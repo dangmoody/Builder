@@ -87,11 +87,11 @@ enum buildResult_t {
 #pragma clang diagnostic ignored "-Wpadded"
 #endif
 
-static u64 GetLastFileWriteTime( const char* filename ) {
+u64 GetLastFileWriteTime( const char* filename ) {
 	FileInfo fileInfo;
-	File file = file_find_first( filename, &fileInfo );
-
-	assert( file.handle != INVALID_FILE_HANDLE );
+	if ( file_get_info( &filename, &fileInfo ) ) {
+		assert( false );
+	}
 
 	return fileInfo.last_write_time;
 }
@@ -354,12 +354,15 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 			return true;
 		}
 
-		FileInfo intermediateFileInfo;
-		File intermediateFile = file_find_first( intermediateFilename, &intermediateFileInfo );
+		FileInfo intermediateFileInfo = {};
 
 		// if the .o file doesnt exist then assume we havent built this file yet
+		if ( !file_get_info( &intermediateFilename, &intermediateFileInfo ) ) {
+			return true;
+		}
+
 		// if the .o file does exist but the source file was written to it more recently then we know we want to rebuild
-		if ( ( intermediateFile.handle == INVALID_FILE_HANDLE ) || ( GetLastFileWriteTime( sourceFile ) > intermediateFileInfo.last_write_time ) ) {
+		if ( GetLastFileWriteTime( sourceFile ) > intermediateFileInfo.last_write_time ) {
 			return true;
 		}
 
@@ -424,9 +427,8 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 		const char* fullBinaryName = BuildConfig_GetFullBinaryName( config );
 
 		FileInfo binaryFileInfo = {};
-		File binaryFile = file_find_first( fullBinaryName, &binaryFileInfo );
 
-		if ( binaryFile.handle == INVALID_FILE_HANDLE ) {
+		if ( !file_get_info( fullBinaryName, &binaryFileInfo ) ) {
 			doLinking = true;
 		} else {
 			For ( u64, intermediateFileIndex, 0, intermediateFiles.count ) {
@@ -453,6 +455,12 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 }
 
 static void NukeFolderInternal_r( const char* folder, const bool8 verbose ) {
+#if 1
+	unused( folder );
+	unused( verbose );
+
+	assert( false );
+#else
 	const char* searchPattern = tprintf( "%s%c*", folder, PATH_SEPARATOR );
 
 	FileInfo fileInfo = {};
@@ -489,6 +497,7 @@ static void NukeFolderInternal_r( const char* folder, const bool8 verbose ) {
 			}
 		}
 	} while ( file_find_next( &file, &fileInfo ) );
+#endif
 }
 
 void NukeFolder_r( const char* folder, const bool8 deleteRoot, const bool8 verbose ) {

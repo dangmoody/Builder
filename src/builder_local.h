@@ -103,6 +103,8 @@ struct buildContext_t {
 	bool8								verbose;
 };
 
+u64			GetLastFileWriteTime( const char* filename );
+
 void		NukeFolder_r( const char* folder, const bool8 deleteRoot, const bool8 verbose );
 
 const char*	GetNextSlashInPath( const char* path );

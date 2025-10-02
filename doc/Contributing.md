@@ -20,17 +20,14 @@ The naming convention for branches is `lower-case-separated-by-hyphens`.
 
 ## Developer Setup
 
-
-### Pre-requisites
-
-Builder is built with [Clang 20.1.5](https://github.com/llvm/llvm-project/releases/tag/llvmorg-20.1.5).
+Run `download_default_compiler 20.1.5` (we have both Batch and Bash variants depending on what platform you're developing on).  Builder also uses this as the "default" compiler when building the user config DLL.  You also can't make release packages without it.
 
 
-#### Linux
+### Linux
 
 You'll need `libuuid` (we are working to remove this dependency in future, but for now you will need it).
 
-If you want to use an IDE to open `builder.sln` then you'll also need MSBuild as, somehow, the solution is dependent on it (we are working to remove this dependency in future, but for now you will need it).
+If you want to use an IDE to open `builder.sln` then you'll also need MSBuild as, somehow, the solution is dependent on it (we are working to remove this dependency but, for now, you will need it).
 
 
 ### Compiling Builder
@@ -39,7 +36,7 @@ For those using Visual Studio:
 1. Open `builder.sln` and build the `builder` project.
 2. You should now be good to go.
 
-Builder can also be compiled without relying Visual Studio:
+Builder can also be compiled without using Visual Studio:
 1. Run `build.bat <config>` where `<config>` is either `debug` or `release`.
 
 To build and run the tests:

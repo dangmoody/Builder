@@ -97,10 +97,13 @@
     <ClCompile Include="src\core\src\allocator_malloc.cpp" />
     <ClCompile Include="src\backend_clang.cpp" />
     <ClCompile Include="src\core\src\cmd_line_args.cpp" />
+    <ClCompile Include="src\core\src\core.linux.suc.cpp" />
     <ClCompile Include="src\core\src\core.suc.cpp" />
     <ClCompile Include="src\core\src\core.win64.suc.cpp" />
     <ClCompile Include="src\core\src\core_process.subprocess.cpp" />
     <ClCompile Include="src\core\src\core_string.cpp" />
+    <ClCompile Include="src\core\src\debug.cpp" />
+    <ClCompile Include="src\core\src\file.cpp" />
     <ClCompile Include="src\core\src\hash.xxhash.cpp" />
     <ClCompile Include="src\core\src\hashmap.cpp" />
     <ClCompile Include="src\core\src\linux\allocator_malloc.linux.cpp" />
@@ -118,6 +121,7 @@
     <ClCompile Include="src\core\src\string_builder.cpp" />
     <ClCompile Include="src\core\src\string_helpers.cpp" />
     <ClCompile Include="src\core\src\temp_storage.cpp" />
+    <ClCompile Include="src\core\src\win64\allocator_malloc.win64.cpp" />
     <ClCompile Include="src\core\src\win64\core_process.win64.cpp" />
     <ClCompile Include="src\core\src\win64\date_and_time.win64.cpp" />
     <ClCompile Include="src\core\src\win64\debug.win64.cpp" />
@@ -166,13 +170,17 @@
     <ClInclude Include="src\core\src\3rdparty\subprocess\subprocess.h" />
     <ClInclude Include="src\core\src\3rdparty\xxhash\xxhash.h" />
     <ClInclude Include="src\core\src\core_local.h" />
+    <ClInclude Include="src\core\src\file_local.h" />
     <ClInclude Include="test_sln\src\library\library.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".gitignore" />
     <None Include="build.bat" />
+    <None Include="build.sh" />
     <None Include="build_tests.bat" />
+    <None Include="build_tests.sh" />
     <None Include="download_default_compiler.bat" />
+    <None Include="download_default_compiler.sh" />
     <None Include="LICENSE" />
     <None Include="make_release.bat" />
     <None Include="README.md" />

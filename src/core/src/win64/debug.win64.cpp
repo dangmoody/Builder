@@ -54,7 +54,7 @@ SOFTWARE.
 void set_console_text_color( const ConsoleTextColor color ) {
 	HANDLE handle = GetStdHandle( STD_OUTPUT_HANDLE );
 
-	DWORD color_win64 = 0;
+	WORD color_win64 = 0;
 
 	switch ( color ) {
 		case CONSOLE_TEXT_COLOR_DEFAULT:		color_win64 = 0x07; break;
@@ -145,11 +145,11 @@ void dump_callstack( void ) {
 static void assert_dialog_internal( const char* file, const int line, const char* prefix, const char* msg ) {
 	HANDLE handle = GetStdHandle( STD_OUTPUT_HANDLE );
 
-	SetConsoleTextAttribute( handle, CONSOLE_COLOR_RED );
+	SetConsoleTextAttribute( handle, CONSOLE_TEXT_COLOR_RED );
 
 	printf( "%s: %s line %d: ", prefix, file, line );
 
-	SetConsoleTextAttribute( handle, CONSOLE_COLOR_YELLOW );
+	SetConsoleTextAttribute( handle, CONSOLE_TEXT_COLOR_YELLOW );
 
 	printf( "%s\n", msg );
 
@@ -157,7 +157,7 @@ static void assert_dialog_internal( const char* file, const int line, const char
 	dump_callstack();
 #endif
 
-	SetConsoleTextAttribute( handle, CONSOLE_COLOR_DEFAULT );
+	SetConsoleTextAttribute( handle, CONSOLE_TEXT_COLOR_DEFAULT );
 
 #ifdef _DEBUG
 	_CrtDbgReport( _CRT_ASSERT, file, line, NULL, msg );

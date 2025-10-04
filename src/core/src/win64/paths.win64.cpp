@@ -105,7 +105,7 @@ const char* path_canonicalise( const char* path ) {
 }
 
 char* path_relative_path_to( const char* path_from, const char* path_to ) {
-	const char* result;
+	char* result = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
 
 	if ( PathRelativePathTo( result, path_from, FILE_ATTRIBUTE_NORMAL, path_to, FILE_ATTRIBUTE_NORMAL ) ) {
 		error( "Unable to compute relative path, ensure provided paths exist.\nFrom Path: %s\nTo Path: %s", path_from, path_to );
@@ -115,7 +115,7 @@ char* path_relative_path_to( const char* path_from, const char* path_to ) {
 }
 
 bool8 path_set_current_directory( const char* path ) {
-	return SetCurrentDirectory(path);
+	return cast( bool8, SetCurrentDirectory( path ) );
 }
 
 #endif // _WIN32

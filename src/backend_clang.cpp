@@ -78,8 +78,7 @@ static void ReadDependencyFile( const char* depFilename, std::vector<std::string
 
 	if ( !file_read_entire( depFilename, &depFileBuffer ) ) {
 		errorCode_t errorCode = get_last_error_code();
-		//fatal_error( "Failed to read \"%s\".  This should never happen! Error code: " ERROR_CODE_FORMAT "\n", depFilename, errorCode );
-		fatal_error( "Failed to read \"%s\".  This should never happen! %s\n", depFilename, strerror( errorCode ) );
+		fatal_error( "Failed to read \"%s\".  This should never happen! Error code: " ERROR_CODE_FORMAT "\n", depFilename, errorCode );
 		return;
 	}
 

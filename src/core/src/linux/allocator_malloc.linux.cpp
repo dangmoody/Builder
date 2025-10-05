@@ -92,7 +92,7 @@ void* malloc_allocator_realloc( void* allocator_data, void* ptr, const u64 new_s
 	assertf( !allocator_data, "Malloc_allocator is stateless" );
 
 	unused( allocator_data );
-	unused(alignment);
+	unused( alignment );
 
 	// if ( !ptr ) {
 	// 	warning( "Null ptr cannot be realloced" );

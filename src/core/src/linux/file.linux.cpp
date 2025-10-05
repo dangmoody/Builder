@@ -55,10 +55,6 @@ static File open_file_internal( const char* filename, int flags ) {
 
 	int handle = open( filename, flags, S_IRWXU | S_IRWXG | S_IRWXO );
 	if ( handle == -1 ) {
-		int err = errno;
-
-		error( "Failed to open file \"%s\".  Error code %d: %s\n", filename, err, strerror( err ) );
-
 		return { INVALID_FILE_HANDLE, 0 };
 	}
 

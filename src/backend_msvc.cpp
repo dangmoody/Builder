@@ -150,6 +150,8 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 	msvcState_t* msvcState = cast( msvcState_t*, mem_alloc( sizeof( msvcState_t ) ) );
 	new( msvcState ) msvcState_t;
 
+	msvcState->versionMask = 0;
+
 	backend->data = msvcState;
 
 	std::string msvcRootFolder;
@@ -193,43 +195,12 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 
 	// get latest version of msvc
 	{
-#if 0
-		const char* msvcVersionSearchFolder = tprintf( "%s\\VC\\Tools\\MSVC\\*", msvcRootFolder.c_str() );
-
-		FileInfo fileInfo;
-		File file = file_find_first( msvcVersionSearchFolder, &fileInfo );
-
-		u32 highestVersion = 0;
-		do {
-			if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) ) {
-				continue;
-			}
-
-			if ( !fileInfo.is_directory ) {
-				continue;
-			}
-
-			u32 version0 = 0;
-			u32 version1 = 0;
-			u32 version2 = 0;
-			sscanf( fileInfo.filename, "%u.%u.%u", &version0, &version1, &version2 );
-
-			u32 mask = ( version0 << 24 ) | ( version1 << 16 ) | ( version2 );
-
-			if ( mask > highestVersion ) {
-				highestVersion = mask;
-
-				msvcState->compilerVersion = fileInfo.filename;
-			}
-		} while ( file_find_next( &file, &fileInfo ) );
-#else
 		const char* msvcVersionSearchFolder = tprintf( "%s\\VC\\Tools\\MSVC", msvcRootFolder.c_str() );
 
 		if ( !file_get_all_files_in_folder( msvcVersionSearchFolder, false, true, OnMSVCVersionFound, msvcState ) ) {
 			fatal_error( "Failed to query all MSVC version folders.  This should never happen! Error code: " ERROR_CODE_FORMAT "\n" );
 			return false;
 		}
-#endif
 	}
 
 	// now use MSVC root folder and the correct MSVC version to get the path to cl.exe

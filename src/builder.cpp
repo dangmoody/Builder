@@ -724,7 +724,7 @@ static bool8 WriteIncludeDependenciesFile( buildContext_t* context ) {
 
 	if ( !file_write_entire( includeDepsFilename, byteBuffer.data.data, byteBuffer.data.count ) ) {
 		errorCode_t errorCode = get_last_error_code();
-		error( "Failed to write file \"%s\".  Error code: " ERROR_CODE_FORMAT ".\n", errorCode );
+		error( "Failed to write file \"%s\".  Error code: " ERROR_CODE_FORMAT ".\n", includeDepsFilename, errorCode );
 		return false;
 	}
 
@@ -957,7 +957,7 @@ int main( int argc, char** argv ) {
 #endif
 		};
 
-		//userConfigFullBinaryName = BuildConfig_GetFullBinaryName( &userConfigBuildConfig );
+		userConfigFullBinaryName = BuildConfig_GetFullBinaryName( &userConfigBuildConfig );
 
 		userConfigBuildResult = BuildBinary( &context, &userConfigBuildConfig, &compilerBackend );
 
@@ -987,15 +987,6 @@ int main( int argc, char** argv ) {
 	}
 
 	BuilderOptions options = {};
-
-#ifdef _WIN32
-	const char* dllFileExtension = ".dll";
-#elif defined( __linux__ )
-	const char* dllFileExtension = ".so";
-#else
-#error Unrecognised platform.
-#endif
-	userConfigFullBinaryName = tprintf( "%s%c%s%s", context.dotBuilderFolder.data, PATH_SEPARATOR, defaultBinaryName, dllFileExtension );
 
 	Library library = library_load( userConfigFullBinaryName );
 	assertf( library.ptr, "Failed to load the user-config build DLL \"%s\".  This should never happen!\n", userConfigFullBinaryName );
@@ -1251,7 +1242,7 @@ int main( int argc, char** argv ) {
 				printf( ", config \"%s\"", config->name.c_str() );
 			}
 
-			printf( "\n" );
+			printf( ":\n" );
 		}
 
 		// make all non-absolute additional include paths relative to the build source file

@@ -54,12 +54,13 @@ struct File {
 	u64		offset;
 };
 
+// TODO(DM): 05/10/2025: support for symlinks
 struct FileInfo {
-	bool8	is_directory;	// TODO(DM): change to fileAttributeFlags_t bit mask
-	u64		last_write_time;
-	u64		size_bytes;
-	char*	filename;
-	char*	full_filename;
+	bool8		is_directory;
+	u64			last_write_time;
+	u64			size_bytes;
+	const char*	filename;
+	const char*	full_filename;
 };
 
 typedef void ( *FileVisitCallback )( const FileInfo* file_info, void* user_data );

@@ -27,9 +27,13 @@ SOFTWARE.
 */
 
 #ifdef __linux__
-
+#include "../../include/core_types.h"
+#include "../../include/core_types.h"
 #include <file.h>
 #include "../file_local.h"
+
+#include <paths.h>
+#include <array.inl>
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -72,6 +76,16 @@ static bool8 create_folder_internal( const char* path ) {
 	return result == 0;
 }
 
+u64 file_get_size_internal( const File* file ) {
+	assert( file );
+	assert( file->handle );
+
+	struct stat file_stat = {};
+	fstat( trunc_cast( int, file->handle ), &file_stat );
+
+	return trunc_cast( u64, file_stat.st_size );
+}
+
 File file_open( const char* filename ) {
 	assert( filename );
 
@@ -110,7 +124,7 @@ bool8 file_copy( const char* original_path, const char* new_path ) {
 	unused( new_path );
 
 	assert( false );
-	
+
 	return false;
 }
 
@@ -168,47 +182,67 @@ bool8 file_get_info( const char* filename, FileInfo* out_file_info ) {
 	assert( out_file_info );
 
 	struct stat file_stat = {};
-	if ( !stat( entry->d_name, &file_stat ) ) {
+	if ( stat( filename, &file_stat ) != 0 ) {
 		return false;
 	}
 
 	*out_file_info = FileInfo {
 		.is_directory		= S_ISDIR( file_stat.st_mode ),
-		.last_write_time	= file_stat.st_mtime,
-		.size_bytes			= file_stat.st_size,
-		.filename			= entry->d_name,
+		.last_write_time	= trunc_cast( u64, file_stat.st_mtime ),
+		.size_bytes			= trunc_cast( u64, file_stat.st_size ),
+		.filename			= filename,
 	};
 
 	return true;
 }
 
-bool8 file_get_all_files_in_folder( const char* path, FileVisitCallback visit_callback ) {
+bool8 file_get_all_files_in_folder( const char* path, const bool8 recursive, const bool8 visit_folders, FileVisitCallback visit_callback, void* user_data ) {
 	assert( path );
 	assert( visit_callback );
 
-	DIR* dir = opendir( path );
+	Array<const char*> directories;
+	directories.add( path );
 
-	if ( !dir ) {
-		return false;
-	}
+	u32 dir_index = 0;
 
-	struct dirent* entry = NULL;
-	while ( ( entry = readdir( dir ) ) != NULL ) {
-		if ( string_equals( entry->d_name, "." ) || string_equals( entry->d_name, ".." ) ) {
-			continue;
-		}
+	while ( dir_index < directories.count ) {
+		DIR* dir = opendir( directories[dir_index] );
 
-		FileInfo file_info = {};
+		dir_index += 1;
 
-		if ( !file_get_info( entry->d_name, &file_info ) ) {
+		if ( !dir ) {
 			return false;
 		}
 
-		visit_callback( &file_info );
-	}
+		struct dirent* entry = NULL;
+		while ( ( entry = readdir( dir ) ) != NULL ) {
+			if ( string_equals( entry->d_name, "." ) || string_equals( entry->d_name, ".." ) ) {
+				continue;
+			}
 
-	if ( !closedir( dir ) ) {
-		return false;
+			FileInfo file_info = {};
+			file_info.full_filename = tprintf( "%s%c%s", path, PATH_SEPARATOR, entry->d_name );
+
+			if ( !file_get_info( file_info.full_filename, &file_info ) ) {
+				return false;
+			}
+
+			if ( file_info.is_directory ) {
+				if ( visit_folders ) {
+					visit_callback( &file_info, user_data );
+				}
+
+				if ( recursive ) {
+					directories.add( file_info.full_filename );
+				}
+			} else {
+				visit_callback( &file_info, user_data );
+			}
+		}
+
+		if ( !closedir( dir ) ) {
+			return false;
+		}
 	}
 
 	return true;

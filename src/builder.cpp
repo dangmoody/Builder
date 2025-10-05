@@ -89,7 +89,7 @@ enum buildResult_t {
 
 u64 GetLastFileWriteTime( const char* filename ) {
 	FileInfo fileInfo;
-	if ( file_get_info( filename, &fileInfo ) ) {
+	if ( !file_get_info( filename, &fileInfo ) ) {
 		assert( false );
 	}
 
@@ -97,11 +97,19 @@ u64 GetLastFileWriteTime( const char* filename ) {
 }
 
 static const char* GetFileExtensionFromBinaryType( BinaryType type ) {
+#ifdef _WIN32
 	switch ( type ) {
-		case BINARY_TYPE_EXE:				return "exe";
-		case BINARY_TYPE_DYNAMIC_LIBRARY:	return "dll";
-		case BINARY_TYPE_STATIC_LIBRARY:	return "lib";
+		case BINARY_TYPE_EXE:				return ".exe";
+		case BINARY_TYPE_DYNAMIC_LIBRARY:	return ".dll";
+		case BINARY_TYPE_STATIC_LIBRARY:	return ".lib";
 	}
+#else
+	switch ( type ) {
+		case BINARY_TYPE_EXE:				return "";
+		case BINARY_TYPE_DYNAMIC_LIBRARY:	return ".dylib";
+		case BINARY_TYPE_STATIC_LIBRARY:	return ".a";
+	}
+#endif
 
 	assertf( false, "Something went really wrong here.\n" );
 
@@ -236,7 +244,7 @@ const char* BuildConfig_GetFullBinaryName( const BuildConfig* config ) {
 	string_builder_appendf( &builder, "%s", config->binary_name.c_str() );
 
 	if ( !config->remove_file_extension ) {
-		string_builder_appendf( &builder, ".%s", GetFileExtensionFromBinaryType( config->binary_type ) );
+		string_builder_appendf( &builder, "%s", GetFileExtensionFromBinaryType( config->binary_type ) );
 	}
 
 	return string_builder_to_string( &builder );
@@ -870,8 +878,9 @@ int main( int argc, char** argv ) {
 	#if defined( _WIN64 )
 		const char* defaultCompilerPath = "clang_win64/bin/clang";
 	#elif defined( __linux__ )
-		// TODO(DM): 22/09/2025: not sure if we want to do this all clang installs on linux yet
-		// but we definitely want to do it for our default local copy
+		// clang.exe (on linux at least) isn't actually an exe, it's a text file that points to where the real clang.exe is
+		// so we need to read that file, extract the text from it, and then call that exe instead 
+		// TODO(DM): 22/09/2025: do we want to do this for ALL clang linux installs? or just our local one?
 		char* realClangBinaryName = NULL;
 		defer( file_free_buffer( &realClangBinaryName ) );
 		{
@@ -946,7 +955,7 @@ int main( int argc, char** argv ) {
 #endif
 		};
 
-		userConfigFullBinaryName = BuildConfig_GetFullBinaryName( &userConfigBuildConfig );
+		//userConfigFullBinaryName = BuildConfig_GetFullBinaryName( &userConfigBuildConfig );
 
 		userConfigBuildResult = BuildBinary( &context, &userConfigBuildConfig, &compilerBackend );
 
@@ -977,7 +986,15 @@ int main( int argc, char** argv ) {
 
 	BuilderOptions options = {};
 
+#ifdef _WIN32
+	const char* dllFileExtension = ".dll";
+#else
+	const char* dllFileExtension = ".dylib";
+#endif
+	userConfigFullBinaryName = tprintf( "%s%c%s%s", context.dotBuilderFolder.data, PATH_SEPARATOR, defaultBinaryName, dllFileExtension );
+
 	Library library = library_load( userConfigFullBinaryName );
+	assertf( library.ptr, "Failed to load the user-config build DLL \"%s\".  This should never happen!\n", userConfigFullBinaryName );
 	defer( library_unload( &library ) );
 
 	typedef void ( *setBuilderOptionsFunc_t )( BuilderOptions* options );

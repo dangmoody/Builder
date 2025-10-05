@@ -30,6 +30,8 @@ SOFTWARE.
 
 #include <library.h>
 
+#include <dlfcn.h>
+
 /*
 ================================================================================================
 
@@ -39,20 +41,28 @@ SOFTWARE.
 */
 
 Library library_load( const char* name ) {
-	unused( name );
-
-	return { NULL };
+	return Library {
+		.ptr = dlopen( name, RTLD_LAZY ),
+	};
 }
 
 void library_unload( Library* library ) {
-	unused( library );
+	assert( library );
+	assert( library->ptr );
+
+	if ( dlclose( library->ptr ) != 0 ) {
+		int err = errno;
+		error( "Failed to close library handle: %s\n", strerror( err ) );
+	}
+
+	library->ptr = NULL;
 }
 
 void* library_get_proc_address( const Library library, const char* func_name ) {
-	unused( library );
-	unused( func_name );
+	assert( library.ptr );
+	assert( func_name );
 
-	return NULL;
+	return dlsym( library.ptr, func_name );
 }
 
 #endif // __linux__

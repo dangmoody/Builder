@@ -909,6 +909,8 @@ int main( int argc, char** argv ) {
 	{
 		float64 userConfigBuildTimeStart = time_ms();
 
+		printf( "Doing user config build:\n" );
+
 		BuildConfig userConfigBuildConfig = {
 			.source_files = {
 				context.inputFile,
@@ -971,7 +973,7 @@ int main( int argc, char** argv ) {
 				QUIT_ERROR();
 
 			case BUILD_RESULT_SKIPPED:
-				// nothing
+				printf( "Skipped!\n" );
 				break;
 		}
 

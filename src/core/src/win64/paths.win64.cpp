@@ -70,6 +70,8 @@ const char* path_current_working_directory() {
 }
 
 const char* path_absolute_path( const char* file ) {
+	assert( file );
+
 	char* absolute_path = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
 	GetFullPathName( file, MAX_PATH, absolute_path, NULL );
 	return absolute_path;
@@ -84,6 +86,8 @@ bool8 path_is_absolute( const char* path ) {
 }
 
 const char* path_canonicalise( const char* path ) {
+	assert( path );
+
 	const char* path_copy = path_fix_slashes( path );
 
 	u64 max_path_length = ( strlen( path_copy ) + 1 ) * sizeof( char );
@@ -105,9 +109,12 @@ const char* path_canonicalise( const char* path ) {
 }
 
 char* path_relative_path_to( const char* path_from, const char* path_to ) {
+	assert( path_from );
+	assert( path_to );
+
 	char* result = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
 
-	if ( PathRelativePathTo( result, path_from, FILE_ATTRIBUTE_NORMAL, path_to, FILE_ATTRIBUTE_NORMAL ) ) {
+	if ( PathRelativePathTo( result, path_fix_slashes( path_from ), FILE_ATTRIBUTE_NORMAL, path_fix_slashes( path_to ), FILE_ATTRIBUTE_NORMAL ) ) {
 		error( "Unable to compute relative path, ensure provided paths exist.\nFrom Path: %s\nTo Path: %s", path_from, path_to );
 	}
 
@@ -115,6 +122,8 @@ char* path_relative_path_to( const char* path_from, const char* path_to ) {
 }
 
 bool8 path_set_current_directory( const char* path ) {
+	assert( path );
+
 	return cast( bool8, SetCurrentDirectory( path ) );
 }
 

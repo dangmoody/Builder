@@ -53,11 +53,11 @@ SOFTWARE.
 static File open_file_internal( const char* filename, int flags ) {
 	assert( filename );
 
-	int handle = open( filename, flags );
+	int handle = open( filename, flags, S_IRWXU | S_IRWXG | S_IRWXO );
 	if ( handle == -1 ) {
 		int err = errno;
 
-		error( "Failed to open file \"%s\": %s\n", filename, strerror( err ) );
+		error( "Failed to open file \"%s\".  Error code %d: %s\n", filename, err, strerror( err ) );
 
 		return { INVALID_FILE_HANDLE, 0 };
 	}
@@ -89,13 +89,13 @@ u64 file_get_size_internal( const File* file ) {
 File file_open( const char* filename ) {
 	assert( filename );
 
-	return open_file_internal( filename, 0 );
+	return open_file_internal( filename, O_RDWR );
 }
 
 File file_open_or_create( const char* filename, const bool8 keep_existing_content ) {
 	assert( filename );
 
-	int flags = O_CREAT;
+	int flags = O_CREAT | O_RDWR;
 
 	if ( !keep_existing_content ) {
 		flags |= O_TRUNC;
@@ -161,7 +161,7 @@ bool8 file_write( File* file, const void* data, const u64 offset, const u64 size
 	ssize_t bytes_written = pwrite( trunc_cast( int, file->handle ), data, size, trunc_cast( off_t, offset ) );
 	int err = errno;
 
-	assertf( trunc_cast( u64, bytes_written ) == size, "Failed to write %llu bytes of file at offset %llu: %s.\n", size, offset, strerror( err ) );
+	assertf( trunc_cast( u64, bytes_written ) == size, "Failed to write %llu bytes of file at offset %llu.  Error code %d: %s.\n", size, offset, err, strerror( err ) );
 
 	return trunc_cast( u64, bytes_written ) == size;
 }
@@ -207,6 +207,7 @@ bool8 file_get_all_files_in_folder( const char* path, const bool8 recursive, con
 
 	while ( dir_index < directories.count ) {
 		DIR* dir = opendir( directories[dir_index] );
+		defer( closedir( dir ) );
 
 		dir_index += 1;
 
@@ -220,12 +221,20 @@ bool8 file_get_all_files_in_folder( const char* path, const bool8 recursive, con
 				continue;
 			}
 
-			FileInfo file_info = {};
-			file_info.full_filename = tprintf( "%s%c%s", path, PATH_SEPARATOR, entry->d_name );
+			const char* full_filename = tprintf( "%s%c%s", path, PATH_SEPARATOR, entry->d_name );
 
-			if ( !file_get_info( file_info.full_filename, &file_info ) ) {
+			struct stat file_stat = {};
+			if ( stat( full_filename, &file_stat ) != 0 ) {
 				return false;
 			}
+
+			FileInfo file_info = {
+				.is_directory		= S_ISDIR( file_stat.st_mode ),
+				.last_write_time	= trunc_cast( u64, file_stat.st_mtime ),
+				.size_bytes			= trunc_cast( u64, file_stat.st_size ),
+				.filename			= entry->d_name,
+				.full_filename		= full_filename,
+			};
 
 			if ( file_info.is_directory ) {
 				if ( visit_folders ) {
@@ -233,15 +242,11 @@ bool8 file_get_all_files_in_folder( const char* path, const bool8 recursive, con
 				}
 
 				if ( recursive ) {
-					directories.add( file_info.full_filename );
+					directories.add( full_filename );
 				}
 			} else {
 				visit_callback( &file_info, user_data );
 			}
-		}
-
-		if ( !closedir( dir ) ) {
-			return false;
 		}
 	}
 

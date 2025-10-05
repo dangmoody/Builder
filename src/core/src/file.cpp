@@ -103,9 +103,15 @@ bool8 file_write_entire( const char* filename, const void* data, const u64 size 
 		return false;
 	}
 
-	defer( file_close( &file ) );
+	if ( !file_write( &file, data, 0, size ) ) {
+		return false;
+	}
 
-	return file_write( &file, data, 0, size );
+	if ( !file_close( &file ) ) {
+		return false;
+	}
+
+	return true;
 }
 
 bool8 file_write( File* file, const void* data, const u64 size ) {

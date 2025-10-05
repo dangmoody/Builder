@@ -103,12 +103,14 @@ static const char* GetFileExtensionFromBinaryType( BinaryType type ) {
 		case BINARY_TYPE_DYNAMIC_LIBRARY:	return ".dll";
 		case BINARY_TYPE_STATIC_LIBRARY:	return ".lib";
 	}
-#else
+#elif defined( __linux__ )
 	switch ( type ) {
 		case BINARY_TYPE_EXE:				return "";
-		case BINARY_TYPE_DYNAMIC_LIBRARY:	return ".dylib";
+		case BINARY_TYPE_DYNAMIC_LIBRARY:	return ".so";
 		case BINARY_TYPE_STATIC_LIBRARY:	return ".a";
 	}
+#else
+#error Unrecognised paltform.
 #endif
 
 	assertf( false, "Something went really wrong here.\n" );
@@ -988,8 +990,10 @@ int main( int argc, char** argv ) {
 
 #ifdef _WIN32
 	const char* dllFileExtension = ".dll";
+#elif defined( __linux__ )
+	const char* dllFileExtension = ".so";
 #else
-	const char* dllFileExtension = ".dylib";
+#error Unrecognised platform.
 #endif
 	userConfigFullBinaryName = tprintf( "%s%c%s%s", context.dotBuilderFolder.data, PATH_SEPARATOR, defaultBinaryName, dllFileExtension );
 

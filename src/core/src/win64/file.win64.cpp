@@ -29,12 +29,15 @@ SOFTWARE.
 #ifdef _WIN32
 
 #include <file.h>
+#include "../file_local.h"
 
 #include <debug.h>
 #include <allocation_context.h>
 #include <defer.h>
 #include <temp_storage.h>
 #include <typecast.inl>
+#include <paths.h>
+#include <array.inl>
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -67,7 +70,7 @@ static File open_file_internal( const char* filename, const DWORD access_flags, 
 //
 //	File file_handle = open_file_internal( filename, access_flags, creation_disposition );
 //
-//	if ( file_handle.ptr != INVALID_HANDLE_VALUE ) {
+//	if ( file_handle.handle != INVALID_FILE_HANDLE ) {
 //		return file_handle;
 //	}
 //
@@ -98,6 +101,21 @@ static bool8 create_folder_internal( const char* path ) {
 	return result;
 }
 
+u64 file_get_size_internal( const File* file ) {
+	assert( file );
+	assert( file->handle != INVALID_FILE_HANDLE );
+
+	HANDLE handle_win64 = cast( HANDLE, file->handle );
+
+	LARGE_INTEGER large_int = {};
+
+	if ( !GetFileSizeEx( handle_win64, &large_int ) ) {
+		assertf( false, "Failed to get file size.  Win32 error code: 0x%X", GetLastError() );
+	}
+
+	return cast( u64, large_int.QuadPart );
+}
+
 //================================================================
 
 File file_open( const char* filename ) {
@@ -111,7 +129,7 @@ File file_open_or_create( const char* filename, const bool8 keep_existing_conten
 	DWORD access_flags = GENERIC_READ | GENERIC_WRITE;
 	File file_handle = open_file_internal( filename, access_flags, creation_disposition );
 
-	if ( file_handle.ptr != INVALID_HANDLE_VALUE ) {
+	if ( file_handle.handle != INVALID_FILE_HANDLE ) {
 		return file_handle;
 	}
 
@@ -127,7 +145,7 @@ bool8 file_close( File* file ) {
 
 	//printf( "%s() last error: 0x%08X\n", __FUNCTION__, GetLastError() );
 
-	file->handle = INVALID_HANDLE_VALUE;
+	file->handle = INVALID_FILE_HANDLE;
 
 	return cast( bool8, result );
 }
@@ -154,7 +172,7 @@ bool8 file_rename( const char* old_filename, const char* new_filename ) {
 }
 
 bool8 file_read( File* file, const u64 offset, const u64 size, void* out_data ) {
-	assert( file && file->handle != INVALID_HANDLE_VALUE );
+	assert( file && file->handle != INVALID_FILE_HANDLE );
 	assertf( out_data, "Out data cannot be null." );
 
 	if ( size == 0 ) {
@@ -235,21 +253,21 @@ bool8 file_delete( const char* filename ) {
 	return cast( bool8, result );
 }
 
-u64 file_get_size( const File file ) {
-	if ( file.ptr == INVALID_HANDLE_VALUE ) {
-		return 0;
-	}
-
-	HANDLE handle = cast( HANDLE, file.ptr );
-
-	LARGE_INTEGER large_int = {};
-	BOOL got_file_size = GetFileSizeEx( handle, &large_int );
-
-	assertf( got_file_size, "Failed to get size for file: 0x%x.", GetLastError() );
-	unused( got_file_size );
-
-	return cast( u64, large_int.QuadPart );
-}
+//u64 file_get_size( const File file ) {
+//	if ( file.handle == INVALID_FILE_HANDLE ) {
+//		return 0;
+//	}
+//
+//	HANDLE handle = cast( HANDLE, file.handle );
+//
+//	LARGE_INTEGER large_int = {};
+//	BOOL got_file_size = GetFileSizeEx( handle, &large_int );
+//
+//	assertf( got_file_size, "Failed to get size for file: 0x%x.", GetLastError() );
+//	unused( got_file_size );
+//
+//	return cast( u64, large_int.QuadPart );
+//}
 
 static void get_file_info_internal( const WIN32_FIND_DATA* find_data, FileInfo* out_file_info ) {
 	assert( find_data );
@@ -262,40 +280,133 @@ static void get_file_info_internal( const WIN32_FIND_DATA* find_data, FileInfo* 
 	strncpy( out_file_info->filename, find_data->cFileName, MAX_PATH );
 }
 
-File file_find_first( const char* path, FileInfo* out_file_info ) {
-	assertf( path, "Path cannot be null." );
-	assertf( out_file_info, "Out file info cannot be null." );
+//File file_find_first( const char* path, FileInfo* out_file_info ) {
+//	assertf( path, "Path cannot be null." );
+//	assertf( out_file_info, "Out file info cannot be null." );
+//
+//	WIN32_FIND_DATA info = {};
+//	HANDLE handle = FindFirstFile( path, &info );
+//
+//	//assertf( handle != INVALID_HANDLE_VALUE, "Failed to find files at path \"%s\": 0x%X.", path, GetLastError() );
+//
+//	get_file_info_internal( &info, out_file_info );
+//
+//	return { handle, 0 };
+//}
+//
+//bool8 file_find_next( File* first_file, FileInfo* out_file_info ) {
+//	assertf( first_file && first_file->handle, "first_file cannot be invalid." );
+//	assertf( out_file_info, "Out file info cannot be null." );
+//
+//	HANDLE handle = cast( HANDLE, first_file->handle );
+//
+//	WIN32_FIND_DATA info = {};
+//	bool8 found = cast( bool8, FindNextFile( handle, &info ) );
+//
+//	if ( !found ) {
+//		// TODO(DM): switch/case this for other errors if we need to account for others
+//		DWORD lastError = GetLastError();
+//		if ( lastError != ERROR_NO_MORE_FILES && lastError != ERROR_INVALID_HANDLE ) {
+//			assertf( found, "Failed to get next file from first file: 0x%X.", lastError );
+//		}
+//
+//		return false;
+//	}
+//
+//	get_file_info_internal( &info, out_file_info );
+//
+//	return true;
+//}
 
-	WIN32_FIND_DATA info = {};
-	HANDLE handle = FindFirstFile( path, &info );
+bool8 file_get_info( const char* filename, FileInfo* out_file_info ) {
+	assert( filename );
+	assert( out_file_info );
 
-	//assertf( handle != INVALID_HANDLE_VALUE, "Failed to find files at path \"%s\": 0x%X.", path, GetLastError() );
+	WIN32_FIND_DATA find_data = {};
+	HANDLE handle = FindFirstFile( filename, &find_data );
 
-	get_file_info_internal( &info, out_file_info );
-
-	return { handle, 0 };
-}
-
-bool8 file_find_next( File* first_file, FileInfo* out_file_info ) {
-	assertf( first_file && first_file->handle, "first_file cannot be invalid." );
-	assertf( out_file_info, "Out file info cannot be null." );
-
-	HANDLE handle = cast( HANDLE, first_file->handle );
-
-	WIN32_FIND_DATA info = {};
-	bool8 found = cast( bool8, FindNextFile( handle, &info ) );
-
-	if ( !found ) {
-		// TODO(DM): switch/case this for other errors if we need to account for others
-		DWORD lastError = GetLastError();
-		if ( lastError != ERROR_NO_MORE_FILES && lastError != ERROR_INVALID_HANDLE ) {
-			assertf( found, "Failed to get next file from first file: 0x%X.", lastError );
-		}
-
+	if ( handle == INVALID_HANDLE_VALUE ) {
 		return false;
 	}
 
-	get_file_info_internal( &info, out_file_info );
+	LARGE_INTEGER large_int = {};
+	if ( !GetFileSizeEx( handle, &large_int ) ) {
+		return false;
+	}
+
+	*out_file_info = FileInfo {
+		.is_directory		= cast( bool8, find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ),
+		.last_write_time	= ( cast( u64, find_data.ftLastWriteTime.dwHighDateTime ) << 32 ) | find_data.ftLastWriteTime.dwLowDateTime,
+		.size_bytes			= trunc_cast( u64, large_int.QuadPart ),
+	};
+
+	u64 filename_length = strlen( find_data.cFileName );
+	out_file_info->filename = cast( char*, mem_temp_alloc( filename_length * sizeof( char ) ) );
+	strncpy( out_file_info->filename, find_data.cFileName, filename_length * sizeof( char ) );
+
+	return true;
+}
+
+bool8 file_get_all_files_in_folder( const char* path, const bool8 recursive, const bool8 visit_folders, FileVisitCallback visit_callback, void* user_data ) {
+	assert( path );
+	assert( visit_callback );
+
+	Array<const char*> directories;	// TODO(DM): 02/10/2025: allocate this on temp storage
+	directories.add( path );
+
+	u32 dir_index = 0;
+
+	while ( dir_index < directories.count ) {
+		const char* dir = directories[dir_index];
+
+		dir_index += 1;
+
+		const char* search_path = NULL;
+		if ( string_ends_with( dir, PATH_SEPARATOR ) ) {
+			search_path = tprintf( "%s*", dir );
+		} else {
+			search_path = tprintf( "%s%c*", dir, PATH_SEPARATOR );
+		}
+
+		WIN32_FIND_DATA find_data = {};
+		HANDLE handle = FindFirstFile( search_path, &find_data );
+
+		if ( handle == INVALID_HANDLE_VALUE ) {
+			return false;
+		}
+
+		while ( 1 ) {
+			FileInfo file_info = {
+				.is_directory		= cast( bool8, find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ),
+				.last_write_time	= ( trunc_cast( u64, find_data.ftLastWriteTime.dwHighDateTime ) << 32 ) | find_data.ftLastWriteTime.dwLowDateTime,
+				.size_bytes			= ( trunc_cast( u64, find_data.nFileSizeHigh ) << 32 ) | find_data.nFileSizeLow,
+				.filename			= find_data.cFileName,
+				.full_filename		= tprintf( "%s%c%s", dir, PATH_SEPARATOR, file_info.filename ),
+			};
+
+			if ( file_info.is_directory ) {
+				if ( !string_equals( find_data.cFileName, "." ) && !string_equals( find_data.cFileName, ".." ) ) {
+					if ( visit_folders ) {
+						visit_callback( &file_info, user_data );
+					}
+
+					if ( recursive ) {
+						directories.add( file_info.full_filename );
+					}
+				}
+			} else {
+				visit_callback( &file_info, user_data );
+			}
+
+			if ( !FindNextFile( handle, &find_data ) ) {
+				break;
+			}
+		}
+
+		if ( !FindClose( handle ) ) {
+			return false;
+		}
+	}
 
 	return true;
 }

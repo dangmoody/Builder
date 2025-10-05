@@ -61,65 +61,34 @@ struct visualStudioFileFilter_t {
 	const char* folderInFilter;	// relative from the root code folder that it was found in
 };
 
-static void GetAllVisualStudioFiles_r( buildContext_t* context, const char* solutionFilename, const char* basePath, const char* subfolder, const std::vector<std::string>& fileExtensions, Array<visualStudioFileFilter_t>& outFilterFiles ) {
-	const char* fullSearchPath = NULL;
+struct visualStudioSourceFileVisitorData_t {
+	Array<visualStudioFileFilter_t>	filterFiles;
+	std::vector<std::string>		fileExtensions;
+	const char*						rootFolder;
+};
 
-	if ( string_ends_with( basePath, PATH_SEPARATOR ) ) {
-		if ( subfolder ) {
-			fullSearchPath = tprintf( "%s%s%c*", basePath, PATH_SEPARATOR, subfolder );
-		} else {
-			fullSearchPath = tprintf( "%s*", basePath );
-		}
-	} else {
-		if ( subfolder ) {
-			fullSearchPath = tprintf( "%s%c%s%c*", basePath, PATH_SEPARATOR, subfolder, PATH_SEPARATOR );
-		} else {
-			fullSearchPath = tprintf( "%s%c*", basePath, PATH_SEPARATOR );
+static void VisualStudio_OnFoundSourceFile( const FileInfo* fileInfo, void* user_data ) {
+	visualStudioSourceFileVisitorData_t* visitorData = cast( visualStudioSourceFileVisitorData_t*, user_data );
+
+	For ( u32, fileExtensionIndex, 0, visitorData->fileExtensions.size() ) {
+		if ( string_ends_with( fileInfo->filename, visitorData->fileExtensions[fileExtensionIndex].c_str() ) ) {
+			const char* folderInFilter = path_remove_file_from_path( fileInfo->full_filename );
+			folderInFilter += strlen( visitorData->rootFolder );	// trim the root folder from the path, we only want the subfolders
+
+			while ( *folderInFilter == '\\' || *folderInFilter == '/' ) {
+				folderInFilter++;
+			}
+
+			visualStudioFileFilter_t filterFile = {
+				.filenameAndPathFromRoot	= fileInfo->full_filename,
+				.folderInFilter				= folderInFilter,
+			};
+
+			visitorData->filterFiles.add( filterFile );
+
+			break;
 		}
 	}
-
-	FileInfo fileInfo;
-	File file = file_find_first( fullSearchPath, &fileInfo );
-
-	do {
-		if ( string_equals( fileInfo.filename, "." ) ) {
-			continue;
-		}
-
-		if ( string_equals( fileInfo.filename, ".." ) ) {
-			continue;
-		}
-
-		if ( fileInfo.is_directory ) {
-			const char* folderName = NULL;
-			if ( subfolder ) {
-				folderName = tprintf( "%s%c%s", subfolder, PATH_SEPARATOR, fileInfo.filename );
-			} else {
-				folderName = tprintf( "%s", fileInfo.filename );
-			}
-
-			GetAllVisualStudioFiles_r( context, solutionFilename, basePath, folderName, fileExtensions, outFilterFiles );
-		} else {
-			For ( u64, fileExtensionIndex, 0, fileExtensions.size() ) {
-				if ( string_ends_with( fileInfo.filename, fileExtensions[fileExtensionIndex].c_str() ) ) {
-					const char* filenameAndPathFromRoot = NULL;
-					if ( subfolder ) {
-						filenameAndPathFromRoot = tprintf( "%s%c%s", subfolder, PATH_SEPARATOR, fileInfo.filename );
-					} else {
-						filenameAndPathFromRoot = tprintf( "%s", fileInfo.filename );
-					}
-
-					visualStudioFileFilter_t filterFile = {
-						.filenameAndPathFromRoot	= filenameAndPathFromRoot,
-						.folderInFilter				= subfolder,
-					};
-
-					outFilterFiles.add( filterFile );
-					break;
-				}
-			}
-		}
-	} while ( file_find_next( &file, &fileInfo ) );
 }
 
 // data layout comes from: https://learn.microsoft.com/en-us/windows/win32/api/guiddef/ns-guiddef-guid
@@ -228,7 +197,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 	// delete old VS files if they exist
 	// but keep the root because we're about to re-populate it
-	NukeFolder_r( visualStudioProjectFilesPath, false, context->verbose );
+	NukeFolder( visualStudioProjectFilesPath, false, context->verbose );
 
 	const char* solutionFilename = tprintf( "%s%c%s.sln", visualStudioProjectFilesPath, PATH_SEPARATOR, options->solution.name.c_str() );
 
@@ -412,18 +381,19 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 			For ( u64, folderIndex, 0, project->code_folders.size() ) {
 				const char* codeFolder = project->code_folders[folderIndex].c_str();
 
-				Array<visualStudioFileFilter_t> filterFiles;
-				GetAllVisualStudioFiles_r( context, solutionFilename, cast( char*, context->inputFilePath.data ), codeFolder, project->file_extensions, filterFiles );
+				visualStudioSourceFileVisitorData_t visitorData = {
+					.fileExtensions	= project->file_extensions,
+					.rootFolder		= context->inputFilePath.data,
+				};
 
-				if ( filterFiles.count == 0 ) {
-					error(
-						"Project \"%s\" is trying to find the source file path \"%s\" but it doesn't exist (full path it's trying to find is: \"%s%c%s\").\n",
-						project->name.c_str(), codeFolder,
-						context->inputFilePath.data, PATH_SEPARATOR, codeFolder
-					);
+				const char* searchPath = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, codeFolder );
 
+				if ( !file_get_all_files_in_folder( searchPath, true, false, VisualStudio_OnFoundSourceFile, &visitorData ) ) {
+					error( "Failed to get all files in \"%s\" (including subdirectories).\n", searchPath );
 					return false;
 				}
+
+				Array<visualStudioFileFilter_t> filterFiles = visitorData.filterFiles;
 
 				For ( u64, filterFileIndex, 0, filterFiles.count ) {
 					visualStudioFileFilter_t* fileFilter = &filterFiles[filterFileIndex];

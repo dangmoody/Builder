@@ -89,7 +89,7 @@ enum buildResult_t {
 
 u64 GetLastFileWriteTime( const char* filename ) {
 	FileInfo fileInfo;
-	if ( file_get_info( &filename, &fileInfo ) ) {
+	if ( file_get_info( filename, &fileInfo ) ) {
 		assert( false );
 	}
 
@@ -328,7 +328,7 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 	// create binary folder
 	if ( !folder_create_if_it_doesnt_exist( config->binary_folder.c_str() ) ) {
 		errorCode_t errorCode = get_last_error_code();
-		fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".  %s\n", SET_BUILDER_OPTIONS_FUNC_NAME, config->binary_folder.c_str(), strerror( errorCode ) );
+		fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".  Error code: " ERROR_CODE_FORMAT "", SET_BUILDER_OPTIONS_FUNC_NAME, config->binary_folder.c_str(), errorCode );
 		return BUILD_RESULT_FAILED;
 	}
 
@@ -336,7 +336,7 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 	const char* intermediatePath = tprintf( "%s%c%s", config->binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
 	if ( !folder_create_if_it_doesnt_exist( intermediatePath ) ) {
 		errorCode_t errorCode = get_last_error_code();
-		fatal_error( "Failed to create intermediate binary folder.  %s\n", strerror( errorCode ) );
+		fatal_error( "Failed to create intermediate binary folder.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
 		return BUILD_RESULT_FAILED;
 	}
 
@@ -357,7 +357,7 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 		FileInfo intermediateFileInfo = {};
 
 		// if the .o file doesnt exist then assume we havent built this file yet
-		if ( !file_get_info( &intermediateFilename, &intermediateFileInfo ) ) {
+		if ( !file_get_info( intermediateFilename, &intermediateFileInfo ) ) {
 			return true;
 		}
 
@@ -454,59 +454,49 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 	return BUILD_RESULT_SUCCESS;
 }
 
-static void NukeFolderInternal_r( const char* folder, const bool8 verbose ) {
-#if 1
-	unused( folder );
-	unused( verbose );
+struct nukeContext_t {
+	Array<const char*>	folders;
+	bool8				verbose;
+};
 
-	assert( false );
-#else
-	const char* searchPattern = tprintf( "%s%c*", folder, PATH_SEPARATOR );
+static void Nuke_DeleteAllFilesAndCacheFoldersInternal( const FileInfo* fileInfo, void* user_data ) {
+	nukeContext_t* context = cast( nukeContext_t*, user_data );
 
-	FileInfo fileInfo = {};
-	File file = file_find_first( searchPattern, &fileInfo );
-
-	do {
-		if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) || fileInfo.filename[0] == 0 ) {
-			continue;
+	if ( fileInfo->is_directory ) {
+		context->folders.add( fileInfo->full_filename );
+	} else {
+		if ( context->verbose ) {
+			printf( "Deleting file \"%s\"\n", fileInfo->full_filename );
 		}
 
-		const char* fileFullPath = tprintf( "%s%c%s", folder, PATH_SEPARATOR, fileInfo.filename );
-
-		if ( fileInfo.is_directory ) {
-			if ( verbose ) {
-				printf( "Found folder %s\n", fileFullPath );
-			}
-
-			NukeFolderInternal_r( fileFullPath, verbose );
-
-			if ( verbose ) {
-				printf( "Deleting folder %s\n", fileFullPath );
-			}
-
-			if ( !folder_delete( fileFullPath ) ) {
-				error( "Nuke failed to delete folder \"%s\".\n", fileFullPath );
-			}
-		} else {
-			if ( verbose ) {
-				printf( "Deleting file %s\n", fileFullPath );
-			}
-
-			if ( !file_delete( fileFullPath ) ) {
-				error( "Nuke failed to delete folder \"%s\".\n", fileFullPath );
-			}
+		if ( !file_delete( fileInfo->full_filename ) ) {
+			error( "Nuke failed to delete folder \"%s\".\n", fileInfo->full_filename );
 		}
-	} while ( file_find_next( &file, &fileInfo ) );
-#endif
+	}
 }
 
-void NukeFolder_r( const char* folder, const bool8 deleteRoot, const bool8 verbose ) {
-	NukeFolderInternal_r( folder, verbose );
+void NukeFolder( const char* folder, const bool8 deleteRoot, const bool8 verbose ) {
+	nukeContext_t nukeContext = {
+		.verbose = verbose
+	};
+
+	file_get_all_files_in_folder( folder, true, true, Nuke_DeleteAllFilesAndCacheFoldersInternal, &nukeContext );
+
+	RFor ( u64, subfolderIndex, 0, nukeContext.folders.count ) {
+		const char* subfolder = nukeContext.folders[subfolderIndex];
+
+		if ( verbose ) {
+			printf( "Deleting folder \"%s\"\n", subfolder );
+		}
+
+		if ( !folder_delete( subfolder ) ) {
+			error( "Failed to delete subfolder \"%s\" while nuking \"%s\".  You will need to do this manually.  Sorry.\n", subfolder, folder );
+		}
+	}
 
 	if ( deleteRoot ) {
 		if ( !folder_delete( folder ) ) {
-			errorCode_t errorCode = get_last_error_code();
-			error( "Nuke failed to delete root folder \"%s\".  You'll have to do this manually.  Error code " ERROR_CODE_FORMAT "\n", folder, errorCode );
+			error( "Failed to nuke root folder \"%s\" after deleting all the files and folders inside it.  You may need to do this manually.  Sorry.\n" );
 		}
 	}
 }
@@ -556,67 +546,49 @@ static bool8 FileMatchesFilter( const char* filename, const char* filter ) {
 	return *filterCopy == 0;
 }
 
-static void GetAllSourceFiles_r( const char* path, const char* subfolder, const char* searchFilter, std::vector<std::string>& outSourceFiles ) {
-	assert( path );
-	assert( searchFilter );
+struct sourceFileFindVisitorData_t {
+	std::vector<std::string>	sourceFiles;
+	const char*					searchFilter;
+};
 
-	const char* fullSearchPath = NULL;
-	if ( subfolder ) {
-		fullSearchPath = tprintf( "%s/%s/*", path, subfolder );
-	} else {
-		fullSearchPath = tprintf( "%s/*", path );
+static void SourceFileVisitor( const FileInfo* fileInfo, void* userData ) {
+	sourceFileFindVisitorData_t* visitorData2 = cast( sourceFileFindVisitorData_t*, userData );
+
+	if ( FileMatchesFilter( fileInfo->filename, visitorData2->searchFilter ) ) {
+		visitorData2->sourceFiles.push_back( fileInfo->filename );
 	}
-
-	FileInfo fileInfo;
-	File file = file_find_first( fullSearchPath, &fileInfo );
-
-	do {
-		if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) ) {
-			continue;
-		}
-
-		const char* fileInFolder = NULL;
-		if ( subfolder ) {
-			fileInFolder = tprintf( "%s/%s", subfolder, fileInfo.filename );
-		} else {
-			fileInFolder = tprintf( "%s", fileInfo.filename );
-		}
-
-		if ( fileInfo.is_directory ) {
-			GetAllSourceFiles_r( path, fileInFolder, searchFilter, outSourceFiles );
-		} else {
-			if ( FileMatchesFilter( fileInFolder, searchFilter ) ) {
-				outSourceFiles.push_back( fileInFolder );
-			}
-		}
-	} while ( file_find_next( &file, &fileInfo ) );
 }
 
 static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContext_t* context, const BuildConfig* config ) {
-	std::vector<std::string> sourceFiles;
+	sourceFileFindVisitorData_t visitorData = {};
 
 	For ( u64, sourceFileIndex, 0, config->source_files.size() ) {
 		const char* sourceFile = config->source_files[sourceFileIndex].c_str();
 
-		bool8 inputFileIsSameAsSourceFile = string_equals( sourceFile, context->inputFile );
-
 		const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
-		const char* sourceFilePath = NULL;
 
+		const char* sourceFilePath = path_remove_file_from_path( sourceFile );
+		if ( !sourceFilePath ) {
+			sourceFilePath = ".";
+		}
+
+		// TODO(DM): 02/10/2025: needing this is (probably) a hack
+		// re-evaluate this
+		bool8 inputFileIsSameAsSourceFile = string_equals( sourceFile, context->inputFile );
 		if ( inputFileIsSameAsSourceFile ) {
-			GetAllSourceFiles_r( context->inputFilePath.data, NULL, sourceFileNoPath, sourceFiles );
+			visitorData.searchFilter = sourceFileNoPath;
 		} else {
-			sourceFilePath = path_remove_file_from_path( sourceFile );
+			visitorData.searchFilter = sourceFile;
+		}
 
-			if ( !sourceFilePath ) {
-				sourceFilePath = ".";
-			}
+		bool8 recursive = string_contains( sourceFile, "**" );
 
-			GetAllSourceFiles_r( context->inputFilePath.data, NULL, sourceFile, sourceFiles );
+		if ( !file_get_all_files_in_folder( sourceFilePath, recursive, false, SourceFileVisitor, &visitorData ) ) {
+			fatal_error( "Failed to get source file(s) \"%s\".  This should never happen.\n", sourceFile );
 		}
 	}
 
-	return sourceFiles;
+	return visitorData.sourceFiles;
 }
 
 static void AddBuildConfigAndDependenciesUnique( buildContext_t* context, const BuildConfig* config, std::vector<BuildConfig>& outConfigs ) {
@@ -742,7 +714,7 @@ static bool8 WriteIncludeDependenciesFile( buildContext_t* context ) {
 
 	if ( !file_write_entire( includeDepsFilename, byteBuffer.data.data, byteBuffer.data.count ) ) {
 		errorCode_t errorCode = get_last_error_code();
-		error( "Failed to write file \"%s\".  %s.\n", strerror( errorCode ) );
+		error( "Failed to write file \"%s\".  Error code: " ERROR_CODE_FORMAT ".\n", errorCode );
 		return false;
 	}
 
@@ -837,7 +809,7 @@ int main( int argc, char** argv ) {
 
 			float64 startTime = time_ms();
 
-			NukeFolder_r( folderToNuke, false, true );
+			NukeFolder( folderToNuke, false, true );
 
 			float64 endTime = time_ms();
 
@@ -1349,7 +1321,7 @@ int main( int argc, char** argv ) {
 	float64 totalTimeEnd = time_ms();
 
 	{
-	    using namespace hlml;
+		using namespace hlml;
 
 		printf( "Build finished:\n" );
 		printf( "    User config build:   %f ms%s\n", userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? " (skipped)" : "" );

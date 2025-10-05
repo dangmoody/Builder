@@ -58,8 +58,12 @@ struct FileInfo {
 	bool8	is_directory;	// TODO(DM): change to fileAttributeFlags_t bit mask
 	u64		last_write_time;
 	u64		size_bytes;
-	char	filename[1024];	// TODO(DM): do this properly
+	char*	filename;
+	char*	full_filename;
 };
+
+typedef void ( *FileVisitCallback )( const FileInfo* file_info, void* user_data );
+
 
 // Opens the file for reading and writing.
 CORE_API File	file_open( const char* filename );
@@ -114,14 +118,14 @@ CORE_API bool8	file_write_line(File* file, const char* line);
 // Returns true if successfully deletes the file, otherwise returns false.
 CORE_API bool8	file_delete( const char* filename );
 
-typedef void ( *FileVisitCallback )( const FileInfo* file_info );
-
 // Returns true and fills out_file_info if the file can be found, otherwise returns false.
 CORE_API bool8	file_get_info( const char* filename, FileInfo* out_file_info );
 
 // Returns true if all files found in path can be successfully visited, otherwise returns false.
-// For each successful visit, file_visit_callback will be called.
-CORE_API bool8	file_visit( const char* path, FileVisitCallback file_visit_callback );
+// For each file found, 'visit_callback' gets called.
+// If 'visit_folders' is true then 'visit_callback' will also fire for each folder that gets visited.
+// 'user_data' can be NULL.
+CORE_API bool8	file_get_all_files_in_folder( const char* path, const bool8 recursive, const bool8 visit_folders, FileVisitCallback visit_callback, void* user_data );
 
 // If the folder at the given path already exists then returns true.
 // If the folder at the given path does NOT exist but was successfully created then returns true.

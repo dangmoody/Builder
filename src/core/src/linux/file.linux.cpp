@@ -29,6 +29,7 @@ SOFTWARE.
 #ifdef __linux__
 
 #include <file.h>
+#include "../file_local.h"
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -181,9 +182,9 @@ bool8 file_get_info( const char* filename, FileInfo* out_file_info ) {
 	return true;
 }
 
-bool8 file_visit( const char* path, FileVisitCallback file_visit_callback ) {
+bool8 file_get_all_files_in_folder( const char* path, FileVisitCallback visit_callback ) {
 	assert( path );
-	assert( file_visit_callback );
+	assert( visit_callback );
 
 	DIR* dir = opendir( path );
 
@@ -203,7 +204,7 @@ bool8 file_visit( const char* path, FileVisitCallback file_visit_callback ) {
 			return false;
 		}
 
-		file_visit_callback( &file_info );
+		visit_callback( &file_info );
 	}
 
 	if ( !closedir( dir ) ) {

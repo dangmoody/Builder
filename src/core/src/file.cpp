@@ -27,6 +27,7 @@ SOFTWARE.
 */
 
 #include <file.h>
+#include "file_local.h"
 
 /*
 ================================================================================================
@@ -63,7 +64,7 @@ bool8 file_read_entire( const char* filename, char** outBuffer, u64* out_file_le
 		return 0;
 	}
 
-	u64 file_size = file_get_size( file );
+	u64 file_size = file_get_size_internal( &file );
 
 	char* temp = cast( char*, mem_alloc( file_size + 1 ) );
 

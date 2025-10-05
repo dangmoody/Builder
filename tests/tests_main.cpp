@@ -96,6 +96,33 @@ TEMPER_TEST_PARAMETRIC( Compile_SetBuilderOptions, TEMPER_FLAG_SHOULD_RUN, const
 	DoBinaryFilesPostCheck( "test_set_builder_options", "test_set_builder_options.cpp" );
 }
 
+TEMPER_TEST( Compile_MSVC, TEMPER_FLAG_SHOULD_RUN ) {
+	const char* buildSourceFile = "tests\\test_msvc\\test_msvc.cpp";
+
+	TEMPER_CHECK_TRUE( FileExists( buildSourceFile ) );
+
+	s32 exitCode = 0;
+
+	Array<const char*> args;
+
+	args.reset();
+	args.add( "builder.exe" );
+	args.add( buildSourceFile );
+	exitCode = RunProc( &args );
+
+	TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
+
+	TEMPER_CHECK_TRUE( FileExists( "tests\\test_msvc\\test_msvc.exe" ) );
+
+	args.reset();
+	args.add( "tests\\test_msvc\\test_msvc.exe" );
+	exitCode = RunProc( &args );
+
+	TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
+
+	DoBinaryFilesPostCheck( "test_msvc", "test_msvc.cpp" );
+}
+
 TEMPER_INVOKE_PARAMETRIC_TEST( Compile_SetBuilderOptions, "release" );
 TEMPER_INVOKE_PARAMETRIC_TEST( Compile_SetBuilderOptions, "debug" );
 

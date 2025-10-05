@@ -100,6 +100,7 @@
     <ClCompile Include="test_dynamic_lib\lib\lib.cpp" />
     <ClCompile Include="test_dynamic_lib\program\build.cpp" />
     <ClCompile Include="test_dynamic_lib\program\program.cpp" />
+    <ClCompile Include="test_msvc\test_msvc.cpp" />
     <ClCompile Include="test_multiple_source_files\build.cpp" />
     <ClCompile Include="test_multiple_source_files\src\main.cpp" />
     <ClCompile Include="test_multiple_source_files\src\marco.linux.cpp" />

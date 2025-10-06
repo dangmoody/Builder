@@ -44,9 +44,9 @@ SOFTWARE.
 // This means that you need to have set_builder_options() exposed so that Builder can find the function and call it, hence it gets exported as a symbol in the binary.
 // Then Builder will compile your program proper, so that function isn't needed anymore.
 #ifdef BUILDER_DOING_USER_CONFIG_BUILD
-#define BUILDER_CALLBACK	extern "C" __declspec( dllexport )
+	#define BUILDER_CALLBACK	extern "C" __declspec( dllexport )
 #else
-#define BUILDER_CALLBACK	static
+	#define BUILDER_CALLBACK	static
 #endif
 
 enum LanguageVersion {
@@ -95,13 +95,13 @@ struct BuildConfig {
 	// Additional libraries to set for Clang.
 	std::vector<std::string>	additional_libs;
 
-	// Additional warnings to tell Clang to ignore.
-	// Uses the Clang syntax (E.G.: -Wno-newline-eof).
-	std::vector<std::string>	ignore_warnings;
-
 	// The warning/diagnostic groups that you want to enable.
 	// Allowed values: -Weverything, -Wall, -Wextra, -Wpedantic.
 	std::vector<std::string>	warning_levels;
+
+	// Additional warnings to tell Clang to ignore.
+	// Uses the Clang syntax (E.G.: -Wno-newline-eof).
+	std::vector<std::string>	ignore_warnings;
 
 	// The name that the built binary is going to have.
 	// This will be placed inside binary_folder, if you set that.

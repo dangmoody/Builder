@@ -11,7 +11,7 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	BuildConfig debug = {
 		.name = "debug",
 		.binary_name = "kenneth",
-		.binary_folder = "bin\\debug",
+		.binary_folder = "bin/debug",
 		.remove_symbols = false,
 		.optimization_level = OPTIMIZATION_LEVEL_O0,
 	};
@@ -19,7 +19,7 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	BuildConfig release = {
 		.name = "release",
 		.binary_name = "kenneth",
-		.binary_folder = "bin\\release",
+		.binary_folder = "bin/release",
 		.remove_symbols = true,
 		.optimization_level = OPTIMIZATION_LEVEL_O3,
 	};

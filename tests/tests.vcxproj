@@ -23,7 +23,7 @@
     <ProjectGuid>{5636AF3C-11B3-4AE4-983F-F27A5D33D372}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
   </PropertyGroup>
-  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" Condition="'$(OS)' == 'Windows_NT'" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Makefile</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
@@ -44,7 +44,7 @@
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
-  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" Condition="'$(OS)' == 'Windows_NT'" />
   <ImportGroup Label="ExtensionSettings">
   </ImportGroup>
   <ImportGroup Label="Shared">
@@ -122,7 +122,7 @@
     <ClInclude Include="test_static_library\library\lib.h" />
     <ClInclude Include="test_static_lib\lib\lib.h" />
   </ItemGroup>
-  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" Condition="'$(OS)' == 'Windows_NT'" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
 </Project>

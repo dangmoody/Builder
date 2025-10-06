@@ -17,7 +17,7 @@ if [[ "$config" != "debug" && "$config" != "release" ]]; then
 	ShowUsage
 fi
 
-echo Building config "$config"...
+echo Building Builder, config "$config"...
 
 #couldn't find a way to just change the working director real quick - so i'll just do this for now and push absolute paths
 # tbf - I could probably stash pwd and then cd into the absolute path and then cd out but not right now, let's get this running first
@@ -60,9 +60,3 @@ ignore_warnings="-Wno-newline-eof -Wno-format-nonliteral -Wno-gnu-zero-variadic-
 args="clang -std=c++20 -ferror-limit=0 -o $bin_folder/builder $symbols $optimisation $source_files $defines $includes $libraries $warning_levels $ignore_warnings"
 echo $args
 $args
-
-#echo "Copying $bin_folder/builder.exe -> ./builder.exe"
-#cp $bin_folder/builder.exe ./builder.exe
-
-
-exit 0

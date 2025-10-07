@@ -26,9 +26,8 @@ SOFTWARE.
 ===========================================================================
 */
 
-#pragma once
-
 #ifdef __linux__
+
 #include "../../include/paths.h"
 
 #include <core_types.h>

@@ -108,8 +108,6 @@
     <ClCompile Include="test_multiple_source_files\src\polo.linux.cpp" />
     <ClCompile Include="test_multiple_source_files\src\polo.win64.cpp" />
     <ClCompile Include="test_set_builder_options\test_set_builder_options.cpp" />
-    <ClCompile Include="test_static_library\library\lib.cpp" />
-    <ClCompile Include="test_static_library\program\program.cpp" />
     <ClCompile Include="test_static_lib\build.cpp" />
     <ClCompile Include="test_static_lib\lib\lib.cpp" />
     <ClCompile Include="test_static_lib\program\program.cpp" />
@@ -119,8 +117,19 @@
   <ItemGroup>
     <ClInclude Include="test_dynamic_lib\lib\lib.h" />
     <ClInclude Include="test_multiple_source_files\src\marco_polo.h" />
-    <ClInclude Include="test_static_library\library\lib.h" />
     <ClInclude Include="test_static_lib\lib\lib.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="test_static_lib\.builder\build.include_dependencies" />
+    <Content Include="test_static_lib\.builder\build.so" />
+    <Content Include="test_static_lib\.builder\intermediate\build.cpp.d" />
+    <Content Include="test_static_lib\.builder\intermediate\build.cpp.o" />
+    <Content Include="test_static_lib\bin\intermediate\lib.cpp.d" />
+    <Content Include="test_static_lib\bin\intermediate\lib.cpp.o" />
+    <Content Include="test_static_lib\bin\intermediate\program.cpp.d" />
+    <Content Include="test_static_lib\bin\intermediate\program.cpp.o" />
+    <Content Include="test_static_lib\bin\test_static_lib.a" />
+    <Content Include="test_static_lib\bin\test_static_library_program" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" Condition="'$(OS)' == 'Windows_NT'" />
   <ImportGroup Label="ExtensionTargets">

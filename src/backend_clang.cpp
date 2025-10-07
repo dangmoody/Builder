@@ -319,9 +319,15 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t* backend, const Arra
 	// for dynamic libraries and executables clang and gcc recommend you call the compiler again and just pass in all the intermediate files
 	if ( config->binary_type == BINARY_TYPE_STATIC_LIBRARY ) {
 		args.add( backend->linkerPath.data );
+
+#if defined( _WIN32 )
 		args.add( "/lib" );
 
 		args.add( tprintf( "/OUT:%s", fullBinaryName ) );
+#elif defined( __linux__ )
+		args.add( "rc" );
+		args.add( fullBinaryName );
+#endif
 
 		args.add_range( &intermediateFiles );
 	} else {
@@ -345,7 +351,16 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t* backend, const Arra
 		}
 
 		For ( u32, libIndex, 0, config->additional_libs.size() ) {
-			args.add( tprintf( "-l%s", config->additional_libs[libIndex].c_str() ) );
+			const char* staticLib = config->additional_libs[libIndex].c_str();
+#if defined( _WIN32 )
+			args.add( tprintf( "-l%s", staticLib ) );
+#elif defined( __linux__ )
+			if ( !string_starts_with( staticLib, "lib" ) ) {
+				args.add( tprintf( "-l:%s", staticLib ) );
+			} else {
+				args.add( tprintf( "-l%s", staticLib ) );
+			}
+#endif
 		}
 	}
 
@@ -468,7 +483,11 @@ static String GCC_GetCompilerVersion( compilerBackend_t* backend ) {
 void CreateCompilerBackend_Clang( compilerBackend_t* outBackend, const char* compilerPath ) {
 	*outBackend = compilerBackend_t {
 		.compilerPath								= compilerPath,
+#if defined( _WIN32 )
 		.linkerPath									= "lld-link",
+#elif defined( __linux__ )
+		.linkerPath									= "llvm-ar",
+#endif
 		.data										= NULL,
 		.Init										= Clang_Init,
 		.Shutdown									= Clang_Shutdown,

@@ -27,6 +27,8 @@ SOFTWARE.
 */
 
 #ifdef __linux__
+
+#include "../../include/file.h"
 #include "../../include/core_types.h"
 #include "../../include/core_types.h"
 #include <file.h>
@@ -116,12 +118,21 @@ bool8 file_close( File* file ) {
 }
 
 bool8 file_copy( const char* original_path, const char* new_path ) {
-	unused( original_path );
-	unused( new_path );
+	assert( original_path );
+	assert( new_path );
 
-	assert( false );
+	char* buffer = NULL;
+	if ( !file_read_entire( original_path, &buffer ) ) {
+		return false;
+	}
 
-	return false;
+	defer( file_free_buffer( &buffer ) );
+
+	if ( !file_write_entire( new_path, buffer, strlen( buffer ) ) ) {
+		return false;
+	}
+
+	return true;
 }
 
 bool8 file_rename( const char* old_filename, const char* new_filename ) {
@@ -202,12 +213,18 @@ bool8 file_get_all_files_in_folder( const char* path, const bool8 recursive, con
 	u32 dir_index = 0;
 
 	while ( dir_index < directories.count ) {
-		DIR* dir = opendir( directories[dir_index] );
+		const char* directory = directories[dir_index];
+
+		printf( "Scanning directory \"%s\"\n", directory );
+
+		DIR* dir = opendir( directory );
 		defer( closedir( dir ) );
 
 		dir_index += 1;
 
 		if ( !dir ) {
+			int err = errno;
+			printf( "NO 1: %s\n", strerror( err ) );
 			return false;
 		}
 
@@ -217,10 +234,12 @@ bool8 file_get_all_files_in_folder( const char* path, const bool8 recursive, con
 				continue;
 			}
 
-			const char* full_filename = tprintf( "%s%c%s", path, PATH_SEPARATOR, entry->d_name );
+			const char* full_filename = tprintf( "%s%c%s", directory, PATH_SEPARATOR, entry->d_name );
 
 			struct stat file_stat = {};
 			if ( stat( full_filename, &file_stat ) != 0 ) {
+				int err = errno;
+				printf( "Can't stat \"%s\": %s\n", full_filename, strerror( err ) );
 				return false;
 			}
 

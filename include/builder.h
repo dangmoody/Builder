@@ -36,17 +36,24 @@ SOFTWARE.
 #include <cstring> // ctring is not a part of std string on linux and needs a manual include
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wpadded"
-#define INVALID_HANDLE_VALUE ((void*)((u64)-1)) // TODO (MY) - cloned from the windows MSDN docs, you will need to replace this but for now you can use this to reduce compiler noise
 #endif // __linux__
 
 // If you override set_builder_options() you will need preface the function with the BUILDER_CALLBACK #define.
 // This is because when Builder does its user config build stage it will search your code for the function set_builder_options() and BUILDER_DOING_USER_CONFIG_BUILD will be defined.
 // This means that you need to have set_builder_options() exposed so that Builder can find the function and call it, hence it gets exported as a symbol in the binary.
 // Then Builder will compile your program proper, so that function isn't needed anymore.
-#ifdef BUILDER_DOING_USER_CONFIG_BUILD
-	#define BUILDER_CALLBACK	extern "C" __declspec( dllexport )
-#else
-	#define BUILDER_CALLBACK	static
+#if defined( _WIN32 )
+	#ifdef BUILDER_DOING_USER_CONFIG_BUILD
+		#define BUILDER_CALLBACK	extern "C" __declspec( dllexport )
+	#else
+		#define BUILDER_CALLBACK	static
+	#endif
+#elif defined( __linux__ )
+	#ifdef BUILDER_DOING_USER_CONFIG_BUILD
+		#define BUILDER_CALLBACK	extern "C" __attribute__( ( visibility( "default" ) ) )
+	#else
+		#define BUILDER_CALLBACK
+	#endif
 #endif
 
 enum LanguageVersion {

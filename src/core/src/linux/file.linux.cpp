@@ -215,7 +215,7 @@ bool8 file_get_all_files_in_folder( const char* path, const bool8 recursive, con
 	while ( dir_index < directories.count ) {
 		const char* directory = directories[dir_index];
 
-		printf( "Scanning directory \"%s\"\n", directory );
+		//printf( "Scanning directory \"%s\"\n", directory );
 
 		DIR* dir = opendir( directory );
 		defer( closedir( dir ) );
@@ -238,8 +238,8 @@ bool8 file_get_all_files_in_folder( const char* path, const bool8 recursive, con
 
 			struct stat file_stat = {};
 			if ( stat( full_filename, &file_stat ) != 0 ) {
-				int err = errno;
-				printf( "Can't stat \"%s\": %s\n", full_filename, strerror( err ) );
+				/*int err = errno;
+				printf( "Can't stat \"%s\": %s\n", full_filename, strerror( err ) );*/
 				return false;
 			}
 

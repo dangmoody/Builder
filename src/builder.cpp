@@ -577,29 +577,19 @@ static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContex
 
 		const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
 
-		/*const char* sourceFilePath = path_remove_file_from_path( sourceFile );
-
-		if ( !sourceFilePath ) {
-			sourceFilePath = ".";
-		}*/
-
 		bool8 recursive = string_contains( sourceFile, "**" ) || string_contains( sourceFile, "/" );
 
 		// TODO(DM): 02/10/2025: needing this is (probably) a hack
 		// re-evaluate this
 		bool8 inputFileIsSameAsSourceFile = string_equals( sourceFile, context->inputFile );
 		if ( inputFileIsSameAsSourceFile ) {
-			visitorData.searchFilter = sourceFileNoPath;
-
-			if ( !file_get_all_files_in_folder( context->inputFilePath.data/*sourceFilePath*/, recursive, false, SourceFileVisitor, &visitorData ) ) {
-				fatal_error( "Failed to get source file(s) \"%s\".  This should never happen.\n", sourceFile );
-			}
+			visitorData.searchFilter = context->inputFile;
 		} else {
-			visitorData.searchFilter = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, sourceFile );//sourceFilePath;
+			visitorData.searchFilter = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, sourceFile );
+		}
 
-			if ( !file_get_all_files_in_folder( context->inputFilePath.data/*sourceFilePath*/, recursive, false, SourceFileVisitor, &visitorData ) ) {
-				fatal_error( "Failed to get source file(s) \"%s\".  This should never happen.\n", sourceFile );
-			}
+		if ( !file_get_all_files_in_folder( context->inputFilePath.data, recursive, false, SourceFileVisitor, &visitorData ) ) {
+			fatal_error( "Failed to get source file(s) \"%s\".  This should never happen.\n", sourceFile );
 		}
 	}
 
@@ -956,7 +946,9 @@ int main( int argc, char** argv ) {
 			.ignore_warnings = {
 				"-Wno-missing-prototypes",	// otherwise the user has to forward declare functions like set_builder_options and thats annoying
 				"-Wno-reorder-init-list",	// allow users to initialize struct members in whatever order they want
-				"-fms-extensions",	// DM!!! HACK HACK HACK
+#ifdef __linux__
+				"-fPIC",	// DM!!! HACK HACK HACK! move this into its own field
+#endif
 			},
 			.binary_name = defaultBinaryName,
 			.binary_folder = context.dotBuilderFolder.data,

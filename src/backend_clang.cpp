@@ -351,14 +351,16 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t* backend, const Arra
 		}
 
 		For ( u32, libIndex, 0, config->additional_libs.size() ) {
-			const char* staticLib = config->additional_libs[libIndex].c_str();
+			std::string& staticLib = config->additional_libs[libIndex];
+
 #if defined( _WIN32 )
-			args.add( tprintf( "-l%s", staticLib ) );
+			args.add( tprintf( "-l%s", staticLib.c_str() ) );
 #elif defined( __linux__ )
-			if ( !string_starts_with( staticLib, "lib" ) ) {
-				args.add( tprintf( "-l:%s", staticLib ) );
+			if ( string_starts_with( staticLib.c_str(), "lib" ) ) {
+				staticLib.erase( 0, strlen( "lib" ) );
+				args.add( tprintf( "-l%s", staticLib.c_str() ) );
 			} else {
-				args.add( tprintf( "-l%s", staticLib ) );
+				args.add( tprintf( "-l:%s", staticLib.c_str() ) );
 			}
 #endif
 		}

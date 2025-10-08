@@ -281,14 +281,21 @@ TEMPER_TEST( Compile_StaticLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 
 TEMPER_TEST( Compile_DynamicLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 #if defined( _WIN32 )
-	const char* testDynamicLibDLLPath = tprintf( "tests/test_dynamic_lib/bin/test_dynamic_lib%s", GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
+	const char* dynamicLibraryFilename = tprintf( "tests/test_dynamic_lib/bin/test_dynamic_lib%s", GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
 #elif defined( __linux__ )
-	const char* testDynamicLibDLLPath = tprintf( "tests/test_dynamic_lib/bin/libtest_dynamic_lib%s", GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
+	const char* dynamicLibraryFilename = tprintf( "tests/test_dynamic_lib/bin/libtest_dynamic_lib%s", GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
 #endif
 
-	if ( FileExists( testDynamicLibDLLPath ) ) {
-		file_delete( testDynamicLibDLLPath );
-		TEMPER_CHECK_TRUE( !FileExists( testDynamicLibDLLPath ) );
+	const char* binaryFilename = tprintf( "tests/test_dynamic_lib/bin/test_dynamic_library_program%s", GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
+
+	if ( FileExists( dynamicLibraryFilename ) ) {
+		file_delete( dynamicLibraryFilename );
+		TEMPER_CHECK_TRUE( !FileExists( dynamicLibraryFilename ) );
+	}
+
+	if ( FileExists( binaryFilename ) ) {
+		file_delete( binaryFilename );
+		TEMPER_CHECK_TRUE( !FileExists( binaryFilename ) );
 	}
 
 	// now build the exe
@@ -308,13 +315,13 @@ TEMPER_TEST( Compile_DynamicLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 	// run the program to make sure everything actually works
 	{
 		Array<const char*> args;
-		args.add( tprintf( "tests/test_dynamic_lib/bin/test_dynamic_library_program%s", GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) ) );
+		args.add( binaryFilename );
 
 		s32 exitCode = RunProc( &args );
 
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 
-		TEMPER_CHECK_TRUE( FileExists( testDynamicLibDLLPath ) );
+		TEMPER_CHECK_TRUE( FileExists( dynamicLibraryFilename ) );
 	}
 }
 

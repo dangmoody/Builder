@@ -116,7 +116,7 @@ static void ReadDependencyFile( const char* depFilename, std::vector<std::string
 		assert( dependencyEnd );
 		// paths can have spaces in them, but they are preceded by a single backslash (\)
 		// so if we find a space but it has a single backslash just before it then keep searching for a space
-		while ( dependencyEnd && ( *( dependencyEnd - 1 ) == PATH_SEPARATOR ) ) {
+		while ( dependencyEnd && ( *( dependencyEnd - 1 ) == '\\' ) ) {
 			dependencyEnd = strchr( dependencyEnd + 1, ' ' );
 		}
 
@@ -133,7 +133,7 @@ static void ReadDependencyFile( const char* depFilename, std::vector<std::string
 		// get the substring we actually need
 		std::string dependencyFilename( dependencyStart, dependencyFilenameLength );
 		For ( u64, i, 0, dependencyFilename.size() ) {
-			if ( dependencyFilename[i] == PATH_SEPARATOR && dependencyFilename[i + 1] == ' ' ) {
+			if ( dependencyFilename[i] == '\\' && dependencyFilename[i + 1] == ' ' ) {
 				dependencyFilename.erase( i, 1 );
 			}
 		}
@@ -146,7 +146,8 @@ static void ReadDependencyFile( const char* depFilename, std::vector<std::string
 
 		current = dependencyEnd + 1;
 
-		while ( *current == PATH_SEPARATOR ) {
+		//while ( *current == PATH_SEPARATOR ) {
+		while ( *current == '\\' ) {
 			current += 1;
 		}
 

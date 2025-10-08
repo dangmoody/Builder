@@ -113,6 +113,7 @@
     <ClCompile Include="test_third_party_libraries\sdl_test.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="temper\temper.h" />
     <ClInclude Include="test_dynamic_lib\lib\lib.h" />
     <ClInclude Include="test_multiple_source_files\src\marco_polo.h" />
     <ClInclude Include="test_static_lib\lib\lib.h" />

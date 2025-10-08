@@ -305,7 +305,7 @@ TEMPER_TEST( Compile_DynamicLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 }
 
 // TODO(DM): this!
-TEMPER_TEST( RebuildSkipping, TEMPER_FLAG_SHOULD_RUN ) {
+TEMPER_TEST( RebuildSkipping, TEMPER_FLAG_SHOULD_SKIP ) {
 }
 
 TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {

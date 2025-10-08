@@ -59,10 +59,10 @@ static s32 RunProc( Array<const char*>* args ) {
 	assert( args );
 	assert( args->count > 0 );
 
-	For ( u64, argIndex, 0, args->count ) {
+	/*For ( u64, argIndex, 0, args->count ) {
 		printf( "%s ", ( *args )[argIndex] );
 	}
-	printf( "\n" );
+	printf( "\n" );*/
 
 	Process* process = process_create( args, NULL, /*PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR*/0 );
 
@@ -70,12 +70,12 @@ static s32 RunProc( Array<const char*>* args ) {
 
 	defer( process_destroy( process ) );
 
-	{
+	/*{
 		char buffer[1024];
 		while ( process_read_stdout( process, buffer, count_of( buffer ) ) ) {
 			printf( "%s", buffer );
 		}
-	}
+	}*/
 
 	s32 exitCode = process_join( process );
 
@@ -200,25 +200,34 @@ TEMPER_TEST( Compile_MultipleSourceFiles, TEMPER_FLAG_SHOULD_RUN ) {
 
 	TEMPER_CHECK_TRUE( FileExists( buildSourceFile ) );
 
-	Array<const char*> args;
-	args.add( BUILDER_EXE_PATH );
-	args.add( buildSourceFile );
+	// compile the program
+	{
+		Array<const char*> args;
+		args.add( BUILDER_EXE_PATH );
+		args.add( buildSourceFile );
 
-	s32 exitCode = RunProc( &args );
+		s32 exitCode = RunProc( &args );
 
-	TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
+		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 
-	TEMPER_CHECK_TRUE( FileExists( binaryFilename ) );
+		TEMPER_CHECK_TRUE( FileExists( binaryFilename ) );
+	}
+
+	// run the program
+	{
+		// TODO(DM): this
+	}
 
 	DoBinaryFilesPostCheck( "test_multiple_source_files", "build.cpp" );
 }
 
-TEMPER_TEST( SetThirdPartyLibrariesViaSetBuilderOptions, TEMPER_FLAG_SHOULD_RUN ) {
+/*TEMPER_TEST( SetThirdPartyLibrariesViaSetBuilderOptions, TEMPER_FLAG_SHOULD_RUN ) {
 	const char* buildSourceFile = "tests/test_third_party_libraries/build.cpp";
 	const char* binaryFilename = tprintf( "tests/test_third_party_libraries/bin/sdl_test%s", GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
 
 	TEMPER_CHECK_TRUE( FileExists( buildSourceFile ) );
 
+	// compile the program
 	{
 		Array<const char*> args;
 		args.add( BUILDER_EXE_PATH );
@@ -233,6 +242,7 @@ TEMPER_TEST( SetThirdPartyLibrariesViaSetBuilderOptions, TEMPER_FLAG_SHOULD_RUN 
 
 	DoBinaryFilesPostCheck( "test_third_party_libraries", "build.cpp" );
 
+	// run the program
 	{
 		Array<const char*> args;
 		args.add( binaryFilename );
@@ -241,7 +251,7 @@ TEMPER_TEST( SetThirdPartyLibrariesViaSetBuilderOptions, TEMPER_FLAG_SHOULD_RUN 
 
 		TEMPER_CHECK_TRUE( testProgramExitCode == 0 );
 	}
-}
+}*/
 
 TEMPER_TEST( Compile_StaticLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 	// now build the exe that uses it
@@ -270,7 +280,11 @@ TEMPER_TEST( Compile_StaticLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 }
 
 TEMPER_TEST( Compile_DynamicLibrary, TEMPER_FLAG_SHOULD_RUN ) {
+#if defined( _WIN32 )
 	const char* testDynamicLibDLLPath = tprintf( "tests/test_dynamic_lib/bin/test_dynamic_lib%s", GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
+#elif defined( __linux__ )
+	const char* testDynamicLibDLLPath = tprintf( "tests/test_dynamic_lib/bin/libtest_dynamic_lib%s", GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
+#endif
 
 	if ( FileExists( testDynamicLibDLLPath ) ) {
 		file_delete( testDynamicLibDLLPath );

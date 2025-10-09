@@ -342,9 +342,6 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t* backend, const Arra
 			args.add( "-g" );
 		}
 
-		args.add( "-o" );
-		args.add( fullBinaryName );
-
 		args.add_range( &intermediateFiles );
 
 		For ( u32, libPathIndex, 0, config->additional_lib_paths.size() ) {
@@ -365,6 +362,16 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t* backend, const Arra
 			}
 #endif
 		}
+
+#ifdef __linux__
+		if ( config->binary_type == BINARY_TYPE_EXE ) {
+			const char* fullBinaryPath = path_remove_file_from_path( fullBinaryName );
+			args.add( tprintf( "-Wl,-rpath=%s", fullBinaryPath ) );
+		}
+#endif
+
+		args.add( "-o" );
+		args.add( fullBinaryName );
 	}
 
 	s32 exitCode = RunProc( &args, NULL, PROC_FLAG_SHOW_ARGS | PROC_FLAG_SHOW_STDOUT );

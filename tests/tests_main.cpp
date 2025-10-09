@@ -286,16 +286,16 @@ TEMPER_TEST( Compile_DynamicLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 	const char* dynamicLibraryFilename = tprintf( "tests/test_dynamic_lib/bin/libtest_dynamic_lib%s", GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
 #endif
 
-	const char* binaryFilename = tprintf( "tests/test_dynamic_lib/bin/test_dynamic_library_program%s", GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
+	const char* exeFilename = tprintf( "tests/test_dynamic_lib/bin/test_dynamic_library_program%s", GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
 
 	if ( FileExists( dynamicLibraryFilename ) ) {
 		file_delete( dynamicLibraryFilename );
 		TEMPER_CHECK_TRUE( !FileExists( dynamicLibraryFilename ) );
 	}
 
-	if ( FileExists( binaryFilename ) ) {
-		file_delete( binaryFilename );
-		TEMPER_CHECK_TRUE( !FileExists( binaryFilename ) );
+	if ( FileExists( exeFilename ) ) {
+		file_delete( exeFilename );
+		TEMPER_CHECK_TRUE( !FileExists( exeFilename ) );
 	}
 
 	// now build the exe
@@ -305,9 +305,12 @@ TEMPER_TEST( Compile_DynamicLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 		args.add( "tests/test_dynamic_lib/build.cpp" );
 		args.add( "--config=program" );
 
-		s32 exitCode = RunProc( &args );
+		s32 buildExitCode = RunProc( &args );
 
-		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
+		TEMPER_CHECK_TRUE_M( buildExitCode == 0, "Exit code actually returned %d.\n", buildExitCode );
+
+		TEMPER_CHECK_TRUE( FileExists( dynamicLibraryFilename ) );
+		TEMPER_CHECK_TRUE( FileExists( exeFilename ) );
 
 		DoBinaryFilesPostCheck( "test_dynamic_lib", "build.cpp" );
 	}
@@ -315,13 +318,11 @@ TEMPER_TEST( Compile_DynamicLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 	// run the program to make sure everything actually works
 	{
 		Array<const char*> args;
-		args.add( binaryFilename );
+		args.add( exeFilename );
 
-		s32 exitCode = RunProc( &args );
+		s32 runProgramExitCode = RunProc( &args );
 
-		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
-
-		TEMPER_CHECK_TRUE( FileExists( dynamicLibraryFilename ) );
+		TEMPER_CHECK_TRUE_M( runProgramExitCode == 0, "Exit code actually returned %d.\n", runProgramExitCode );
 	}
 }
 
@@ -344,7 +345,11 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 	// build the app project in the solution via MSBuild
 	{
 		Array<const char*> args;
+#if defined( _WIN32 )
 		args.add( "C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/MSBuild.exe" );	// TODO(DM): query for this instead
+#elif defined( __linux__ )
+		args.add( "msbuild" );
+#endif
 		args.add( "tests/test_generate_visual_studio_files/visual_studio/app.vcxproj" );
 		args.add( "/property:Platform=x64" );
 

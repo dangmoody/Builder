@@ -91,11 +91,34 @@ bool8 path_is_absolute( const char* path ) {
 }
 
 const char* path_canonicalise( const char* path ) {
-	unused( path );
+	assert( path );
 
-	assert( false );
+	char* path_copy = cast( char*, mem_temp_alloc( PATH_MAX * sizeof( char ) ) );
+	strncpy( path_copy, path, PATH_MAX * sizeof( char ) );
 
-	return NULL;
+	const char* result = realpath( path_copy, NULL );
+	if ( !result ) {
+		int err = errno;
+		printf( "Failed to get real path of \"%s\": %s.\n", path, strerror( err ) );
+		return NULL;
+	}
+
+	return result;
+}
+
+const char* path_fix_slashes( const char* path ) {
+	u64 path_length = strlen( path );
+	char* result = cast( char*, mem_temp_alloc( ( path_length + 1 ) * sizeof( char ) ) );
+	memcpy( result, path, path_length * sizeof( char ) );
+	result[path_length] = 0;
+
+	For ( u64, char_index, 0, path_length ) {
+		if ( result[char_index] == '\\' ) {
+			result[char_index] = '/';
+		}
+	}
+
+	return result;
 }
 
 char* path_relative_path_to( const char* path_from, const char* path_to ) {

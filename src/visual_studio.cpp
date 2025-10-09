@@ -191,13 +191,13 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 	if ( !options->solution.path.empty() ) {
 		visualStudioProjectFilesPath = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, options->solution.path.c_str() );
 	} else {
-		visualStudioProjectFilesPath = cast( char*, context->inputFilePath.data );
+		visualStudioProjectFilesPath = context->inputFilePath.data;
 	}
-	visualStudioProjectFilesPath = path_canonicalise( visualStudioProjectFilesPath );
+	//visualStudioProjectFilesPath = path_canonicalise( visualStudioProjectFilesPath );
 
 	// delete old VS files if they exist
 	// but keep the root because we're about to re-populate it
-	NukeFolder( visualStudioProjectFilesPath, false, context->verbose );
+	NukeFolder( visualStudioProjectFilesPath, false, context->verbose, false );
 
 	const char* solutionFilename = tprintf( "%s%c%s.sln", visualStudioProjectFilesPath, PATH_SEPARATOR, options->solution.name.c_str() );
 

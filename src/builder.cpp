@@ -485,7 +485,15 @@ static void Nuke_DeleteAllFilesAndCacheFoldersInternal( const FileInfo* fileInfo
 	}
 }
 
-void NukeFolder( const char* folder, const bool8 deleteRoot, const bool8 verbose ) {
+void NukeFolder( const char* folder, const bool8 verbose, const bool8 deleteRoot, const bool8 failIfRootNotFound ) {
+	if ( !folder_exists( folder ) ) {
+		if ( failIfRootNotFound ) {
+			error( "Tried to nuke folder \"%s\"%s but that path doesn't exist.\n" );
+		}
+
+		return;
+	}
+
 	nukeContext_t nukeContext = {
 		.verbose = verbose
 	};
@@ -814,7 +822,7 @@ int main( int argc, char** argv ) {
 
 			float64 startTime = time_ms();
 
-			NukeFolder( folderToNuke, false, true );
+			NukeFolder( folderToNuke, false, true, true );
 
 			float64 endTime = time_ms();
 

@@ -363,6 +363,8 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t* backend, const Arra
 #endif
 		}
 
+		// TODO(DM): 09/10/2025: this works fine but do we want to expose this to the user?
+		// or do we want to just do this by default on linux because its a really common thing that people do?
 #ifdef __linux__
 		if ( config->binary_type == BINARY_TYPE_EXE ) {
 			const char* fullBinaryPath = path_remove_file_from_path( fullBinaryName );

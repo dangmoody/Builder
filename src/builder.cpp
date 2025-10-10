@@ -485,7 +485,15 @@ static void Nuke_DeleteAllFilesAndCacheFoldersInternal( const FileInfo* fileInfo
 	}
 }
 
-void NukeFolder( const char* folder, const bool8 deleteRoot, const bool8 verbose ) {
+void NukeFolder( const char* folder, const bool8 verbose, const bool8 deleteRoot, const bool8 failIfRootNotFound ) {
+	if ( !folder_exists( folder ) ) {
+		if ( failIfRootNotFound ) {
+			error( "Tried to nuke folder \"%s\"%s but that path doesn't exist.\n" );
+		}
+
+		return;
+	}
+
 	nukeContext_t nukeContext = {
 		.verbose = verbose
 	};
@@ -564,8 +572,8 @@ struct sourceFileFindVisitorData_t {
 static void SourceFileVisitor( const FileInfo* fileInfo, void* userData ) {
 	sourceFileFindVisitorData_t* visitorData2 = cast( sourceFileFindVisitorData_t*, userData );
 
-	if ( FileMatchesFilter( fileInfo->filename, visitorData2->searchFilter ) ) {
-		visitorData2->sourceFiles.push_back( fileInfo->filename );
+	if ( FileMatchesFilter( fileInfo->full_filename, visitorData2->searchFilter ) ) {
+		visitorData2->sourceFiles.push_back( fileInfo->full_filename );
 	}
 }
 
@@ -577,23 +585,18 @@ static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContex
 
 		const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
 
-		const char* sourceFilePath = path_remove_file_from_path( sourceFile );
-		if ( !sourceFilePath ) {
-			sourceFilePath = ".";
-		}
+		bool8 recursive = string_contains( sourceFile, "**" ) || string_contains( sourceFile, "/" );
 
 		// TODO(DM): 02/10/2025: needing this is (probably) a hack
 		// re-evaluate this
 		bool8 inputFileIsSameAsSourceFile = string_equals( sourceFile, context->inputFile );
 		if ( inputFileIsSameAsSourceFile ) {
-			visitorData.searchFilter = sourceFileNoPath;
+			visitorData.searchFilter = context->inputFile;
 		} else {
-			visitorData.searchFilter = sourceFile;
+			visitorData.searchFilter = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, sourceFile );
 		}
 
-		bool8 recursive = string_contains( sourceFile, "**" );
-
-		if ( !file_get_all_files_in_folder( sourceFilePath, recursive, false, SourceFileVisitor, &visitorData ) ) {
+		if ( !file_get_all_files_in_folder( context->inputFilePath.data, recursive, false, SourceFileVisitor, &visitorData ) ) {
 			fatal_error( "Failed to get source file(s) \"%s\".  This should never happen.\n", sourceFile );
 		}
 	}
@@ -819,7 +822,7 @@ int main( int argc, char** argv ) {
 
 			float64 startTime = time_ms();
 
-			NukeFolder( folderToNuke, false, true );
+			NukeFolder( folderToNuke, false, true, true );
 
 			float64 endTime = time_ms();
 
@@ -896,6 +899,11 @@ int main( int argc, char** argv ) {
 		const char* defaultCompilerPathFull = tprintf( "%s%c..%c..%c..%c%s", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, defaultCompilerPath );
 
 		CreateCompilerBackend_Clang( &compilerBackend, defaultCompilerPathFull );
+
+		// DM!!! HACK HACK HACK
+#ifdef __linux__
+		compilerBackend.linkerPath = tprintf( "%s%c..%c..%c..%cclang_linux%cbin%cllvm-ar", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
+#endif
 	}
 
 	compilerBackend.Init( &compilerBackend );
@@ -946,6 +954,9 @@ int main( int argc, char** argv ) {
 			.ignore_warnings = {
 				"-Wno-missing-prototypes",	// otherwise the user has to forward declare functions like set_builder_options and thats annoying
 				"-Wno-reorder-init-list",	// allow users to initialize struct members in whatever order they want
+#ifdef __linux__
+				"-fPIC",	// DM!!! HACK HACK HACK! move this into its own field
+#endif
 			},
 			.binary_name = defaultBinaryName,
 			.binary_folder = context.dotBuilderFolder.data,
@@ -1280,9 +1291,9 @@ int main( int argc, char** argv ) {
 
 			// the .build_info file wont store the full paths to the source files because the input path can change depending on whether we're building via visual studio or from the command line
 			// so we need to reconstruct the full paths to the source files ourselves
-			For ( u64, sourceFileIndex, 0, finalSourceFilesToBuild.size() ) {
+			/*For ( u64, sourceFileIndex, 0, finalSourceFilesToBuild.size() ) {
 				finalSourceFilesToBuild[sourceFileIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, finalSourceFilesToBuild[sourceFileIndex].c_str() );
-			}
+			}*/
 
 			config->source_files = finalSourceFilesToBuild;
 		}

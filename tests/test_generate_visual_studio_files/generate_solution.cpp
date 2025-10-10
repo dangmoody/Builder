@@ -1,27 +1,11 @@
 #include <builder.h>
 
-// this is just for the sake of the example
-// your own codebase probably has its own implementation of this
-#ifdef _WIN64
-#include <Windows.h>
-static void copy_file( const char* from, const char* to ) {
-	CopyFileA( from, to, FALSE );
-}
-#else
-#error TODO(DGM): 11/10/2024: fill me in!
-#endif
-
-BUILDER_CALLBACK void on_post_build() {
-	copy_file( "bin/debug/library/the-library.dll", "bin/debug/app/the-library.dll" );
-	copy_file( "bin/release/library/the-library.dll", "bin/release/app/the-library.dll" );
-}
-
 BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	BuildConfig library_debug = {
 		.name				= "library-debug",
 		.source_files		= { "src/library1/*.cpp", "src/library2/*.cpp" },
 		.binary_name		= "the-library",
-		.binary_folder		= "bin/debug/library",
+		.binary_folder		= "bin/debug",
 		.binary_type		= BINARY_TYPE_DYNAMIC_LIBRARY,
 		.optimization_level	= OPTIMIZATION_LEVEL_O0,
 		.defines			= { "LIBRARY_EXPORTS", "_DEBUG" },
@@ -31,7 +15,7 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 		.name				= "library-release",
 		.source_files		= { "src/library1/*.cpp", "src/library2/*.cpp" },
 		.binary_name		= "the-library",
-		.binary_folder		= "bin/release/library",
+		.binary_folder		= "bin/release",
 		.binary_type		= BINARY_TYPE_DYNAMIC_LIBRARY,
 		.optimization_level	= OPTIMIZATION_LEVEL_O3,
 		.defines			= { "LIBRARY_EXPORTS", "NDEBUG" },
@@ -42,7 +26,7 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 		.name					= "app-debug",
 		.source_files			= { "src/app/main.cpp" },
 		.binary_name			= "the-app",
-		.binary_folder			= "bin/debug/app",
+		.binary_folder			= "bin/debug",
 		.optimization_level		= OPTIMIZATION_LEVEL_O0,
 		.defines				= { "_DEBUG" },
 		.additional_includes	= { "src" },
@@ -55,7 +39,7 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 		.name					= "app-release",
 		.source_files			= { "src/app/main.cpp" },
 		.binary_name			= "the-app",
-		.binary_folder			= "bin/release/app",
+		.binary_folder			= "bin/release",
 		.optimization_level		= OPTIMIZATION_LEVEL_O3,
 		.defines				= { "NDEBUG" },
 		.additional_includes	= { "src" },

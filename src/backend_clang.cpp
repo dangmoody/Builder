@@ -116,7 +116,7 @@ static void ReadDependencyFile( const char* depFilename, std::vector<std::string
 		assert( dependencyEnd );
 		// paths can have spaces in them, but they are preceded by a single backslash (\)
 		// so if we find a space but it has a single backslash just before it then keep searching for a space
-		while ( dependencyEnd && ( *( dependencyEnd - 1 ) == PATH_SEPARATOR ) ) {
+		while ( dependencyEnd && ( *( dependencyEnd - 1 ) == '\\' ) ) {
 			dependencyEnd = strchr( dependencyEnd + 1, ' ' );
 		}
 
@@ -133,7 +133,7 @@ static void ReadDependencyFile( const char* depFilename, std::vector<std::string
 		// get the substring we actually need
 		std::string dependencyFilename( dependencyStart, dependencyFilenameLength );
 		For ( u64, i, 0, dependencyFilename.size() ) {
-			if ( dependencyFilename[i] == PATH_SEPARATOR && dependencyFilename[i + 1] == ' ' ) {
+			if ( dependencyFilename[i] == '\\' && dependencyFilename[i + 1] == ' ' ) {
 				dependencyFilename.erase( i, 1 );
 			}
 		}
@@ -146,7 +146,8 @@ static void ReadDependencyFile( const char* depFilename, std::vector<std::string
 
 		current = dependencyEnd + 1;
 
-		while ( *current == PATH_SEPARATOR ) {
+		//while ( *current == PATH_SEPARATOR ) {
+		while ( *current == '\\' ) {
 			current += 1;
 		}
 
@@ -319,9 +320,15 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t* backend, const Arra
 	// for dynamic libraries and executables clang and gcc recommend you call the compiler again and just pass in all the intermediate files
 	if ( config->binary_type == BINARY_TYPE_STATIC_LIBRARY ) {
 		args.add( backend->linkerPath.data );
+
+#if defined( _WIN32 )
 		args.add( "/lib" );
 
 		args.add( tprintf( "/OUT:%s", fullBinaryName ) );
+#elif defined( __linux__ )
+		args.add( "rc" );
+		args.add( fullBinaryName );
+#endif
 
 		args.add_range( &intermediateFiles );
 	} else {
@@ -335,9 +342,6 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t* backend, const Arra
 			args.add( "-g" );
 		}
 
-		args.add( "-o" );
-		args.add( fullBinaryName );
-
 		args.add_range( &intermediateFiles );
 
 		For ( u32, libPathIndex, 0, config->additional_lib_paths.size() ) {
@@ -345,8 +349,31 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t* backend, const Arra
 		}
 
 		For ( u32, libIndex, 0, config->additional_libs.size() ) {
-			args.add( tprintf( "-l%s", config->additional_libs[libIndex].c_str() ) );
+			std::string& staticLib = config->additional_libs[libIndex];
+
+#if defined( _WIN32 )
+			args.add( tprintf( "-l%s", staticLib.c_str() ) );
+#elif defined( __linux__ )
+			if ( string_starts_with( staticLib.c_str(), "lib" ) ) {
+				staticLib.erase( 0, strlen( "lib" ) );
+				args.add( tprintf( "-l%s", staticLib.c_str() ) );
+			} else {
+				args.add( tprintf( "-l:%s", staticLib.c_str() ) );
+			}
+#endif
 		}
+
+		// TODO(DM): 09/10/2025: this works fine but do we want to expose this to the user?
+		// or do we want to just do this by default on linux because its a really common thing that people do?
+#ifdef __linux__
+		if ( config->binary_type == BINARY_TYPE_EXE ) {
+			const char* fullBinaryPath = path_remove_file_from_path( fullBinaryName );
+			args.add( tprintf( "-Wl,-rpath=%s", fullBinaryPath ) );
+		}
+#endif
+
+		args.add( "-o" );
+		args.add( fullBinaryName );
 	}
 
 	s32 exitCode = RunProc( &args, NULL, PROC_FLAG_SHOW_ARGS | PROC_FLAG_SHOW_STDOUT );
@@ -468,7 +495,11 @@ static String GCC_GetCompilerVersion( compilerBackend_t* backend ) {
 void CreateCompilerBackend_Clang( compilerBackend_t* outBackend, const char* compilerPath ) {
 	*outBackend = compilerBackend_t {
 		.compilerPath								= compilerPath,
+#if defined( _WIN32 )
 		.linkerPath									= "lld-link",
+#elif defined( __linux__ )
+		.linkerPath									= "llvm-ar",
+#endif
 		.data										= NULL,
 		.Init										= Clang_Init,
 		.Shutdown									= Clang_Shutdown,

@@ -116,7 +116,7 @@ const char* string_builder_to_string( StringBuilder* builder ) {
 		current = current->next;
 	}
 
-	result = cast( char*, mem_alloc( length * sizeof( char ) ) );
+	result = cast( char*, mem_alloc( ( length + 1 ) * sizeof( char ) ) );
 
 	current = builder->head;
 
@@ -125,6 +125,8 @@ const char* string_builder_to_string( StringBuilder* builder ) {
 
 		current = current->next;
 	}
+
+	result[length] = 0;
 
 	return result;
 }

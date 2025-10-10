@@ -92,14 +92,17 @@
   <ItemGroup>
     <ClCompile Include="tests_main.cpp" />
     <ClCompile Include="test_basic\test_basic.cpp" />
-    <ClCompile Include="test_cases\test_basic\test_basic.cpp" />
-    <ClCompile Include="test_cases\test_set_builder_options\test_set_builder_options.cpp" />
     <ClCompile Include="test_compiler_path\test_compiler_path.cpp" />
     <ClCompile Include="test_dynamic_lib\build.cpp" />
-    <ClCompile Include="test_dynamic_lib\lib\build.cpp" />
     <ClCompile Include="test_dynamic_lib\lib\lib.cpp" />
-    <ClCompile Include="test_dynamic_lib\program\build.cpp" />
     <ClCompile Include="test_dynamic_lib\program\program.cpp" />
+    <ClCompile Include="test_generate_visual_studio_files\generate_solution.cpp" />
+    <ClCompile Include="test_generate_visual_studio_files\src\app\dir1\dir2\dir3\test_file3.cpp" />
+    <ClCompile Include="test_generate_visual_studio_files\src\app\dir1\dir2\test_file2.cpp" />
+    <ClCompile Include="test_generate_visual_studio_files\src\app\dir1\test_file1.cpp" />
+    <ClCompile Include="test_generate_visual_studio_files\src\app\main.cpp" />
+    <ClCompile Include="test_generate_visual_studio_files\src\library1\library1.cpp" />
+    <ClCompile Include="test_generate_visual_studio_files\src\library2\library2.cpp" />
     <ClCompile Include="test_msvc\test_msvc.cpp" />
     <ClCompile Include="test_multiple_source_files\build.cpp" />
     <ClCompile Include="test_multiple_source_files\src\main.cpp" />
@@ -108,8 +111,6 @@
     <ClCompile Include="test_multiple_source_files\src\polo.linux.cpp" />
     <ClCompile Include="test_multiple_source_files\src\polo.win64.cpp" />
     <ClCompile Include="test_set_builder_options\test_set_builder_options.cpp" />
-    <ClCompile Include="test_static_library\library\lib.cpp" />
-    <ClCompile Include="test_static_library\program\program.cpp" />
     <ClCompile Include="test_static_lib\build.cpp" />
     <ClCompile Include="test_static_lib\lib\lib.cpp" />
     <ClCompile Include="test_static_lib\program\program.cpp" />
@@ -117,10 +118,24 @@
     <ClCompile Include="test_third_party_libraries\sdl_test.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="temper\temper.h" />
     <ClInclude Include="test_dynamic_lib\lib\lib.h" />
+    <ClInclude Include="test_generate_visual_studio_files\src\library.h" />
     <ClInclude Include="test_multiple_source_files\src\marco_polo.h" />
-    <ClInclude Include="test_static_library\library\lib.h" />
     <ClInclude Include="test_static_lib\lib\lib.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="test_generate_visual_studio_files\.builder\intermediate\generate_solution.cpp.d" />
+    <Content Include="test_static_lib\.builder\build.include_dependencies" />
+    <Content Include="test_static_lib\.builder\build.so" />
+    <Content Include="test_static_lib\.builder\intermediate\build.cpp.d" />
+    <Content Include="test_static_lib\.builder\intermediate\build.cpp.o" />
+    <Content Include="test_static_lib\bin\intermediate\lib.cpp.d" />
+    <Content Include="test_static_lib\bin\intermediate\lib.cpp.o" />
+    <Content Include="test_static_lib\bin\intermediate\program.cpp.d" />
+    <Content Include="test_static_lib\bin\intermediate\program.cpp.o" />
+    <Content Include="test_static_lib\bin\test_static_lib.a" />
+    <Content Include="test_static_lib\bin\test_static_library_program" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" Condition="'$(OS)' == 'Windows_NT'" />
   <ImportGroup Label="ExtensionTargets">

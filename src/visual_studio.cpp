@@ -80,7 +80,7 @@ static void VisualStudio_OnFoundSourceFile( const FileInfo* fileInfo, void* user
 			}
 
 			visualStudioFileFilter_t filterFile = {
-				.filenameAndPathFromRoot	= fileInfo->full_filename,
+				.filenameAndPathFromRoot	= tprintf( "%s%c%s", folderInFilter, PATH_SEPARATOR, fileInfo->filename ),
 				.folderInFilter				= folderInFilter,
 			};
 
@@ -191,13 +191,13 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 	if ( !options->solution.path.empty() ) {
 		visualStudioProjectFilesPath = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, options->solution.path.c_str() );
 	} else {
-		visualStudioProjectFilesPath = cast( char*, context->inputFilePath.data );
+		visualStudioProjectFilesPath = context->inputFilePath.data;
 	}
-	visualStudioProjectFilesPath = path_canonicalise( visualStudioProjectFilesPath );
+	//visualStudioProjectFilesPath = path_canonicalise( visualStudioProjectFilesPath );
 
 	// delete old VS files if they exist
 	// but keep the root because we're about to re-populate it
-	NukeFolder( visualStudioProjectFilesPath, false, context->verbose );
+	NukeFolder( visualStudioProjectFilesPath, false, context->verbose, false );
 
 	const char* solutionFilename = tprintf( "%s%c%s.sln", visualStudioProjectFilesPath, PATH_SEPARATOR, options->solution.name.c_str() );
 
@@ -376,14 +376,12 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 				}
 			};
 
-			const char* pathFromSolutionToCode = pathFromSolutionToInputFile;
-
 			For ( u64, folderIndex, 0, project->code_folders.size() ) {
 				const char* codeFolder = project->code_folders[folderIndex].c_str();
 
 				visualStudioSourceFileVisitorData_t visitorData = {
-					.fileExtensions	= project->file_extensions,
-					.rootFolder		= context->inputFilePath.data,
+					.fileExtensions					= project->file_extensions,
+					.rootFolder						= context->inputFilePath.data,
 				};
 
 				const char* searchPath = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, codeFolder );
@@ -495,11 +493,11 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 				const char* from = solutionFilename;
 				const char* to = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, fullBinaryName );
-				to = path_canonicalise( to );
+				//to = path_canonicalise( to );
 
 				char* pathFromSolutionToBinary = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
 				memset( pathFromSolutionToBinary, 0, MAX_PATH * sizeof( char ) );
-				pathFromSolutionToBinary = path_relative_path_to(from, to);
+				pathFromSolutionToBinary = path_relative_path_to( from, to );
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcast-qual"
@@ -676,11 +674,11 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 					const char* from = solutionFilename;
 					const char* to = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, fullBinaryName );
-					to = path_canonicalise( to );
+					//to = path_canonicalise( to );
 
 					char* pathFromSolutionToBinary = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
 					memset( pathFromSolutionToBinary, 0, MAX_PATH * sizeof( char ) );
-					pathFromSolutionToBinary = path_relative_path_to(from, to);
+					pathFromSolutionToBinary = path_relative_path_to( from, to );
 
 					For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
 						const char* platform = options->solution.platforms[platformIndex].c_str();

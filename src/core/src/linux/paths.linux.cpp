@@ -28,12 +28,13 @@ SOFTWARE.
 
 #ifdef __linux__
 
-#include "../../include/paths.h"
+#include <paths.h>
 
 #include <core_types.h>
 #include <debug.h>
 #include <paths.h>
 #include <temp_storage.h>
+#include <string_builder.h>
 
 #include <stdio.h>
 #include <unistd.h>
@@ -122,12 +123,48 @@ const char* path_fix_slashes( const char* path ) {
 }
 
 char* path_relative_path_to( const char* path_from, const char* path_to ) {
-	unused( path_from );
-	unused( path_to );
+	assert( path_from );
+	assert( path_to );
 
-	char* result = nullptr;
+	const char* path_from_copy = path_from;
+	const char* path_to_copy = path_to;
 
-	assert( false );
+	u32 num_same_chars = 0;
+	u32 num_backs = 0;
+
+	while ( path_from_copy[num_same_chars] && path_to_copy[num_same_chars] && path_from_copy[num_same_chars] == path_to_copy[num_same_chars] ) {
+		num_same_chars += 1;
+	}
+
+	path_from_copy = path_from + num_same_chars;
+	path_to_copy = path_to + num_same_chars;
+
+	// skip the first one of these if there is one
+	if ( *path_from_copy == '/' ) {
+		path_from_copy += 1;
+	}
+
+	while ( *path_from_copy ) {
+		if ( *path_from_copy == '/' ) {
+			num_backs += 1;
+		}
+		path_from_copy += 1;
+	}
+
+	StringBuilder sb = {};
+	string_builder_reset( &sb );
+
+	For ( u32, back_index, 0, num_backs ) {
+		string_builder_appendf( &sb, "../" );
+	}
+
+	string_builder_appendf( &sb, path_to + num_same_chars );
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-qual"
+	//char* result = cast( char*, mem_temp_alloc( PATH_MAX * sizeof( char ) ) );
+	char* result = cast( char*, string_builder_to_string( &sb ) );
+#pragma clang diagnostic pop
 
 	return result;
 }

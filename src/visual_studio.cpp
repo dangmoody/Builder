@@ -485,7 +485,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 				string_builder_appendf( &vcxprojContent, "\t</PropertyGroup>\n" );
 			}
 
-			string_builder_appendf( &vcxprojContent, tprintf( "\t<Import Project=\"$(VCTargetsPath)%cMicrosoft.Cpp.Default.props\" />\n", PATH_SEPARATOR ) );
+			string_builder_appendf( &vcxprojContent, tprintf( "\t<Import Project=\"$(VCTargetsPath)%cMicrosoft.Cpp.Default.props\" Condition=\"'$(OS)' == 'Windows_NT'\" />\n", PATH_SEPARATOR ) );
 
 			// for each config and platform, define config type, toolset, out dir, and intermediate dir
 			For ( u64, configIndex, 0, project->configs.size() ) {
@@ -519,7 +519,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 				}
 			}
 
-			string_builder_appendf( &vcxprojContent, tprintf( "\t<Import Project=\"$(VCTargetsPath)%cMicrosoft.Cpp.props\" />\n", PATH_SEPARATOR ) );
+			string_builder_appendf( &vcxprojContent, tprintf( "\t<Import Project=\"$(VCTargetsPath)%cMicrosoft.Cpp.props\" Condition=\"'$(OS)' == 'Windows_NT'\" />\n", PATH_SEPARATOR ) );
 
 			// not sure what this is or why we need this one but visual studio seems to want it
 			string_builder_appendf( &vcxprojContent, "\t<ImportGroup Label=\"ExtensionSettings\">\n" );

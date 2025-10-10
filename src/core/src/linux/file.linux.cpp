@@ -224,7 +224,7 @@ bool8 file_get_all_files_in_folder( const char* path, const bool8 recursive, con
 
 		if ( !dir ) {
 			int err = errno;
-			printf( "NO 1: %s\n", strerror( err ) );
+			printf( "Can't open dir \"%s\": %s\n", directory, strerror( err ) );
 			return false;
 		}
 

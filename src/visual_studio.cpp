@@ -380,8 +380,8 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 				const char* codeFolder = project->code_folders[folderIndex].c_str();
 
 				visualStudioSourceFileVisitorData_t visitorData = {
-					.fileExtensions					= project->file_extensions,
-					.rootFolder						= context->inputFilePath.data,
+					.fileExtensions	= project->file_extensions,
+					.rootFolder		= context->inputFilePath.data,
 				};
 
 				const char* searchPath = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, codeFolder );

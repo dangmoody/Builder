@@ -58,13 +58,16 @@ bool8 file_read_entire( const char* filename, char** outBuffer, u64* out_file_le
 	mem_push_allocator( platform_allocator );
 	defer( mem_pop_allocator() );
 
+	u64 file_size = 0;
+	if ( !file_get_size( filename, &file_size ) ) {
+		return false;
+	}
+
 	File file = file_open( filename );
 
 	if ( file.handle == INVALID_FILE_HANDLE ) {
 		return 0;
 	}
-
-	u64 file_size = file_get_size_internal( &file );
 
 	char* temp = cast( char*, mem_alloc( file_size + 1 ) );
 

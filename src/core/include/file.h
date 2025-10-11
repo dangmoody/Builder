@@ -119,14 +119,20 @@ CORE_API bool8	file_write_line(File* file, const char* line);
 // Returns true if successfully deletes the file, otherwise returns false.
 CORE_API bool8	file_delete( const char* filename );
 
-// Returns true and fills out_file_info if the file can be found, otherwise returns false.
-CORE_API bool8	file_get_info( const char* filename, FileInfo* out_file_info );
+// If the file exists sets 'out_size' to the size of the file and returns true, otherwise returns false.
+CORE_API bool8	file_get_size( const char* filename, u64* out_size );
+
+// If the file exists sets 'out_last_write_time' to the timestamp of when the file was last written to and returns true, otherwise returns false.
+CORE_API bool8	file_get_last_write_time( const char* filename, u64* out_last_write_time );
 
 // Returns true if all files found in path can be successfully visited, otherwise returns false.
 // For each file found, 'visit_callback' gets called.
 // If 'visit_folders' is true then 'visit_callback' will also fire for each folder that gets visited.
 // 'user_data' can be NULL.
 CORE_API bool8	file_get_all_files_in_folder( const char* path, const bool8 recursive, const bool8 visit_folders, FileVisitCallback visit_callback, void* user_data );
+
+// Returns true if the file actually exists on the file system, otherwise returns false.
+CORE_API bool8	file_exists( const char* filename );
 
 // If the folder at the given path already exists then returns true.
 // If the folder at the given path does NOT exist but was successfully created then returns true.
@@ -138,10 +144,6 @@ CORE_API bool8	folder_delete( const char* path );
 
 // Returns true if the given folder path exists, otherwise returns false.
 CORE_API bool8	folder_exists( const char* path );
-
-// Returns the number of files that are found in 'path'.
-// TODO(DM): add recursive search
-CORE_API u64	folder_get_num_files( const char* path );
 
 #ifdef __linux__
 #pragma clang diagnostic pop

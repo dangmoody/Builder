@@ -74,16 +74,6 @@ static bool8 create_folder_internal( const char* path ) {
 	return result == 0;
 }
 
-u64 file_get_size_internal( const File* file ) {
-	assert( file );
-	assert( file->handle );
-
-	struct stat file_stat = {};
-	fstat( trunc_cast( int, file->handle ), &file_stat );
-
-	return trunc_cast( u64, file_stat.st_size );
-}
-
 File file_open( const char* filename ) {
 	assert( filename );
 
@@ -184,21 +174,30 @@ bool8 file_delete( const char* filename ) {
 	return result == 0;
 }
 
-bool8 file_get_info( const char* filename, FileInfo* out_file_info ) {
+boo8 file_get_size( const char* filename, u64* out_size ) {
 	assert( filename );
-	assert( out_file_info );
+	assert( out_size );
 
 	struct stat file_stat = {};
-	if ( stat( filename, &file_stat ) != 0 ) {
+	if ( !stat( filename, &file_stat ), &file_stat ) ) {
 		return false;
 	}
 
-	*out_file_info = FileInfo {
-		.is_directory		= S_ISDIR( file_stat.st_mode ),
-		.last_write_time	= trunc_cast( u64, file_stat.st_mtime ),
-		.size_bytes			= trunc_cast( u64, file_stat.st_size ),
-		.filename			= filename,
-	};
+	*out_size = trunc_cast( u64, file_stat.st_size );
+
+	return true;
+}
+
+bool8 file_get_last_write_time( const char* filename, u64* out_last_write_time ) {
+	assert( filename );
+	assert( out_last_write_time );
+
+	struct stat file_stat = {};
+	if ( !stat( filename, &file_stat ), &file_stat ) ) {
+		return false;
+	}
+
+	*out_size = trunc_cast( u64, file_stat.st_mtime );
 
 	return true;
 }
@@ -268,6 +267,12 @@ bool8 file_get_all_files_in_folder( const char* path, const bool8 recursive, con
 	return true;
 }
 
+bool8 file_exists( const char* filename ) {
+	assert( filename );
+
+	return access( filename, 0 ) == 0;
+}
+
 bool8 folder_delete( const char* path ) {
 	assert( path );
 
@@ -294,15 +299,6 @@ bool8 folder_exists( const char* path ) {
 
 	assertf( false, "Failed to check if the folder exists: %s\n", strerror( err ) );
 	return false;
-}
-
-// TODO(DM): 09/07/2025: do we still want this?
-u64 folder_get_num_files( const char* path ) {
-	unused( path );
-
-	assert( false );
-
-	return 0;
 }
 
 #endif // __linux__

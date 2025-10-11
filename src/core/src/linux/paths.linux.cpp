@@ -140,9 +140,9 @@ char* path_relative_path_to( const char* path_from, const char* path_to ) {
 	path_to_copy = path_to + num_same_chars;
 
 	// skip the first one of these if there is one
-	if ( *path_from_copy == '/' ) {
+	/*if ( *path_from_copy == '/' ) {
 		path_from_copy += 1;
-	}
+	}*/
 
 	while ( *path_from_copy ) {
 		if ( *path_from_copy == '/' ) {

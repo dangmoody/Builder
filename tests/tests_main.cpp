@@ -61,6 +61,13 @@ static s32 RunProc( Array<const char*>* args, const bool8 showStdout = false ) {
 
 	Process* process = process_create( args, NULL, /*PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR*/0 );
 
+	if ( !process ) {
+		// DM: 20/07/2025: I'm not 100% sure that its totally ok to have -1 as our own special exit code to mean that the process couldnt be found
+		// its totally possible for other processes to return -1 and have it mean something else
+		// the interpretation of the exit code of the processes we run is the responsibility of the calling code and were probably making a lot of assumptions there
+		return -1;
+	}
+
 	TEMPER_CHECK_TRUE_M( process, "Failed to run process \"%s\".  Did you type the path correctly?\n", ( *args )[0] );
 
 	defer( process_destroy( process ) );
@@ -348,7 +355,7 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 		args.add( "tests/test_generate_visual_studio_files/visual_studio/app.vcxproj" );
 		args.add( "/property:Platform=x64" );
 
-		s32 exitCode = RunProc( &args );
+		s32 exitCode = RunProc( &args, true );
 
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 	}

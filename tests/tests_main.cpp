@@ -28,11 +28,6 @@
 
 #define BUILDER_EXE_PATH "bin/" PLATFORM "/" CONFIG "/builder" FILE_EXTENSION
 
-static bool8 FileExists( const char* filename ) {
-	FileInfo fileInfo;
-	return file_get_info( filename, &fileInfo );
-}
-
 static const char* GetFileExtensionFromBinaryType( BinaryType type ) {
 #ifdef _WIN32
 	switch ( type ) {
@@ -55,7 +50,7 @@ static const char* GetFileExtensionFromBinaryType( BinaryType type ) {
 	return "ERROR";
 }
 
-static s32 RunProc( Array<const char*>* args ) {
+static s32 RunProc( Array<const char*>* args, const bool8 showStdout = false ) {
 	assert( args );
 	assert( args->count > 0 );
 
@@ -70,12 +65,12 @@ static s32 RunProc( Array<const char*>* args ) {
 
 	defer( process_destroy( process ) );
 
-	/*{
+	if ( showStdout ) {
 		char buffer[1024];
 		while ( process_read_stdout( process, buffer, count_of( buffer ) ) ) {
 			printf( "%s", buffer );
 		}
-	}*/
+	}
 
 	s32 exitCode = process_join( process );
 
@@ -86,13 +81,13 @@ static void DoBinaryFilesPostCheck( const char* testName, const char* buildSourc
 	const char* buildSourceFileNoExtension = path_remove_file_extension( buildSourceFile );
 
 	TEMPER_CHECK_TRUE( folder_exists( tprintf( "tests/%s/.builder", testName ) ) );
-	TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests/%s/.builder/%s%s", testName, buildSourceFileNoExtension, GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) ) ) );
+	TEMPER_CHECK_TRUE( file_exists(    tprintf( "tests/%s/.builder/%s%s", testName, buildSourceFileNoExtension, GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) ) ) );
 
 #ifdef _WIN32
-	//TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests/%s/.builder/%s.exp", testName, buildSourceFileNoExtension ) ) );	// optional
-	TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests/%s/.builder/%s.ilk", testName, buildSourceFileNoExtension ) ) );
-	//TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests/%s/.builder/%s.lib", testName, buildSourceFileNoExtension ) ) );	// optional
-	TEMPER_CHECK_TRUE( FileExists(    tprintf( "tests/%s/.builder/%s.pdb", testName, buildSourceFileNoExtension ) ) );
+	//TEMPER_CHECK_TRUE( file_exists(    tprintf( "tests/%s/.builder/%s.exp", testName, buildSourceFileNoExtension ) ) );	// optional
+	TEMPER_CHECK_TRUE( file_exists(    tprintf( "tests/%s/.builder/%s.ilk", testName, buildSourceFileNoExtension ) ) );
+	//TEMPER_CHECK_TRUE( file_exists(    tprintf( "tests/%s/.builder/%s.lib", testName, buildSourceFileNoExtension ) ) );	// optional
+	TEMPER_CHECK_TRUE( file_exists(    tprintf( "tests/%s/.builder/%s.pdb", testName, buildSourceFileNoExtension ) ) );
 #endif
 }
 
@@ -100,7 +95,7 @@ TEMPER_TEST( Compile_Basic, TEMPER_FLAG_SHOULD_RUN ) {
 	const char* sourceFile = "tests/test_basic/test_basic.cpp";
 	const char* binaryFilename = tprintf( "tests/test_basic/test_basic%s", GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
 
-	TEMPER_CHECK_TRUE( FileExists( sourceFile ) );
+	TEMPER_CHECK_TRUE( file_exists( sourceFile ) );
 
 	Array<const char*> args;
 	args.add( BUILDER_EXE_PATH );
@@ -112,11 +107,11 @@ TEMPER_TEST( Compile_Basic, TEMPER_FLAG_SHOULD_RUN ) {
 
 	// now run the program we just built
 	{
-		TEMPER_CHECK_TRUE( FileExists( binaryFilename ) );
+		TEMPER_CHECK_TRUE( file_exists( binaryFilename ) );
 
 #ifdef _WIN32
-		TEMPER_CHECK_TRUE( FileExists( "tests/test_basic/test_basic.pdb" ) );
-		TEMPER_CHECK_TRUE( FileExists( "tests/test_basic/test_basic.ilk" ) );
+		TEMPER_CHECK_TRUE( file_exists( "tests/test_basic/test_basic.pdb" ) );
+		TEMPER_CHECK_TRUE( file_exists( "tests/test_basic/test_basic.ilk" ) );
 #endif
 	}
 
@@ -127,7 +122,7 @@ TEMPER_TEST_PARAMETRIC( Compile_SetBuilderOptions, TEMPER_FLAG_SHOULD_RUN, const
 	const char* sourceFile = "tests/test_set_builder_options/test_set_builder_options.cpp";
 	const char* binaryFilename = tprintf( "tests/test_set_builder_options/bin/%s/kenneth%s", config, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
 
-	TEMPER_CHECK_TRUE( FileExists( sourceFile ) );
+	TEMPER_CHECK_TRUE( file_exists( sourceFile ) );
 
 	Array<const char*> args;
 	args.add( BUILDER_EXE_PATH );
@@ -139,15 +134,15 @@ TEMPER_TEST_PARAMETRIC( Compile_SetBuilderOptions, TEMPER_FLAG_SHOULD_RUN, const
 	TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 
 	TEMPER_CHECK_TRUE( folder_exists( tprintf( "tests/test_set_builder_options/bin/%s", config ) ) );
-	TEMPER_CHECK_TRUE( FileExists( binaryFilename ) );
+	TEMPER_CHECK_TRUE( file_exists( binaryFilename ) );
 
 #ifdef _WIN32
 	if ( string_equals( config, "debug" ) ) {
-		TEMPER_CHECK_TRUE( FileExists( tprintf( "tests/test_set_builder_options/bin/%s/kenneth.pdb", config ) ) );
-		TEMPER_CHECK_TRUE( FileExists( tprintf( "tests/test_set_builder_options/bin/%s/kenneth.ilk", config ) ) );
+		TEMPER_CHECK_TRUE( file_exists( tprintf( "tests/test_set_builder_options/bin/%s/kenneth.pdb", config ) ) );
+		TEMPER_CHECK_TRUE( file_exists( tprintf( "tests/test_set_builder_options/bin/%s/kenneth.ilk", config ) ) );
 	} else {
-		TEMPER_CHECK_TRUE( !FileExists( tprintf( "tests/test_set_builder_options/bin/%s/kenneth.pdb", config ) ) );
-		TEMPER_CHECK_TRUE( !FileExists( tprintf( "tests/test_set_builder_options/bin/%s/kenneth.ilk", config ) ) );
+		TEMPER_CHECK_TRUE( !file_exists( tprintf( "tests/test_set_builder_options/bin/%s/kenneth.pdb", config ) ) );
+		TEMPER_CHECK_TRUE( !file_exists( tprintf( "tests/test_set_builder_options/bin/%s/kenneth.ilk", config ) ) );
 	}
 #endif
 
@@ -158,7 +153,7 @@ TEMPER_TEST_PARAMETRIC( Compile_SetBuilderOptions, TEMPER_FLAG_SHOULD_RUN, const
 TEMPER_TEST( Compile_MSVC, TEMPER_FLAG_SHOULD_RUN ) {
 	const char* buildSourceFile = "tests/test_msvc/test_msvc.cpp";
 
-	TEMPER_CHECK_TRUE( FileExists( buildSourceFile ) );
+	TEMPER_CHECK_TRUE( file_exists( buildSourceFile ) );
 
 	s32 exitCode = 0;
 
@@ -174,7 +169,7 @@ TEMPER_TEST( Compile_MSVC, TEMPER_FLAG_SHOULD_RUN ) {
 
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 
-		TEMPER_CHECK_TRUE( FileExists( "tests/test_msvc/test_msvc.exe" ) );
+		TEMPER_CHECK_TRUE( file_exists( "tests/test_msvc/test_msvc.exe" ) );
 	}
 
 	// run the program
@@ -198,7 +193,7 @@ TEMPER_TEST( Compile_MultipleSourceFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	const char* buildSourceFile = "tests/test_multiple_source_files/build.cpp";
 	const char* binaryFilename = tprintf( "tests/test_multiple_source_files/bin/marco_polo%s", GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
 
-	TEMPER_CHECK_TRUE( FileExists( buildSourceFile ) );
+	TEMPER_CHECK_TRUE( file_exists( buildSourceFile ) );
 
 	// compile the program
 	{
@@ -210,7 +205,7 @@ TEMPER_TEST( Compile_MultipleSourceFiles, TEMPER_FLAG_SHOULD_RUN ) {
 
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 
-		TEMPER_CHECK_TRUE( FileExists( binaryFilename ) );
+		TEMPER_CHECK_TRUE( file_exists( binaryFilename ) );
 	}
 
 	// run the program
@@ -225,7 +220,7 @@ TEMPER_TEST( Compile_MultipleSourceFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	const char* buildSourceFile = "tests/test_third_party_libraries/build.cpp";
 	const char* binaryFilename = tprintf( "tests/test_third_party_libraries/bin/sdl_test%s", GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
 
-	TEMPER_CHECK_TRUE( FileExists( buildSourceFile ) );
+	TEMPER_CHECK_TRUE( file_exists( buildSourceFile ) );
 
 	// compile the program
 	{
@@ -238,7 +233,7 @@ TEMPER_TEST( Compile_MultipleSourceFiles, TEMPER_FLAG_SHOULD_RUN ) {
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 	}
 
-	TEMPER_CHECK_TRUE( FileExists( binaryFilename ) );
+	TEMPER_CHECK_TRUE( file_exists( binaryFilename ) );
 
 	DoBinaryFilesPostCheck( "test_third_party_libraries", "build.cpp" );
 
@@ -288,14 +283,14 @@ TEMPER_TEST( Compile_DynamicLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 
 	const char* exeFilename = tprintf( "tests/test_dynamic_lib/bin/test_dynamic_library_program%s", GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
 
-	if ( FileExists( dynamicLibraryFilename ) ) {
+	if ( file_exists( dynamicLibraryFilename ) ) {
 		file_delete( dynamicLibraryFilename );
-		TEMPER_CHECK_TRUE( !FileExists( dynamicLibraryFilename ) );
+		TEMPER_CHECK_TRUE( !file_exists( dynamicLibraryFilename ) );
 	}
 
-	if ( FileExists( exeFilename ) ) {
+	if ( file_exists( exeFilename ) ) {
 		file_delete( exeFilename );
-		TEMPER_CHECK_TRUE( !FileExists( exeFilename ) );
+		TEMPER_CHECK_TRUE( !file_exists( exeFilename ) );
 	}
 
 	// now build the exe
@@ -309,8 +304,8 @@ TEMPER_TEST( Compile_DynamicLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 
 		TEMPER_CHECK_TRUE_M( buildExitCode == 0, "Exit code actually returned %d.\n", buildExitCode );
 
-		TEMPER_CHECK_TRUE( FileExists( dynamicLibraryFilename ) );
-		TEMPER_CHECK_TRUE( FileExists( exeFilename ) );
+		TEMPER_CHECK_TRUE( file_exists( dynamicLibraryFilename ) );
+		TEMPER_CHECK_TRUE( file_exists( exeFilename ) );
 
 		DoBinaryFilesPostCheck( "test_dynamic_lib", "build.cpp" );
 	}
@@ -361,7 +356,7 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 	// run the program, make sure it returns the correct exit code
 	{
 		Array<const char*> args;
-		args.add( "tests/test_generate_visual_studio_files/bin/debug/app/the-app.exe" );
+		args.add( "tests/test_generate_visual_studio_files/bin/debug/the-app.exe" );
 
 		s32 exitCode = RunProc( &args );
 

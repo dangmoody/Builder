@@ -236,20 +236,20 @@ static const char* BuildConfig_ToString( const BuildConfig* config ) {
 const char* BuildConfig_GetFullBinaryName( const BuildConfig* config ) {
 	assert( !config->binary_name.empty() );
 
-	StringBuilder builder = {};
-	string_builder_reset( &builder );
+	StringBuilder sb = {};
+	string_builder_reset( &sb );
 
 	if ( !config->binary_folder.empty() ) {
-		string_builder_appendf( &builder, "%s%c", config->binary_folder.c_str(), PATH_SEPARATOR );
+		string_builder_appendf( &sb, "%s%c", config->binary_folder.c_str(), PATH_SEPARATOR );
 	}
 
-	string_builder_appendf( &builder, "%s", config->binary_name.c_str() );
+	string_builder_appendf( &sb, "%s", config->binary_name.c_str() );
 
 	if ( !config->remove_file_extension ) {
-		string_builder_appendf( &builder, "%s", GetFileExtensionFromBinaryType( config->binary_type ) );
+		string_builder_appendf( &sb, "%s", GetFileExtensionFromBinaryType( config->binary_type ) );
 	}
 
-	return string_builder_to_string( &builder );
+	return string_builder_to_string( &sb );
 }
 
 s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVariables, const procFlags_t procFlags ) {

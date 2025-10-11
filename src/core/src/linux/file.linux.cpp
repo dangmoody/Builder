@@ -174,12 +174,12 @@ bool8 file_delete( const char* filename ) {
 	return result == 0;
 }
 
-boo8 file_get_size( const char* filename, u64* out_size ) {
+bool8 file_get_size( const char* filename, u64* out_size ) {
 	assert( filename );
 	assert( out_size );
 
 	struct stat file_stat = {};
-	if ( !stat( filename, &file_stat ), &file_stat ) ) {
+	if ( stat( filename, &file_stat ) != 0 ) {
 		return false;
 	}
 
@@ -193,11 +193,11 @@ bool8 file_get_last_write_time( const char* filename, u64* out_last_write_time )
 	assert( out_last_write_time );
 
 	struct stat file_stat = {};
-	if ( !stat( filename, &file_stat ), &file_stat ) ) {
+	if ( stat( filename, &file_stat ) != 0 ) {
 		return false;
 	}
 
-	*out_size = trunc_cast( u64, file_stat.st_mtime );
+	*out_last_write_time = trunc_cast( u64, file_stat.st_mtime );
 
 	return true;
 }

@@ -88,12 +88,12 @@ enum buildResult_t {
 #endif
 
 u64 GetLastFileWriteTime( const char* filename ) {
-	FileInfo fileInfo;
-	if ( !file_get_info( filename, &fileInfo ) ) {
+	u64 lastWriteTime = 0;
+	if ( !file_get_last_write_time( filename, &lastWriteTime ) ) {
 		assert( false );
 	}
 
-	return fileInfo.last_write_time;
+	return lastWriteTime;
 }
 
 static const char* GetFileExtensionFromBinaryType( BinaryType type ) {
@@ -364,16 +364,18 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 			return true;
 		}
 
-		FileInfo intermediateFileInfo = {};
+		// if the source file is newer than the intermediate file then we want to rebuild
+		u64 intermediateFileLastWriteTime = 0;
+		{
+			// if the .o file doesnt exist then assume we havent built this file yet
+			if ( !file_get_last_write_time( intermediateFilename, &intermediateFileLastWriteTime ) ) {
+				return true;
+			}
 
-		// if the .o file doesnt exist then assume we havent built this file yet
-		if ( !file_get_info( intermediateFilename, &intermediateFileInfo ) ) {
-			return true;
-		}
-
-		// if the .o file does exist but the source file was written to it more recently then we know we want to rebuild
-		if ( GetLastFileWriteTime( sourceFile ) > intermediateFileInfo.last_write_time ) {
-			return true;
+			// if the .o file does exist but the source file was written to it more recently then we know we want to rebuild
+			if ( GetLastFileWriteTime( sourceFile ) > intermediateFileLastWriteTime ) {
+				return true;
+			}
 		}
 
 		// if the source file wasnt newer than the .o file then do the same timestamp check for all the files that this source file depends on
@@ -383,9 +385,7 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 			const std::vector<std::string>& includeDependencies = context->sourceFileIncludeDependencies[sourceFileHashmapIndex].includeDependencies;
 
 			For ( u64, dependencyIndex, 0, includeDependencies.size() ) {
-				u64 dependencyLastWriteTime = GetLastFileWriteTime( includeDependencies[dependencyIndex].c_str() );
-
-				if ( dependencyLastWriteTime > intermediateFileInfo.last_write_time ) {
+				if ( GetLastFileWriteTime( includeDependencies[dependencyIndex].c_str() ) > intermediateFileLastWriteTime ) {
 					return true;
 				}
 			}
@@ -436,15 +436,15 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 
 		const char* fullBinaryName = BuildConfig_GetFullBinaryName( config );
 
-		FileInfo binaryFileInfo = {};
+		u64 binaryFileLastWriteTime = 0;
 
-		if ( !file_get_info( fullBinaryName, &binaryFileInfo ) ) {
+		if ( !file_get_last_write_time( fullBinaryName, &binaryFileLastWriteTime ) ) {
 			doLinking = true;
 		} else {
 			For ( u64, intermediateFileIndex, 0, intermediateFiles.count ) {
 				u64 intermediateFileLastWriteTime = GetLastFileWriteTime( intermediateFiles[intermediateFileIndex] );
 
-				if ( intermediateFileLastWriteTime > binaryFileInfo.last_write_time ) {
+				if ( intermediateFileLastWriteTime > binaryFileLastWriteTime ) {
 					doLinking = true;
 					break;
 				}
@@ -593,7 +593,7 @@ static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContex
 		if ( inputFileIsSameAsSourceFile ) {
 			visitorData.searchFilter = context->inputFile;
 		} else {
-			visitorData.searchFilter = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, sourceFile );
+			visitorData.searchFilter = tprintf( "%s%c%s", context->inputFilePath.data, '/', sourceFile );
 		}
 
 		if ( !file_get_all_files_in_folder( context->inputFilePath.data, recursive, false, SourceFileVisitor, &visitorData ) ) {

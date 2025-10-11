@@ -30,7 +30,7 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 		.optimization_level		= OPTIMIZATION_LEVEL_O0,
 		.defines				= { "_DEBUG" },
 		.additional_includes	= { "src" },
-		.additional_lib_paths	= { "bin/debug/library" },
+		.additional_lib_paths	= { "bin/debug" },
 		.additional_libs		= { "the-library.lib" },
 	};
 
@@ -43,7 +43,7 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 		.optimization_level		= OPTIMIZATION_LEVEL_O3,
 		.defines				= { "NDEBUG" },
 		.additional_includes	= { "src" },
-		.additional_lib_paths	= { "bin/release/library" },
+		.additional_lib_paths	= { "bin/release" },
 		.additional_libs		= { "the-library.lib" },
 	};
 

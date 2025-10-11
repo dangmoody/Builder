@@ -204,7 +204,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 	// get relative path from visual studio to the input file
 	char* pathFromSolutionToInputFile = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
 	memset( pathFromSolutionToInputFile, 0, MAX_PATH * sizeof( char ) );
-	pathFromSolutionToInputFile = path_relative_path_to(solutionFilename, path_fix_slashes( cast( char*, context->inputFilePath.data ) ) );
+	pathFromSolutionToInputFile = path_relative_path_to( visualStudioProjectFilesPath, context->inputFilePath.data );
 	assert( pathFromSolutionToInputFile != NULL || !string_equals( pathFromSolutionToInputFile, "" ) );
 
 	// give each project a guid
@@ -491,7 +491,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 				const char* fullBinaryName = BuildConfig_GetFullBinaryName( &config->options );
 
-				const char* from = solutionFilename;
+				const char* from = visualStudioProjectFilesPath;
 				const char* to = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, fullBinaryName );
 				//to = path_canonicalise( to );
 
@@ -672,7 +672,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 					const char* fullBinaryName = BuildConfig_GetFullBinaryName( &config->options );
 
-					const char* from = solutionFilename;
+					const char* from = visualStudioProjectFilesPath;
 					const char* to = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, fullBinaryName );
 					//to = path_canonicalise( to );
 

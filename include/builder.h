@@ -110,6 +110,10 @@ struct BuildConfig {
 	// Uses the Clang syntax (E.G.: -Wno-newline-eof).
 	std::vector<std::string>	ignore_warnings;
 
+	// Anything else that you want to pass to the compiler that there isn't already an existing option for.
+	// These will get added to the end of all the other compiler arguments.
+	std::vector<std::string>	additional_compiler_arguments;
+
 	// The name that the built binary is going to have.
 	// This will be placed inside binary_folder, if you set that.
 	std::string					binary_name;

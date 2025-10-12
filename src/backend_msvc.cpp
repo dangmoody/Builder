@@ -412,6 +412,10 @@ static bool8 MSVC_CompileSourceFile( compilerBackend_t* backend, const char* sou
 		args.add( config->ignore_warnings[ignoreWarningIndex].c_str() );
 	}
 
+	For ( u64, additionalArgumentIndex, 0, config->additional_compiler_arguments.size() ) {
+		args.add( config->additional_compiler_arguments[additionalArgumentIndex].c_str() );
+	}
+
 	{
 		For ( u64, argIndex, 0, args.count ) {
 			printf( "%s ", msvcState->args[argIndex] );

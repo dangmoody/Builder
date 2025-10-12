@@ -40,7 +40,7 @@ SOFTWARE.
 /*
 ================================================================================================
 
-	AllocatorMalloc: wraps malloc and free
+	Malloc Allocator: Win64 implementations for wrapping malloc and free
 
 ================================================================================================
 */

@@ -29,12 +29,15 @@ SOFTWARE.
 #ifdef _WIN32
 
 #include <file.h>
+#include "../file_local.h"
 
 #include <debug.h>
 #include <allocation_context.h>
 #include <defer.h>
 #include <temp_storage.h>
 #include <typecast.inl>
+#include <paths.h>
+#include <array.inl>
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -42,13 +45,13 @@ SOFTWARE.
 /*
 ================================================================================================
 
-	File
+	Win64 File IO implementations
 
 ================================================================================================
 */
 
 static File open_file_internal( const char* filename, const DWORD access_flags, const DWORD creation_disposition ) {
-	assertf( filename, "Null file name was specified!" );
+	assert( filename );
 
 	DWORD file_share_flags = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
 	DWORD flags_and_attribs = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED;
@@ -59,41 +62,20 @@ static File open_file_internal( const char* filename, const DWORD access_flags, 
 	// TODO(DM): allow setting a logging level for the file system? verbose logging?
 	//printf( "%s last error: 0x%08X\n", __FUNCTION__, GetLastError() );
 
-	return { handle, 0 };
+	return { cast( u64, handle ), 0 };
 }
 
-//static File open_or_create_file_internal( const char* filename, const DWORD access_flags, const DWORD creation_disposition ) {
-//	assert( filename );
-//
-//	File file_handle = open_file_internal( filename, access_flags, creation_disposition );
-//
-//	if ( file_handle.ptr != INVALID_HANDLE_VALUE ) {
-//		return file_handle;
-//	}
-//
-//	return open_file_internal( filename, access_flags, creation_disposition );
-//}
-
 static bool8 create_folder_internal( const char* path ) {
+	assert( path );
+
 	if ( folder_exists( path ) ) {
 		return true;
 	}
 
-	bool8 result = false;
-
-#if 0
-	SECURITY_ATTRIBUTES secattr = {};
-	result = (bool8) CreateDirectory( path, &secattr );
-
-	if ( !result ) {
-		printf( "WIN32: Failed creating folder \"%s\": %lu\n", path, GetLastError() );
-	}
-#else
 	SECURITY_ATTRIBUTES attributes = {};
 	attributes.nLength = sizeof( SECURITY_ATTRIBUTES );
 
-	result = cast( bool8, CreateDirectoryA( path, &attributes ) );
-#endif
+	bool8 result = cast( bool8, CreateDirectoryA( path, &attributes ) );
 
 	return result;
 }
@@ -101,17 +83,21 @@ static bool8 create_folder_internal( const char* path ) {
 //================================================================
 
 File file_open( const char* filename ) {
+	assert( filename );
+
 	return open_file_internal( filename, GENERIC_READ | GENERIC_WRITE, OPEN_EXISTING );
 }
 
 File file_open_or_create( const char* filename, const bool8 keep_existing_content ) {
+	assert( filename );
+
 	DWORD creation_disposition = ( keep_existing_content ) ? CREATE_NEW : CREATE_ALWAYS;
 
 	//return open_or_create_file_internal( filename, GENERIC_READ | GENERIC_WRITE, creation_disposition );
 	DWORD access_flags = GENERIC_READ | GENERIC_WRITE;
 	File file_handle = open_file_internal( filename, access_flags, creation_disposition );
 
-	if ( file_handle.ptr != INVALID_HANDLE_VALUE ) {
+	if ( file_handle.handle != INVALID_FILE_HANDLE ) {
 		return file_handle;
 	}
 
@@ -119,22 +105,23 @@ File file_open_or_create( const char* filename, const bool8 keep_existing_conten
 }
 
 bool8 file_close( File* file ) {
-	assertf( file, "The file->ptr can be NULL, but the pointer to the handle MUST be non-NULL." );
+	assert( file );
+	assert( file->handle != INVALID_FILE_HANDLE );
 
-	HANDLE handle = cast( HANDLE, file->ptr );
+	HANDLE handle = cast( HANDLE, file->handle );
 
 	BOOL result = CloseHandle( handle );
 
 	//printf( "%s() last error: 0x%08X\n", __FUNCTION__, GetLastError() );
 
-	file->ptr = INVALID_HANDLE_VALUE;
+	file->handle = INVALID_FILE_HANDLE;
 
 	return cast( bool8, result );
 }
 
 bool8 file_copy( const char* original_path, const char* new_path ) {
-	assertf( original_path, "Original filename cannot be null.\n" );
-	assertf( new_path, "New filename cannot be null.\n" );
+	assert( original_path );
+	assert( new_path );
 
 	BOOL copied = CopyFileA( original_path, new_path, FALSE );
 	assertf( copied, "Failed to copy file \"%s\" to \"%s\": 0x%x.", original_path, new_path, GetLastError() );
@@ -143,8 +130,8 @@ bool8 file_copy( const char* original_path, const char* new_path ) {
 }
 
 bool8 file_rename( const char* old_filename, const char* new_filename ) {
-	assertf( old_filename, "Old filename cannot be NULL." );
-	assertf( new_filename, "New filename cannot be NULL." );
+	assert( old_filename );
+	assert( new_filename );
 
 	bool8 renamed = cast( bool8, MoveFileA( old_filename, new_filename ) );
 
@@ -153,71 +140,15 @@ bool8 file_rename( const char* old_filename, const char* new_filename ) {
 	return renamed;
 }
 
-void file_free_buffer( char** buffer ) {
-	//TODO(TOM): Figure out how to configure the file IO allocator
-	Allocator* platform_allocator = g_core_ptr->allocator_stack[0];
-
-	mem_push_allocator( platform_allocator );
-	defer( mem_pop_allocator() );
-
-	mem_free( *buffer );
-	*buffer = NULL;
-}
-
-bool8 file_read_entire( const char* filename, char** outBuffer, u64* out_file_length ) {
-	assertf( filename, "Specified file name to read from cannot be null." );
-	assertf( !*outBuffer, "Specified out-buffer MUST be null because this function news it." );
-
-	//TODO(TOM): Figure out how to configure the file IO allocator
-	Allocator* platform_allocator = g_core_ptr->allocator_stack[0];
-
-	mem_push_allocator( platform_allocator );
-	defer( mem_pop_allocator() );
-
-	File file = file_open( filename );
-
-	if ( file.ptr == NULL ) {
-		return 0;
-	}
-
-	u64 file_size = file_get_size( file );
-
-	char* temp = cast( char*, mem_alloc( file_size + 1 ) );
-
-	bool8 read = file_read( &file, 0, file_size, temp );
-
-	file_close( &file );
-
-	temp[file_size] = 0;
-
-	*outBuffer = temp;
-
-	if ( out_file_length ) {
-		*out_file_length = file_size;
-	}
-
-	return read;
-}
-
-bool8 file_read( File* file, const u64 size, void* out_data ) {
-	bool8 read = file_read( file, file->offset, size, out_data );
-
-	if ( read ) {
-		file->offset += size;
-	}
-
-	return read;
-}
-
 bool8 file_read( File* file, const u64 offset, const u64 size, void* out_data ) {
-	assertf( file && file->ptr, "File cannot be null." );
-	assertf( out_data, "Out data cannot be null." );
+	assert( file && file->handle != INVALID_FILE_HANDLE );
+	assert( out_data );
 
 	if ( size == 0 ) {
 		return 0;
 	}
 
-	HANDLE handle = cast( HANDLE, file->ptr );
+	HANDLE handle = cast( HANDLE, file->handle );
 
 	DWORD bytes_read = 0;
 	DWORD bytes_to_read = cast( DWORD, size );
@@ -247,49 +178,16 @@ bool8 file_read( File* file, const u64 offset, const u64 size, void* out_data ) 
 	return bytes_read == size;
 }
 
-bool8 file_write_entire( const char* filename, const void* data, const u64 size ) {
-	assertf( filename, "File name cannot be null." );
-	assertf( data, "Write data cannot be null." );
-
-	File file = file_open_or_create( filename );
-
-	if ( file.ptr == NULL ) {
-		return false;
-	}
-
-	defer( file_close( &file ) );
-
-	return file_write( &file, data, 0, size );
-}
-
-bool8 file_write( File* file, const void* data, const u64 size ) {
-	bool8 written = file_write( file, data, file->offset, size );
-
-	if ( written ) {
-		file->offset += size;
-	}
-
-	return written;
-}
-
-bool8 file_write( File* file, const char* data ) {
-	return file_write( file, data, strlen( data ) * sizeof( char ) );
-}
-
-bool8 file_write_line( File* file, const char* line ) {
-	bool8 main_write = file_write( file, line );
-	return main_write && file_write( file, "\n" );
-}
-
 bool8 file_write( File* file, const void* data, const u64 offset, const u64 size ) {
-	assertf( file && file->ptr, "File cannot be null." );
-	assertf( data, "Write data cannot be null." );
+	assert( file );
+	assert( file->handle );
+	assert( data );
 
 	if ( size == 0 ) {
 		return false;
 	}
 
-	HANDLE handle = cast( HANDLE, file->ptr );
+	HANDLE handle = cast( HANDLE, file->handle );
 
 	DWORD bytes_written = 0;
 	DWORD bytes_to_write = cast( DWORD, size );
@@ -325,108 +223,124 @@ bool8 file_delete( const char* filename ) {
 	return cast( bool8, result );
 }
 
-u64 file_get_size( const File file ) {
-	if ( file.ptr == INVALID_HANDLE_VALUE ) {
-		return 0;
-	}
+bool8 file_get_size( const char* filename, u64* out_size ) {
+	assert( filename );
+	assert( out_size );
 
-	HANDLE handle = cast( HANDLE, file.ptr );
+	File file = open_file_internal( filename, 0, OPEN_EXISTING );
 
-	LARGE_INTEGER large_int = {};
-	BOOL got_file_size = GetFileSizeEx( handle, &large_int );
-
-	assertf( got_file_size, "Failed to get size for file: 0x%x.", GetLastError() );
-	unused( got_file_size );
-
-	return cast( u64, large_int.QuadPart );
-}
-
-static void get_file_info_internal( const WIN32_FIND_DATA* find_data, FileInfo* out_file_info ) {
-	assert( find_data );
-	assert( out_file_info );
-
-	out_file_info->is_directory = ( find_data->dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY );
-
-	out_file_info->last_write_time = ( cast( u64, find_data->ftLastWriteTime.dwHighDateTime ) << 32 ) | find_data->ftLastWriteTime.dwLowDateTime;
-
-	strncpy( out_file_info->filename, find_data->cFileName, MAX_PATH );
-}
-
-File file_find_first( const char* path, FileInfo* out_file_info ) {
-	assertf( path, "Path cannot be null." );
-	assertf( out_file_info, "Out file info cannot be null." );
-
-	WIN32_FIND_DATA info = {};
-	HANDLE handle = FindFirstFile( path, &info );
-
-	//assertf( handle != INVALID_HANDLE_VALUE, "Failed to find files at path \"%s\": 0x%X.", path, GetLastError() );
-
-	get_file_info_internal( &info, out_file_info );
-
-	return { handle, 0 };
-}
-
-bool8 file_find_next( File* first_file, FileInfo* out_file_info ) {
-	assertf( first_file && first_file->ptr, "first_file cannot be invalid." );
-	assertf( out_file_info, "Out file info cannot be null." );
-
-	HANDLE handle = cast( HANDLE, first_file->ptr );
-
-	WIN32_FIND_DATA info = {};
-	bool8 found = cast( bool8, FindNextFile( handle, &info ) );
-
-	if ( !found ) {
-		// TODO(DM): switch/case this for other errors if we need to account for others
-		DWORD lastError = GetLastError();
-		if ( lastError != ERROR_NO_MORE_FILES && lastError != ERROR_INVALID_HANDLE ) {
-			assertf( found, "Failed to get next file from first file: 0x%X.", lastError );
-		}
-
+	if ( file.handle == INVALID_FILE_HANDLE ) {
 		return false;
 	}
 
-	get_file_info_internal( &info, out_file_info );
+	defer( file_close( &file ) );
+
+	LARGE_INTEGER large_int = {};
+
+	if ( !GetFileSizeEx( cast( HANDLE, file.handle ), &large_int ) ) {
+		return false;
+	}
+
+	*out_size = cast( u64, large_int.QuadPart );
 
 	return true;
 }
 
-bool8 folder_create_if_it_doesnt_exist( const char* path ) {
-	assertf( path, "Path cannot be NULL." );
+bool8 file_get_last_write_time( const char* filename, u64* out_last_write_time ) {
+	assert( filename );
+	assert( out_last_write_time );
 
-	// if already here, no problem
-	if ( folder_exists( path ) ) {
-		return true;
+	File file = open_file_internal( filename, 0, OPEN_EXISTING );
+
+	if ( file.handle == INVALID_FILE_HANDLE ) {
+		return false;
 	}
 
-	// otherwise create the folder
-	{
-		bool8 result = false;
+	defer( file_close( &file ) );
 
-		u64 path_len = strlen( path );
+	FILETIME lastWriteTime = {};
 
-		// dont process trailing slash if one exists
-		// otherwise we will get duplicate results for sub-dirs to parse
-		//if ( path[path_len - 1] == '/' ) {
-		//	path_len--;
-		//}
+	if ( !GetFileTime( cast( HANDLE, file.handle ), NULL, NULL, &lastWriteTime ) ) {
+		return false;
+	}
 
-		for ( u64 i = 0; i <= path_len; i++ ) {
-			if ( path[i] != '/' && path[i] != '\0' && path[i] != '\\' ) {
-				continue;
-			}
+	*out_last_write_time = ( cast( u64, lastWriteTime.dwHighDateTime ) << 32 ) | lastWriteTime.dwLowDateTime;
 
-			char name[1024] = {};
-			strncpy( name, path, i );
+	return true;
+}
 
-			result |= create_folder_internal( name );
+bool8 file_get_all_files_in_folder( const char* path, const bool8 recursive, const bool8 visit_folders, FileVisitCallback visit_callback, void* user_data ) {
+	assert( path );
+	assert( visit_callback );
+
+	Array<const char*> directories;	// TODO(DM): 02/10/2025: allocate this on temp storage
+	directories.add( path );
+
+	u32 dir_index = 0;
+
+	while ( dir_index < directories.count ) {
+		const char* dir = directories[dir_index];
+
+		dir_index += 1;
+
+		const char* search_path = NULL;
+		if ( string_ends_with( dir, "/" ) ) {
+			search_path = tprintf( "%s*", dir );
+		} else {
+			search_path = tprintf( "%s%c*", dir, '/' );
 		}
 
-		return result;
+		WIN32_FIND_DATA find_data = {};
+		HANDLE handle = FindFirstFile( search_path, &find_data );
+
+		if ( handle == INVALID_HANDLE_VALUE ) {
+			return false;
+		}
+
+		while ( 1 ) {
+			FileInfo file_info = {
+				.is_directory		= cast( bool8, find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ),
+				.last_write_time	= ( trunc_cast( u64, find_data.ftLastWriteTime.dwHighDateTime ) << 32 ) | find_data.ftLastWriteTime.dwLowDateTime,
+				.size_bytes			= ( trunc_cast( u64, find_data.nFileSizeHigh ) << 32 ) | find_data.nFileSizeLow,
+				.filename			= find_data.cFileName,
+				.full_filename		= tprintf( "%s%c%s", dir, '/', file_info.filename ),
+			};
+
+			if ( file_info.is_directory ) {
+				if ( !string_equals( find_data.cFileName, "." ) && !string_equals( find_data.cFileName, ".." ) ) {
+					if ( visit_folders ) {
+						visit_callback( &file_info, user_data );
+					}
+
+					if ( recursive ) {
+						directories.add( file_info.full_filename );
+					}
+				}
+			} else {
+				visit_callback( &file_info, user_data );
+			}
+
+			if ( !FindNextFile( handle, &find_data ) ) {
+				break;
+			}
+		}
+
+		if ( !FindClose( handle ) ) {
+			return false;
+		}
 	}
+
+	return true;
+}
+
+bool8 file_exists( const char* filename ) {
+	assert( filename );
+
+	return GetFileAttributes( filename ) != INVALID_FILE_ATTRIBUTES;
 }
 
 bool8 folder_delete( const char* path ) {
-	assertf( path, "Path cannot be NULL." );
+	assert( path );
 
 	bool8 result = cast( bool8, RemoveDirectoryA( path ) );
 
@@ -438,41 +352,11 @@ bool8 folder_delete( const char* path ) {
 }
 
 bool8 folder_exists( const char* path ) {
-	assertf( path, "Path cannot be NULL." );
+	assert( path );
 
 	DWORD attribs = GetFileAttributes( path );
 
 	return ( attribs != INVALID_FILE_ATTRIBUTES ) && ( ( attribs & FILE_ATTRIBUTE_DIRECTORY ) != 0 );
-}
-
-u64 folder_get_num_files( const char* path ) {
-	assert( path );
-
-	u64 path_len = strlen( path );
-
-	char* path_copy = cast( char*, mem_temp_alloc( path_len + 1 ) );
-	strncpy( path_copy, path, path_len * sizeof( char ) );
-	path_copy[path_len] = 0;
-
-	if ( path_copy[path_len - 1] == '/' || path_copy[path_len - 1] == '\\' ) {
-		path_copy[path_len - 1] = 0;
-		path_len--;
-	}
-
-	WIN32_FIND_DATA find_data = {};
-	HANDLE filehandle = FindFirstFile( path_copy, &find_data );
-
-	u64 count = 0;
-
-	do {
-		if ( find_data.cFileName[0] == '.' || find_data.cFileName[0] == 0 ) {
-			continue;
-		}
-
-		count++;
-	} while ( FindNextFile( filehandle, &find_data ) );
-
-	return count;
 }
 
 #endif // _WIN32

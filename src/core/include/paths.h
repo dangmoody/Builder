@@ -75,6 +75,10 @@ CORE_API const char*	path_canonicalise( const char* path );
 // Make sure that any slashes found in 'path' are what the OS expects them to be.
 CORE_API const char*	path_fix_slashes( const char* path );
 
+CORE_API char*			path_relative_path_to( const char* pathFrom, const char* pathTo );
+
+CORE_API bool8			path_set_current_directory( const char* path );
+
 // Takes a potentially-infinite number of strings and separates each one with a slash (back slash on Windows, forward slash on all other platforms).
 // template<class... Args>
 // CORE_API const char*	path_join( const char* first, const Args*... args );

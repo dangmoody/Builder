@@ -30,6 +30,8 @@ SOFTWARE.
 
 #if defined( _WIN64 )
 	#include "core.win64.suc.cpp"
+#elif __linux__
+	#include "core.linux.suc.cpp"
 #else
 	#error Unrecognised platform.
 #endif
@@ -39,13 +41,15 @@ SOFTWARE.
 #include <ring.inl>
 #include "allocation_context.cpp"
 #include "memory_tracking.cpp"
-#include "allocator_malloc.cpp"
 #include "allocator_linear.cpp"
 #include "cmd_line_args.cpp"
 #include "core_string.cpp"
+#include "debug.cpp"
+#include "file.cpp"
 #include "hashmap.cpp"
 #include "math.cpp"
 #include "random.cpp"
+#include "paths.cpp"
 #include "string_helpers.cpp"
 #include "string_builder.cpp"
 #include "temp_storage.cpp"

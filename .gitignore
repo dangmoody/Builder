@@ -32,14 +32,22 @@ bug_reports/**/*
 .vs
 x64
 
-# ignore test-generated visual studio solutions
-tests/**/*.sln
-tests/**/*.vcxproj
-tests/**/*.vcxproj.user
-tests/**/*.vcxproj.filters
-
 
 #
 # rider stuff
 #
 .idea
+
+
+#
+# zed stuff
+#
+
+.zed
+
+
+# ignore test-generated visual studio solutions
+tests/**/*.sln
+tests/**/*.vcxproj
+tests/**/*.vcxproj.user
+tests/**/*.vcxproj.filters

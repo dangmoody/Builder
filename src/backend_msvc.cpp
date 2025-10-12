@@ -38,6 +38,22 @@ SOFTWARE.
 #include "core/include/core_process.h"
 #include "core/include/file.h"
 
+
+struct msvcState_t {
+	Array<const char*>			args;
+
+	std::vector<std::string>	windowsIncludes;
+	std::vector<std::string>	windowsLibPaths;
+
+	std::vector<std::string>	includeDependencies;
+
+	String						compilerVersion;
+
+	u32							versionMask;
+};
+
+//================================================================
+
 // TODO(DM): 20/07/2025: do we want to ignore this warning via the build script?
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wswitch"
@@ -69,18 +85,24 @@ static const char* OptimizationLevelToCompilerArg( const OptimizationLevel level
 	}
 }
 
+static void OnMSVCVersionFound( const FileInfo* fileInfo, void* userData ) {
+	msvcState_t* msvcState2 = cast( msvcState_t*, userData );
+
+	u32 version0 = 0;
+	u32 version1 = 0;
+	u32 version2 = 0;
+	sscanf( fileInfo->filename, "%u.%u.%u", &version0, &version1, &version2 );
+
+	u32 mask = ( version0 << 24 ) | ( version1 << 16 ) | ( version2 );
+
+	if ( mask > msvcState2->versionMask ) {
+		msvcState2->versionMask = mask;
+
+		msvcState2->compilerVersion = fileInfo->filename;
+	}
+}
+
 //================================================================
-
-struct msvcState_t {
-	Array<const char*>			args;
-
-	std::vector<std::string>	windowsIncludes;
-	std::vector<std::string>	windowsLibPaths;
-
-	std::vector<std::string>	includeDependencies;
-
-	String						compilerVersion;
-};
 
 static bool8 MSVC_Init( compilerBackend_t* backend ) {
 	auto ParseTagString = []( const char* fileBuffer, const char* tag, std::string& outString ) {
@@ -128,6 +150,8 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 	msvcState_t* msvcState = cast( msvcState_t*, mem_alloc( sizeof( msvcState_t ) ) );
 	new( msvcState ) msvcState_t;
 
+	msvcState->versionMask = 0;
+
 	backend->data = msvcState;
 
 	std::string msvcRootFolder;
@@ -171,34 +195,12 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 
 	// get latest version of msvc
 	{
-		const char* msvcVersionSearchFolder = tprintf( "%s\\VC\\Tools\\MSVC\\*", msvcRootFolder.c_str() );
+		const char* msvcVersionSearchFolder = tprintf( "%s\\VC\\Tools\\MSVC", msvcRootFolder.c_str() );
 
-		FileInfo fileInfo;
-		File file = file_find_first( msvcVersionSearchFolder, &fileInfo );
-
-		u32 highestVersion = 0;
-		do {
-			if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) ) {
-				continue;
-			}
-
-			if ( !fileInfo.is_directory ) {
-				continue;
-			}
-
-			u32 version0 = 0;
-			u32 version1 = 0;
-			u32 version2 = 0;
-			sscanf( fileInfo.filename, "%u.%u.%u", &version0, &version1, &version2 );
-
-			u32 mask = ( version0 << 24 ) | ( version1 << 16 ) | ( version2 );
-
-			if ( mask > highestVersion ) {
-				highestVersion = mask;
-
-				msvcState->compilerVersion = fileInfo.filename;
-			}
-		} while ( file_find_next( &file, &fileInfo ) );
+		if ( !file_get_all_files_in_folder( msvcVersionSearchFolder, false, true, OnMSVCVersionFound, msvcState ) ) {
+			fatal_error( "Failed to query all MSVC version folders.  This should never happen! Error code: " ERROR_CODE_FORMAT "\n" );
+			return false;
+		}
 	}
 
 	// now use MSVC root folder and the correct MSVC version to get the path to cl.exe
@@ -408,6 +410,10 @@ static bool8 MSVC_CompileSourceFile( compilerBackend_t* backend, const char* sou
 
 	For ( u64, ignoreWarningIndex, 0, config->ignore_warnings.size() ) {
 		args.add( config->ignore_warnings[ignoreWarningIndex].c_str() );
+	}
+
+	For ( u64, additionalArgumentIndex, 0, config->additional_compiler_arguments.size() ) {
+		args.add( config->additional_compiler_arguments[additionalArgumentIndex].c_str() );
 	}
 
 	{

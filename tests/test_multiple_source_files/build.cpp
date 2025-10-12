@@ -13,7 +13,11 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 
 			// or entire folders at a time
 			// you can also filter by wildcard
-			"src/*.win64.cpp"
+#if defined( _WIN32 )
+			"src/*.win64.cpp",
+#elif defined( __linux__ )
+			"src/*.linux.cpp",
+#endif
 		},
 	};
 

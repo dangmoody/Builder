@@ -42,9 +42,12 @@ SOFTWARE.
 #include "core/include/library.h"
 #include "core/include/core_string.h"
 #include "core/include/hashmap.h"
+#include "core/include/file.h"
 
 #ifdef _WIN64
 #include <Shlwapi.h>
+#elif defined(__linux__)
+#include <errno.h>
 #endif
 
 #include <stdio.h>
@@ -61,7 +64,7 @@ SOFTWARE.
 
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
-	BUILDER_VERSION_MINOR	= 8,
+	BUILDER_VERSION_MINOR	= 9,
 	BUILDER_VERSION_PATCH	= 0,
 };
 
@@ -79,29 +82,36 @@ enum buildResult_t {
 	debug_break(); \
 	return 1
 
-errorCode_t GetLastErrorCode() {
-#ifdef _WIN64
-	return GetLastError();
-#else
-#error Unrecognised platform!
+#ifdef __linux__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpadded"
 #endif
-}
 
-static u64 GetLastFileWriteTime( const char* filename ) {
-	FileInfo fileInfo;
-	File file = file_find_first( filename, &fileInfo );
+u64 GetLastFileWriteTime( const char* filename ) {
+	u64 lastWriteTime = 0;
+	if ( !file_get_last_write_time( filename, &lastWriteTime ) ) {
+		assert( false );
+	}
 
-	assert( file.ptr != INVALID_HANDLE_VALUE );
-
-	return fileInfo.last_write_time;
+	return lastWriteTime;
 }
 
 static const char* GetFileExtensionFromBinaryType( BinaryType type ) {
+#ifdef _WIN32
 	switch ( type ) {
-		case BINARY_TYPE_EXE:				return "exe";
-		case BINARY_TYPE_DYNAMIC_LIBRARY:	return "dll";
-		case BINARY_TYPE_STATIC_LIBRARY:	return "lib";
+		case BINARY_TYPE_EXE:				return ".exe";
+		case BINARY_TYPE_DYNAMIC_LIBRARY:	return ".dll";
+		case BINARY_TYPE_STATIC_LIBRARY:	return ".lib";
 	}
+#elif defined( __linux__ )
+	switch ( type ) {
+		case BINARY_TYPE_EXE:				return "";
+		case BINARY_TYPE_DYNAMIC_LIBRARY:	return ".so";
+		case BINARY_TYPE_STATIC_LIBRARY:	return ".a";
+	}
+#else
+#error Unrecognised paltform.
+#endif
 
 	assertf( false, "Something went really wrong here.\n" );
 
@@ -226,20 +236,20 @@ static const char* BuildConfig_ToString( const BuildConfig* config ) {
 const char* BuildConfig_GetFullBinaryName( const BuildConfig* config ) {
 	assert( !config->binary_name.empty() );
 
-	StringBuilder builder = {};
-	string_builder_reset( &builder );
+	StringBuilder sb = {};
+	string_builder_reset( &sb );
 
 	if ( !config->binary_folder.empty() ) {
-		string_builder_appendf( &builder, "%s%c", config->binary_folder.c_str(), PATH_SEPARATOR );
+		string_builder_appendf( &sb, "%s%c", config->binary_folder.c_str(), PATH_SEPARATOR );
 	}
 
-	string_builder_appendf( &builder, "%s", config->binary_name.c_str() );
+	string_builder_appendf( &sb, "%s", config->binary_name.c_str() );
 
 	if ( !config->remove_file_extension ) {
-		string_builder_appendf( &builder, ".%s", GetFileExtensionFromBinaryType( config->binary_type ) );
+		string_builder_appendf( &sb, "%s", GetFileExtensionFromBinaryType( config->binary_type ) );
 	}
 
-	return string_builder_to_string( &builder );
+	return string_builder_to_string( &sb );
 }
 
 s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVariables, const procFlags_t procFlags ) {
@@ -254,7 +264,8 @@ s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVariables,
 		printf( "\n" );
 	}
 
-	Process* process = process_create( args, environmentVariables, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
+	// DM!!! put the async flag back when done getting this running
+	Process* process = process_create( args, environmentVariables, /*PROCESS_FLAG_ASYNC |*/ PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
 
 	if ( !process ) {
 		error(
@@ -326,15 +337,15 @@ static s32 ShowUsage( const s32 exitCode ) {
 static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, compilerBackend_t* compilerBackend ) {
 	// create binary folder
 	if ( !folder_create_if_it_doesnt_exist( config->binary_folder.c_str() ) ) {
-		errorCode_t errorCode = GetLastErrorCode();
-		fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".  Error code: " ERROR_CODE_FORMAT "\n", SET_BUILDER_OPTIONS_FUNC_NAME, config->binary_folder.c_str(), errorCode );
+		errorCode_t errorCode = get_last_error_code();
+		fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".  Error code: " ERROR_CODE_FORMAT "", SET_BUILDER_OPTIONS_FUNC_NAME, config->binary_folder.c_str(), errorCode );
 		return BUILD_RESULT_FAILED;
 	}
 
 	// create intermediate folder
 	const char* intermediatePath = tprintf( "%s%c%s", config->binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
 	if ( !folder_create_if_it_doesnt_exist( intermediatePath ) ) {
-		errorCode_t errorCode = GetLastErrorCode();
+		errorCode_t errorCode = get_last_error_code();
 		fatal_error( "Failed to create intermediate binary folder.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
 		return BUILD_RESULT_FAILED;
 	}
@@ -353,13 +364,18 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 			return true;
 		}
 
-		FileInfo intermediateFileInfo;
-		File intermediateFile = file_find_first( intermediateFilename, &intermediateFileInfo );
+		// if the source file is newer than the intermediate file then we want to rebuild
+		u64 intermediateFileLastWriteTime = 0;
+		{
+			// if the .o file doesnt exist then assume we havent built this file yet
+			if ( !file_get_last_write_time( intermediateFilename, &intermediateFileLastWriteTime ) ) {
+				return true;
+			}
 
-		// if the .o file doesnt exist then assume we havent built this file yet
-		// if the .o file does exist but the source file was written to it more recently then we know we want to rebuild
-		if ( ( intermediateFile.ptr == INVALID_HANDLE_VALUE ) || ( GetLastFileWriteTime( sourceFile ) > intermediateFileInfo.last_write_time ) ) {
-			return true;
+			// if the .o file does exist but the source file was written to it more recently then we know we want to rebuild
+			if ( GetLastFileWriteTime( sourceFile ) > intermediateFileLastWriteTime ) {
+				return true;
+			}
 		}
 
 		// if the source file wasnt newer than the .o file then do the same timestamp check for all the files that this source file depends on
@@ -369,9 +385,7 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 			const std::vector<std::string>& includeDependencies = context->sourceFileIncludeDependencies[sourceFileHashmapIndex].includeDependencies;
 
 			For ( u64, dependencyIndex, 0, includeDependencies.size() ) {
-				u64 dependencyLastWriteTime = GetLastFileWriteTime( includeDependencies[dependencyIndex].c_str() );
-
-				if ( dependencyLastWriteTime > intermediateFileInfo.last_write_time ) {
+				if ( GetLastFileWriteTime( includeDependencies[dependencyIndex].c_str() ) > intermediateFileLastWriteTime ) {
 					return true;
 				}
 			}
@@ -422,16 +436,15 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 
 		const char* fullBinaryName = BuildConfig_GetFullBinaryName( config );
 
-		FileInfo binaryFileInfo = {};
-		File binaryFile = file_find_first( fullBinaryName, &binaryFileInfo );
+		u64 binaryFileLastWriteTime = 0;
 
-		if ( binaryFile.ptr == INVALID_HANDLE_VALUE ) {
+		if ( !file_get_last_write_time( fullBinaryName, &binaryFileLastWriteTime ) ) {
 			doLinking = true;
 		} else {
 			For ( u64, intermediateFileIndex, 0, intermediateFiles.count ) {
 				u64 intermediateFileLastWriteTime = GetLastFileWriteTime( intermediateFiles[intermediateFileIndex] );
 
-				if ( intermediateFileLastWriteTime > binaryFileInfo.last_write_time ) {
+				if ( intermediateFileLastWriteTime > binaryFileLastWriteTime ) {
 					doLinking = true;
 					break;
 				}
@@ -451,52 +464,57 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 	return BUILD_RESULT_SUCCESS;
 }
 
-static void NukeFolderInternal_r( const char* folder, const bool8 verbose ) {
-	const char* searchPattern = tprintf( "%s%c*", folder, PATH_SEPARATOR );
+struct nukeContext_t {
+	Array<const char*>	folders;
+	bool8				verbose;
+};
 
-	FileInfo fileInfo = {};
-	File file = file_find_first( searchPattern, &fileInfo );
+static void Nuke_DeleteAllFilesAndCacheFoldersInternal( const FileInfo* fileInfo, void* user_data ) {
+	nukeContext_t* context = cast( nukeContext_t*, user_data );
 
-	do {
-		if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) || fileInfo.filename[0] == 0 ) {
-			continue;
+	if ( fileInfo->is_directory ) {
+		context->folders.add( fileInfo->full_filename );
+	} else {
+		if ( context->verbose ) {
+			printf( "Deleting file \"%s\"\n", fileInfo->full_filename );
 		}
 
-		const char* fileFullPath = tprintf( "%s%c%s", folder, PATH_SEPARATOR, fileInfo.filename );
-
-		if ( fileInfo.is_directory ) {
-			if ( verbose ) {
-				printf( "Found folder %s\n", fileFullPath );
-			}
-
-			NukeFolderInternal_r( fileFullPath, verbose );
-
-			if ( verbose ) {
-				printf( "Deleting folder %s\n", fileFullPath );
-			}
-
-			if ( !folder_delete( fileFullPath ) ) {
-				error( "Nuke failed to delete folder \"%s\".\n", fileFullPath );
-			}
-		} else {
-			if ( verbose ) {
-				printf( "Deleting file %s\n", fileFullPath );
-			}
-
-			if ( !file_delete( fileFullPath ) ) {
-				error( "Nuke failed to delete folder \"%s\".\n", fileFullPath );
-			}
+		if ( !file_delete( fileInfo->full_filename ) ) {
+			error( "Nuke failed to delete folder \"%s\".\n", fileInfo->full_filename );
 		}
-	} while ( file_find_next( &file, &fileInfo ) );
+	}
 }
 
-void NukeFolder_r( const char* folder, const bool8 deleteRoot, const bool8 verbose ) {
-	NukeFolderInternal_r( folder, verbose );
+void NukeFolder( const char* folder, const bool8 verbose, const bool8 deleteRoot, const bool8 failIfRootNotFound ) {
+	if ( !folder_exists( folder ) ) {
+		if ( failIfRootNotFound ) {
+			error( "Tried to nuke folder \"%s\"%s but that path doesn't exist.\n" );
+		}
+
+		return;
+	}
+
+	nukeContext_t nukeContext = {
+		.verbose = verbose
+	};
+
+	file_get_all_files_in_folder( folder, true, true, Nuke_DeleteAllFilesAndCacheFoldersInternal, &nukeContext );
+
+	RFor ( u64, subfolderIndex, 0, nukeContext.folders.count ) {
+		const char* subfolder = nukeContext.folders[subfolderIndex];
+
+		if ( verbose ) {
+			printf( "Deleting folder \"%s\"\n", subfolder );
+		}
+
+		if ( !folder_delete( subfolder ) ) {
+			error( "Failed to delete subfolder \"%s\" while nuking \"%s\".  You will need to do this manually.  Sorry.\n", subfolder, folder );
+		}
+	}
 
 	if ( deleteRoot ) {
 		if ( !folder_delete( folder ) ) {
-			errorCode_t errorCode = GetLastErrorCode();
-			error( "Nuke failed to delete root folder \"%s\".  You'll have to do this manually.  Error code " ERROR_CODE_FORMAT "\n", folder, errorCode );
+			error( "Failed to nuke root folder \"%s\" after deleting all the files and folders inside it.  You may need to do this manually.  Sorry.\n" );
 		}
 	}
 }
@@ -546,67 +564,44 @@ static bool8 FileMatchesFilter( const char* filename, const char* filter ) {
 	return *filterCopy == 0;
 }
 
-static void GetAllSourceFiles_r( const char* path, const char* subfolder, const char* searchFilter, std::vector<std::string>& outSourceFiles ) {
-	assert( path );
-	assert( searchFilter );
+struct sourceFileFindVisitorData_t {
+	std::vector<std::string>	sourceFiles;
+	const char*					searchFilter;
+};
 
-	const char* fullSearchPath = NULL;
-	if ( subfolder ) {
-		fullSearchPath = tprintf( "%s/%s/*", path, subfolder );
-	} else {
-		fullSearchPath = tprintf( "%s/*", path );
+static void SourceFileVisitor( const FileInfo* fileInfo, void* userData ) {
+	sourceFileFindVisitorData_t* visitorData2 = cast( sourceFileFindVisitorData_t*, userData );
+
+	if ( FileMatchesFilter( fileInfo->full_filename, visitorData2->searchFilter ) ) {
+		visitorData2->sourceFiles.push_back( fileInfo->full_filename );
 	}
-
-	FileInfo fileInfo;
-	File file = file_find_first( fullSearchPath, &fileInfo );
-
-	do {
-		if ( string_equals( fileInfo.filename, "." ) || string_equals( fileInfo.filename, ".." ) ) {
-			continue;
-		}
-
-		const char* fileInFolder = NULL;
-		if ( subfolder ) {
-			fileInFolder = tprintf( "%s/%s", subfolder, fileInfo.filename );
-		} else {
-			fileInFolder = tprintf( "%s", fileInfo.filename );
-		}
-
-		if ( fileInfo.is_directory ) {
-			GetAllSourceFiles_r( path, fileInFolder, searchFilter, outSourceFiles );
-		} else {
-			if ( FileMatchesFilter( fileInFolder, searchFilter ) ) {
-				outSourceFiles.push_back( fileInFolder );
-			}
-		}
-	} while ( file_find_next( &file, &fileInfo ) );
 }
 
 static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContext_t* context, const BuildConfig* config ) {
-	std::vector<std::string> sourceFiles;
+	sourceFileFindVisitorData_t visitorData = {};
 
 	For ( u64, sourceFileIndex, 0, config->source_files.size() ) {
 		const char* sourceFile = config->source_files[sourceFileIndex].c_str();
 
-		bool8 inputFileIsSameAsSourceFile = string_equals( sourceFile, context->inputFile );
-
 		const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
-		const char* sourceFilePath = NULL;
 
+		bool8 recursive = string_contains( sourceFile, "**" ) || string_contains( sourceFile, "/" );
+
+		// TODO(DM): 02/10/2025: needing this is (probably) a hack
+		// re-evaluate this
+		bool8 inputFileIsSameAsSourceFile = string_equals( sourceFile, context->inputFile );
 		if ( inputFileIsSameAsSourceFile ) {
-			GetAllSourceFiles_r( context->inputFilePath.data, NULL, sourceFileNoPath, sourceFiles );
+			visitorData.searchFilter = context->inputFile;
 		} else {
-			sourceFilePath = path_remove_file_from_path( sourceFile );
+			visitorData.searchFilter = tprintf( "%s%c%s", context->inputFilePath.data, '/', sourceFile );
+		}
 
-			if ( !sourceFilePath ) {
-				sourceFilePath = ".";
-			}
-
-			GetAllSourceFiles_r( context->inputFilePath.data, NULL, sourceFile, sourceFiles );
+		if ( !file_get_all_files_in_folder( context->inputFilePath.data, recursive, false, SourceFileVisitor, &visitorData ) ) {
+			fatal_error( "Failed to get source file(s) \"%s\".  This should never happen.\n", sourceFile );
 		}
 	}
 
-	return sourceFiles;
+	return visitorData.sourceFiles;
 }
 
 static void AddBuildConfigAndDependenciesUnique( buildContext_t* context, const BuildConfig* config, std::vector<BuildConfig>& outConfigs ) {
@@ -731,26 +726,12 @@ static bool8 WriteIncludeDependenciesFile( buildContext_t* context ) {
 	}
 
 	if ( !file_write_entire( includeDepsFilename, byteBuffer.data.data, byteBuffer.data.count ) ) {
-		errorCode_t errorCode = GetLastErrorCode();
-		error( "Failed to write file \"%s\".  Error code: " ERROR_CODE_FORMAT ".\n", errorCode );
+		errorCode_t errorCode = get_last_error_code();
+		error( "Failed to write file \"%s\".  Error code: " ERROR_CODE_FORMAT ".\n", includeDepsFilename, errorCode );
 		return false;
 	}
 
 	return true;
-}
-
-static const char* GetDefaultCompilerPath() {
-#ifdef BUILDER_RELEASE
-	return tprintf( "%s%c../clang/bin/clang", path_app_path(), PATH_SEPARATOR );
-#else
-	#if defined( _WIN64 )
-		const char* defaultCompilerPath = "clang_win64/bin/clang";
-	#elif defined( __linux__ )
-		const char* defaultCompilerPath = "clang_linux/bin/clang";
-	#endif
-
-	return tprintf( "%s%c..%c..%c..%c%s", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, defaultCompilerPath );
-#endif
 }
 
 int main( int argc, char** argv ) {
@@ -765,7 +746,7 @@ int main( int argc, char** argv ) {
 	core_init( MEM_MEGABYTES( 128 ) );	// TODO(DM): 26/03/2025: can we just use defaults for this now?
 	defer( core_shutdown() );
 
-	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+	printf( "Builder v%d.%d.%d RC0\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {
 		.configIndices	= hashmap_create( 1 ),	// TODO(DM): 30/03/2025: whats a reasonable default here?
@@ -841,7 +822,7 @@ int main( int argc, char** argv ) {
 
 			float64 startTime = time_ms();
 
-			NukeFolder_r( folderToNuke, false, true );
+			NukeFolder( folderToNuke, false, true, true );
 
 			float64 endTime = time_ms();
 
@@ -895,7 +876,35 @@ int main( int argc, char** argv ) {
 
 	// init default compiler backend (the version of clang that builder came with)
 	compilerBackend_t compilerBackend;
-	CreateCompilerBackend_Clang( &compilerBackend, GetDefaultCompilerPath() );
+	{
+#ifdef BUILDER_RELEASE
+		const char* defaultCompilerPath = tprintf( "%s%c../clang/bin/clang", path_app_path(), PATH_SEPARATOR );
+#else // BUILDER_RELEASE
+	#if defined( _WIN64 )
+		const char* defaultCompilerPath = "clang_win64/bin/clang";
+	#elif defined( __linux__ )
+		// clang.exe (on linux at least) isn't actually an exe, it's a text file that points to where the real clang.exe is
+		// so we need to read that file, extract the text from it, and then call that exe instead 
+		// TODO(DM): 22/09/2025: do we want to do this for ALL clang linux installs? or just our local one?
+		char* realClangBinaryName = NULL;
+		defer( file_free_buffer( &realClangBinaryName ) );
+		{
+			bool8 read = file_read_entire( "clang_linux/bin/clang", &realClangBinaryName );
+			assert( read );
+		}
+		const char* defaultCompilerPath = tprintf( "clang_linux/bin/%s", realClangBinaryName );
+	#endif
+#endif // BUILDER_RELEASE
+
+		const char* defaultCompilerPathFull = tprintf( "%s%c..%c..%c..%c%s", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, defaultCompilerPath );
+
+		CreateCompilerBackend_Clang( &compilerBackend, defaultCompilerPathFull );
+
+		// DM!!! HACK HACK HACK
+#ifdef __linux__
+		compilerBackend.linkerPath = tprintf( "%s%c..%c..%c..%cclang_linux%cbin%cllvm-ar", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
+#endif
+	}
 
 	compilerBackend.Init( &compilerBackend );
 	defer( compilerBackend.Shutdown( &compilerBackend ) );
@@ -907,6 +916,8 @@ int main( int argc, char** argv ) {
 	const char* userConfigFullBinaryName = NULL;
 	{
 		float64 userConfigBuildTimeStart = time_ms();
+
+		printf( "Doing user config build:\n" );
 
 		BuildConfig userConfigBuildConfig = {
 			.source_files = {
@@ -944,6 +955,11 @@ int main( int argc, char** argv ) {
 				"-Wno-missing-prototypes",	// otherwise the user has to forward declare functions like set_builder_options and thats annoying
 				"-Wno-reorder-init-list",	// allow users to initialize struct members in whatever order they want
 			},
+#ifdef __linux__
+			.additional_compiler_arguments = {
+				"-fPIC"
+			},
+#endif
 			.binary_name = defaultBinaryName,
 			.binary_folder = context.dotBuilderFolder.data,
 			.binary_type = BINARY_TYPE_DYNAMIC_LIBRARY,
@@ -970,7 +986,7 @@ int main( int argc, char** argv ) {
 				QUIT_ERROR();
 
 			case BUILD_RESULT_SKIPPED:
-				// nothing
+				printf( "Skipped!\n" );
 				break;
 		}
 
@@ -988,6 +1004,7 @@ int main( int argc, char** argv ) {
 	BuilderOptions options = {};
 
 	Library library = library_load( userConfigFullBinaryName );
+	assertf( library.ptr, "Failed to load the user-config build DLL \"%s\".  This should never happen!\n", userConfigFullBinaryName );
 	defer( library_unload( &library ) );
 
 	typedef void ( *setBuilderOptionsFunc_t )( BuilderOptions* options );
@@ -1076,7 +1093,7 @@ int main( int argc, char** argv ) {
 			if ( string_ends_with( options.compiler_path.c_str(), "clang" ) ) {
 				// nothing, clang already got initialized
 			} else if ( string_ends_with( options.compiler_path.c_str(), "cl" ) ) {
-#if _WIN32
+#ifdef _WIN32
 				CreateCompilerBackend_MSVC( &compilerBackend, options.compiler_path.c_str() );
 #else
 				error(
@@ -1213,8 +1230,8 @@ int main( int argc, char** argv ) {
 		printf( "Running pre-build code...\n" );
 
 		const char* oldCWD = path_current_working_directory();
-		SetCurrentDirectory( context.inputFilePath.data );
-		defer( SetCurrentDirectory( oldCWD ) );
+		path_set_current_directory( context.inputFilePath.data );
+		defer( path_set_current_directory( oldCWD ) );
 
 		preBuildFunc();
 	}
@@ -1240,7 +1257,7 @@ int main( int argc, char** argv ) {
 				printf( ", config \"%s\"", config->name.c_str() );
 			}
 
-			printf( "\n" );
+			printf( ":\n" );
 		}
 
 		// make all non-absolute additional include paths relative to the build source file
@@ -1273,12 +1290,6 @@ int main( int argc, char** argv ) {
 			// at this point its totally acceptable for finalSourceFilesToBuild to be empty
 			// this is because the compiler should be the one that tells the user they specified no valid source files to build with
 			// the compiler can and will throw an error for that, so let it
-
-			// the .build_info file wont store the full paths to the source files because the input path can change depending on whether we're building via visual studio or from the command line
-			// so we need to reconstruct the full paths to the source files ourselves
-			For ( u64, sourceFileIndex, 0, finalSourceFilesToBuild.size() ) {
-				finalSourceFilesToBuild[sourceFileIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, finalSourceFilesToBuild[sourceFileIndex].c_str() );
-			}
 
 			config->source_files = finalSourceFilesToBuild;
 		}
@@ -1316,8 +1327,8 @@ int main( int argc, char** argv ) {
 		printf( "Running post-build code...\n" );
 
 		const char* oldCWD = path_current_working_directory();
-		SetCurrentDirectory( context.inputFilePath.data );
-		defer( SetCurrentDirectory( oldCWD ) );
+		path_set_current_directory( context.inputFilePath.data );
+		defer( path_set_current_directory( oldCWD ) );
 
 		postBuildFunc();
 	}
@@ -1331,6 +1342,8 @@ int main( int argc, char** argv ) {
 	float64 totalTimeEnd = time_ms();
 
 	{
+		using namespace hlml;
+
 		printf( "Build finished:\n" );
 		printf( "    User config build:   %f ms%s\n", userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? " (skipped)" : "" );
 		if ( !doubleeq( compilerBackendInitTimeMS, -1.0 ) ) {
@@ -1348,3 +1361,7 @@ int main( int argc, char** argv ) {
 
 	return 0;
 }
+
+#ifdef __linux__
+#pragma clang diagnostic pop
+#endif //__linux__

@@ -42,16 +42,29 @@ SOFTWARE.
 ================================================================================================
 */
 
+#define INVALID_FILE_HANDLE U64_MAX
+
+#ifdef __linux__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpadded"
+#endif // __linux__
+
 struct File {
-	void*	ptr;
+	u64		handle;
 	u64		offset;
 };
 
+// TODO(DM): 05/10/2025: support for symlinks
 struct FileInfo {
-	bool8	is_directory;	// TODO(DM): change to fileAttributeFlags_t bit mask
-	u64		last_write_time;
-	char	filename[1024];	// TODO(DM): do this properly
+	bool8		is_directory;
+	u64			last_write_time;
+	u64			size_bytes;
+	const char*	filename;
+	const char*	full_filename;
 };
+
+typedef void ( *FileVisitCallback )( const FileInfo* file_info, void* user_data );
+
 
 // Opens the file for reading and writing.
 CORE_API File	file_open( const char* filename );
@@ -106,17 +119,20 @@ CORE_API bool8	file_write_line(File* file, const char* line);
 // Returns true if successfully deletes the file, otherwise returns false.
 CORE_API bool8	file_delete( const char* filename );
 
-// Returns the size of the file in bytes.
-CORE_API u64	file_get_size( const File file );
+// If the file exists sets 'out_size' to the size of the file and returns true, otherwise returns false.
+CORE_API bool8	file_get_size( const char* filename, u64* out_size );
 
-// Returns the first file found in the path 'path'.
-// Supports wildcard searches.
-CORE_API File	file_find_first( const char* path, FileInfo* out_file_info );
+// If the file exists sets 'out_last_write_time' to the timestamp of when the file was last written to and returns true, otherwise returns false.
+CORE_API bool8	file_get_last_write_time( const char* filename, u64* out_last_write_time );
 
-// After calling 'file_find_first()' returns the next file found, if any.
-// Returns true if a next file was found and fills in 'out_file_info'.
-// Returns false if no next file was found.
-CORE_API bool8	file_find_next( File* first_file, FileInfo* out_file_info );
+// Returns true if all files found in path can be successfully visited, otherwise returns false.
+// For each file found, 'visit_callback' gets called.
+// If 'visit_folders' is true then 'visit_callback' will also fire for each folder that gets visited.
+// 'user_data' can be NULL.
+CORE_API bool8	file_get_all_files_in_folder( const char* path, const bool8 recursive, const bool8 visit_folders, FileVisitCallback visit_callback, void* user_data );
+
+// Returns true if the file actually exists on the file system, otherwise returns false.
+CORE_API bool8	file_exists( const char* filename );
 
 // If the folder at the given path already exists then returns true.
 // If the folder at the given path does NOT exist but was successfully created then returns true.
@@ -129,6 +145,6 @@ CORE_API bool8	folder_delete( const char* path );
 // Returns true if the given folder path exists, otherwise returns false.
 CORE_API bool8	folder_exists( const char* path );
 
-// Returns the number of files that are found in 'path'.
-// TODO(DM): add recursive search
-CORE_API u64	folder_get_num_files( const char* path );
+#ifdef __linux__
+#pragma clang diagnostic pop
+#endif //__linux__

@@ -72,14 +72,14 @@ static void string_builder_appendfv( StringBuilder* builder, const char* fmt, va
 	assert( args );
 
 	StringBuilderBuffer* buffer = cast( StringBuilderBuffer*, mem_alloc( sizeof( StringBuilderBuffer ) ) );
-	buffer->next = NULL;
+	//buffer->next = NULL;
+	memset( buffer, 0, sizeof( StringBuilderBuffer ) );
 
-	int length = string_vsnprintf( NULL, 0, fmt, args );
-	length++;
+	buffer->length = trunc_cast( u32, string_vsnprintf( NULL, 0, fmt, args ) );
 
-	buffer->data = cast( char*, mem_alloc( cast( u64, length ) * sizeof( char ) ) );
-
-	string_vsnprintf( buffer->data, length, fmt, args );
+	buffer->data = cast( char*, mem_alloc( trunc_cast( u64, ( buffer->length + 1 ) ) * sizeof( char ) ) );
+	string_vsnprintf( buffer->data, buffer->length + 1, fmt, args );
+	buffer->data[buffer->length] = 0;
 
 	// if no head then this is the first element
 	if ( !builder->head ) {
@@ -89,6 +89,7 @@ static void string_builder_appendfv( StringBuilder* builder, const char* fmt, va
 
 	builder->tail->next = buffer;
 	builder->tail = buffer;
+	builder->tail->next = NULL;
 }
 
 void string_builder_appendf( StringBuilder* builder, const char* fmt, ... ) {
@@ -105,26 +106,36 @@ void string_builder_appendf( StringBuilder* builder, const char* fmt, ... ) {
 
 const char* string_builder_to_string( StringBuilder* builder ) {
 	char* result = NULL;
-	u64 length = 0;
+	u64 total_length = 0;
 	u64 offset = 0;
 
 	StringBuilderBuffer* current = builder->head;
 
+	if ( !current ) {
+		return NULL;
+	}
+
 	while ( current ) {
-		length += cast( u64, string_snprintf( NULL, 0, current->data ) );
+		total_length += current->length;
 
 		current = current->next;
 	}
 
-	result = cast( char*, mem_alloc( length * sizeof( char ) ) );
+	total_length += 1;
+
+	result = cast( char*, mem_alloc( total_length * sizeof( char ) ) );
 
 	current = builder->head;
 
 	while ( current ) {
-		offset += cast( u64, string_snprintf( result + offset, cast( s64, length ), current->data ) );
+		strncpy( result + offset, current->data, current->length );
+
+		offset += current->length;
 
 		current = current->next;
 	}
+
+	result[total_length - 1] = 0;
 
 	return result;
 }

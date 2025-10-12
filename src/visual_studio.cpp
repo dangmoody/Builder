@@ -40,8 +40,15 @@ SOFTWARE.
 #include "core/include/hashmap.h"
 #include "core/include/debug.h"
 
-#ifdef _WIN64
+#if defined( _WIN32 )
 #include <Shlwapi.h>
+#elif defined( __linux__ )
+#include <uuid/uuid.h>
+#endif
+
+#ifndef MAX_PATH
+	// Windows has the shortest filepaths - builder is cross platform, let's lock it down for all platforms to the min
+	#define MAX_PATH 260
 #endif
 
 
@@ -54,81 +61,71 @@ struct visualStudioFileFilter_t {
 	const char* folderInFilter;	// relative from the root code folder that it was found in
 };
 
-static void GetAllVisualStudioFiles_r( buildContext_t* context, const char* solutionFilename, const char* basePath, const char* subfolder, const std::vector<std::string>& fileExtensions, Array<visualStudioFileFilter_t>& outFilterFiles ) {
-	const char* fullSearchPath = NULL;
+struct visualStudioSourceFileVisitorData_t {
+	Array<visualStudioFileFilter_t>	filterFiles;
+	std::vector<std::string>		fileExtensions;
+	const char*						rootFolder;
+};
 
-	if ( string_ends_with( basePath, PATH_SEPARATOR ) ) {
-		if ( subfolder ) {
-			fullSearchPath = tprintf( "%s%s%c*", basePath, PATH_SEPARATOR, subfolder );
-		} else {
-			fullSearchPath = tprintf( "%s*", basePath );
-		}
-	} else {
-		if ( subfolder ) {
-			fullSearchPath = tprintf( "%s%c%s%c*", basePath, PATH_SEPARATOR, subfolder, PATH_SEPARATOR );
-		} else {
-			fullSearchPath = tprintf( "%s%c*", basePath, PATH_SEPARATOR );
+static void VisualStudio_OnFoundSourceFile( const FileInfo* fileInfo, void* user_data ) {
+	visualStudioSourceFileVisitorData_t* visitorData = cast( visualStudioSourceFileVisitorData_t*, user_data );
+
+	For ( u32, fileExtensionIndex, 0, visitorData->fileExtensions.size() ) {
+		if ( string_ends_with( fileInfo->filename, visitorData->fileExtensions[fileExtensionIndex].c_str() ) ) {
+			const char* folderInFilter = path_remove_file_from_path( fileInfo->full_filename );
+			folderInFilter += strlen( visitorData->rootFolder );	// trim the root folder from the path, we only want the subfolders
+
+			while ( *folderInFilter == '\\' || *folderInFilter == '/' ) {
+				folderInFilter++;
+			}
+
+			visualStudioFileFilter_t filterFile = {
+				.filenameAndPathFromRoot	= tprintf( "%s%c%s", folderInFilter, PATH_SEPARATOR, fileInfo->filename ),
+				.folderInFilter				= folderInFilter,
+			};
+
+			visitorData->filterFiles.add( filterFile );
+
+			break;
 		}
 	}
-
-	FileInfo fileInfo;
-	File file = file_find_first( fullSearchPath, &fileInfo );
-
-	do {
-		if ( string_equals( fileInfo.filename, "." ) ) {
-			continue;
-		}
-
-		if ( string_equals( fileInfo.filename, ".." ) ) {
-			continue;
-		}
-
-		if ( fileInfo.is_directory ) {
-			const char* folderName = NULL;
-			if ( subfolder ) {
-				folderName = tprintf( "%s%c%s", subfolder, PATH_SEPARATOR, fileInfo.filename );
-			} else {
-				folderName = tprintf( "%s", fileInfo.filename );
-			}
-
-			GetAllVisualStudioFiles_r( context, solutionFilename, basePath, folderName, fileExtensions, outFilterFiles );
-		} else {
-			For ( u64, fileExtensionIndex, 0, fileExtensions.size() ) {
-				if ( string_ends_with( fileInfo.filename, fileExtensions[fileExtensionIndex].c_str() ) ) {
-					const char* filenameAndPathFromRoot = NULL;
-					if ( subfolder ) {
-						filenameAndPathFromRoot = tprintf( "%s%c%s", subfolder, PATH_SEPARATOR, fileInfo.filename );
-					} else {
-						filenameAndPathFromRoot = tprintf( "%s", fileInfo.filename );
-					}
-
-					visualStudioFileFilter_t filterFile = {
-						.filenameAndPathFromRoot	= filenameAndPathFromRoot,
-						.folderInFilter				= subfolder,
-					};
-
-					outFilterFiles.add( filterFile );
-					break;
-				}
-			}
-		}
-	} while ( file_find_next( &file, &fileInfo ) );
 }
 
 // data layout comes from: https://learn.microsoft.com/en-us/windows/win32/api/guiddef/ns-guiddef-guid
+// DM: I don't see a good enough argument that this is common enough that we want this in Core, currently, so I'm leaving this here for now
 static const char* CreateVisualStudioGuid() {
+#if defined( _WIN32 )
 	GUID guid;
 	HRESULT hr = CoCreateGuid( &guid );
 	assert( hr == S_OK );
 
 	return tprintf( "%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X", guid.Data1, guid.Data2, guid.Data3, guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3], guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7] );
+#elif defined( __linux__ )
+	const u64 guidStringLength = 37;
+	char* guidString = cast( char*, mem_temp_alloc( guidStringLength * sizeof( char ) ) );
+
+	uuid_t uuid;
+	uuid_generate( uuid );
+	uuid_unparse_upper( uuid, guidString );
+
+	return guidString;
+#endif
 }
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunreachable-code"
 
 bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* options ) {
 	assert( context );
 	assert( context->inputFile );
 	assert( context->inputFilePath.data );
 	assert( options );
+
+#ifdef __linux__
+	error( "Visual Studio project generation on Linux is still WIP.  Come back later.  Sorry.\n" );
+
+	return false;
+#endif
 
 	Array<char*> projectFolders;
 
@@ -203,20 +200,20 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 	if ( !options->solution.path.empty() ) {
 		visualStudioProjectFilesPath = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, options->solution.path.c_str() );
 	} else {
-		visualStudioProjectFilesPath = cast( char*, context->inputFilePath.data );
+		visualStudioProjectFilesPath = context->inputFilePath.data;
 	}
-	visualStudioProjectFilesPath = path_canonicalise( visualStudioProjectFilesPath );
+	//visualStudioProjectFilesPath = path_canonicalise( visualStudioProjectFilesPath );
 
 	// delete old VS files if they exist
 	// but keep the root because we're about to re-populate it
-	NukeFolder_r( visualStudioProjectFilesPath, false, context->verbose );
+	NukeFolder( visualStudioProjectFilesPath, false, context->verbose, false );
 
 	const char* solutionFilename = tprintf( "%s%c%s.sln", visualStudioProjectFilesPath, PATH_SEPARATOR, options->solution.name.c_str() );
 
 	// get relative path from visual studio to the input file
 	char* pathFromSolutionToInputFile = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
 	memset( pathFromSolutionToInputFile, 0, MAX_PATH * sizeof( char ) );
-	PathRelativePathTo( pathFromSolutionToInputFile, solutionFilename, FILE_ATTRIBUTE_NORMAL, path_fix_slashes( cast( char*, context->inputFilePath.data ) ), FILE_ATTRIBUTE_DIRECTORY );
+	pathFromSolutionToInputFile = path_relative_path_to( visualStudioProjectFilesPath, context->inputFilePath.data );
 	assert( pathFromSolutionToInputFile != NULL || !string_equals( pathFromSolutionToInputFile, "" ) );
 
 	// give each project a guid
@@ -228,7 +225,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 	}
 
 	if ( !folder_create_if_it_doesnt_exist( visualStudioProjectFilesPath ) ) {
-		errorCode_t errorCode = GetLastErrorCode();
+		errorCode_t errorCode = get_last_error_code();
 		error( "Failed to create the Visual Studio Solution folder.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
 
 		return false;
@@ -240,7 +237,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 		bool8 written = file_write_entire( filename, msg, msgLength );
 
 		if ( !written ) {
-			errorCode_t errorCode = GetLastErrorCode();
+			errorCode_t errorCode = get_last_error_code();
 			error( "Failed to write \"%s\": " ERROR_CODE_FORMAT ".\n", filename, errorCode );
 
 			return false;
@@ -388,23 +385,22 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 				}
 			};
 
-			const char* pathFromSolutionToCode = pathFromSolutionToInputFile;
-
 			For ( u64, folderIndex, 0, project->code_folders.size() ) {
 				const char* codeFolder = project->code_folders[folderIndex].c_str();
 
-				Array<visualStudioFileFilter_t> filterFiles;
-				GetAllVisualStudioFiles_r( context, solutionFilename, cast( char*, context->inputFilePath.data ), codeFolder, project->file_extensions, filterFiles );
+				visualStudioSourceFileVisitorData_t visitorData = {
+					.fileExtensions	= project->file_extensions,
+					.rootFolder		= context->inputFilePath.data,
+				};
 
-				if ( filterFiles.count == 0 ) {
-					error(
-						"Project \"%s\" is trying to find the source file path \"%s\" but it doesn't exist (full path it's trying to find is: \"%s%c%s\").\n",
-						project->name.c_str(), codeFolder,
-						context->inputFilePath.data, PATH_SEPARATOR, codeFolder
-					);
+				const char* searchPath = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, codeFolder );
 
+				if ( !file_get_all_files_in_folder( searchPath, true, false, VisualStudio_OnFoundSourceFile, &visitorData ) ) {
+					error( "Failed to get all files in \"%s\" (including subdirectories).\n", searchPath );
 					return false;
 				}
+
+				Array<visualStudioFileFilter_t> filterFiles = visitorData.filterFiles;
 
 				For ( u64, filterFileIndex, 0, filterFiles.count ) {
 					visualStudioFileFilter_t* fileFilter = &filterFiles[filterFileIndex];
@@ -496,7 +492,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 				string_builder_appendf( &vcxprojContent, "\t</PropertyGroup>\n" );
 			}
 
-			string_builder_appendf( &vcxprojContent, tprintf( "\t<Import Project=\"$(VCTargetsPath)%cMicrosoft.Cpp.Default.props\" />\n", PATH_SEPARATOR ) );
+			string_builder_appendf( &vcxprojContent, tprintf( "\t<Import Project=\"$(VCTargetsPath)%cMicrosoft.Cpp.Default.props\" Condition=\"'$(OS)' == 'Windows_NT'\" />\n", PATH_SEPARATOR ) );
 
 			// for each config and platform, define config type, toolset, out dir, and intermediate dir
 			For ( u64, configIndex, 0, project->configs.size() ) {
@@ -504,13 +500,13 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 				const char* fullBinaryName = BuildConfig_GetFullBinaryName( &config->options );
 
-				const char* from = solutionFilename;
+				const char* from = visualStudioProjectFilesPath;
 				const char* to = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, fullBinaryName );
-				to = path_canonicalise( to );
+				//to = path_canonicalise( to );
 
 				char* pathFromSolutionToBinary = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
 				memset( pathFromSolutionToBinary, 0, MAX_PATH * sizeof( char ) );
-				PathRelativePathTo( pathFromSolutionToBinary, from, FILE_ATTRIBUTE_NORMAL, to, FILE_ATTRIBUTE_DIRECTORY );
+				pathFromSolutionToBinary = path_relative_path_to( from, to );
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcast-qual"
@@ -530,7 +526,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 				}
 			}
 
-			string_builder_appendf( &vcxprojContent, tprintf( "\t<Import Project=\"$(VCTargetsPath)%cMicrosoft.Cpp.props\" />\n", PATH_SEPARATOR ) );
+			string_builder_appendf( &vcxprojContent, tprintf( "\t<Import Project=\"$(VCTargetsPath)%cMicrosoft.Cpp.props\" Condition=\"'$(OS)' == 'Windows_NT'\" />\n", PATH_SEPARATOR ) );
 
 			// not sure what this is or why we need this one but visual studio seems to want it
 			string_builder_appendf( &vcxprojContent, "\t<ImportGroup Label=\"ExtensionSettings\">\n" );
@@ -647,7 +643,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 				WriteFilterFilesToVcxproj( &vcxprojContent, otherFiles, "None" );
 			}
 
-			string_builder_appendf( &vcxprojContent, tprintf( "\t<Import Project=\"$(VCTargetsPath)%cMicrosoft.Cpp.targets\" />\n", PATH_SEPARATOR ) );
+			string_builder_appendf( &vcxprojContent, tprintf( "\t<Import Project=\"$(VCTargetsPath)%cMicrosoft.Cpp.targets\" Condition=\"'$(OS)' == 'Windows_NT'\" />\n", PATH_SEPARATOR ) );
 
 			// not sure what this is or why we need this one but visual studio seems to want it
 			string_builder_appendf( &vcxprojContent, "\t<ImportGroup Label=\"ExtensionTargets\">\n" );
@@ -685,13 +681,13 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 					const char* fullBinaryName = BuildConfig_GetFullBinaryName( &config->options );
 
-					const char* from = solutionFilename;
+					const char* from = visualStudioProjectFilesPath;
 					const char* to = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, fullBinaryName );
-					to = path_canonicalise( to );
+					//to = path_canonicalise( to );
 
 					char* pathFromSolutionToBinary = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
 					memset( pathFromSolutionToBinary, 0, MAX_PATH * sizeof( char ) );
-					PathRelativePathTo( pathFromSolutionToBinary, from, FILE_ATTRIBUTE_NORMAL, to, FILE_ATTRIBUTE_DIRECTORY );
+					pathFromSolutionToBinary = path_relative_path_to( from, to );
 
 					For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
 						const char* platform = options->solution.platforms[platformIndex].c_str();
@@ -899,8 +895,12 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 			return false;
 		}
 
-		printf( "Done\n\n" );
+		printf( "Done\n" );
 	}
+
+	printf( "\n" );
 
 	return true;
 }
+
+#pragma clang diagnostic pop

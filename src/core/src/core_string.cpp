@@ -126,7 +126,7 @@ void string_printf( String* dst, const char* fmt, ... ) {
 	va_start( args, fmt );
 	defer( va_end( args ) );
 
-	u64 length = cast( u64, vsnprintf( NULL, 0, fmt, args ) );
+	u64 length = cast( u64, string_vsnprintf( NULL, 0, fmt, args ) );
 
 	string_reserve_internal( dst, length + 1 );
 

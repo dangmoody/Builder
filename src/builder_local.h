@@ -53,12 +53,10 @@ SOFTWARE.
 
 #define INTERMEDIATE_PATH				"intermediate"
 
-#ifdef _WIN64
-#define ERROR_CODE_FORMAT "0x%X"
-typedef DWORD errorCode_t;
-#else
-#error Unrecognised platform!
-#endif
+#ifdef __linux__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpadded"
+#endif //__linux__
 
 struct buildContext_t;
 
@@ -105,9 +103,9 @@ struct buildContext_t {
 	bool8								verbose;
 };
 
-errorCode_t	GetLastErrorCode();
+u64			GetLastFileWriteTime( const char* filename );
 
-void		NukeFolder_r( const char* folder, const bool8 deleteRoot, const bool8 verbose );
+void		NukeFolder( const char* folder, const bool8 deleteRoot, const bool8 verbose, const bool8 failIfRootNotFound );
 
 const char*	GetNextSlashInPath( const char* path );
 
@@ -123,3 +121,7 @@ bool8		GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* op
 inline u64 minull( const u64 x, const u64 y ) {
 	return ( x < y ) ? x : y;
 }
+
+#ifdef __linux__
+#pragma clang diagnostic pop
+#endif //__linux__

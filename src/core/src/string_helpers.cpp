@@ -26,6 +26,7 @@ SOFTWARE.
 ===========================================================================
 */
 
+#include <cstdio>
 #include <string_helpers.h>
 
 #include <debug.h>
@@ -104,7 +105,7 @@ void string_substring( const char* str, const u64 offset, const u64 count, char*
 int string_sprintf( char* buffer, const char* fmt, ... ) {
 	va_list args;
 	va_start( args, fmt );
-	int result = string_vsprintf( buffer, fmt, args );
+	int result = vsprintf( buffer, fmt, args );
 	va_end( args );
 	return result;
 }
@@ -113,19 +114,33 @@ int string_sprintf( char* buffer, const char* fmt, ... ) {
 int string_snprintf( char* buffer, const s64 buffer_length, const char* fmt, ... ) {
 	va_list args;
 	va_start( args, fmt );
-	int result = string_vsnprintf( buffer, buffer_length, fmt, args );
+	int result = vsnprintf( buffer, trunc_cast( u64, buffer_length ), fmt, args );
 	va_end( args );
+	return trunc_cast( int, result );
+}
+
+// TODO(DM): 1/1/2023: this needs to be replaced with a vsprintf #define that chooses stb if the use_stb define is set
+int string_vsprintf( char* buffer, const char* fmt, va_list args ) {
+	va_list args_copy;
+	va_copy( args_copy, args );
+
+	int result = stbsp_vsprintf( buffer, fmt, args_copy );
+
+	va_end( args_copy );
+
 	return result;
 }
 
 // TODO(DM): 1/1/2023: this needs to be replaced with a vsprintf #define that chooses stb if the use_stb define is set
-int string_vsprintf( char* buffer, const char* fmt, const va_list args ) {
-	return stbsp_vsprintf( buffer, fmt, args );
-}
+int string_vsnprintf( char* buffer, const s64 buffer_length, const char* fmt, va_list args ) {
+	va_list args_copy;
+	va_copy( args_copy, args );
 
-// TODO(DM): 1/1/2023: this needs to be replaced with a vsprintf #define that chooses stb if the use_stb define is set
-int string_vsnprintf( char* buffer, const s64 buffer_length, const char* fmt, const va_list args ) {
-	return stbsp_vsnprintf( buffer, trunc_cast( s32, buffer_length ), fmt, args );
+	int result = stbsp_vsnprintf( buffer, trunc_cast( s32, buffer_length ), fmt, args_copy );
+
+	va_end( args_copy );
+
+	return result;
 }
 
 char* tprintf( const char* fmt, ... ) {
@@ -141,13 +156,13 @@ char* tprintf( const char* fmt, ... ) {
 	return out_string;
 }
 
-char* vtprintf( const char* fmt, const va_list args ) {
+char* vtprintf( const char* fmt, va_list args ) {
 	assertf( fmt, "Format string MUST be non-NULL." );
 
-	s64 string_length = cast( s64, string_vsnprintf( NULL, 0, fmt, args ) );
-	string_length++;	// + 1 for null terminator
+	s64 string_length = string_vsnprintf( NULL, 0, fmt, args );
+	string_length += 1;	// + 1 for null terminator
 
-	char* out_string = cast( char*, mem_temp_alloc( cast( u64, string_length ) * sizeof( char ) ) );
+	char* out_string = cast( char*, mem_temp_alloc( trunc_cast( u64, string_length ) * sizeof( char ) ) );
 
 	string_vsnprintf( out_string, string_length, fmt, args );
 	out_string[string_length - 1] = 0;

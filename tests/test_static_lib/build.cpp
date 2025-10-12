@@ -17,7 +17,12 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 		.source_files			= { "program/program.cpp" },
 		.additional_includes	= { "lib" },
 		.additional_lib_paths	= { "bin" },
+		// TODO(DM): 07/10/2025: does this mean we want build scripts to ignore file extensions?
+#ifdef _WIN32
 		.additional_libs		= { "test_static_lib.lib" },
+#else
+		.additional_libs		= { "test_static_lib.a" },
+#endif
 	};
 
 	// only need to add program config

@@ -41,7 +41,7 @@ if /I [%config%]==[release] (
 
 set source_files=tests\\tests_main.cpp
 
-set defines=-D_CRT_SECURE_NO_WARNINGS -DCORE_SUC -DCORE_USE_SUBPROCESS
+set defines=-D_CRT_SECURE_NO_WARNINGS -DCORE_SUC -DCORE_USE_SUBPROCESS -DHLML_NAMESPACE
 if /I [%config%]==[debug] (
 	set defines=!defines! -D_DEBUG
 )

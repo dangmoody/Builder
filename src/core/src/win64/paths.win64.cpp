@@ -39,28 +39,12 @@ SOFTWARE.
 #include <Windows.h>
 #include <Shlwapi.h>
 
-static const char* get_last_slash( const char* path ) {
-	const char* last_slash = NULL;
-	const char* last_back_slash = strrchr( path, '\\' );
-	const char* last_forward_slash = strrchr( path, '/' );
-
-	if ( !last_back_slash && !last_forward_slash ) {
-		return NULL;
-	}
-
-	if ( cast( u64, last_back_slash ) > cast( u64, last_forward_slash ) ) {
-		last_slash = last_back_slash;
-	} else {
-		last_slash = last_forward_slash;
-	}
-
-	return last_slash;
-}
-
 /*
 ================================================================================================
 
 	Paths
+
+	Win64-specific functionality
 
 ================================================================================================
 */
@@ -86,53 +70,11 @@ const char* path_current_working_directory() {
 }
 
 const char* path_absolute_path( const char* file ) {
+	assert( file );
+
 	char* absolute_path = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
 	GetFullPathName( file, MAX_PATH, absolute_path, NULL );
 	return absolute_path;
-}
-
-const char* path_remove_file_from_path( const char* path ) {
-	const char* last_slash = get_last_slash( path );
-
-	if ( !last_slash ) {
-		return NULL;
-	}
-
-	u64 path_length = cast( u64, last_slash ) - cast( u64, path );
-
-	char* result = cast( char*, mem_temp_alloc( ( path_length + 1 ) * sizeof( char ) ) );
-	strncpy( result, path, path_length * sizeof( char ) );
-	result[path_length] = 0;
-
-	return result;
-}
-
-const char* path_remove_path_from_file( const char* path ) {
-	const char* last_slash = get_last_slash( path );
-
-	if ( !last_slash ) {
-		last_slash = path;
-	} else {
-		last_slash++;
-	}
-
-	return last_slash;
-}
-
-const char* path_remove_file_extension( const char* filename ) {
-	const char* dot = strrchr( filename, '.' );
-
-	if ( !dot ) {
-		return filename;
-	}
-
-	u64 result_length = cast( u64, dot ) - cast( u64, filename );
-
-	char* result = cast( char*, mem_temp_alloc( ( result_length + 1 ) * sizeof( char ) ) );
-	strncpy( result, filename, result_length * sizeof( char ) );
-	result[result_length] = 0;
-
-	return result;
 }
 
 bool8 path_is_absolute( const char* path ) {
@@ -144,6 +86,8 @@ bool8 path_is_absolute( const char* path ) {
 }
 
 const char* path_canonicalise( const char* path ) {
+	assert( path );
+
 	const char* path_copy = path_fix_slashes( path );
 
 	u64 max_path_length = ( strlen( path_copy ) + 1 ) * sizeof( char );
@@ -177,6 +121,28 @@ const char* path_fix_slashes( const char* path ) {
 	}
 
 	return result;
+}
+
+// TODO(DM): 10/10/2025: I'm very tempted to remove this implementation and make the linux one work cross platform
+// for some reason this windows implementation cares whether or not the files we are referencing are files or directories and it starts returning very wrong answers if we are wrong about the file type we specify vs the actual path
+// the linux implementation doesnt care about any of that and instead just compares the strings (which is all it needs to do)
+char* path_relative_path_to( const char* path_from, const char* path_to ) {
+	assert( path_from );
+	assert( path_to );
+
+	char* result = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
+
+	if ( !PathRelativePathTo( result, path_fix_slashes( path_from ), FILE_ATTRIBUTE_DIRECTORY, path_fix_slashes( path_to ), FILE_ATTRIBUTE_DIRECTORY ) ) {
+		error( "Unable to compute relative path, ensure provided paths exist.\nFrom Path: %s\nTo Path: %s", path_from, path_to );
+	}
+
+	return result;
+}
+
+bool8 path_set_current_directory( const char* path ) {
+	assert( path );
+
+	return cast( bool8, SetCurrentDirectory( path ) );
 }
 
 #endif // _WIN32

@@ -21,14 +21,14 @@ echo Building config "%config%"...
 pushd %~dp0
 
 set bin_folder="bin\\win64\\"%config%
-set intermediate_path=%bin_folder%"\\intermediate"
+set intermediate_folder=%bin_folder%"\\intermediate"
 
 if not exist %bin_folder% (
 	mkdir %bin_folder%
 )
 
-if not exist %intermediate_path% (
-	mkdir %intermediate_path%
+if not exist %intermediate_folder% (
+	mkdir %intermediate_folder%
 )
 
 set symbols=-g
@@ -43,7 +43,7 @@ if /I [%config%]==[release] (
 
 set source_files=src\\builder.cpp src\\visual_studio.cpp src\\core\\src\\core.suc.cpp src\\backend_clang.cpp src\\backend_msvc.cpp
 
-set defines=-D_CRT_SECURE_NO_WARNINGS -DCORE_USE_XXHASH -DCORE_USE_SUBPROCESS -DCORE_SUC -DHASHMAP_HIDE_MISSING_KEY_WARNING
+set defines=-D_CRT_SECURE_NO_WARNINGS -DCORE_USE_XXHASH -DCORE_USE_SUBPROCESS -DCORE_SUC -DHASHMAP_HIDE_MISSING_KEY_WARNING -DHLML_NAMESPACE
 if /I [%config%]==[debug] (
 	set defines=!defines! -D_DEBUG
 )

@@ -87,6 +87,9 @@
     <ClCompile Include="test_compiler_path\test_compiler_path.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="test_msvc\test_msvc.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="test_multiple_source_files\src\marco_polo.h">

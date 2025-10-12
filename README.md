@@ -21,7 +21,7 @@ Builder supports Clang, MSVC, and GCC.
 
 ## Usage
 
-Builds are configured via a source file which you pass as an argument when calling `builder.exe`.
+Builds are configured via a source file which you pass as an argument when calling Builder.
 
 ```cpp
 // build.cpp
@@ -51,7 +51,7 @@ Builder will now build your program.
 
 If you don't write `set_builder_options` then Builder can still build your program, it will just use the defaults:
 * Builder will use the portable install of Clang that it comes with as the compiler.
-* The program name will be the name of the source file you specified, except it will end with `.exe` instead of `.cpp`.
+* The program name will be the name of the source file you specified, except it will end with `.exe` (on Windows, on Linux there won't be a file extension for executables) instead of `.cpp`.
 * The program will be put in the same folder as the source file.
 
 Run `builder -h` or `builder --help` for help in the command line.
@@ -64,7 +64,7 @@ Builder supports building different "configs" in the way you may know them from 
 To specify a config in Builder you have to do two things:
 
 1. When writing your `BuildConfig`, set the `name` member to the name of your config.
-2. When you run `builder.exe`, pass in the command line argument `--config=<config name here>`
+2. When you run Builder, pass in the command line argument `--config=<config name here>`.
 
 Example usage:
 
@@ -119,7 +119,7 @@ By default, Builder comes with it's own portable install of Clang and, by defaul
 To override this, and to make Builder use whatever compiler you want (so long as it's either Clang, MSVC, or GCC) then do the following inside `set_builder_options`:
 
 ```cpp
-options->compiler_path = "C:/Program Files/mingw64/bin/gcc.exe";
+options->compiler_path = "C:/Program Files/mingw64/bin/gcc";
 ```
 
 You can also tell Builder that you want to use a specific compiler version like so:
@@ -197,7 +197,7 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 }
 ```
 
-Every project that Builder generates is a Makefile project that calls `builder.exe`.  Therefore, changes that you make to any of the project properties in Visual Studio will not actually do anything (this is a Visual Studio problem).  If you want to change your project properties you must re-generate your Visual Studio solution.
+Every project that Builder generates is a Makefile project that calls Builder.  Therefore, changes that you make to any of the project properties in Visual Studio will not actually do anything (this is a Visual Studio problem).  If you want to change your project properties you must re-generate your Visual Studio solution.
 
 
 ## Motivation
@@ -222,7 +222,7 @@ Please see [Contributing.md](doc/Contributing.md).
 
 Builder would not have been possible without the following people who deserve, at the very least, a special thanks:
 
-* Tom Whitcombe (Visual Studio project generation)
-* Mike Young (Linux port)
 * Dale Green
 * Yann Richeux
+* Tom Whitcombe (Visual Studio project generation)
+* Mike Young (Linux port)

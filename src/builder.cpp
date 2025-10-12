@@ -746,7 +746,7 @@ int main( int argc, char** argv ) {
 	core_init( MEM_MEGABYTES( 128 ) );	// TODO(DM): 26/03/2025: can we just use defaults for this now?
 	defer( core_shutdown() );
 
-	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+	printf( "Builder v%d.%d.%d RC0\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {
 		.configIndices	= hashmap_create( 1 ),	// TODO(DM): 30/03/2025: whats a reasonable default here?
@@ -954,10 +954,12 @@ int main( int argc, char** argv ) {
 			.ignore_warnings = {
 				"-Wno-missing-prototypes",	// otherwise the user has to forward declare functions like set_builder_options and thats annoying
 				"-Wno-reorder-init-list",	// allow users to initialize struct members in whatever order they want
-#ifdef __linux__
-				"-fPIC",	// DM!!! HACK HACK HACK! move this into its own field
-#endif
 			},
+#ifdef __linux__
+			.additional_compiler_arguments = {
+				"-fPIC"
+			},
+#endif
 			.binary_name = defaultBinaryName,
 			.binary_folder = context.dotBuilderFolder.data,
 			.binary_type = BINARY_TYPE_DYNAMIC_LIBRARY,
@@ -1288,12 +1290,6 @@ int main( int argc, char** argv ) {
 			// at this point its totally acceptable for finalSourceFilesToBuild to be empty
 			// this is because the compiler should be the one that tells the user they specified no valid source files to build with
 			// the compiler can and will throw an error for that, so let it
-
-			// the .build_info file wont store the full paths to the source files because the input path can change depending on whether we're building via visual studio or from the command line
-			// so we need to reconstruct the full paths to the source files ourselves
-			/*For ( u64, sourceFileIndex, 0, finalSourceFilesToBuild.size() ) {
-				finalSourceFilesToBuild[sourceFileIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, finalSourceFilesToBuild[sourceFileIndex].c_str() );
-			}*/
 
 			config->source_files = finalSourceFilesToBuild;
 		}

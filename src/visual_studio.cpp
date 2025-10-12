@@ -118,6 +118,12 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 	assert( context->inputFilePath.data );
 	assert( options );
 
+#ifdef __linux__
+	error( "Visual Studio project generation on Linux is still WIP.  Come back later.  Sorry.\n" );
+
+	return false;
+#endif
+
 	Array<char*> projectFolders;
 
 	Hashmap* projectFolderIndices = hashmap_create( 1 );
@@ -634,7 +640,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 				WriteFilterFilesToVcxproj( &vcxprojContent, otherFiles, "None" );
 			}
 
-			string_builder_appendf( &vcxprojContent, tprintf( "\t<Import Project=\"$(VCTargetsPath)%cMicrosoft.Cpp.targets\" />\n", PATH_SEPARATOR ) );
+			string_builder_appendf( &vcxprojContent, tprintf( "\t<Import Project=\"$(VCTargetsPath)%cMicrosoft.Cpp.targets\" Condition=\"'$(OS)' == 'Windows_NT'\" />\n", PATH_SEPARATOR ) );
 
 			// not sure what this is or why we need this one but visual studio seems to want it
 			string_builder_appendf( &vcxprojContent, "\t<ImportGroup Label=\"ExtensionTargets\">\n" );
@@ -886,8 +892,10 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 			return false;
 		}
 
-		printf( "Done\n\n" );
+		printf( "Done\n" );
 	}
+
+	printf( "\n" );
 
 	return true;
 }

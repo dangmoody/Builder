@@ -287,6 +287,10 @@ static bool8 Clang_CompileSourceFile( compilerBackend_t* backend, const char* so
 		args.add( config->ignore_warnings[ignoreWarningIndex].c_str() );
 	}
 
+	For ( u64, additionalArgumentIndex, 0, config->additional_compiler_arguments.size() ) {
+		args.add( config->additional_compiler_arguments[additionalArgumentIndex].c_str() );
+	}
+
 	s32 exitCode = RunProc( &args, NULL, PROC_FLAG_SHOW_ARGS | PROC_FLAG_SHOW_STDOUT );
 
 	ReadDependencyFile( depFilename, clangState->includeDependencies );

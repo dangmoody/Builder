@@ -121,12 +121,6 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 	assert( context->inputFilePath.data );
 	assert( options );
 
-#ifdef __linux__
-	error( "Visual Studio project generation on Linux is still WIP.  Come back later.  Sorry.\n" );
-
-	return false;
-#endif
-
 	Array<char*> projectFolders;
 
 	Hashmap* projectFolderIndices = hashmap_create( 1 );

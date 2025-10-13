@@ -75,7 +75,7 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	BuildConfig debug = {
 		.name = "debug",	// If you wanted to use this config, you'd pass --config=debug in the command line.
 		.binary_name = "kenneth",
-		.binary_folder = "bin\\debug",
+		.binary_folder = "bin/debug",
 		.remove_symbols = false,
 		.optimization_level = OPTIMIZATION_LEVEL_O0,
 	};
@@ -83,7 +83,7 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	BuildConfig release = {
 		.name = "release",	// If you wanted to use this config, you'd pass --config=release in the command line.
 		.binary_name = "kenneth",
-		.binary_folder = "bin\\release",
+		.binary_folder = "bin/release",
 		.remove_symbols = true,
 		.optimization_level = OPTIMIZATION_LEVEL_O3,
 	};

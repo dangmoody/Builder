@@ -112,6 +112,9 @@ static const char* CreateVisualStudioGuid() {
 #endif
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunreachable-code"
+
 bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* options ) {
 	assert( context );
 	assert( context->inputFile );
@@ -899,3 +902,5 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 	return true;
 }
+
+#pragma clang diagnostic pop

@@ -25,10 +25,20 @@ set intermediate_folder=%bin_folder%"\\intermediate"
 
 if not exist %bin_folder% (
 	mkdir %bin_folder%
+
+	if %errorlevel% NEQ 0 (
+		echo ERROR: Failed to create bin folder "%bin_folder%"
+		exit /B %errorlevel%
+	)
 )
 
 if not exist %intermediate_folder% (
 	mkdir %intermediate_folder%
+
+	if %errorlevel% NEQ 0 (
+		echo ERROR: Failed to create intermediate folder "%intermediate_folder%"
+		exit /B %errorlevel%
+	)
 )
 
 set symbols=-g
@@ -69,14 +79,16 @@ set args=clang_win64\\bin\\clang -std=c++20 -o %bin_folder%\\builder.exe %symbol
 echo %args%
 %args%
 
-@REM xcopy /v /y /f %bin_folder%\\builder.exe .\\
+if %errorlevel% NEQ 0 (
+	echo ERROR: Build failed
+	exit /B %errorlevel%
+)
 
 popd
 
-goto :EOF
+exit /B 0
 
 
 :ShowUsage
 echo Usage: build.bat [debug^|release]
-
-goto :EOF
+exit /B 1

@@ -11,6 +11,8 @@ Builder is a build tool that lets you configure the compilation of your C++ prog
 
 Builder supports Clang, MSVC, and GCC.
 
+You can also generate Visual Studio solutions using Builder (see below).
+
 
 ## Installation
 

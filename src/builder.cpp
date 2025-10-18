@@ -219,6 +219,7 @@ static const char* BuildConfig_ToString( const BuildConfig* config ) {
 	PrintSTDStringArray( "additional_lib_paths", config->additional_lib_paths );
 	PrintSTDStringArray( "additional_libs", config->additional_libs );
 	PrintSTDStringArray( "ignore_warnings", config->ignore_warnings );
+	PrintSTDStringArray( "additional_compiler_arguments", config->additional_compiler_arguments );
 
 	PrintField( "binary_name", config->binary_name.c_str() );
 	PrintField( "binary_folder", config->binary_folder.c_str() );

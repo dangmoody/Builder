@@ -12,7 +12,9 @@ v0.9.0, <RELEASE DATE HERE>:
 * Added BuildConfig::additional_compiler_arguments.
 	* These get added to the end of your final list of arguments that you will send to the compiler.
 	* Useful for things like -fPIC etc.
-* Fixed generated Visual Studio solutions not checking to see if they were on Windows before including some Windows-specific dependencies.
+* Visual Studio:
+	* Fixed generated Visual Studio solutions not checking to see if they were on Windows before including some Windows-specific dependencies.
+	* Fixed Visual Studio installations sometimes not getting detected.
 * Log when doing (and skipping) user config builds.
 
 ----------------------------------------------------------------

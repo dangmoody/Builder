@@ -105,9 +105,12 @@ static void OnMSVCVersionFound( const FileInfo* fileInfo, void* userData ) {
 //================================================================
 
 static bool8 MSVC_Init( compilerBackend_t* backend ) {
-	auto ParseTagString = []( const char* fileBuffer, const char* tag, std::string& outString ) {
+	auto ParseTagString = []( const char* fileBuffer, const char* tag, std::string& outString ) -> bool8 {
 		const char* lineStart = strstr( fileBuffer, tag );
-		assert( lineStart );
+		if ( !lineStart ) {
+			return false;
+		}
+
 		lineStart += strlen( tag );
 
 		while ( *lineStart == ' ' ) {
@@ -117,8 +120,11 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 		const char* lineEnd = NULL;
 		if ( !lineEnd ) lineEnd = strchr( lineStart, '\r' );
 		if ( !lineEnd ) lineEnd = strchr( lineStart, '\n' );
+		assert( lineEnd );
 
 		outString = std::string( lineStart, lineEnd );
+
+		return true;
 	};
 
 	auto ParseTagArray = []( const char* fileBuffer, const char* tag, std::vector<std::string>& outArray ) {
@@ -159,10 +165,11 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 
 	// call vswhere.exe to get the MSVC root folder
 	{
-		const char* defaultVSWherePath = "C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe";
-
 		Array<const char*> args;
-		args.add( defaultVSWherePath );
+		args.add( "C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe" );
+		args.add( "-all" );
+		args.add( "-products" );
+		args.add( "*" );
 
 		Process* process = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
 
@@ -187,7 +194,13 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 
 		const char* outputBuffer = string_builder_to_string( &processStdout );
 
-		ParseTagString( outputBuffer, "installationPath:", msvcRootFolder );
+		if ( !ParseTagString( outputBuffer, "installationPath:", msvcRootFolder ) ) {
+			error(
+				"Failed to find MSVC tag \"installationPath\" from vswhere.exe.\n"
+				"This means you don't actually have an installation of MSVC (cl.exe) on your machine.  You need to go and install that.\n"
+			);
+			return false;
+		}
 
 		process_destroy( process );
 		process = NULL;

@@ -50,7 +50,7 @@ static const char* GetFileExtensionFromBinaryType( BinaryType type ) {
 	return "ERROR";
 }
 
-static s32 RunProc( Array<const char*>* args, const bool8 showStdout = false ) {
+static s32 RunProc( Array<const char*>* args, String* outStdout = NULL, const bool8 showStdout = false ) {
 	assert( args );
 	assert( args->count > 0 );
 
@@ -72,11 +72,20 @@ static s32 RunProc( Array<const char*>* args, const bool8 showStdout = false ) {
 
 	defer( process_destroy( process ) );
 
-	if ( showStdout ) {
-		char buffer[1024];
-		while ( process_read_stdout( process, buffer, count_of( buffer ) ) ) {
+	StringBuilder sb = {};
+	string_builder_reset( &sb );
+
+	char buffer[1024] = {};
+	while ( process_read_stdout( process, buffer, count_of( buffer ) ) ) {
+		string_builder_appendf( &sb, buffer );
+
+		if ( showStdout ) {
 			printf( "%s", buffer );
 		}
+	}
+
+	if ( outStdout ) {
+		*outStdout = string_builder_to_string( &sb );
 	}
 
 	s32 exitCode = process_join( process );
@@ -137,7 +146,6 @@ TEMPER_TEST_PARAMETRIC( Compile_SetBuilderOptions, TEMPER_FLAG_SHOULD_RUN, const
 	args.add( tprintf( "--config=%s", config ) );
 
 	s32 exitCode = RunProc( &args );
-
 	TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 
 	TEMPER_CHECK_TRUE( folder_exists( tprintf( "tests/test_set_builder_options/bin/%s", config ) ) );
@@ -333,6 +341,50 @@ TEMPER_TEST( RebuildSkipping, TEMPER_FLAG_SHOULD_SKIP ) {
 }
 
 TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
+	std::string msbuildInstallationPath;
+
+	// detect where msbuild is stored
+	{
+		String vswhereStdout;
+
+		Array<const char*> args;
+		args.add( "C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe" );
+		args.add( "-latest" );
+		args.add( "-products" );
+		args.add( "*" );
+		args.add( "-requires" );
+		args.add( "Microsoft.Component.MSBuild" );
+
+		// fail test if vswhere errors
+		s32 exitCode = RunProc( &args, &vswhereStdout, true );
+		TEMPER_CHECK_TRUE_M( exitCode == 0, "Failed to run vswhere.exe properly.  Exit code actually returned %d.\n", exitCode );
+
+		// fail test if we cant find the tag in the output that were looking for
+		// DM!!! this lambda is duplicated! unify!
+		auto ParseTagString = []( const char* fileBuffer, const char* tag, std::string& outString ) -> bool8 {
+			const char* lineStart = strstr( fileBuffer, tag );
+			if ( !lineStart ) {
+				return false;
+			}
+
+			lineStart += strlen( tag );
+
+			while ( *lineStart == ' ' ) {
+				lineStart++;
+			}
+
+			const char* lineEnd = NULL;
+			if ( !lineEnd ) lineEnd = strchr( lineStart, '\r' );
+			if ( !lineEnd ) lineEnd = strchr( lineStart, '\n' );
+			assert( lineEnd );
+
+			outString = std::string( lineStart, lineEnd );
+
+			return true;
+		};
+		TEMPER_CHECK_TRUE_M( ParseTagString( vswhereStdout.data, "installationPath:", msbuildInstallationPath ), "Failed to query for MSBuild installation path using vswhere.exe.\n" );
+	}
+
 	// generate the solution
 	{
 		Array<const char*> args;
@@ -348,14 +400,14 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 	{
 		Array<const char*> args;
 #if defined( _WIN32 )
-		args.add( "C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/MSBuild.exe" );	// TODO(DM): query for this instead
+		args.add( tprintf( "%s/MSBuild/Current/Bin/MSBuild.exe", msbuildInstallationPath.c_str() ) );	// TODO(DM): query for this instead
 #elif defined( __linux__ )
 		args.add( "msbuild" );
 #endif
 		args.add( "tests/test_generate_visual_studio_files/visual_studio/app.vcxproj" );
 		args.add( "/property:Platform=x64" );
 
-		s32 exitCode = RunProc( &args, true );
+		s32 exitCode = RunProc( &args, NULL, true );
 
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 	}

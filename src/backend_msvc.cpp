@@ -174,7 +174,7 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 		Process* process = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
 
 		if ( !process ) {
-			error( "I can't find vswhere.exe in teh default install directory on your PC (\"%s\").  I need this to be able to build with MSVC.  Sorry.\n" );
+			error( "I can't find vswhere.exe in the default install directory on your PC (\"%s\").  I need this to be able to build with MSVC.  Sorry.\n" );
 			return false;
 		}
 

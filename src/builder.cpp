@@ -882,7 +882,7 @@ int main( int argc, char** argv ) {
 		const char* defaultCompilerPath = tprintf( "%s%c../clang/bin/clang", path_app_path(), PATH_SEPARATOR );
 #else // BUILDER_RELEASE
 	#if defined( _WIN64 )
-		const char* defaultCompilerPath = "clang_win64/bin/clang";
+		const char* defaultCompilerPath = "clang/bin/clang";
 	#elif defined( __linux__ )
 		// clang.exe (on linux at least) isn't actually an exe, it's a text file that points to where the real clang.exe is
 		// so we need to read that file, extract the text from it, and then call that exe instead 
@@ -890,10 +890,10 @@ int main( int argc, char** argv ) {
 		char* realClangBinaryName = NULL;
 		defer( file_free_buffer( &realClangBinaryName ) );
 		{
-			bool8 read = file_read_entire( "clang_linux/bin/clang", &realClangBinaryName );
+			bool8 read = file_read_entire( "clang/bin/clang", &realClangBinaryName );
 			assert( read );
 		}
-		const char* defaultCompilerPath = tprintf( "clang_linux/bin/%s", realClangBinaryName );
+		const char* defaultCompilerPath = tprintf( "clang/bin/%s", realClangBinaryName );
 	#endif
 #endif // BUILDER_RELEASE
 
@@ -903,7 +903,7 @@ int main( int argc, char** argv ) {
 
 		// DM!!! HACK HACK HACK
 #ifdef __linux__
-		compilerBackend.linkerPath = tprintf( "%s%c..%c..%c..%cclang_linux%cbin%cllvm-ar", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
+		compilerBackend.linkerPath = tprintf( "%s%c..%c..%c..%cclang%cbin%cllvm-ar", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
 #endif
 	}
 

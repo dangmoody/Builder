@@ -879,32 +879,12 @@ int main( int argc, char** argv ) {
 	compilerBackend_t compilerBackend;
 	{
 #ifdef BUILDER_RELEASE
-		const char* defaultCompilerPath = tprintf( "%s%c../clang/bin/clang", path_app_path(), PATH_SEPARATOR );
-#else // BUILDER_RELEASE
-	#if defined( _WIN64 )
-		const char* defaultCompilerPath = "clang/bin/clang";
-	#elif defined( __linux__ )
-		// clang.exe (on linux at least) isn't actually an exe, it's a text file that points to where the real clang.exe is
-		// so we need to read that file, extract the text from it, and then call that exe instead 
-		// TODO(DM): 22/09/2025: do we want to do this for ALL clang linux installs? or just our local one?
-		char* realClangBinaryName = NULL;
-		defer( file_free_buffer( &realClangBinaryName ) );
-		{
-			bool8 read = file_read_entire( "clang/bin/clang", &realClangBinaryName );
-			assert( read );
-		}
-		const char* defaultCompilerPath = tprintf( "clang/bin/%s", realClangBinaryName );
-	#endif
-#endif // BUILDER_RELEASE
-
-		const char* defaultCompilerPathFull = tprintf( "%s%c..%c..%c..%c%s", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, defaultCompilerPath );
-
-		CreateCompilerBackend_Clang( &compilerBackend, defaultCompilerPathFull );
-
-		// DM!!! HACK HACK HACK
-#ifdef __linux__
-		compilerBackend.linkerPath = tprintf( "%s%c..%c..%c..%cclang%cbin%cllvm-ar", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
+		const char* defaultCompilerPath = tprintf( "%s%c..%cclang%cbin%cclang", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
+#else
+		const char* defaultCompilerPath = tprintf( "%s%c..%c..%c..%cclang%cbin%cclang", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
 #endif
+
+		CreateCompilerBackend_Clang( &compilerBackend, defaultCompilerPath );
 	}
 
 	compilerBackend.Init( &compilerBackend );

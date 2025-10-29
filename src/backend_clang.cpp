@@ -497,13 +497,26 @@ static String GCC_GetCompilerVersion( compilerBackend_t* backend ) {
 }
 
 void CreateCompilerBackend_Clang( compilerBackend_t* outBackend, const char* compilerPath ) {
-	*outBackend = compilerBackend_t {
-		.compilerPath								= compilerPath,
 #if defined( _WIN32 )
-		.linkerPath									= "lld-link",
+	const char* clangExe = "clang";
+	const char* linkerExe = "lld-link";
 #elif defined( __linux__ )
-		.linkerPath									= "llvm-ar",
+	// clang.exe (on linux at least) isn't actually an exe, it's a text file that points to where the real clang.exe is
+	// so we need to read that file, extract the text from it, and then call that exe instead 
+	// TODO(DM): 22/09/2025: do we want to do this for ALL clang linux installs? or just our local one?
+	char* clangExe = NULL;
+	defer( file_free_buffer( &clangExe ) );
+	{
+		bool8 read = file_read_entire( tprintf( "%s/clang", compilerPath ), &clangExe );
+		assert( read );
+	}
+
+	const char* linkerExe = "llvm-ar";
+#else
+#error Unrecognised platform.
 #endif
+
+	*outBackend = compilerBackend_t {
 		.data										= NULL,
 		.Init										= Clang_Init,
 		.Shutdown									= Clang_Shutdown,
@@ -512,12 +525,21 @@ void CreateCompilerBackend_Clang( compilerBackend_t* outBackend, const char* com
 		.GetIncludeDependenciesFromSourceFileBuild	= Clang_GetIncludeDependenciesFromSourceFileBuild,
 		.GetCompilerVersion							= Clang_GetCompilerVersion,
 	};
+
+	const char* pathToCompiler = path_remove_file_from_path( compilerPath );
+	if ( pathToCompiler == NULL ) {
+		outBackend->compilerPath = compilerPath;
+		outBackend->linkerPath = linkerExe;
+	} else {
+		outBackend->compilerPath = tprintf( "%s%c%s", pathToCompiler, PATH_SEPARATOR, clangExe );
+		outBackend->linkerPath = tprintf( "%s%c%s", pathToCompiler, PATH_SEPARATOR, linkerExe );
+	}
 }
 
 void CreateCompilerBackend_GCC( compilerBackend_t* outBackend, const char* compilerPath ) {
 	*outBackend = compilerBackend_t {
-		.compilerPath								= compilerPath,
-		.linkerPath									= "ld",
+		.compilerPath								= tprintf( "%s%cgcc", compilerPath, PATH_SEPARATOR ),
+		.linkerPath									= tprintf( "%s%cld", compilerPath, PATH_SEPARATOR ),
 		.data										= NULL,
 		.Init										= Clang_Init,
 		.Shutdown									= Clang_Shutdown,
@@ -526,4 +548,16 @@ void CreateCompilerBackend_GCC( compilerBackend_t* outBackend, const char* compi
 		.GetIncludeDependenciesFromSourceFileBuild	= Clang_GetIncludeDependenciesFromSourceFileBuild,
 		.GetCompilerVersion							= GCC_GetCompilerVersion,
 	};
+
+	const char* compilerExe = "gcc";
+	const char* linkerExe = "ld";
+
+	const char* pathToCompiler = path_remove_file_from_path( compilerPath );
+	if ( pathToCompiler == NULL ) {
+		outBackend->compilerPath = compilerExe;
+		outBackend->linkerPath = linkerExe;
+	} else {
+		outBackend->compilerPath = tprintf( "%s%c%s", compilerPath, PATH_SEPARATOR, compilerExe );
+		outBackend->linkerPath = tprintf( "%s%c%s", compilerPath, PATH_SEPARATOR, linkerExe );
+	}
 }

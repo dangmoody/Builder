@@ -270,7 +270,6 @@ TEMPER_TEST( Compile_StaticLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 		args.add( BUILDER_EXE_PATH );
 		args.add( "tests/test_static_lib/build.cpp" );
 		args.add( "--config=program" );
-
 		s32 exitCode = RunProc( &args );
 
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
@@ -282,7 +281,6 @@ TEMPER_TEST( Compile_StaticLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 	{
 		Array<const char*> args;
 		args.add( tprintf( "tests/test_static_lib/bin/test_static_library_program%s", GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) ) );
-
 		s32 exitCode = RunProc( &args );
 
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );

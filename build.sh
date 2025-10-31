@@ -22,13 +22,12 @@ echo Building Builder, config "$config"...
 #couldn't find a way to just change the working director real quick - so i'll just do this for now and push absolute paths
 # tbf - I could probably stash pwd and then cd into the absolute path and then cd out but not right now, let's get this running first
 # https://stackoverflow.com/questions/207959/equivalent-of-dp0-retrieving-source-file-name-in-sh
-called_path=${0%/*}
-stripped=${called_path#[^/]*}
-project_folder=`pwd`$stripped
+builder_dir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
+clang_dir="${builder_dir}/clang"
 
-bin_folder="$project_folder/bin/linux/$config"
-intermediate_folder="$project_folder/intermediate"
-source_folder="$project_folder/src"
+bin_folder="${builder_dir}/bin/linux/$config"
+intermediate_folder="${builder_dir}/intermediate"
+source_folder="${builder_dir}/src"
 
 mkdir -p $bin_folder
 mkdir -p $intermediate_folder
@@ -50,13 +49,13 @@ if [[ "$config" == "release" ]]; then
 	defines="$defines -DNDEBUG"
 fi
 
-includes="-I$project_folder/src/core/include"
+includes="-I${builder_dir}/src/core/include"
 
 libraries="-lstdc++ -luuid"
 
 warning_levels="-Werror -Wall -Wextra -Weverything -Wpedantic"
 ignore_warnings="-Wno-newline-eof -Wno-format-nonliteral -Wno-gnu-zero-variadic-macro-arguments -Wno-declaration-after-statement -Wno-unsafe-buffer-usage -Wno-zero-as-null-pointer-constant -Wno-c++98-compat-pedantic -Wno-old-style-cast -Wno-missing-field-initializers -Wno-switch-default -Wno-covered-switch-default -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-cast-align -Wno-double-promotion -Wno-alloca"
 
-args="./clang/bin/clang -std=c++20 -ferror-limit=0 -o $bin_folder/builder $symbols $optimisation $source_files $defines $includes $libraries $warning_levels $ignore_warnings"
+args="${clang_dir}/bin/clang -std=c++20 -ferror-limit=0 -o $bin_folder/builder $symbols $optimisation $source_files $defines $includes $libraries $warning_levels $ignore_warnings"
 echo $args
 $args

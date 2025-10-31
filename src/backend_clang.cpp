@@ -504,13 +504,7 @@ void CreateCompilerBackend_Clang( compilerBackend_t* outBackend, const char* com
 	// clang.exe (on linux at least) isn't actually an exe, it's a text file that points to where the real clang.exe is
 	// so we need to read that file, extract the text from it, and then call that exe instead 
 	// TODO(DM): 22/09/2025: do we want to do this for ALL clang linux installs? or just our local one?
-	char* clangExe = NULL;
-	defer( file_free_buffer( &clangExe ) );
-	{
-		bool8 read = file_read_entire( tprintf( "%s/clang", compilerPath ), &clangExe );
-		assert( read );
-	}
-
+	const char* clangExe = "clang";
 	const char* linkerExe = "llvm-ar";
 #else
 #error Unrecognised platform.

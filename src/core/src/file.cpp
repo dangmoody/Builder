@@ -139,7 +139,6 @@ bool8 file_write_line( File* file, const char* line ) {
 bool8 folder_create_if_it_doesnt_exist( const char* path ) {
 	assertf( path, "Path cannot be NULL." );
 
-	// if already here, no problem
 	if ( folder_exists( path ) ) {
 		return true;
 	}
@@ -161,8 +160,9 @@ bool8 folder_create_if_it_doesnt_exist( const char* path ) {
 			if ( path[i] != '/' && path[i] != '\0') {
 				continue;
 			}
-			if (i == 0 && path[i] == '/')
-			{
+
+			// dont process root folder
+			if ( i == 0 && path[i] == '/' ) {
 				continue;
 			}
 #else
@@ -173,8 +173,8 @@ bool8 folder_create_if_it_doesnt_exist( const char* path ) {
 
 			char name[1024] = {};
 			strncpy( name, path, i );
-			if ( !folder_exists( name ) )
-			{
+
+			if ( !folder_exists( name ) ) {
 				result |= create_folder_internal( name );
 			}
 		}

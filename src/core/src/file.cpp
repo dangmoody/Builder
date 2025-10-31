@@ -157,14 +157,26 @@ bool8 folder_create_if_it_doesnt_exist( const char* path ) {
 		//}
 
 		for ( u64 i = 0; i <= path_len; i++ ) {
+#if __linux__
+			if ( path[i] != '/' && path[i] != '\0') {
+				continue;
+			}
+			if (i == 0 && path[i] == '/')
+			{
+				continue;
+			}
+#else
 			if ( path[i] != '/' && path[i] != '\0' && path[i] != '\\' ) {
 				continue;
 			}
+#endif
 
 			char name[1024] = {};
 			strncpy( name, path, i );
-
-			result |= create_folder_internal( name );
+			if ( !folder_exists( name ) )
+			{
+				result |= create_folder_internal( name );
+			}
 		}
 
 		return result;

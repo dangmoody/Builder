@@ -17,7 +17,9 @@ tests/**/*.exe
 tests/**/*.ilk
 tests/**/*.pdb
 tests/**/*.sln
+tests/**/*.vcxproj
 tests/**/*.vcxproj.user
+tests/**/*.vcxproj.filters
 
 
 #

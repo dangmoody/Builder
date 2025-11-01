@@ -217,8 +217,8 @@ TEMPER_TEST_PARAMETRIC( SetCompilerPath, TEMPER_FLAG_SHOULD_RUN, const compiler_
 }
 
 TEMPER_INVOKE_PARAMETRIC_TEST( SetCompilerPath, COMPILER_CLANG );
-TEMPER_INVOKE_PARAMETRIC_TEST( SetCompilerPath, COMPILER_GCC );
 #ifdef _WIN32
+TEMPER_INVOKE_PARAMETRIC_TEST( SetCompilerPath, COMPILER_GCC );
 TEMPER_INVOKE_PARAMETRIC_TEST( SetCompilerPath, COMPILER_MSVC );
 #endif
 
@@ -357,22 +357,26 @@ TEMPER_TEST( RebuildSkipping, TEMPER_FLAG_SHOULD_SKIP ) {
 }
 
 TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
+	Array<const char*> args;
+	
+	// need to find where msbuild lives on windows
+#ifdef _WIN32
 	std::string msbuildInstallationPath;
 
 	// detect where msbuild is stored
 	{
 		String vswhereStdout;
 
-		Array<const char*> args;
+		args.reset();
 		args.add( "C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe" );
 		args.add( "-latest" );
 		args.add( "-products" );
 		args.add( "*" );
 		args.add( "-requires" );
 		args.add( "Microsoft.Component.MSBuild" );
+		s32 exitCode = RunProc( &args, &vswhereStdout, true );
 
 		// fail test if vswhere errors
-		s32 exitCode = RunProc( &args, &vswhereStdout, true );
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Failed to run vswhere.exe properly.  Exit code actually returned %d.\n", exitCode );
 
 		// fail test if we cant find the tag in the output that were looking for
@@ -400,10 +404,11 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 		};
 		TEMPER_CHECK_TRUE_M( ParseTagString( vswhereStdout.data, "installationPath:", msbuildInstallationPath ), "Failed to query for MSBuild installation path using vswhere.exe.\n" );
 	}
+#endif
 
 	// generate the solution
 	{
-		Array<const char*> args;
+		args.reset();
 		args.add( BUILDER_EXE_PATH );
 		args.add( "tests/test_generate_visual_studio_files/generate_solution.cpp" );
 
@@ -414,7 +419,7 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 
 	// build the app project in the solution via MSBuild
 	{
-		Array<const char*> args;
+		args.reset();
 #if defined( _WIN32 )
 		args.add( tprintf( "%s/MSBuild/Current/Bin/MSBuild.exe", msbuildInstallationPath.c_str() ) );	// TODO(DM): query for this instead
 #elif defined( __linux__ )
@@ -422,7 +427,6 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 #endif
 		args.add( "tests/test_generate_visual_studio_files/visual_studio/app.vcxproj" );
 		args.add( "/property:Platform=x64" );
-
 		s32 exitCode = RunProc( &args );
 
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
@@ -430,9 +434,8 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 
 	// run the program, make sure it returns the correct exit code
 	{
-		Array<const char*> args;
+		args.reset();
 		args.add( "tests/test_generate_visual_studio_files/bin/debug/the-app.exe" );
-
 		s32 exitCode = RunProc( &args );
 
 		TEMPER_CHECK_TRUE_M( exitCode == 69420, "Exit code actually returned %d.\n", exitCode );

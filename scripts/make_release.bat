@@ -7,19 +7,21 @@ if [%version%]==[] (
 	goto :ShowUsage
 )
 
-call build.bat release
-
 pushd %~dp0
+pushd ..
+
+call .\\scripts\\build.bat release
 
 set temp_folder=.\\releases\\temp
 
 robocopy    .\\bin\\win64\\release %temp_folder%\\bin   builder.exe
-robocopy /e .\\clang_win64         %temp_folder%\\clang
+robocopy /e .\\clang               %temp_folder%\\clang
 
-.\\7zip\\7za.exe a -tzip releases\\builder_win64_%version%.zip %temp_folder%\\bin %temp_folder%\\clang include doc README.md LICENSE
+.\\tools\\7zip_win64\\7za.exe a -tzip .\\releases\\builder_%version%_win64.zip %temp_folder%\\bin %temp_folder%\\clang include doc README.md LICENSE
 
 rd /s /Q %temp_folder%
 
+popd
 popd
 
 goto :EOF

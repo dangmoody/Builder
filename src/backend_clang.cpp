@@ -497,14 +497,10 @@ static String GCC_GetCompilerVersion( compilerBackend_t* backend ) {
 }
 
 void CreateCompilerBackend_Clang( compilerBackend_t* outBackend, const char* compilerPath ) {
-#if defined( _WIN32 )
 	const char* clangExe = "clang";
+#if defined( _WIN32 )
 	const char* linkerExe = "lld-link";
 #elif defined( __linux__ )
-	// clang.exe (on linux at least) isn't actually an exe, it's a text file that points to where the real clang.exe is
-	// so we need to read that file, extract the text from it, and then call that exe instead 
-	// TODO(DM): 22/09/2025: do we want to do this for ALL clang linux installs? or just our local one?
-	const char* clangExe = "clang";
 	const char* linkerExe = "llvm-ar";
 #else
 #error Unrecognised platform.

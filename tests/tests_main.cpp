@@ -164,9 +164,27 @@ TEMPER_TEST_PARAMETRIC( Compile_SetBuilderOptions, TEMPER_FLAG_SHOULD_RUN, const
 	DoBinaryFilesPostCheck( "test_set_builder_options", "test_set_builder_options.cpp" );
 }
 
-#ifdef _WIN32
-TEMPER_TEST( Compile_MSVC, TEMPER_FLAG_SHOULD_RUN ) {
-	const char* buildSourceFile = "tests/test_msvc/test_msvc.cpp";
+TEMPER_INVOKE_PARAMETRIC_TEST( Compile_SetBuilderOptions, "release" );
+TEMPER_INVOKE_PARAMETRIC_TEST( Compile_SetBuilderOptions, "debug" );
+
+enum compiler_t {
+	COMPILER_CLANG	= 0,
+	COMPILER_GCC,
+	COMPILER_MSVC,
+};
+
+TEMPER_TEST_PARAMETRIC( SetCompilerPath, TEMPER_FLAG_SHOULD_RUN, const compiler_t compiler ) {
+	auto GetCompilerName = []( const compiler_t compilerType ) -> const char* {
+		switch ( compilerType ) {
+			case COMPILER_CLANG:	return "clang";
+			case COMPILER_GCC:		return "gcc";
+			case COMPILER_MSVC:		return "msvc";
+		}
+	};
+
+	const char* compilerName = GetCompilerName( compiler );
+
+	const char* buildSourceFile = tprintf( "tests/test_override_path_%s/test_override_path_%s.cpp", compilerName, compilerName );
 
 	TEMPER_CHECK_TRUE( file_exists( buildSourceFile ) );
 
@@ -179,30 +197,30 @@ TEMPER_TEST( Compile_MSVC, TEMPER_FLAG_SHOULD_RUN ) {
 		args.reset();
 		args.add( BUILDER_EXE_PATH );
 		args.add( buildSourceFile );
-
 		exitCode = RunProc( &args );
 
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 
-		TEMPER_CHECK_TRUE( file_exists( "tests/test_msvc/test_msvc.exe" ) );
+		TEMPER_CHECK_TRUE( file_exists( tprintf( "tests/test_override_path_%s/test_override_path_%s.exe", compilerName, compilerName ) ) );
 	}
 
 	// run the program
 	{
 		args.reset();
-		args.add( "tests/test_msvc/test_msvc.exe" );
-
+		args.add( tprintf( "tests/test_override_path_%s/test_override_path_%s.exe", compilerName, compilerName ) );
 		exitCode = RunProc( &args );
 
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 	}
 
-	DoBinaryFilesPostCheck( "test_msvc", "test_msvc.cpp" );
+	DoBinaryFilesPostCheck( tprintf( "test_override_path_%s", compilerName ), tprintf( "test_override_path_%s.cpp", compilerName ) );
 }
-#endif // _WIN32
 
-TEMPER_INVOKE_PARAMETRIC_TEST( Compile_SetBuilderOptions, "release" );
-TEMPER_INVOKE_PARAMETRIC_TEST( Compile_SetBuilderOptions, "debug" );
+TEMPER_INVOKE_PARAMETRIC_TEST( SetCompilerPath, COMPILER_CLANG );
+TEMPER_INVOKE_PARAMETRIC_TEST( SetCompilerPath, COMPILER_GCC );
+#ifdef _WIN32
+TEMPER_INVOKE_PARAMETRIC_TEST( SetCompilerPath, COMPILER_MSVC );
+#endif
 
 TEMPER_TEST( Compile_MultipleSourceFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	const char* buildSourceFile = "tests/test_multiple_source_files/build.cpp";

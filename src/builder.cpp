@@ -1065,7 +1065,9 @@ int main( int argc, char** argv ) {
 				options.compiler_path = path_remove_file_extension( options.compiler_path.c_str() );
 			}
 
-			if ( !path_is_absolute( options.compiler_path.c_str() ) ) {
+			const char* path = path_remove_file_from_path( options.compiler_path.c_str() );
+
+			if ( path && !path_is_absolute( path ) ) {
 				options.compiler_path = context.inputFilePath.data + std::string( "/" ) + options.compiler_path;
 			}
 

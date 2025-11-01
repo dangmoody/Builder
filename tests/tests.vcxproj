@@ -63,9 +63,9 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <NMakeBuildCommandLine>..\\build_tests.bat debug</NMakeBuildCommandLine>
+    <NMakeBuildCommandLine>..\\scripts\\build_tests.bat debug</NMakeBuildCommandLine>
     <NMakeOutput>builder_tests.exe</NMakeOutput>
-    <NMakeReBuildCommandLine>..\\build_tests.bat debug</NMakeReBuildCommandLine>
+    <NMakeReBuildCommandLine>..\\scripts\\build_tests.bat debug</NMakeReBuildCommandLine>
     <NMakePreprocessorDefinitions>_DEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
     <NMakeIncludeSearchPath>..\\;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
   </PropertyGroup>
@@ -103,13 +103,15 @@
     <ClCompile Include="test_generate_visual_studio_files\src\app\main.cpp" />
     <ClCompile Include="test_generate_visual_studio_files\src\library1\library1.cpp" />
     <ClCompile Include="test_generate_visual_studio_files\src\library2\library2.cpp" />
-    <ClCompile Include="test_msvc\test_msvc.cpp" />
     <ClCompile Include="test_multiple_source_files\build.cpp" />
     <ClCompile Include="test_multiple_source_files\src\main.cpp" />
     <ClCompile Include="test_multiple_source_files\src\marco.linux.cpp" />
     <ClCompile Include="test_multiple_source_files\src\marco.win64.cpp" />
     <ClCompile Include="test_multiple_source_files\src\polo.linux.cpp" />
     <ClCompile Include="test_multiple_source_files\src\polo.win64.cpp" />
+    <ClCompile Include="test_override_path_clang\test_override_path_clang.cpp" />
+    <ClCompile Include="test_override_path_gcc\test_override_path_gcc.cpp" />
+    <ClCompile Include="test_override_path_msvc\test_override_path_msvc.cpp" />
     <ClCompile Include="test_set_builder_options\test_set_builder_options.cpp" />
     <ClCompile Include="test_static_lib\build.cpp" />
     <ClCompile Include="test_static_lib\lib\lib.cpp" />

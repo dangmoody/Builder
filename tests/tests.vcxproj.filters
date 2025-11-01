@@ -18,12 +18,6 @@
     <ClCompile Include="tests_main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="test_cases\test_basic\test_basic.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="test_cases\test_set_builder_options\test_set_builder_options.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="test_basic\test_basic.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -54,12 +48,6 @@
     <ClCompile Include="test_third_party_libraries\build.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="test_static_library\library\lib.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="test_static_library\program\program.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="test_static_lib\lib\lib.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -69,13 +57,7 @@
     <ClCompile Include="test_dynamic_lib\lib\lib.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="test_dynamic_lib\program\build.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="test_dynamic_lib\program\program.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="test_dynamic_lib\lib\build.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="test_dynamic_lib\build.cpp">
@@ -87,7 +69,34 @@
     <ClCompile Include="test_compiler_path\test_compiler_path.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="test_msvc\test_msvc.cpp">
+    <ClCompile Include="test_generate_visual_studio_files\generate_solution.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="test_generate_visual_studio_files\src\app\dir1\dir2\dir3\test_file3.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="test_generate_visual_studio_files\src\app\dir1\dir2\test_file2.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="test_generate_visual_studio_files\src\app\dir1\test_file1.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="test_generate_visual_studio_files\src\app\main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="test_generate_visual_studio_files\src\library1\library1.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="test_generate_visual_studio_files\src\library2\library2.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="test_override_path_clang\test_override_path_clang.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="test_override_path_gcc\test_override_path_gcc.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="test_override_path_msvc\test_override_path_msvc.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -95,13 +104,16 @@
     <ClInclude Include="test_multiple_source_files\src\marco_polo.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="test_static_library\library\lib.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="test_static_lib\lib\lib.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="test_dynamic_lib\lib\lib.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="temper\temper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="test_generate_visual_studio_files\src\library.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

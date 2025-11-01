@@ -1,7 +1,3 @@
-// this is the "basic" test
-// its meant to serve as the easiest, most minimal example of what builder can build
-// we should still be able to build programs with Builder without using any of the Builder-specific entry points
-
 #include <stdio.h>
 
 #if BUILDER_DOING_USER_CONFIG_BUILD

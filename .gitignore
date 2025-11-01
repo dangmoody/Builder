@@ -20,6 +20,8 @@ tests/**/*.sln
 tests/**/*.vcxproj
 tests/**/*.vcxproj.user
 tests/**/*.vcxproj.filters
+!tests/tests.vcxproj
+!tests/tests.vcxproj.filters
 
 
 #

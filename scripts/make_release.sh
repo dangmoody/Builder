@@ -15,29 +15,24 @@ ShowUsage() {
 
 version=$1
 
-# couldn't find a way to just change the working director real quick - so i'll just do this for now and push absolute paths
-# tbf - I could probably stash pwd and then cd into the absolute path and then cd out but not right now, let's get this running first
-# https://stackoverflow.com/questions/207959/equivalent-of-dp0-retrieving-source-file-name-in-sh
-called_path=${0%/*}
-stripped=${called_path#[^/]*}
-project_folder=`pwd`$stripped
-
 if [[ -z "$version" ]]; then
 	echo ERROR: Release version was not set!  Please specify a release version
 	ShowUsage
 fi
 
-source build.sh release
+builder_dir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")/..
 
-releases_folder=$project_folder/releases
-temp_folder=$project_folder/releases/temp
+source ${builder_dir}/scripts/build.sh release
 
-mkdir -p $releases_folder
-mkdir -p $temp_folder
+releases_folder=${builder_dir}/releases
+temp_folder=${builder_dir}/releases/temp
 
-cp -R ./bin/linux/release $temp_folder/bin
-cp -R ./clang_linux       $temp_folder/clang
+mkdir -p ${releases_folder}
+mkdir -p ${temp_folder}
 
-7za a -tzip releases/builder_linux_$version.zip $temp_folder/bin $temp_folder/clang include doc README.md LICENSE
+cp -R ./bin/linux/release ${temp_folder}/bin
+cp -R ./clang             ${temp_folder}/clang
+
+7za a -tzip releases/builder_${version}_linux.zip ${temp_folder}/bin ${temp_folder}/clang include doc README.md LICENSE
 
 rm -r $temp_folder

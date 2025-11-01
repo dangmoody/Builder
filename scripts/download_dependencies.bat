@@ -6,10 +6,11 @@ pushd %~dp0
 
 :: ----------------------------------------------------------------
 
+:: download clang
 set clang_version=20.1.5
+
 if not exist ..\\clang mkdir ..\\clang
 
-:: download clang
 echo Downloading Clang archive...
 curl -o ..\\clang\\clang.tar.xz -L "https://github.com/llvm/llvm-project/releases/download/llvmorg-%clang_version%/clang+llvm-%clang_version%-x86_64-pc-windows-msvc.tar.xz"
 echo Done.

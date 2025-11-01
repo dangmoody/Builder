@@ -22,7 +22,7 @@ echo ""
 
 echo Building tests config "$config"...
 
-builder_dir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
+builder_dir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")/..
 clang_dir="${builder_dir}/clang"
 
 bin_folder="${builder_dir}/bin/linux/$config"
@@ -40,6 +40,6 @@ if [[ "$config" == "debug" ]]; then
 	defines="$defines -D_DEBUG"
 fi
 
-args="clang ${symbols} ${optimization} -lstdc++ -luuid -std=c++20 -fexceptions -ferror-limit=0 -o bin/linux/${config}/builder_tests tests/tests_main.cpp ${defines} -Isrc/core/include"
+args="${clang_dir}/bin/clang ${symbols} ${optimization} -lstdc++ -luuid -std=c++20 -fexceptions -ferror-limit=0 -o bin/linux/${config}/builder_tests tests/tests_main.cpp ${defines} -Isrc/core/include"
 echo ${args}
 ${args}

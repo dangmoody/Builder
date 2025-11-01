@@ -19,7 +19,7 @@ fi
 
 echo Building Builder, config "$config"...
 
-builder_dir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
+builder_dir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")/..
 clang_dir="${builder_dir}/clang"
 
 bin_folder="${builder_dir}/bin/linux/$config"

@@ -156,7 +156,7 @@ bool8 folder_create_if_it_doesnt_exist( const char* path ) {
 		//}
 
 		for ( u64 i = 0; i <= path_len; i++ ) {
-#if __linux__
+#if defined( __linux__ )
 			if ( path[i] != '/' && path[i] != '\0') {
 				continue;
 			}
@@ -165,7 +165,7 @@ bool8 folder_create_if_it_doesnt_exist( const char* path ) {
 			if ( i == 0 && path[i] == '/' ) {
 				continue;
 			}
-#else
+#elif defined( _WIN32 )
 			if ( path[i] != '/' && path[i] != '\0' && path[i] != '\\' ) {
 				continue;
 			}

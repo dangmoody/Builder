@@ -225,6 +225,6 @@ Please see [Contributing.md](doc/Contributing.md).
 Builder would not have been possible without the following people who deserve, at the very least, a special thanks:
 
 * Dale Green
-* Yann Richeux
+* Yann Richeux (Bug fixes)
 * Tom Whitcombe (Visual Studio project generation)
 * Mike Young (Linux port)

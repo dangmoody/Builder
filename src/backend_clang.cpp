@@ -547,7 +547,7 @@ void CreateCompilerBackend_GCC( compilerBackend_t* outBackend, const char* compi
 		outBackend->compilerPath = compilerExe;
 		outBackend->linkerPath = linkerExe;
 	} else {
-		outBackend->compilerPath = tprintf( "%s%c%s", compilerPath, PATH_SEPARATOR, compilerExe );
-		outBackend->linkerPath = tprintf( "%s%c%s", compilerPath, PATH_SEPARATOR, linkerExe );
+		outBackend->compilerPath = tprintf( "%s%c%s", pathToCompiler, PATH_SEPARATOR, compilerExe );
+		outBackend->linkerPath = tprintf( "%s%c%s", pathToCompiler, PATH_SEPARATOR, linkerExe );
 	}
 }

@@ -4,27 +4,20 @@
 bin
 .builder
 clang
+releases
+bug_reports
 *.o
+
+# ignore tools folder, but dont ignore 7zip
+tools/*
+!tools/7zip_win64
 
 # ignore test files
 tests/**/*.exe
 tests/**/*.ilk
 tests/**/*.pdb
 tests/**/*.sln
-tests/**/*.vcxproj
 tests/**/*.vcxproj.user
-tests/**/*.vcxproj.filters
-
-
-# ignore releases
-releases/**/*
-
-# ignore tools folder, but dont ignore 7zip
-tools/*
-!tools/7zip_win64
-
-# ignore bug_reports folder
-bug_reports
 
 
 #

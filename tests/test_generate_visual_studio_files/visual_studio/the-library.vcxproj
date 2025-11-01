@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+	<ItemGroup Label="ProjectConfigurations">
+		<ProjectConfiguration Include="debug|x64">
+			<Configuration>debug</Configuration>
+			<Platform>x64</Platform>
+		</ProjectConfiguration>
+		<ProjectConfiguration Include="release|x64">
+			<Configuration>release</Configuration>
+			<Platform>x64</Platform>
+		</ProjectConfiguration>
+	</ItemGroup>
+	<PropertyGroup Label="Globals">
+		<VCProjectVersion>17.0</VCProjectVersion>
+		<ProjectGuid>{5D39DBE3-136B-4DCF-92E4-18062C7C15E8}</ProjectGuid>
+		<IgnoreWarnCompileDuplicatedFilename>true</IgnoreWarnCompileDuplicatedFilename>
+		<Keyword>MakeFileProj</Keyword>
+	</PropertyGroup>
+	<Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" Condition="'$(OS)' == 'Windows_NT'" />
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='debug|x64'" Label="Configuration">
+		<ConfigurationType>Makefile</ConfigurationType>
+		<UseDebugLibraries>false</UseDebugLibraries>
+		<PlatformToolset>v143</PlatformToolset>
+		<OutDir>..\bin\debug</OutDir>
+		<IntDir>bin/debug\intermediate</IntDir>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='release|x64'" Label="Configuration">
+		<ConfigurationType>Makefile</ConfigurationType>
+		<UseDebugLibraries>false</UseDebugLibraries>
+		<PlatformToolset>v143</PlatformToolset>
+		<OutDir>..\bin\release</OutDir>
+		<IntDir>bin/release\intermediate</IntDir>
+	</PropertyGroup>
+	<Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" Condition="'$(OS)' == 'Windows_NT'" />
+	<ImportGroup Label="ExtensionSettings">
+	</ImportGroup>
+	<ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='debug|x64'">
+		<Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+	</ImportGroup>
+	<ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='release|x64'">
+		<Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+	</ImportGroup>
+	<PropertyGroup Label="UserMacros" />
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='debug|x64'">
+		<ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
+		<LibraryPath>$(LibraryPath)</LibraryPath>
+		<NMakeOutput>bin/debug</NMakeOutput>
+		<NMakeBuildCommandLine>"C:\dev\builder\bin\win64\debug\builder.exe" ..\generate_solution.cpp --config=library-debug --visual-studio-build</NMakeBuildCommandLine>
+		<NMakeReBuildCommandLine>"C:\dev\builder\bin\win64\debug\builder.exe" ..\generate_solution.cpp --config=library-debug --visual-studio-build</NMakeReBuildCommandLine>
+		<NMakeCleanCommandLine>"C:\dev\builder\bin\win64\debug\builder.exe" --nuke bin/debug</NMakeCleanCommandLine>
+		<NMakePreprocessorDefinitions>LIBRARY_EXPORTS;_DEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='release|x64'">
+		<ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
+		<LibraryPath>$(LibraryPath)</LibraryPath>
+		<NMakeOutput>bin/release</NMakeOutput>
+		<NMakeBuildCommandLine>"C:\dev\builder\bin\win64\debug\builder.exe" ..\generate_solution.cpp --config=library-release --visual-studio-build</NMakeBuildCommandLine>
+		<NMakeReBuildCommandLine>"C:\dev\builder\bin\win64\debug\builder.exe" ..\generate_solution.cpp --config=library-release --visual-studio-build</NMakeReBuildCommandLine>
+		<NMakeCleanCommandLine>"C:\dev\builder\bin\win64\debug\builder.exe" --nuke bin/release</NMakeCleanCommandLine>
+		<NMakePreprocessorDefinitions>LIBRARY_EXPORTS;NDEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+	</PropertyGroup>
+	<ItemDefinitionGroup>
+	</ItemDefinitionGroup>
+	<ItemGroup>
+		<ClCompile Include="..\src/library1\library1.cpp" />
+		<ClCompile Include="..\src/library2\library2.cpp" />
+	</ItemGroup>
+	<Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" Condition="'$(OS)' == 'Windows_NT'" />
+	<ImportGroup Label="ExtensionTargets">
+	</ImportGroup>
+</Project>

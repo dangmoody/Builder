@@ -19,9 +19,6 @@ fi
 
 echo Building Builder, config "$config"...
 
-#couldn't find a way to just change the working director real quick - so i'll just do this for now and push absolute paths
-# tbf - I could probably stash pwd and then cd into the absolute path and then cd out but not right now, let's get this running first
-# https://stackoverflow.com/questions/207959/equivalent-of-dp0-retrieving-source-file-name-in-sh
 builder_dir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
 clang_dir="${builder_dir}/clang"
 

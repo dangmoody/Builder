@@ -273,21 +273,22 @@
     </None>
     <None Include="README.md" />
     <None Include=".gitignore" />
-    <None Include="build.bat">
-      <Filter>Source Files</Filter>
-    </None>
-    <None Include="build_tests.bat">
-      <Filter>Source Files</Filter>
-    </None>
-    <None Include="download_default_compiler.bat">
-      <Filter>Source Files</Filter>
-    </None>
     <None Include="LICENSE" />
-    <None Include="make_release.bat">
+    <None Include="scripts\build.bat">
       <Filter>Source Files</Filter>
     </None>
-    <None Include="build.sh" />
-    <None Include="build_tests.sh" />
-    <None Include="download_default_compiler.sh" />
+    <None Include="scripts\build.sh" />
+    <None Include="scripts\build_tests.bat">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="scripts\build_tests.sh" />
+    <None Include="scripts\download_dependencies.bat">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="scripts\download_dependencies.sh" />
+    <None Include="scripts\make_release.bat">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="scripts\make_release.sh" />
   </ItemGroup>
 </Project>

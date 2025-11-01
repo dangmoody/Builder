@@ -19,6 +19,7 @@ if ["%config%"] NEQ ["debug"] (
 echo Building config "%config%"...
 
 pushd %~dp0
+pushd ..
 
 set bin_folder="bin\\win64\\"%config%
 set intermediate_folder=%bin_folder%"\\intermediate"
@@ -84,6 +85,7 @@ if %errorlevel% NEQ 0 (
 	exit /B %errorlevel%
 )
 
+popd
 popd
 
 exit /B 0

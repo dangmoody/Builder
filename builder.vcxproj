@@ -63,9 +63,9 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <NMakeBuildCommandLine>build.bat debug</NMakeBuildCommandLine>
+    <NMakeBuildCommandLine>.\\scripts\\build.bat debug</NMakeBuildCommandLine>
     <NMakeOutput>bin\\win64\\debug\\builder.exe</NMakeOutput>
-    <NMakeReBuildCommandLine>build.bat debug</NMakeReBuildCommandLine>
+    <NMakeReBuildCommandLine>.\\scripts\\build.bat debug</NMakeReBuildCommandLine>
     <NMakePreprocessorDefinitions>_DEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -81,9 +81,9 @@
     <NMakePreprocessorDefinitions>WIN32;NDEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <NMakeBuildCommandLine>build.bat release</NMakeBuildCommandLine>
+    <NMakeBuildCommandLine>.\scripts\build.bat release</NMakeBuildCommandLine>
     <NMakeOutput>bin\\win64\\release\\builder.exe</NMakeOutput>
-    <NMakeReBuildCommandLine>build.bat release</NMakeReBuildCommandLine>
+    <NMakeReBuildCommandLine>.\scripts\build.bat release</NMakeReBuildCommandLine>
     <NMakePreprocessorDefinitions>NDEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
   </PropertyGroup>
   <ItemDefinitionGroup>
@@ -175,15 +175,16 @@
   </ItemGroup>
   <ItemGroup>
     <None Include=".gitignore" />
-    <None Include="build.bat" />
-    <None Include="build.sh" />
-    <None Include="build_tests.bat" />
-    <None Include="build_tests.sh" />
-    <None Include="download_default_compiler.bat" />
-    <None Include="download_default_compiler.sh" />
     <None Include="LICENSE" />
-    <None Include="make_release.bat" />
     <None Include="README.md" />
+    <None Include="scripts\build.bat" />
+    <None Include="scripts\build.sh" />
+    <None Include="scripts\build_tests.bat" />
+    <None Include="scripts\build_tests.sh" />
+    <None Include="scripts\download_dependencies.bat" />
+    <None Include="scripts\download_dependencies.sh" />
+    <None Include="scripts\make_release.bat" />
+    <None Include="scripts\make_release.sh" />
     <None Include="src\core\include\array.inl" />
     <None Include="src\core\include\ring.inl" />
     <None Include="src\core\include\typecast.inl" />

@@ -3,27 +3,28 @@
 #
 bin
 .builder
+clang
 *.o
 
-#
-# default compiler
-#
-clang
-clang_win64
-clang_linux
-
-
-builder.exe
-builder_tests.exe
-
-# ignore test binaries
+# ignore test files
 tests/**/*.exe
 tests/**/*.ilk
 tests/**/*.pdb
+tests/**/*.sln
+tests/**/*.vcxproj
+tests/**/*.vcxproj.user
+tests/**/*.vcxproj.filters
 
+
+# ignore releases
 releases/**/*
 
-bug_reports/**/*
+# ignore tools folder, but dont ignore 7zip
+tools/*
+!tools/7zip_win64
+
+# ignore bug_reports folder
+bug_reports
 
 
 #
@@ -31,23 +32,10 @@ bug_reports/**/*
 #
 .vs
 x64
+*.vcxproj.user
 
 
 #
 # rider stuff
 #
 .idea
-
-
-#
-# zed stuff
-#
-
-.zed
-
-
-# ignore test-generated visual studio solutions
-tests/**/*.sln
-tests/**/*.vcxproj
-tests/**/*.vcxproj.user
-tests/**/*.vcxproj.filters

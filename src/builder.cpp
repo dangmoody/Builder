@@ -1059,20 +1059,20 @@ int main( int argc, char** argv ) {
 	{
 		// if the user never specified a compiler, we can build with the default compiler that we just built the user config DLL with
 		if ( !options.compiler_path.empty() ) {
-			options.compiler_path = path_remove_file_extension( options.compiler_path.c_str() );
+			compilerBackend.Shutdown( &compilerBackend );
 
-			compilerBackend.compilerPath = options.compiler_path.c_str();
+			if ( string_ends_with( options.compiler_path.c_str(), ".exe" ) ) {
+				options.compiler_path = path_remove_file_extension( options.compiler_path.c_str() );
+			}
 
-			// get the linker program that we need
-			const char* compilerPathOnly = path_remove_file_from_path( options.compiler_path.c_str() );
-
-			if ( compilerPathOnly ) {
-				String linkerPathOld = compilerBackend.linkerPath;
-				string_printf( &compilerBackend.linkerPath, "%s%c%s", compilerPathOnly, PATH_SEPARATOR, linkerPathOld.data );
+			if ( !path_is_absolute( options.compiler_path.c_str() ) ) {
+				options.compiler_path = context.inputFilePath.data + std::string( "/" ) + options.compiler_path;
 			}
 
 			if ( string_ends_with( options.compiler_path.c_str(), "clang" ) ) {
-				// nothing, clang already got initialized
+				CreateCompilerBackend_Clang( &compilerBackend, options.compiler_path.c_str() );
+			} else if ( string_ends_with( options.compiler_path.c_str(), "gcc" ) ) {
+				CreateCompilerBackend_GCC( &compilerBackend, options.compiler_path.c_str() );
 			} else if ( string_ends_with( options.compiler_path.c_str(), "cl" ) ) {
 #ifdef _WIN32
 				CreateCompilerBackend_MSVC( &compilerBackend, options.compiler_path.c_str() );
@@ -1084,8 +1084,6 @@ int main( int argc, char** argv ) {
 
 				QUIT_ERROR();
 #endif
-			} else if ( string_ends_with( options.compiler_path.c_str(), "gcc" ) ) {
-				CreateCompilerBackend_GCC( &compilerBackend, options.compiler_path.c_str() );
 			} else {
 				error(
 					"The compiler you want to build with (\"%s\") is not one that I recognise.\n"

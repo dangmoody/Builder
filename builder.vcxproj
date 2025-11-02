@@ -131,10 +131,6 @@
     <ClCompile Include="src\core\src\win64\paths.win64.cpp" />
     <ClCompile Include="src\core\src\win64\timer.win64.cpp" />
     <ClCompile Include="src\visual_studio.cpp" />
-    <ClCompile Include="test_sln\src\app\main.cpp" />
-    <ClCompile Include="test_sln\src\generate_solution.cpp" />
-    <ClCompile Include="test_sln\src\library\library.cpp" />
-    <ClCompile Include="test_sln\src\test_sln.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\builder.h" />
@@ -171,7 +167,6 @@
     <ClInclude Include="src\core\src\3rdparty\xxhash\xxhash.h" />
     <ClInclude Include="src\core\src\core_local.h" />
     <ClInclude Include="src\core\src\file_local.h" />
-    <ClInclude Include="test_sln\src\library\library.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".gitignore" />
@@ -190,13 +185,8 @@
     <None Include="src\core\include\typecast.inl" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="build.bat" />
-    <Content Include="build.sh" />
-    <Content Include="build_tests.bat" />
     <Content Include="doc\CHANGELOG.txt" />
     <Content Include="doc\Contributing.md" />
-    <Content Include="download_default_compiler.bat" />
-    <Content Include="make_release.bat" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" Condition="'$(OS)' == 'Windows_NT'" />
   <ImportGroup Label="ExtensionTargets">

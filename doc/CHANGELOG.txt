@@ -6,8 +6,9 @@ v0.9.0, <RELEASE DATE HERE>:
 		* Executables are not given a file extension (so in this case BuildConfig::remove_file_extension will not actually do anything).
 		* Dynamic libraries have the default file extension .so.
 		* Static libraries have the default file extension .a.
-	* Visual Studio Solution generation is still currently WIP.
-		* Turns out there's a lot more to this than generating valid XML.
+	* Rider support for Visual Studio Solutions is still currently WIP.
+		* You can generate an SLN and see all your files there, but you can't build projects via Rider right now.
+		* I'm working on it.
 	* Thanks @Mike430 for helping out with this!
 * Added BuildConfig::additional_compiler_arguments.
 	* These get added to the end of your final list of arguments that you will send to the compiler.

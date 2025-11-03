@@ -467,7 +467,10 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 
 struct nukeContext_t {
 	Array<const char*>	folders;
+	Array<const char*>	fileExtensionsToCheck;
 	bool8				verbose;
+	bool8				deleteRoot;
+	bool8				errorIfRootNotFound;
 };
 
 static void Nuke_DeleteAllFilesAndCacheFoldersInternal( const FileInfo* fileInfo, void* user_data ) {
@@ -476,35 +479,43 @@ static void Nuke_DeleteAllFilesAndCacheFoldersInternal( const FileInfo* fileInfo
 	if ( fileInfo->is_directory ) {
 		context->folders.add( fileInfo->full_filename );
 	} else {
-		if ( context->verbose ) {
-			printf( "Deleting file \"%s\"\n", fileInfo->full_filename );
-		}
+		if ( context->fileExtensionsToCheck.count > 0 ) {
+			For ( u32, fileExtensionIndex, 0, context->fileExtensionsToCheck.count ) {
+				if ( string_ends_with( fileInfo->filename, context->fileExtensionsToCheck[fileExtensionIndex] ) ) {
+					if ( context->verbose ) {
+						printf( "Deleting file \"%s\"\n", fileInfo->full_filename );
+					}
 
-		if ( !file_delete( fileInfo->full_filename ) ) {
-			error( "Nuke failed to delete folder \"%s\".\n", fileInfo->full_filename );
+					if ( !file_delete( fileInfo->full_filename ) ) {
+						error( "Nuke failed to delete folder \"%s\".\n", fileInfo->full_filename );
+					}
+
+					break;
+				}
+			}
+		} else {
+			if ( !file_delete( fileInfo->full_filename ) ) {
+				error( "Nuke failed to delete folder \"%s\".\n", fileInfo->full_filename );
+			}
 		}
 	}
 }
 
-void NukeFolder( const char* folder, const bool8 verbose, const bool8 deleteRoot, const bool8 failIfRootNotFound ) {
+void NukeFolder( const char* folder, const nukeContext_t* nukeContext ) {
 	if ( !folder_exists( folder ) ) {
-		if ( failIfRootNotFound ) {
+		if ( nukeContext->errorIfRootNotFound ) {
 			error( "Tried to nuke folder \"%s\"%s but that path doesn't exist.\n" );
 		}
 
 		return;
 	}
 
-	nukeContext_t nukeContext = {
-		.verbose = verbose
-	};
+	file_get_all_files_in_folder( folder, true, true, Nuke_DeleteAllFilesAndCacheFoldersInternal, cast( nukeContext_t*, nukeContext ) );
 
-	file_get_all_files_in_folder( folder, true, true, Nuke_DeleteAllFilesAndCacheFoldersInternal, &nukeContext );
+	RFor ( u64, subfolderIndex, 0, nukeContext->folders.count ) {
+		const char* subfolder = nukeContext->folders[subfolderIndex];
 
-	RFor ( u64, subfolderIndex, 0, nukeContext.folders.count ) {
-		const char* subfolder = nukeContext.folders[subfolderIndex];
-
-		if ( verbose ) {
+		if ( nukeContext->verbose ) {
 			printf( "Deleting folder \"%s\"\n", subfolder );
 		}
 
@@ -513,7 +524,7 @@ void NukeFolder( const char* folder, const bool8 verbose, const bool8 deleteRoot
 		}
 	}
 
-	if ( deleteRoot ) {
+	if ( nukeContext->deleteRoot ) {
 		if ( !folder_delete( folder ) ) {
 			error( "Failed to nuke root folder \"%s\" after deleting all the files and folders inside it.  You may need to do this manually.  Sorry.\n" );
 		}

@@ -466,7 +466,7 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 }
 
 struct nukeContext_t {
-	Array<const char*>	folders;
+	Array<const char*>	subfolders;
 	bool8				verbose;
 };
 
@@ -474,50 +474,51 @@ static void Nuke_DeleteAllFilesAndCacheFoldersInternal( const FileInfo* fileInfo
 	nukeContext_t* context = cast( nukeContext_t*, user_data );
 
 	if ( fileInfo->is_directory ) {
-		context->folders.add( fileInfo->full_filename );
+		context->subfolders.add( fileInfo->full_filename );
 	} else {
 		if ( context->verbose ) {
 			printf( "Deleting file \"%s\"\n", fileInfo->full_filename );
 		}
 
 		if ( !file_delete( fileInfo->full_filename ) ) {
-			error( "Nuke failed to delete folder \"%s\".\n", fileInfo->full_filename );
+			error( "Nuke failed to delete file \"%s\".\n", fileInfo->full_filename );
 		}
 	}
 }
 
-void NukeFolder( const char* folder, const bool8 verbose, const bool8 deleteRoot, const bool8 failIfRootNotFound ) {
-	if ( !folder_exists( folder ) ) {
-		if ( failIfRootNotFound ) {
-			error( "Tried to nuke folder \"%s\"%s but that path doesn't exist.\n" );
-		}
-
-		return;
-	}
-
+bool8 NukeFolder( const char* folder, const bool8 deleteRootFolder, const bool8 verbose ) {
 	nukeContext_t nukeContext = {
 		.verbose = verbose
 	};
 
-	file_get_all_files_in_folder( folder, true, true, Nuke_DeleteAllFilesAndCacheFoldersInternal, &nukeContext );
+	if ( !file_get_all_files_in_folder( folder, true, true, Nuke_DeleteAllFilesAndCacheFoldersInternal, &nukeContext ) ) {
+		error( "Failed to visit all files in folder \"%s\" while trying to nuke it.  You'll have to clean these files and folders up manually.  Sorry.\n", folder );
+		QUIT_ERROR();
+	}
 
-	RFor ( u64, subfolderIndex, 0, nukeContext.folders.count ) {
-		const char* subfolder = nukeContext.folders[subfolderIndex];
+	bool8 result = true;
 
-		if ( verbose ) {
+	RFor ( u64, subfolderIndex, 0, nukeContext.subfolders.count ) {
+		const char* subfolder = nukeContext.subfolders[subfolderIndex];
+
+		if ( nukeContext.verbose ) {
 			printf( "Deleting folder \"%s\"\n", subfolder );
 		}
 
 		if ( !folder_delete( subfolder ) ) {
-			error( "Failed to delete subfolder \"%s\" while nuking \"%s\".  You will need to do this manually.  Sorry.\n", subfolder, folder );
+			error( "Failed to delete subfolder \"%s\".  You will need to nuke this one manually.  Sorry.\n", subfolder );
+			result = false;
 		}
 	}
 
-	if ( deleteRoot ) {
+	if ( deleteRootFolder ) {
 		if ( !folder_delete( folder ) ) {
-			error( "Failed to nuke root folder \"%s\" after deleting all the files and folders inside it.  You may need to do this manually.  Sorry.\n" );
+			error( "Failed to nuke root folder \"%s\" after deleting all the files and folders inside it.  You'll need to do this manually.  Sorry.\n" );
+			result = false;
 		}
 	}
+
+	return result;
 }
 
 const char* GetNextSlashInPath( const char* path ) {
@@ -819,11 +820,19 @@ int main( int argc, char** argv ) {
 
 			const char* folderToNuke = argv[argIndex + 1];
 
-			printf( "Nuking \"%s\"\n", folderToNuke );
-
 			float64 startTime = time_ms();
 
-			NukeFolder( folderToNuke, false, true, true );
+			printf( "Nuking \"%s\"\n", folderToNuke );
+
+			if ( !folder_exists( folderToNuke ) ) {
+				error( "Can't nuke folder \"%s\" because it doesn't exist.  Have you typed it in correctly?\n", folderToNuke );
+				QUIT_ERROR();
+			}
+
+			if ( !NukeFolder( folderToNuke, false, true ) ) {
+				error( "Failed to nuke folder \"%s\".  You will have to clean this one up manually by yourself.  Sorry.\n", folderToNuke );
+				QUIT_ERROR();
+			}
 
 			float64 endTime = time_ms();
 

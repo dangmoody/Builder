@@ -112,6 +112,42 @@ static const char* CreateVisualStudioGuid() {
 #endif
 }
 
+struct visualStudioNukeContext_t {
+	Array<const char*>	fileExtensionsToCheck;
+	String				dotVSFolder;
+	bool8				verbose;
+};
+
+static void VS_DeleteOldProjectFilesCallback( const FileInfo* fileInfo, void* userData ) {
+	visualStudioNukeContext_t* nukeContext = cast( visualStudioNukeContext_t*, userData );
+
+	if ( fileInfo->is_directory && string_equals( fileInfo->filename, ".vs" ) ) {
+		nukeContext->dotVSFolder = fileInfo->full_filename;
+	}
+
+	For ( u32, fileExtensionIndex, 0, nukeContext->fileExtensionsToCheck.count ) {
+		if ( string_ends_with( fileInfo->full_filename, nukeContext->fileExtensionsToCheck[fileExtensionIndex] ) ) {
+			if ( nukeContext->verbose ) {
+				printf( "Deleting file \"%s\"\n", fileInfo->full_filename );
+			}
+
+			if ( file_delete( fileInfo->full_filename ) ) {
+				break;
+			} else {
+				warning( "Failed to delete old Visual Studio file \"%s\" while deleting old Visual Studio files.  You will have to delete this one yourself.  Sorry.\n", fileInfo->full_filename );
+			}
+		}
+	}
+}
+
+static void VS_NukeDotVSFolder( const FileInfo* fileInfo, void* userData ) {
+	unused( userData );
+
+	if ( !file_delete( fileInfo->full_filename ) ) {
+		warning( "Failed to delete old Visual Studio file \"%s\" while deleting old Visual Studio files.  You will have to delete this one yourself.  Sorry.\n", fileInfo->full_filename );
+	}
+}
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunreachable-code"
 
@@ -200,7 +236,19 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 	// delete old VS files if they exist
 	// but keep the root because we're about to re-populate it
-	NukeFolder( visualStudioProjectFilesPath, false, context->verbose, false );
+	{
+		visualStudioNukeContext_t nukeContext = {};
+		nukeContext.fileExtensionsToCheck.add( ".sln" );
+		nukeContext.fileExtensionsToCheck.add( ".vcxproj" );
+		nukeContext.fileExtensionsToCheck.add( ".vcxproj.user" );
+		nukeContext.fileExtensionsToCheck.add( ".vcxproj.filters" );
+
+		file_get_all_files_in_folder( visualStudioProjectFilesPath, false, true, VS_DeleteOldProjectFilesCallback, &nukeContext );
+
+		if ( nukeContext.dotVSFolder.data ) {
+			NukeFolder( nukeContext.dotVSFolder.data, true, context->verbose );
+		}
+	}
 
 	const char* solutionFilename = tprintf( "%s%c%s.sln", visualStudioProjectFilesPath, PATH_SEPARATOR, options->solution.name.c_str() );
 
@@ -245,6 +293,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 		VisualStudioProject* project = &options->solution.projects[projectIndex];
 
 		// validate the project
+		// TODO(DM): 07/11/2025: log all errors that are found here and then exit instead of exiting at the first one
 		{
 			if ( project->name.empty() ) {
 				error( "There is a Visual Studio Project that doesn't have a name here.  You need to fill that in.\n" );

@@ -17,6 +17,7 @@ v0.9.0, <RELEASE DATE HERE>:
 * Visual Studio:
 	* Fixed generated Visual Studio solutions not checking to see if they were on Windows before including some Windows-specific dependencies.
 	* Fixed Visual Studio installations sometimes not getting detected.
+	* Fixed the entire project getting deleted if a Visual Studio path wasn't specified when generating the project files.
 * Log when doing (and skipping) user config builds.
 
 ----------------------------------------------------------------

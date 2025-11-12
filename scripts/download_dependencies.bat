@@ -20,7 +20,7 @@ echo.
 echo Extracing Clang archive...
 ..\\tools\\7zip_win64\\7za.exe x "..\\clang\\clang.tar.xz" -o"..\\clang"
 ..\\tools\\7zip_win64\\7za.exe x "..\\clang\\clang.tar" -o"..\\clang"
-robocopy /nfl /ndl /e "..\\clang\\clang+llvm-%clang_version%-x86_64-pc-windows-msvc" "..\\clang"
+robocopy /nfl /ndl /e /is /it "..\\clang\\clang+llvm-%clang_version%-x86_64-pc-windows-msvc" "..\\clang"
 rmdir /s /q "..\\clang\\clang+llvm-%clang_version%-x86_64-pc-windows-msvc"
 del /q "..\\clang\\clang.tar"
 del /q "..\\clang\\clang.tar.xz"
@@ -41,7 +41,7 @@ echo.
 :: unarchive gcc
 echo Extracing GCC archive...
 ..\\tools\\7zip_win64\\7za.exe x "..\\tools\\gcc\\gcc.7z" -o"..\\tools\\gcc"
-robocopy /nfl /ndl /e "..\\tools\\gcc\\mingw64" "..\\tools\\gcc"
+robocopy /nfl /ndl /e /is /it "..\\tools\\gcc\\mingw64" "..\\tools\\gcc"
 del /q "..\\tools\\gcc\\gcc.7z"
 echo Done.
 echo.

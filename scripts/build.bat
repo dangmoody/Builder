@@ -42,10 +42,10 @@ if not exist %intermediate_folder% (
 	)
 )
 
-set symbols=-g
-REM if /I [%config%]==[debug] (
-REM 	set symbols=-g
-REM )
+set symbols=""
+if /I [%config%]==[debug] (
+	set symbols=-g
+)
 
 set optimisation=-O0
 if /I [%config%]==[release] (

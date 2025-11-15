@@ -30,10 +30,10 @@ if not exist %intermediate_path% (
 	mkdir %intermediate_path%
 )
 
-set symbols=""
-if /I [%config%]==[debug] (
-	set symbols=-g
-)
+set symbols="-g"
+:: if /I [%config%]==[debug] (
+:: 	set symbols=
+:: )
 
 set optimisation=""
 if /I [%config%]==[release] (

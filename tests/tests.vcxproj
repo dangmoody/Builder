@@ -82,9 +82,9 @@
     <NMakePreprocessorDefinitions>WIN32;NDEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <NMakeBuildCommandLine>..\\build_tests.bat release</NMakeBuildCommandLine>
+    <NMakeBuildCommandLine>../scripts/build_tests.bat release</NMakeBuildCommandLine>
     <NMakeOutput>builder_tests.exe</NMakeOutput>
-    <NMakeReBuildCommandLine>..\\build_tests.bat release</NMakeReBuildCommandLine>
+    <NMakeReBuildCommandLine>../scripts/build_tests.bat release</NMakeReBuildCommandLine>
     <NMakePreprocessorDefinitions>NDEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
   </PropertyGroup>
   <ItemDefinitionGroup>

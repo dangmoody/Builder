@@ -29,7 +29,11 @@ source_folder="${builder_dir}/src"
 mkdir -p $bin_folder
 mkdir -p $intermediate_folder
 
-symbols="-g"
+symbols=""
+if [[ "$config" == "debug" ]]; then
+	optimisation="-g"
+fi
+
 optimisation=""
 if [[ "$config" != "release" ]]; then
 	optimisation="-O3"
@@ -51,7 +55,7 @@ includes="-I${builder_dir}/src/core/include"
 libraries="-lstdc++ -luuid"
 
 warning_levels="-Werror -Wall -Wextra -Weverything -Wpedantic"
-ignore_warnings="-Wno-newline-eof -Wno-format-nonliteral -Wno-gnu-zero-variadic-macro-arguments -Wno-declaration-after-statement -Wno-unsafe-buffer-usage -Wno-zero-as-null-pointer-constant -Wno-c++98-compat-pedantic -Wno-old-style-cast -Wno-missing-field-initializers -Wno-switch-default -Wno-covered-switch-default -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-cast-align -Wno-double-promotion -Wno-alloca"
+ignore_warnings="-Wno-newline-eof -Wno-format-nonliteral -Wno-gnu-zero-variadic-macro-arguments -Wno-declaration-after-statement -Wno-unsafe-buffer-usage -Wno-zero-as-null-pointer-constant -Wno-c++98-compat-pedantic -Wno-old-style-cast -Wno-missing-field-initializers -Wno-switch-default -Wno-covered-switch-default -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-cast-align -Wno-double-promotion -Wno-alloca -Wno-padded"
 
 args="${clang_dir}/bin/clang -std=c++20 -ferror-limit=0 -o $bin_folder/builder $symbols $optimisation $source_files $defines $includes $libraries $warning_levels $ignore_warnings"
 echo $args

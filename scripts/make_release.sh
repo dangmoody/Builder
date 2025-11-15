@@ -33,6 +33,6 @@ mkdir -p ${temp_folder}
 cp -R ./bin/linux/release ${temp_folder}/bin
 cp -R ./clang             ${temp_folder}/clang
 
-7za a -tzip releases/builder_${version}_linux.zip ${temp_folder}/bin ${temp_folder}/clang include doc README.md LICENSE
+7za a -t7z releases/builder_${version}_linux.7z ${temp_folder}/bin ${temp_folder}/clang include doc README.md LICENSE
 
 rm -r $temp_folder

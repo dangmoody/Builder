@@ -17,13 +17,13 @@ if [[ "$config" != "debug" && "$config" != "release" ]]; then
 	ShowUsage
 fi
 
-source build.sh ${config}
+builder_dir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")/..
+clang_dir="${builder_dir}/clang"
+
+source ${builder_dir}/build.sh ${config}
 echo ""
 
 echo Building tests config "$config"...
-
-builder_dir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")/..
-clang_dir="${builder_dir}/clang"
 
 bin_folder="${builder_dir}/bin/linux/$config"
 

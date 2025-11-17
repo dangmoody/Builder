@@ -417,6 +417,8 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 	}
 
+	// DM: apparently building projects like this on linux isnt possible
+#ifdef _WIN32
 	// build the app project in the solution via MSBuild
 	{
 		args.reset();
@@ -440,6 +442,7 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 
 		TEMPER_CHECK_TRUE_M( exitCode == 69420, "Exit code actually returned %d.\n", exitCode );
 	}
+#endif // _WIN32
 }
 
 int main( int argc, char** argv ) {

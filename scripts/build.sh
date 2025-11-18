@@ -31,7 +31,7 @@ mkdir -p $intermediate_folder
 
 symbols=""
 if [[ "$config" == "debug" ]]; then
-	optimisation="-g"
+	symbols="-g"
 fi
 
 optimisation=""

@@ -532,7 +532,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 				string_builder_appendf( &vcxprojContent, "\t\t<VCProjectVersion>17.0</VCProjectVersion>\n" );
 				string_builder_appendf( &vcxprojContent, "\t\t<ProjectGuid>{%s}</ProjectGuid>\n", projectGuids[projectIndex] );
 				string_builder_appendf( &vcxprojContent, "\t\t<IgnoreWarnCompileDuplicatedFilename>true</IgnoreWarnCompileDuplicatedFilename>\n" );
-				string_builder_appendf( &vcxprojContent, "\t\t<Keyword>MakeFileProj</Keyword>\n" );
+				string_builder_appendf( &vcxprojContent, "\t\t<Keyword>Win32Proj</Keyword>\n" );
 				string_builder_appendf( &vcxprojContent, "\t</PropertyGroup>\n" );
 			}
 
@@ -890,7 +890,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 			string_builder_appendf( &slnContent, "\tEndGlobalSection\n" );
 
 			// which project config|platform is active?
-			string_builder_appendf( &slnContent, "\tGlobalSection(SolutionConfigurationPlatforms) = postSolution\n" );
+			string_builder_appendf( &slnContent, "\tGlobalSection(ProjectConfigurationPlatforms) = postSolution\n" );
 			For ( u64, projectIndex, 0, options->solution.projects.size() ) {
 				VisualStudioProject* project = &options->solution.projects[projectIndex];
 

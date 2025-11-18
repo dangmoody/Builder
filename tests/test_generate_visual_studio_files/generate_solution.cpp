@@ -4,7 +4,11 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	BuildConfig library_debug = {
 		.name				= "library-debug",
 		.source_files		= { "src/library1/*.cpp", "src/library2/*.cpp" },
+#if defined( _WIN32 )
 		.binary_name		= "the-library",
+#else
+		.binary_name		= "libthe-library",
+#endif
 		.binary_folder		= "bin/debug",
 		.binary_type		= BINARY_TYPE_DYNAMIC_LIBRARY,
 		.optimization_level	= OPTIMIZATION_LEVEL_O0,
@@ -14,7 +18,11 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	BuildConfig library_release = {
 		.name				= "library-release",
 		.source_files		= { "src/library1/*.cpp", "src/library2/*.cpp" },
+#if defined( _WIN32 )
 		.binary_name		= "the-library",
+#else
+		.binary_name		= "libthe-library",
+#endif
 		.binary_folder		= "bin/release",
 		.binary_type		= BINARY_TYPE_DYNAMIC_LIBRARY,
 		.optimization_level	= OPTIMIZATION_LEVEL_O3,
@@ -31,7 +39,11 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 		.defines				= { "_DEBUG" },
 		.additional_includes	= { "src" },
 		.additional_lib_paths	= { "bin/debug" },
+#if defined( _WIN32 )
 		.additional_libs		= { "the-library.lib" },
+#else
+		.additional_libs		= { "libthe-library" },
+#endif
 	};
 
 	BuildConfig app_release = {
@@ -44,7 +56,11 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 		.defines				= { "NDEBUG" },
 		.additional_includes	= { "src" },
 		.additional_lib_paths	= { "bin/release" },
+#if defined( _WIN32 )
 		.additional_libs		= { "the-library.lib" },
+#else
+		.additional_libs		= { "libthe-library" },
+#endif
 	};
 
 	// if you know that you only want to build with visual studio then you dont need to add the build configs like this

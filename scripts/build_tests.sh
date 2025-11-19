@@ -25,7 +25,7 @@ echo ""
 
 echo Building tests config "$config"...
 
-bin_folder="${builder_dir}/bin/linux/$config"
+bin_folder="${builder_dir}/bin"
 
 mkdir -p $bin_folder
 
@@ -38,8 +38,10 @@ fi
 defines="-DCORE_SUC -DHLML_NAMESPACE -DCORE_USE_SUBPROCESS"
 if [[ "$config" == "debug" ]]; then
 	defines="$defines -D_DEBUG"
+elif [[ "$config" == "release" ]]; then
+	defines="$defines -DNDEBUG"
 fi
 
-args="${clang_dir}/bin/clang ${symbols} ${optimization} -lstdc++ -luuid -std=c++20 -fexceptions -ferror-limit=0 -o bin/linux/${config}/builder_tests tests/tests_main.cpp ${defines} -Isrc/core/include"
+args="${clang_dir}/bin/clang ${symbols} ${optimization} -lstdc++ -luuid -std=c++20 -fexceptions -ferror-limit=0 -o ${bin_folder}/builder_tests_${config} tests/tests_main.cpp ${defines} -Isrc/core/include"
 echo ${args}
 ${args}

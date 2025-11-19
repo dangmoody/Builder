@@ -53,11 +53,6 @@ const char* path_app_path() {
 	char* app_full_path = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
 	DWORD length = GetModuleFileNameA( NULL, app_full_path, MAX_PATH );
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wcast-qual"
-	app_full_path = cast( char*, path_remove_file_from_path( app_full_path ) );
-#pragma clang diagnostic pop
-
 	return app_full_path;
 }
 

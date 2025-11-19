@@ -9,9 +9,9 @@ if [%config%]==[] (
 	goto :ShowUsage
 )
 
-if ["%config%"] NEQ ["debug"] (
-	if ["%config%"] NEQ ["release"] (
-		echo ERROR: build config MUST be either "debug" or "release".
+if /I ["%config%"] NEQ ["debug"] (
+	if /I ["%config%"] NEQ ["release"] (
+		echo ERROR: build config MUST be either "debug", "release", or "retail".
 		goto :ShowUsage
 	)
 )
@@ -21,7 +21,7 @@ echo Building config "%config%"...
 pushd %~dp0
 pushd ..
 
-set bin_folder="bin\\win64\\"%config%
+set bin_folder="bin"
 set intermediate_folder=%bin_folder%"\\intermediate"
 
 if not exist %bin_folder% (
@@ -42,31 +42,31 @@ if not exist %intermediate_folder% (
 	)
 )
 
-set symbols=""
-if /I [%config%]==[debug] (
+::set symbols=""
+::if /I [%config%] == [debug] (
 	set symbols=-g
-)
+::)
 
 set optimisation=-O0
-if /I [%config%]==[release] (
+if /I [%config%] == [release] (
 	set optimisation=-O3
 )
 
 set source_files=src\\builder.cpp src\\visual_studio.cpp src\\core\\src\\core.suc.cpp src\\backend_clang.cpp src\\backend_msvc.cpp
 
 set defines=-D_CRT_SECURE_NO_WARNINGS -DCORE_USE_XXHASH -DCORE_USE_SUBPROCESS -DCORE_SUC -DHASHMAP_HIDE_MISSING_KEY_WARNING -DHLML_NAMESPACE
-if /I [%config%]==[debug] (
+if /I [%config%] == [debug] (
 	set defines=!defines! -D_DEBUG
 )
 
-if /I [%config%]==[release] (
-	set defines=!defines! -DNDEBUG -DBUILDER_RELEASE
+if /I [%config%] == [release] (
+	set defines=!defines! -DNDEBUG
 )
 
 set includes=-Isrc\\core\\include
 
 set libraries=-luser32.lib -lShlwapi.lib -lDbgHelp.lib -lOle32.lib
-if /I [%config%]==[debug] (
+if /I [%config%] == [debug] (
 	set libraries=!libraries! -lmsvcrtd.lib
 ) else (
 	set libraries=!libraries! -lmsvcrt.lib
@@ -76,7 +76,7 @@ set warning_levels=-Werror -Wall -Wextra -Weverything -Wpedantic
 
 set ignore_warnings=-Wno-newline-eof -Wno-format-nonliteral -Wno-gnu-zero-variadic-macro-arguments -Wno-declaration-after-statement -Wno-unsafe-buffer-usage -Wno-zero-as-null-pointer-constant -Wno-c++98-compat-pedantic -Wno-old-style-cast -Wno-missing-field-initializers -Wno-switch-default -Wno-covered-switch-default -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-cast-align -Wno-double-promotion -Wno-nontrivial-memcall
 
-set args=clang\\bin\\clang -std=c++20 -o %bin_folder%\\builder.exe %symbols% %optimisation% %source_files% !defines! %includes% !libraries! %warning_levels% %ignore_warnings%
+set args=clang\\bin\\clang -std=c++20 -o %bin_folder%\\builder_%config%.exe %symbols% %optimisation% %source_files% !defines! %includes% !libraries! %warning_levels% %ignore_warnings%
 echo %args%
 %args%
 

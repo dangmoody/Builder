@@ -14,8 +14,10 @@ call .\\scripts\\build.bat release
 
 set temp_folder=.\\releases\\temp
 
-robocopy    .\\bin\\win64\\release %temp_folder%\\bin   builder.exe
-robocopy /e .\\clang               %temp_folder%\\clang
+robocopy    .\\bin   %temp_folder%\\bin   builder_release.exe
+robocopy /e .\\clang %temp_folder%\\clang
+
+ren %temp_folder%\\bin\\builder_release.exe builder.exe
 
 .\\tools\\7zip_win64\\7za.exe a -t7z .\\releases\\builder_%version%_win64.7z %temp_folder%\\bin %temp_folder%\\clang include doc README.md LICENSE
 

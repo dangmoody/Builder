@@ -61,7 +61,7 @@ const char* path_app_path() {
 
 	result[length] = 0;
 
-	return path_remove_file_from_path( result );
+	return result;
 }
 
 const char* path_current_working_directory() {

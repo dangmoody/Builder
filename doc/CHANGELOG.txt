@@ -6,16 +6,17 @@ v0.9.0, <RELEASE DATE HERE>:
 		* Executables are not given a file extension (so in this case BuildConfig::remove_file_extension will not actually do anything).
 		* Dynamic libraries have the default file extension .so.
 		* Static libraries have the default file extension .a.
-	* Rider support for Visual Studio Solutions is still currently WIP.
-		* You can generate an SLN and see all your files there, but you can't build projects via Rider right now.
-		* I'm working on it.
+	* Debugging via Rider on Linux currently doesn't work due to MSBuild only half working on Linux.
+		* This works on Windows, though.
+		* The limitation here is coming from Microsoft.
 	* Thanks @Mike430 for helping out with this!
 * Added BuildConfig::additional_compiler_arguments.
 	* These get added to the end of your final list of arguments that you will send to the compiler.
 	* Useful for things like -fPIC etc.
 * Fixed overriding BuilderOptions::compiler_path not working if the path wasn't absolute.
 * Visual Studio:
-	* Fixed generated Visual Studio solutions not checking to see if they were on Windows before including some Windows-specific dependencies.
+	* Fixed generated SLNs not checking to see if they were on Windows before including some Windows-specific dependencies.
+	* Fixed generated SLNs not working properly in Rider.
 	* Fixed Visual Studio installations sometimes not getting detected.
 	* Fixed the entire project getting deleted if a Visual Studio path wasn't specified when generating the project files (thanks @Yann4 for finding out about this one!).
 * Log when doing (and skipping) user config builds.

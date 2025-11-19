@@ -29,9 +29,10 @@ temp_folder=${builder_dir}/releases/temp
 
 mkdir -p ${releases_folder}
 mkdir -p ${temp_folder}
+mkdir -p ${temp_folder}/bin
 
-cp -R ./bin/linux/release ${temp_folder}/bin
-cp -R ./clang             ${temp_folder}/clang
+cp -R ./bin/builder_release ${temp_folder}/bin/builder
+cp -R ./clang               ${temp_folder}/clang
 
 7za a -t7z releases/builder_${version}_linux.7z ${temp_folder}/bin ${temp_folder}/clang include doc README.md LICENSE
 

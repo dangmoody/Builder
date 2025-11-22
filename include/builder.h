@@ -86,7 +86,7 @@ struct BuildConfig {
 
 	// The source files that you want to build.
 	// Any files/paths you add to this will be made relative to the .cpp file you passed in via the command line.
-	// Supports paths and wildcards.
+	// Also supports wildcards.
 	std::vector<std::string>	source_files;
 
 	// Additional #defines to set for Clang.
@@ -106,8 +106,9 @@ struct BuildConfig {
 	// Allowed values: -Weverything, -Wall, -Wextra, -Wpedantic.
 	std::vector<std::string>	warning_levels;
 
-	// Additional warnings to tell Clang to ignore.
-	// Uses the Clang syntax (E.G.: -Wno-newline-eof).
+	// Additional warnings to tell the compiler to ignore.
+	// For Clang and GCC this array will be filled with things like "-Wno-newline-eof".
+	// For MSVC you'd use /wd.
 	std::vector<std::string>	ignore_warnings;
 
 	// Anything else that you want to pass to the compiler that there isn't already an existing option for.
@@ -115,12 +116,13 @@ struct BuildConfig {
 	std::vector<std::string>	additional_compiler_arguments;
 
 	// The name that the built binary is going to have.
+	// It's not necessary to include the file extension unless 'remove_file_extension' is false.
 	// This will be placed inside binary_folder, if you set that.
 	std::string					binary_name;
 
 	// The folder you want the binary to be put into.
 	// If the folder does not exist, then Builder will create it for you.
-	// This path is relative to the source file you are building.
+	// This path is relative to the file you pass into Builder.
 	std::string					binary_folder;
 
 	// The name of the config.
@@ -134,6 +136,7 @@ struct BuildConfig {
 
 	// What version of C or C++ do you want to build with?
 	// For Clang: This sets the -std argument.
+	// For MSVC: This sets the /std argument.
 	LanguageVersion				language_version;
 
 	// What kind of binary do you want to build?
@@ -170,38 +173,40 @@ struct VisualStudioProject {
 	// You must define at least one of these to make Visual Studio happy.
 	std::vector<VisualStudioConfig>	configs;
 
-	// These are the source files that will be included in the "Source Files" filter in the project.
+	// All the files that are in these folders (based on 'file_extensions') will be included in your project.
 	// This is a separate list to the build options as you likely want the superset of all files in your Solution, but may conditionally exclude a subset of files based on config/target etc.
-	// This folders you include here are relative to your build script.
+	// The folders you include here are relative to your build script.
 	// This list must NOT contain any search filters.
 	std::vector<std::string>		code_folders;
 
-	// All files that have any of these extensions will be included in your project.
+	// All files that have any of these extensions (based on 'code_folders') will be included in your project.
 	// These must NOT start with a dot.  Only the extension is required (Examples: cpp, h, inl).
 	std::vector<std::string>		file_extensions;
 
-	// Visual Studio project name.
+	// The name of the project as it shows in Visual Studio.
 	std::string						name;
 };
 
 struct VisualStudioSolution {
+	// All the projects in the Solution.
 	std::vector<VisualStudioProject>	projects;
 
+	// All the target platforms that this Solution supports.
 	std::vector<std::string>			platforms;
 
-	// The name of the solution.
+	// The name of the Solution as it appears in Visual Studio.
 	// For the sake of simplicity we keep the name of the Solution in Visual Studio and the Solution's filename the same.
 	std::string							name;
 
 	// The folder where the solution (and it's projects) are going to live.
 	// If you don't set this then the solution is generated in the same path as the build file.
-	// This is relative to the source file that you specify at the command line.
+	// The path is relative to the source file that you specify at the command line.
 	std::string							path;
 };
 
 struct BuilderOptions {
 	// The path to the compiler that you want to build with.
-	// If you want to use MSVC then just set this to "cl.exe" or "cl".
+	// If you want to use MSVC then you can just set this to "cl.exe" or "cl" and set 'compiler_version' and Builder will figure it out for you.
 	// If you leave this unset then Builder will use the portable install of Clang that it came with.
 	std::string					compiler_path;
 
@@ -214,7 +219,7 @@ struct BuilderOptions {
 
 	// All the possible configs that you could build with.
 	// Pass the one you actually want to build with via the --config= command line argument.
-	// If you want use Visual Studio only, then don't fill this out.
+	// If all you're doing is generating Visual Studio Solutions then you don't need to fill this out.
 	std::vector<BuildConfig>	configs;
 
 	// If you don't use Visual Studio then ignore this.
@@ -226,28 +231,7 @@ struct BuilderOptions {
 	bool						generate_solution;
 };
 
-static unsigned int builder_get_config_hash( BuildConfig* config, const unsigned int seed );
-
-static bool config_equals( BuildConfig* configA, BuildConfig* configB ) {
-	unsigned int hashA = builder_get_config_hash( configA, 0 );
-	unsigned int hashB = builder_get_config_hash( configB, 0 );
-
-	return hashA == hashB;
-}
-
-static void add_build_config_unique( BuildConfig* config, std::vector<BuildConfig>& outConfigs ) {
-	bool duplicate = false;
-	for ( size_t i = 0; i < outConfigs.size(); i++ ) {
-		if ( config_equals( &outConfigs[i], config ) ) {
-			duplicate = true;
-			break;
-		}
-	}
-
-	if ( !duplicate ) {
-		outConfigs.push_back( *config );
-	}
-}
+static void add_build_config_unique( BuildConfig* config, std::vector<BuildConfig>& out_configs );
 
 static void add_build_config( BuilderOptions* options, BuildConfig* config ) {
 	for ( size_t i = 0; i < config->depends_on.size(); i++ ) {
@@ -260,7 +244,7 @@ static void add_build_config( BuilderOptions* options, BuildConfig* config ) {
 
 //
 // The following is not for users.
-// Don't touch any of this unless you're either a Builder developer or you know exactly what you're doing.
+// Don't use or touch any of this unless you're either a Builder developer or you know exactly what you're doing.
 //
 
 static unsigned int builder_hash_sdbm( void* data, const unsigned int seed, const size_t length ) {
@@ -305,8 +289,8 @@ static unsigned int builder_hash_string_array( const unsigned int seed, const st
 static unsigned int builder_get_config_hash( BuildConfig* config, const unsigned int seed ) {
 	unsigned int hash = seed;
 
-	for ( size_t dependencyIndex = 0; dependencyIndex < config->depends_on.size(); dependencyIndex++ ) {
-		hash = builder_get_config_hash( &config->depends_on[dependencyIndex], hash );
+	for ( size_t dependency_index = 0; dependency_index < config->depends_on.size(); dependency_index++ ) {
+		hash = builder_get_config_hash( &config->depends_on[dependency_index], hash );
 	}
 
 	hash = builder_hash_string_array( hash, config->source_files );
@@ -328,6 +312,27 @@ static unsigned int builder_get_config_hash( BuildConfig* config, const unsigned
 	hash = builder_hash_sdbm( &config->warnings_as_errors, hash, sizeof( bool ) );
 
 	return hash;
+}
+
+static bool config_equals( BuildConfig* configA, BuildConfig* configB ) {
+	unsigned int hashA = builder_get_config_hash( configA, 0 );
+	unsigned int hashB = builder_get_config_hash( configB, 0 );
+
+	return hashA == hashB;
+}
+
+static void add_build_config_unique( BuildConfig* config, std::vector<BuildConfig>& out_configs ) {
+	bool duplicate = false;
+	for ( size_t i = 0; i < out_configs.size(); i++ ) {
+		if ( config_equals( &out_configs[i], config ) ) {
+			duplicate = true;
+			break;
+		}
+	}
+
+	if ( !duplicate ) {
+		out_configs.push_back( *config );
+	}
 }
 
 #ifdef __linux__

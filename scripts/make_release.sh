@@ -21,19 +21,12 @@ if [[ -z "$version" ]]; then
 fi
 
 builder_dir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")/..
+releases_folder=${builder_dir}/releases
 
 source ${builder_dir}/scripts/build.sh release
 
-releases_folder=${builder_dir}/releases
-temp_folder=${builder_dir}/releases/temp
-
 mkdir -p ${releases_folder}
-mkdir -p ${temp_folder}
-mkdir -p ${temp_folder}/bin
 
-cp -R ./bin/builder_release ${temp_folder}/bin/builder
-cp -R ./clang               ${temp_folder}/clang
+cp ./bin/builder_release ./bin/builder
 
-7za a -t7z releases/builder_${version}_linux.7z ${temp_folder}/bin ${temp_folder}/clang include doc README.md LICENSE
-
-rm -r $temp_folder
+tar cvf releases/builder_${version}_linux.tar.xz -I 'xz -9e --lzma2=dict=256M' ./bin/builder clang include doc README.md LICENSE

@@ -1,4 +1,4 @@
-v0.9.0, <RELEASE DATE HERE>:
+v0.9.0, 01/12/2025:
 
 * Added support for Linux!
 	* Building binaries works the same as it does on Windows.

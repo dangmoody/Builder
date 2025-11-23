@@ -19,7 +19,7 @@ robocopy /e .\\clang %temp_folder%\\clang
 
 ren %temp_folder%\\bin\\builder_release.exe builder.exe
 
-.\\tools\\7zip_win64\\7za.exe a -t7z .\\releases\\builder_%version%_win64.7z %temp_folder%\\bin %temp_folder%\\clang include doc README.md LICENSE
+.\\tools\\7zip_win64\\7za.exe a -tzip .\\releases\\builder_%version%_win64.zip %temp_folder%\\bin %temp_folder%\\clang include doc README.md LICENSE
 
 rd /s /Q %temp_folder%
 

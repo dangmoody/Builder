@@ -10,8 +10,31 @@ if [%version%]==[] (
 pushd %~dp0
 pushd ..
 
+:: compile release build
 call .\\scripts\\build.bat release
 
+if %errorlevel% NEQ 0 (
+	echo ERROR: Failed to create release build! A release cannot be made while the build is broken
+	exit /B %errorlevel%
+)
+
+:: compile tests
+call .\\scripts\\build_tests.bat release
+
+if %errorlevel% NEQ 0 (
+	echo ERROR: Failed to build the tests! A release cannot be made while the tests dont compile
+	exit /B %errorlevel%
+)
+
+:: run tests
+call .\\bin\\win64\\release\\builder_tests.exe
+
+if %errorlevel% NEQ 0 (
+	echo ERROR: Tests failed to run successfully! A release cannot be made while the tests dont work
+	exit /B %errorlevel%
+)
+
+:: now actually make release package
 set temp_folder=.\\releases\\temp
 
 robocopy    .\\bin   %temp_folder%\\bin   builder_release.exe

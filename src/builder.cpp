@@ -748,7 +748,7 @@ int main( int argc, char** argv ) {
 	core_init( MEM_MEGABYTES( 128 ) );	// TODO(DM): 26/03/2025: can we just use defaults for this now?
 	defer( core_shutdown() );
 
-	printf( "Builder v%d.%d.%d RC2\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {
 		.configIndices	= hashmap_create( 1 ),	// TODO(DM): 30/03/2025: whats a reasonable default here?
@@ -887,11 +887,11 @@ int main( int argc, char** argv ) {
 	// init default compiler backend (the version of clang that builder came with)
 	compilerBackend_t compilerBackend;
 	{
-#ifdef BUILDER_RELEASE
-		const char* defaultCompilerPath = tprintf( "%s%c..%cclang%cbin%cclang", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
-#else
-		const char* defaultCompilerPath = tprintf( "%s%c..%c..%c..%cclang%cbin%cclang", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
-#endif
+//#ifdef BUILDER_RETAIL
+		const char* defaultCompilerPath = tprintf( "%s%c..%cclang%cbin%cclang", path_remove_file_from_path( path_app_path() ), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
+//#else
+//		const char* defaultCompilerPath = tprintf( "%s%c..%c..%c..%cclang%cbin%cclang", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
+//#endif
 
 		CreateCompilerBackend_Clang( &compilerBackend, defaultCompilerPath );
 	}
@@ -924,11 +924,11 @@ int main( int argc, char** argv ) {
 			},
 			.additional_includes = {
 				// add the folder that builder lives in as an additional include path otherwise people have no real way of being able to include it
-#ifdef BUILDER_RELEASE
-				tprintf( "%s%c..%cinclude", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR ),
-#else
-				tprintf( "%s%c..%c..%c..%cinclude", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR ),
-#endif
+//#ifdef BUILDER_RETAIL
+				tprintf( "%s%c..%cinclude", path_remove_file_from_path( path_app_path() ), PATH_SEPARATOR, PATH_SEPARATOR ),
+//#else
+//				tprintf( "%s%c..%c..%c..%cinclude", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR ),
+//#endif
 			},
 			.additional_libs = {
 #if defined( _WIN64 )

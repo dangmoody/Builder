@@ -18,18 +18,6 @@
     <ClCompile Include="src\builder.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="test_sln\src\test_sln.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="test_sln\src\generate_solution.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="test_sln\src\app\main.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="test_sln\src\library\library.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\visual_studio.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -155,9 +143,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="test_sln\src\library\library.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\builder_local.h">
       <Filter>Header Files</Filter>
     </ClInclude>

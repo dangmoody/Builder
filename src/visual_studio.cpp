@@ -194,7 +194,8 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 			const char* defaultPlatformNames[] = {
 				"Win32",
-				"x64"
+				"x64",
+				"linux-x64"
 			};
 
 			For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
@@ -502,6 +503,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 			StringBuilder vcxprojContent = {};
 			string_builder_reset( &vcxprojContent );
+			defer( string_builder_destroy( &vcxprojContent ) );
 
 			string_builder_appendf( &vcxprojContent, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
 			string_builder_appendf( &vcxprojContent, "<Project DefaultTargets=\"Build\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n" );
@@ -590,7 +592,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 			// not sure what this is or why we need this one but visual studio seems to want it
 			string_builder_appendf( &vcxprojContent, "\t<PropertyGroup Label=\"UserMacros\" />\n" );
-		
+
 			// for each config and platform, set the following:
 			//	external include paths
 			//	external library paths
@@ -643,9 +645,9 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 					const char* inputFileNoPath = path_remove_path_from_file( context->inputFile );
 					const char* inputFileRelative = tprintf( "%s%c%s", pathFromSolutionToInputFile, PATH_SEPARATOR, inputFileNoPath );
 
-					string_builder_appendf( &vcxprojContent, "\t\t<NMakeBuildCommandLine>\"%s%cbuilder.exe\" %s %s%s %s</NMakeBuildCommandLine>\n", path_app_path(), PATH_SEPARATOR, inputFileRelative, ARG_CONFIG, fullConfigName, ARG_VISUAL_STUDIO_BUILD );
-					string_builder_appendf( &vcxprojContent, "\t\t<NMakeReBuildCommandLine>\"%s%cbuilder.exe\" %s %s%s %s</NMakeReBuildCommandLine>\n", path_app_path(), PATH_SEPARATOR, inputFileRelative, ARG_CONFIG, fullConfigName, ARG_VISUAL_STUDIO_BUILD );
-					string_builder_appendf( &vcxprojContent, "\t\t<NMakeCleanCommandLine>\"%s%cbuilder.exe\" %s %s</NMakeCleanCommandLine>\n", path_app_path(), PATH_SEPARATOR, ARG_NUKE, config->options.binary_folder.c_str() );
+					string_builder_appendf( &vcxprojContent, "\t\t<NMakeBuildCommandLine>\"%s\" %s %s%s %s</NMakeBuildCommandLine>\n", path_app_path(), inputFileRelative, ARG_CONFIG, fullConfigName, ARG_VISUAL_STUDIO_BUILD );
+					string_builder_appendf( &vcxprojContent, "\t\t<NMakeReBuildCommandLine>\"%s\" %s %s%s %s</NMakeReBuildCommandLine>\n", path_app_path(), inputFileRelative, ARG_CONFIG, fullConfigName, ARG_VISUAL_STUDIO_BUILD );
+					string_builder_appendf( &vcxprojContent, "\t\t<NMakeCleanCommandLine>\"%s\" %s %s</NMakeCleanCommandLine>\n", path_app_path(), ARG_NUKE, config->options.binary_folder.c_str() );
 
 					// preprocessor definitions
 					string_builder_appendf( &vcxprojContent, "\t\t<NMakePreprocessorDefinitions>" );
@@ -709,6 +711,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 			StringBuilder vcxprojContent = {};
 			string_builder_reset( &vcxprojContent );
+			defer( string_builder_destroy( &vcxprojContent ) );
 
 			string_builder_appendf( &vcxprojContent, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
 			string_builder_appendf( &vcxprojContent, "<Project ToolsVersion=\"Current\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n" );
@@ -773,6 +776,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 			StringBuilder vcxprojContent = {};
 			string_builder_reset( &vcxprojContent );
+			defer( string_builder_destroy( &vcxprojContent ) );
 
 			string_builder_appendf( &vcxprojContent, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
 			string_builder_appendf( &vcxprojContent, "<Project ToolsVersion=\"4.0\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n" );
@@ -839,6 +843,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 		StringBuilder slnContent = {};
 		string_builder_reset( &slnContent );
+		defer( string_builder_destroy( &slnContent ) );
 
 		string_builder_appendf( &slnContent, "\n" );
 		string_builder_appendf( &slnContent, "Microsoft Visual Studio Solution File, Format Version 12.00\n" );

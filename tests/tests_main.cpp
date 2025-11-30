@@ -12,21 +12,19 @@
 #include "../src/core/include/string_helpers.h"
 #include "temper/temper.h"
 
-#ifdef _DEBUG
-#define CONFIG "debug"
-#else
-#define CONFIG "release"
-#endif
-
 #if defined( _WIN32 )
-#define PLATFORM		"win64"
-#define FILE_EXTENSION	".exe"
+	#if defined( _DEBUG )
+		#define BUILDER_EXE_PATH "bin/builder_debug.exe"
+	#elif defined( NDEBUG )
+		#define BUILDER_EXE_PATH "bin/builder_release.exe"
+	#endif
 #elif defined( __linux__ )
-#define PLATFORM		"linux"
-#define FILE_EXTENSION
+	#if defined( _DEBUG )
+		#define BUILDER_EXE_PATH "bin/builder_debug"
+	#elif defined( NDEBUG )
+		#define BUILDER_EXE_PATH "bin/builder_release"
+	#endif
 #endif
-
-#define BUILDER_EXE_PATH "bin/" PLATFORM "/" CONFIG "/builder" FILE_EXTENSION
 
 static const char* GetFileExtensionFromBinaryType( BinaryType type ) {
 #ifdef _WIN32
@@ -417,7 +415,8 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 	}
 
-	// DM: apparently building projects like this on linux isnt possible
+	// DM: apparently MSBuild isnt properly supported on linux so this isnt possible
+	// I'm not convinced by that answer, but all of my reading says so
 #ifdef _WIN32
 	// build the app project in the solution via MSBuild
 	{

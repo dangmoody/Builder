@@ -293,7 +293,9 @@ static bool8 Clang_CompileSourceFile( compilerBackend_t* backend, const char* so
 
 	s32 exitCode = RunProc( &args, NULL, PROC_FLAG_SHOW_ARGS | PROC_FLAG_SHOW_STDOUT );
 
-	ReadDependencyFile( depFilename, clangState->includeDependencies );
+	if ( exitCode == 0 ) {
+		ReadDependencyFile( depFilename, clangState->includeDependencies );
+	}
 
 	return exitCode == 0;
 }

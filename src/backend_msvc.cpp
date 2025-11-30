@@ -461,10 +461,6 @@ static bool8 MSVC_CompileSourceFile( compilerBackend_t* backend, const char* sou
 		process = NULL;
 	}
 
-	if ( exitCode != 0 ) {
-		return false;
-	}
-
 	// now parse the stdout
 	// all include dependencies are on their own line
 	// the line always starts with a specific prefix

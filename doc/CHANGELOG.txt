@@ -14,6 +14,7 @@ v0.9.0, 01/12/2025:
 	* These get added to the end of your final list of arguments that you will send to the compiler.
 	* Useful for things like -fPIC etc.
 * Fixed overriding BuilderOptions::compiler_path not working if the path wasn't absolute.
+* Fixed crash where Builder still tried to find the intermediate file after a build failed.
 * Visual Studio:
 	* Fixed generated SLNs not checking to see if they were on Windows before including some Windows-specific dependencies.
 	* Fixed generated SLNs not working properly in Rider.

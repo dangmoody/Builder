@@ -291,11 +291,13 @@ static bool8 Clang_CompileSourceFile( compilerBackend_t* backend, const char* so
 		args.add( config->additional_compiler_arguments[additionalArgumentIndex].c_str() );
 	}
 
-	s32 exitCode = RunProc( &args, NULL, PROC_FLAG_SHOW_ARGS | PROC_FLAG_SHOW_STDOUT );
+	if ( RunProc( &args, NULL, PROC_FLAG_SHOW_ARGS | PROC_FLAG_SHOW_STDOUT ) != 0 ) {
+		return false;
+	}
 
 	ReadDependencyFile( depFilename, clangState->includeDependencies );
 
-	return exitCode == 0;
+	return true;
 }
 
 static bool8 Clang_LinkIntermediateFiles( compilerBackend_t* backend, const Array<const char*>& intermediateFiles, BuildConfig* config ) {

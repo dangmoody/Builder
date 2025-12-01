@@ -20,7 +20,7 @@ fi
 builder_dir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")/..
 clang_dir="${builder_dir}/clang"
 
-source ${builder_dir}/build.sh ${config}
+source ${builder_dir}/scripts/build.sh ${config}
 echo ""
 
 echo Building tests config "$config"...

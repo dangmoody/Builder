@@ -409,7 +409,10 @@ static String Clang_GetCompilerVersion( compilerBackend_t* backend ) {
 
 	Process* process = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
 
-	assert( process );
+	if ( !process ) {
+		error( "Failed to find process \"%s\".  Did you type it correctly?\n", args[0] );
+		return String();
+	}
 
 	StringBuilder clangOutput = {};
 	string_builder_reset( &clangOutput );

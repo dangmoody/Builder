@@ -1106,6 +1106,12 @@ int main( int argc, char** argv ) {
 				QUIT_ERROR();
 			}
 
+			// check the compiler we want to use actually exists
+			if ( !file_exists( options.compiler_path.c_str() ) ) {
+				error( "You want to use a compiler \"%s\" but I can't find one at that path.  Did you type it correctly?\n", options.compiler_path.c_str() );
+				QUIT_ERROR();
+			}
+
 			// init new compiler backend
 			{
 				float64 compilerBackInitStart = time_ms();

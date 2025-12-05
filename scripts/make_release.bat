@@ -27,7 +27,7 @@ if %errorlevel% NEQ 0 (
 )
 
 :: run tests
-call .\\bin\\win64\\release\\builder_tests.exe
+call .\\bin\\builder_tests_release.exe
 
 if %errorlevel% NEQ 0 (
 	echo ERROR: Tests failed to run successfully! A release cannot be made while the tests dont work

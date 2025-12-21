@@ -182,6 +182,8 @@ TEMPER_TEST_PARAMETRIC( SetCompilerPath, TEMPER_FLAG_SHOULD_RUN, const compiler_
 
 	const char* compilerName = GetCompilerName( compiler );
 
+	printf( "Overriding default Builder compiler for %s\n", compilerName );
+
 	const char* buildSourceFile = tprintf( "tests/test_override_path_%s/test_override_path_%s.cpp", compilerName, compilerName );
 
 	TEMPER_CHECK_TRUE( file_exists( buildSourceFile ) );
@@ -372,7 +374,7 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 		args.add( "*" );
 		args.add( "-requires" );
 		args.add( "Microsoft.Component.MSBuild" );
-		s32 exitCode = RunProc( &args, &vswhereStdout, true );
+		s32 exitCode = RunProc( &args, &vswhereStdout );
 
 		// fail test if vswhere errors
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Failed to run vswhere.exe properly.  Exit code actually returned %d.\n", exitCode );

@@ -64,28 +64,28 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <NMakeBuildCommandLine>..\\scripts\\build_tests.bat debug</NMakeBuildCommandLine>
-    <NMakeOutput>builder_tests.exe</NMakeOutput>
     <NMakeReBuildCommandLine>..\\scripts\\build_tests.bat debug</NMakeReBuildCommandLine>
     <NMakePreprocessorDefinitions>_DEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
     <NMakeIncludeSearchPath>..\\;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+    <NMakeOutput>$(SolutionDir)bin\builder_tests_$(Configuration).exe</NMakeOutput>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <NMakeBuildCommandLine>build_tests.bat</NMakeBuildCommandLine>
-    <NMakeOutput>builder_tests.exe</NMakeOutput>
     <NMakeReBuildCommandLine>build_tests.bat</NMakeReBuildCommandLine>
     <NMakePreprocessorDefinitions>WIN32;_DEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+    <NMakeOutput>$(SolutionDir)bin\builder_tests_$(Configuration).exe</NMakeOutput>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <NMakeBuildCommandLine>build_tests.bat</NMakeBuildCommandLine>
-    <NMakeOutput>builder_tests.exe</NMakeOutput>
     <NMakeReBuildCommandLine>build_tests.bat</NMakeReBuildCommandLine>
     <NMakePreprocessorDefinitions>WIN32;NDEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+    <NMakeOutput>$(SolutionDir)bin\builder_tests_$(Configuration).exe</NMakeOutput>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <NMakeBuildCommandLine>../scripts/build_tests.bat release</NMakeBuildCommandLine>
-    <NMakeOutput>builder_tests.exe</NMakeOutput>
     <NMakeReBuildCommandLine>../scripts/build_tests.bat release</NMakeReBuildCommandLine>
     <NMakePreprocessorDefinitions>NDEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+    <NMakeOutput>$(SolutionDir)bin\builder_tests_$(Configuration).exe</NMakeOutput>
   </PropertyGroup>
   <ItemDefinitionGroup>
   </ItemDefinitionGroup>

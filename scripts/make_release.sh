@@ -23,7 +23,11 @@ fi
 builder_dir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")/..
 releases_folder=${builder_dir}/releases
 
-source ${builder_dir}/scripts/build.sh release
+# build tests (also builds builder)
+source ${builder_dir}/scripts/build_tests.sh release
+
+# run the tests and make sure they pass
+${builder_dir}/bin/builder_tests_release
 
 mkdir -p ${releases_folder}
 

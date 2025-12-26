@@ -1,4 +1,4 @@
-v0.9.1, <RELEASE DATE HERE>:
+v0.9.1, 26/12/2025:
 
 * Stopped the program from crashing if the overridden compiler can't be found.  Instead, show an error and exit gracefully.
 

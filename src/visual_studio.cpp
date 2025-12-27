@@ -159,7 +159,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 	assert( context->inputFilePath.data );
 	assert( options );
 
-	Array<char*> projectFolders;
+	Array<const char*> projectFolders;
 
 	Hashmap* projectFolderIndices = hashmap_create( 1 );
 	defer { hashmap_destroy( projectFolderIndices ); };
@@ -363,10 +363,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 					// make a string from that the start and the end
 					u64 folderNameLength = cast( u64, folderEnd ) - cast( u64, folderStart );
-
-					char* folderName = cast( char*, mem_temp_alloc( ( folderNameLength + 1 ) * sizeof( char ) ) );
-					strncpy( folderName, folderStart, folderNameLength * sizeof( char ) );
-					folderName[folderNameLength] = 0;
+					const char* folderName = temp_c_string( folderStart, folderNameLength );
 
 					u64 folderNameHash = hash_string( folderName, 0 );
 
@@ -473,9 +470,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 						while ( currentSlash ) {
 							u64 filterPathLength = cast( u64, currentSlash ) - cast( u64, folder );
-							char* filterPath = cast( char*, mem_temp_alloc( ( filterPathLength + 1 ) * sizeof( char ) ) );
-							memcpy( filterPath, folder, filterPathLength );
-							filterPath[filterPathLength] = 0;
+							const char* filterPath = temp_c_string( folder, filterPathLength );
 
 							AddUniquePath( filterPath );
 
@@ -558,14 +553,8 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 				const char* to = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, fullBinaryName );
 				//to = path_canonicalise( to );
 
-				char* pathFromSolutionToBinary = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
-				memset( pathFromSolutionToBinary, 0, MAX_PATH * sizeof( char ) );
-				pathFromSolutionToBinary = path_relative_path_to( from, to );
-
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wcast-qual"
+				const char* pathFromSolutionToBinary = path_relative_path_to( from, to );
 				pathFromSolutionToBinary = cast( char*, path_remove_file_from_path( pathFromSolutionToBinary ) );
-#pragma clang diagnostic pop
 
 				For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
 					const char* platform = options->solution.platforms[platformIndex].c_str();
@@ -740,9 +729,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 					const char* to = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, fullBinaryName );
 					//to = path_canonicalise( to );
 
-					char* pathFromSolutionToBinary = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
-					memset( pathFromSolutionToBinary, 0, MAX_PATH * sizeof( char ) );
-					pathFromSolutionToBinary = path_relative_path_to( from, to );
+					char* pathFromSolutionToBinary = path_relative_path_to( from, to );
 
 					For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
 						const char* platform = options->solution.platforms[platformIndex].c_str();

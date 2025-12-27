@@ -106,9 +106,7 @@ const char* path_canonicalise( const char* path ) {
 
 const char* path_fix_slashes( const char* path ) {
 	u64 path_length = strlen( path );
-	char* result = cast( char*, mem_temp_alloc( ( path_length + 1 ) * sizeof( char ) ) );
-	memcpy( result, path, path_length * sizeof( char ) );
-	result[path_length] = 0;
+	const char* result = temp_c_string( path, path_length );
 
 	For ( u64, char_index, 0, path_length ) {
 		if ( result[char_index] == '/' ) {

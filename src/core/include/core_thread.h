@@ -41,7 +41,7 @@ struct Thread {
 	#define ThreadCode int
 #endif
 
-typedef ThreadCode ( *ThreadFunc )( void* data );
+typedef s64 ( *ThreadFunc )( void* data );
 
 CORE_API Thread	thread_create( ThreadFunc thread_func, void* data );
 

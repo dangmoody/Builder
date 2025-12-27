@@ -26,12 +26,6 @@ SOFTWARE.
 ===========================================================================
 */
 
-#if defined( __clang__ )
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
-#pragma clang diagnostic ignored "-Wunsafe-buffer-usage-in-libc-call"
-#endif
-
 #include <hash.h>
 
 #include <typecast.inl>
@@ -43,6 +37,12 @@ SOFTWARE.
 #define XXH_ASSERT assert
 #include "xxhash/xxhash.c"
 #pragma clang diagnostic pop
+
+#if defined( __clang__ )
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#pragma clang diagnostic ignored "-Wunsafe-buffer-usage-in-libc-call"
+#endif
 
 /*
 ================================================================================================

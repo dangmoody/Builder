@@ -94,8 +94,7 @@ bool8 path_is_absolute( const char* path ) {
 const char* path_canonicalise( const char* path ) {
 	assert( path );
 
-	char* path_copy = cast( char*, mem_temp_alloc( PATH_MAX * sizeof( char ) ) );
-	strncpy( path_copy, path, PATH_MAX * sizeof( char ) );
+	const char* path_copy = temp_c_string( path, PATH_MAX );
 
 	const char* result = realpath( path_copy, NULL );
 	if ( !result ) {
@@ -109,9 +108,7 @@ const char* path_canonicalise( const char* path ) {
 
 const char* path_fix_slashes( const char* path ) {
 	u64 path_length = strlen( path );
-	char* result = cast( char*, mem_temp_alloc( ( path_length + 1 ) * sizeof( char ) ) );
-	memcpy( result, path, path_length * sizeof( char ) );
-	result[path_length] = 0;
+	char* result = temp_c_string( path, path_length );
 
 	For ( u64, char_index, 0, path_length ) {
 		if ( result[char_index] == '\\' ) {

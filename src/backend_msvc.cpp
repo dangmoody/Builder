@@ -457,7 +457,7 @@ static bool8 MSVC_CompileSourceFile( compilerBackend_t* backend, const char* sou
 	s32 exitCode = 0;
 	StringBuilder processStdout = {};
 	string_builder_reset( &processStdout );
-	defer( string_builder_destroy( &processStdout ) );
+	defer { string_builder_destroy( &processStdout ); };
 	{
 		Process* process = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
 

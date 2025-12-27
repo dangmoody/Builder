@@ -31,6 +31,7 @@ SOFTWARE.
 #include <core_helpers.h>
 #include <temp_storage.h>
 #include <typecast.inl>
+#include <core_string.h>
 
 #include <string.h>
 
@@ -76,11 +77,7 @@ const char* path_remove_file_from_path( const char* path ) {
 
 	u64 path_length = cast( u64, last_slash ) - cast( u64, path );
 
-	char* result = cast( char*, mem_temp_alloc( ( path_length + 1 ) * sizeof( char ) ) );
-	strncpy( result, path, path_length * sizeof( char ) );
-	result[path_length] = 0;
-
-	return result;
+	return temp_c_string( path, path_length );
 }
 
 const char* path_remove_path_from_file( const char* path ) {
@@ -104,11 +101,7 @@ const char* path_remove_file_extension( const char* filename ) {
 
 	u64 result_length = cast( u64, dot ) - cast( u64, filename );
 
-	char* result = cast( char*, mem_temp_alloc( ( result_length + 1 ) * sizeof( char ) ) );
-	strncpy( result, filename, result_length * sizeof( char ) );
-	result[result_length] = 0;
-
-	return result;
+	return temp_c_string( filename, result_length );
 }
 
 #if defined( __clang__ )

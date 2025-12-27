@@ -32,14 +32,16 @@ SOFTWARE.
 #include "../file_local.h"
 
 #include <debug.h>
-#include <allocation_context.h>
 #include <defer.h>
 #include <temp_storage.h>
 #include <typecast.inl>
 #include <paths.h>
-#include <array.inl>
+#include <core_array.inl>
+#include <core_string.h>
 
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #include <Windows.h>
 
 /*
@@ -63,21 +65,6 @@ static File open_file_internal( const char* filename, const DWORD access_flags, 
 	//printf( "%s last error: 0x%08X\n", __FUNCTION__, GetLastError() );
 
 	return { cast( u64, handle ), 0 };
-}
-
-static bool8 create_folder_internal( const char* path ) {
-	assert( path );
-
-	if ( folder_exists( path ) ) {
-		return true;
-	}
-
-	SECURITY_ATTRIBUTES attributes = {};
-	attributes.nLength = sizeof( SECURITY_ATTRIBUTES );
-
-	bool8 result = cast( bool8, CreateDirectoryA( path, &attributes ) );
-
-	return result;
 }
 
 //================================================================
@@ -233,7 +220,7 @@ bool8 file_get_size( const char* filename, u64* out_size ) {
 		return false;
 	}
 
-	defer( file_close( &file ) );
+	defer { file_close( &file ); };
 
 	LARGE_INTEGER large_int = {};
 
@@ -256,7 +243,7 @@ bool8 file_get_last_write_time( const char* filename, u64* out_last_write_time )
 		return false;
 	}
 
-	defer( file_close( &file ) );
+	defer { file_close( &file ); };
 
 	FILETIME lastWriteTime = {};
 
@@ -337,6 +324,21 @@ bool8 file_exists( const char* filename ) {
 	assert( filename );
 
 	return GetFileAttributes( filename ) != INVALID_FILE_ATTRIBUTES;
+}
+
+bool8 create_folder_internal( const char* path ) {
+	assert( path );
+
+	if ( folder_exists( path ) ) {
+		return true;
+	}
+
+	SECURITY_ATTRIBUTES attributes = {};
+	attributes.nLength = sizeof( SECURITY_ATTRIBUTES );
+
+	bool8 result = cast( bool8, CreateDirectoryA( path, &attributes ) );
+
+	return result;
 }
 
 bool8 folder_delete( const char* path ) {

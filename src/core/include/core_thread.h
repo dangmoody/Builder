@@ -31,12 +31,20 @@ SOFTWARE.
 #include "int_types.h"
 #include "dll_export.h"
 
-struct CommandLineArgs {
-	s32		count;
-	char**	data;
+struct Thread {
+	void*	ptr;
 };
 
-extern CommandLineArgs		g_cmd_line_args;
+#ifdef _WIN32
+	#define ThreadCode DWORD
+#else
+	#define ThreadCode int
+#endif
 
-CORE_API void				set_command_line_args( int argc, char** argv );
-CORE_API CommandLineArgs	get_command_line_args( void );
+typedef ThreadCode ( *ThreadFunc )( void* data );
+
+CORE_API Thread	thread_create( ThreadFunc thread_func, void* data );
+
+CORE_API void	thread_destroy( Thread* thread );
+
+CORE_API void	thread_sleep( const float64 seconds );

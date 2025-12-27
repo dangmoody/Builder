@@ -33,9 +33,6 @@
     <ClCompile Include="src\core\src\win64\file.win64.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\core\src\win64\init.win64.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\core\src\win64\library.win64.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -45,25 +42,7 @@
     <ClCompile Include="src\core\src\win64\timer.win64.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\core\src\allocation_context.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\core\src\allocator_linear.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\core\src\allocator_malloc.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\core\src\cmd_line_args.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\core\src\core.suc.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\core\src\core.win64.suc.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\core\src\core_process.subprocess.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\core\src\core_string.cpp">
@@ -75,19 +54,10 @@
     <ClCompile Include="src\core\src\hashmap.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\core\src\math.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\core\src\memory_tracking.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\core\src\random.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\core\src\string_builder.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\core\src\string_helpers.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\core\src\temp_storage.cpp">
@@ -99,22 +69,10 @@
     <ClCompile Include="src\backend_msvc.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\core\src\3rdparty\xxhash\xxhash.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\core\src\linux\allocator_malloc.linux.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\core\src\linux\core_process.linux.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\core\src\linux\debug.linux.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\core\src\linux\file.linux.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\core\src\linux\init.linux.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\core\src\linux\library.linux.cpp">
@@ -129,39 +87,39 @@
     <ClCompile Include="src\core\src\paths.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\core\src\win64\allocator_malloc.win64.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\core\src\core.linux.suc.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\core\src\debug.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\core\src\file.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\core\src\core_math.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\src\intrinsics.clang.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\src\linear_allocator.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\src\xxhash\xxhash.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\src\win64\core_thread.win64.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\src\core.suc.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\src\win64\core.win64.suc.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\src\linux\core.linux.suc.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\builder_local.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\core\src\core_local.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\core\include\allocation_context.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\core\include\allocator.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\core\include\allocator_linear.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\core\include\allocator_malloc.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\core\include\array.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\core\include\cmd_line_args.h">
@@ -174,9 +132,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\core\include\core_string.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\core\include\core_types.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\core\include\date_and_time.h">
@@ -203,25 +158,13 @@
     <ClInclude Include="src\core\include\library.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\core\include\memory_tracking.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\core\include\memory_units.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\core\include\paths.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\core\include\random.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\core\include\ring.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\core\include\string_builder.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\core\include\string_helpers.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\core\include\temp_storage.h">
@@ -233,26 +176,32 @@
     <ClInclude Include="include\builder.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\core\src\3rdparty\stb\stb_sprintf.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\core\src\3rdparty\subprocess\subprocess.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\core\src\3rdparty\xxhash\xxhash.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\core\src\file_local.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\include\core_array.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\include\core_helpers.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\include\core_memory.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\include\int_types.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\include\linear_allocator.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\src\xxhash\xxhash.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\include\core_thread.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="src\core\include\array.inl">
-      <Filter>Header Files</Filter>
-    </None>
-    <None Include="src\core\include\ring.inl">
-      <Filter>Header Files</Filter>
-    </None>
     <None Include="src\core\include\typecast.inl">
       <Filter>Header Files</Filter>
     </None>
@@ -275,5 +224,8 @@
       <Filter>Source Files</Filter>
     </None>
     <None Include="scripts\make_release.sh" />
+    <None Include="src\core\include\core_array.inl">
+      <Filter>Header Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

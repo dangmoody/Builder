@@ -31,12 +31,19 @@ SOFTWARE.
 #include "builder_local.h"
 
 #include "core/include/debug.h"
-#include "core/include/string_helpers.h"
+#include "core/include/core_string.h"
 #include "core/include/paths.h"
-#include "core/include/array.inl"
+#include "core/include/core_array.inl"
 #include "core/include/string_builder.h"
 #include "core/include/core_process.h"
 #include "core/include/file.h"
+#include "core/include/defer.h"
+#include "core/include/core_helpers.h"
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <Windows.h>
 
 
 struct msvcState_t {
@@ -86,7 +93,7 @@ static const char* OptimizationLevelToCompilerArg( const OptimizationLevel level
 }
 
 static void OnMSVCVersionFound( const FileInfo* fileInfo, void* userData ) {
-	msvcState_t* msvcState2 = cast( msvcState_t*, userData );
+	msvcState_t* msvcState = cast( msvcState_t*, userData );
 
 	u32 version0 = 0;
 	u32 version1 = 0;
@@ -95,10 +102,10 @@ static void OnMSVCVersionFound( const FileInfo* fileInfo, void* userData ) {
 
 	u32 mask = ( version0 << 24 ) | ( version1 << 16 ) | ( version2 );
 
-	if ( mask > msvcState2->versionMask ) {
-		msvcState2->versionMask = mask;
+	if ( mask > msvcState->versionMask ) {
+		msvcState->versionMask = mask;
 
-		msvcState2->compilerVersion = fileInfo->filename;
+		string_copy_from_c_string( &msvcState->compilerVersion, fileInfo->filename );
 	}
 }
 
@@ -153,7 +160,7 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 		return outArray;
 	};
 
-	msvcState_t* msvcState = cast( msvcState_t*, mem_alloc( sizeof( msvcState_t ) ) );
+	msvcState_t* msvcState = cast( msvcState_t*, malloc( sizeof( msvcState_t ) ) );
 	new( msvcState ) msvcState_t;
 
 	msvcState->versionMask = 0;
@@ -161,11 +168,11 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 	backend->data = msvcState;
 
 	std::string msvcRootFolder;
-	String clPath;
 
 	// call vswhere.exe to get the MSVC root folder
 	{
-		Array<const char*> args;
+		Array<const char*> args = {};
+		defer { args.free(); };
 		args.add( "C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe" );
 		args.add( "-all" );
 		args.add( "-products" );
@@ -180,7 +187,7 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 
 		StringBuilder processStdout = {};
 		string_builder_reset( &processStdout );
-		defer( string_builder_destroy( &processStdout ) );
+		defer { string_builder_destroy( &processStdout ); };
 
 		char buffer[1024] = {};
 		u64 bytesRead = U64_MAX;
@@ -217,12 +224,15 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 	}
 
 	// now use MSVC root folder and the correct MSVC version to get the path to cl.exe
+	String clPath = {};
+	defer { string_free( &clPath ); };
 	string_printf( &clPath, "%s\\VC\\Tools\\MSVC\\%s\\bin\\Hostx64\\x64", msvcRootFolder.c_str(), msvcState->compilerVersion.data );
 
 	// now microsoft need us to tell their own compiler that runs on their own platform (specifically FOR their own platform) where their own include and library folders are, sigh...
 	// the way we do that is by manually calling a vcvars*.bat script and using the information it gives us back to know which include and lib folders to look for
 	// and even then we still have to manually construct the windows SDK folders! AAARGH!
-	Array<const char*> args;
+	Array<const char*> args = {};
+	defer { args.free(); };
 	args.add( tprintf( "%s\\VC\\Auxiliary\\Build\\vcvars64.bat", msvcRootFolder.c_str() ) );
 	args.add( "&&" );
 	args.add( "set" );
@@ -236,7 +246,7 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 
 	StringBuilder vcvarsOutput = {};
 	string_builder_reset( &vcvarsOutput );
-	defer( string_builder_destroy( &vcvarsOutput ) );
+	defer { string_builder_destroy( &vcvarsOutput ); };
 
 	char buffer[1024] = {};
 	u64 bytesRead = U64_MAX;
@@ -297,7 +307,12 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 }
 
 static void MSVC_Shutdown( compilerBackend_t* backend ) {
-	mem_free( backend->data );
+	msvcState_t* msvcState = cast( msvcState_t*, backend->data );
+
+	string_free( &msvcState->compilerVersion );
+
+	msvcState->~msvcState_t();
+	free( backend->data );
 	backend->data = NULL;
 }
 
@@ -386,7 +401,7 @@ static bool8 MSVC_CompileSourceFile( compilerBackend_t* backend, const char* sou
 
 		// MSVC only allows one warning level to be set
 		if ( config->warning_levels.size() > 1 ) {
-			StringBuilder builder;
+			StringBuilder builder = {};
 			string_builder_reset( &builder );
 
 			string_builder_appendf( &builder, "MSVC only allows ONE of the following warning levels to be set:\n" );
@@ -568,17 +583,14 @@ static void MSVC_GetIncludeDependenciesFromSourceFileBuild( compilerBackend_t* b
 	outIncludeDependencies = msvcState->includeDependencies;
 }
 
-static String MSVC_GetCompilerVersion( compilerBackend_t* backend ) {
+static void MSVC_GetCompilerVersion( compilerBackend_t* backend, String* outCompilerVersion ) {
 	msvcState_t* msvcState = cast( msvcState_t*, backend->data );
 
-	return msvcState->compilerVersion;
+	string_copy( outCompilerVersion, &msvcState->compilerVersion );
 }
 
 void CreateCompilerBackend_MSVC( compilerBackend_t* outBackend, const char* compilerPath ) {
 	*outBackend = compilerBackend_t {
-		.compilerPath								= compilerPath,
-		.linkerPath									= "link",
-		.data										= NULL,
 		.Init										= MSVC_Init,
 		.Shutdown									= MSVC_Shutdown,
 		.CompileSourceFile							= MSVC_CompileSourceFile,
@@ -586,6 +598,9 @@ void CreateCompilerBackend_MSVC( compilerBackend_t* outBackend, const char* comp
 		.GetIncludeDependenciesFromSourceFileBuild	= MSVC_GetIncludeDependenciesFromSourceFileBuild,
 		.GetCompilerVersion							= MSVC_GetCompilerVersion,
 	};
+
+	string_copy_from_c_string( &outBackend->compilerPath, compilerPath );
+	string_copy_from_c_string( &outBackend->linkerPath, "link" );
 }
 
 #endif // _WIN32

@@ -28,7 +28,7 @@ SOFTWARE.
 
 #pragma once
 
-#include "core_types.h"
+#include "int_types.h"
 #include "dll_export.h"
 
 /*
@@ -79,6 +79,6 @@ CORE_API char*			path_relative_path_to( const char* pathFrom, const char* pathTo
 
 CORE_API bool8			path_set_current_directory( const char* path );
 
-// Takes a potentially-infinite number of strings and separates each one with a slash (back slash on Windows, forward slash on all other platforms).
+// Takes a variable number of strings and separates each one with a slash (back slash on Windows, forward slash on all other platforms).
 // template<class... Args>
 // CORE_API const char*	path_join( const char* first, const Args*... args );

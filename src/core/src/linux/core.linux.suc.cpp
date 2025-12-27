@@ -26,17 +26,12 @@ SOFTWARE.
 ===========================================================================
 */
 
-#pragma once
+#ifdef __linux__
 
-#include "int_types.h"
-#include "dll_export.h"
+#include "debug.linux.cpp"
+#include "file.linux.cpp"
+#include "library.linux.cpp"
+#include "paths.linux.cpp"
+#include "timer.linux.cpp"
 
-struct CommandLineArgs {
-	s32		count;
-	char**	data;
-};
-
-extern CommandLineArgs		g_cmd_line_args;
-
-CORE_API void				set_command_line_args( int argc, char** argv );
-CORE_API CommandLineArgs	get_command_line_args( void );
+#endif // __linux__

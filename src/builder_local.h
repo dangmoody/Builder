@@ -30,13 +30,19 @@ SOFTWARE.
 
 #include "../include/builder.h"
 
-#include "core/include/core_types.h"
-#include "core/include/array.h"
+#include "core/include/int_types.h"
+#include "core/include/core_array.h"
 #include "core/include/core_string.h"
 
-#ifdef _WIN64
-#define NOMINMAX
-#include <Windows.h>
+//#ifdef _WIN64
+//#define NOMINMAX
+//#include <Windows.h>
+//#endif
+
+#ifdef _WIN32
+	#define ERROR_CODE_FORMAT "0x%X"
+#else
+	#define ERROR_CODE_FORMAT "%d"
 #endif
 
 #include <vector>
@@ -78,12 +84,12 @@ struct compilerBackend_t {
 	bool8	( *CompileSourceFile )( compilerBackend_t* backend, const char* sourceFile, BuildConfig* config );
 	bool8	( *LinkIntermediateFiles )( compilerBackend_t* backend, const Array<const char*>& intermediateFiles, BuildConfig* config );
 	void	( *GetIncludeDependenciesFromSourceFileBuild )( compilerBackend_t* backend, std::vector<std::string>& includeDependencies );
-	String	( *GetCompilerVersion )( compilerBackend_t* backend );
+	void	( *GetCompilerVersion )( compilerBackend_t* backend, String* outCompilerVersion );
 };
 
-void			CreateCompilerBackend_Clang( compilerBackend_t* outBackend, const char* compilerPath );
-void			CreateCompilerBackend_MSVC( compilerBackend_t* outBackend, const char* compilerPath );
-void			CreateCompilerBackend_GCC( compilerBackend_t* outBackend, const char* compilerPath );
+void	CreateCompilerBackend_Clang( compilerBackend_t* outBackend, const char* compilerPath );
+void	CreateCompilerBackend_MSVC( compilerBackend_t* outBackend, const char* compilerPath );
+void	CreateCompilerBackend_GCC( compilerBackend_t* outBackend, const char* compilerPath );
 
 struct includeDependencies_t {
 	std::string					filename;

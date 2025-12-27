@@ -26,17 +26,22 @@ SOFTWARE.
 ===========================================================================
 */
 
+#if defined( __clang__ )
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#pragma clang diagnostic ignored "-Wunsafe-buffer-usage-in-libc-call"
+#endif
+
 #include <hash.h>
 
-#include <allocation_context.h>
-#include <debug.h>
 #include <typecast.inl>
+#include <core_helpers.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
 #define XXH_ASSUME assert
 #define XXH_ASSERT assert
-#include "3rdparty/xxhash/xxhash.c"
+#include "xxhash/xxhash.c"
 #pragma clang diagnostic pop
 
 /*
@@ -64,7 +69,7 @@ struct Hasher {
 };
 
 Hasher* hasher_create( const u64 seed ) {
-	Hasher* hasher = cast( Hasher*, mem_alloc( sizeof( Hasher ) ) );
+	Hasher* hasher = cast( Hasher*, malloc( sizeof( Hasher ) ) );
 	memset( hasher, 0, sizeof( Hasher ) );
 
 	hasher->state = XXH64_createState();
@@ -78,7 +83,7 @@ void hasher_destroy( Hasher* hasher ) {
 	XXH64_freeState( hasher->state );
 	hasher->state = NULL;
 
-	mem_free( hasher );
+	free( hasher );
 	hasher = NULL;
 }
 
@@ -92,6 +97,10 @@ void hasher_hash( Hasher* hasher, const void* ptr, const u64 size ) {
 	XXH64_update( hasher->state, ptr, size );
 }
 
-u64 hasher_get( Hasher* hasher ) {
+u64 hasher_get_hash( Hasher* hasher ) {
 	return XXH64_digest( hasher->state );
 }
+
+#if defined( __clang__ )
+#pragma clang diagnostic pop
+#endif

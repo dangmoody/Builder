@@ -28,13 +28,23 @@ SOFTWARE.
 
 #pragma once
 
+#include "int_types.h"
 #include "dll_export.h"
 
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wpadded"
-#endif
+/*
+================================================================================================
 
+	String Builder
+
+	Use this if you want to dynamically append content to a string.
+
+	Every time you append to a StringBuilder it puts that string into a "buffer".  Buffers are
+	stored in a linked list.
+
+================================================================================================
+*/
+
+// TODO(DM): 23/12/2025: add 4KB static char array and use that if the string fits in that
 struct StringBuilderBuffer {
 	u32						length;
 	char*					data;
@@ -46,14 +56,9 @@ struct StringBuilder {
 	StringBuilderBuffer*	tail;
 };
 
-CORE_API void				string_builder_reset( StringBuilder* builder );
-CORE_API void				string_builder_destroy( StringBuilder* builder );
+CORE_API void			string_builder_reset( StringBuilder* builder );
+CORE_API void			string_builder_destroy( StringBuilder* builder );
 
-// CORE_API void				string_builder_appendfv( StringBuilder* builder, const char* fmt, va_list args );
-CORE_API void				string_builder_appendf( StringBuilder* builder, const char* fmt, ... );
+CORE_API void			string_builder_appendf( StringBuilder* builder, const char* fmt, ... );
 
-CORE_API const char*		string_builder_to_string( StringBuilder* builder );
-
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
+CORE_API const char*	string_builder_to_string( StringBuilder* builder );

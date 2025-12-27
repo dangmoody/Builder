@@ -25,18 +25,27 @@ SOFTWARE.
 
 ===========================================================================
 */
-
 #pragma once
 
 #include "int_types.h"
 #include "dll_export.h"
 
-struct CommandLineArgs {
-	s32		count;
-	char**	data;
+struct LinearAllocator {
+	u64	offset;
+	u64	size_bytes;
+	u8*	ptr;
 };
 
-extern CommandLineArgs		g_cmd_line_args;
+CORE_API LinearAllocator*	linear_allocator_create( const u64 size_bytes );
 
-CORE_API void				set_command_line_args( int argc, char** argv );
-CORE_API CommandLineArgs	get_command_line_args( void );
+CORE_API void				linear_allocator_destroy( LinearAllocator* allocator );
+
+CORE_API u8*				linear_allocator_alloc( LinearAllocator* allocator, const u64 size_bytes, const u32 alignment = 8 );
+
+CORE_API void				linear_allocator_reset( LinearAllocator* allocator );
+
+CORE_API u64				linear_allocator_tell( LinearAllocator* allocator );
+
+CORE_API void				linear_allocator_rewind_to( LinearAllocator* allocator, const u64 offset );
+
+CORE_API void				linear_allocator_rewind_by( LinearAllocator* allocator, const u64 bytes );

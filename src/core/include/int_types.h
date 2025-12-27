@@ -28,15 +28,51 @@ SOFTWARE.
 
 #pragma once
 
-#include "int_types.h"
-#include "dll_export.h"
+#include <stdint.h>
+#include <float.h>
 
-struct CommandLineArgs {
-	s32		count;
-	char**	data;
-};
+/*
+================================================================================================
 
-extern CommandLineArgs		g_cmd_line_args;
+	Integer Types
 
-CORE_API void				set_command_line_args( int argc, char** argv );
-CORE_API CommandLineArgs	get_command_line_args( void );
+================================================================================================
+*/
+
+typedef int8_t		s8;
+typedef int16_t		s16;
+typedef int32_t		s32;
+typedef int64_t		s64;
+
+typedef uint8_t		u8;
+typedef uint16_t	u16;
+typedef uint32_t	u32;
+typedef uint64_t	u64;
+
+typedef float		float32;
+typedef double		float64;
+
+typedef u8			bool8;
+
+#define S8_MIN		INT8_MIN
+#define S8_MAX		INT8_MAX
+#define S16_MIN		INT16_MIN
+#define S16_MAX		INT16_MAX
+#define S32_MIN		INT32_MIN
+#define S32_MAX		INT32_MAX
+#define S64_MIN		INT64_MIN
+#define S64_MAX		INT64_MAX
+
+#define U8_MAX		UINT8_MAX
+#define U16_MAX		UINT16_MAX
+#define U32_MAX		UINT32_MAX
+#define U64_MAX		UINT64_MAX
+
+#define FLOAT32_MIN	FLT_MIN
+#define FLOAT32_MAX	FLT_MAX
+
+#define FLOAT64_MIN	DBL_MIN
+#define FLOAT64_MAX	DBL_MAX
+
+// returns bit position 'x'
+#define bit( x )	( 1ULL << (x) )

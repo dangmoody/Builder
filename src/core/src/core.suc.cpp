@@ -26,36 +26,24 @@ SOFTWARE.
 ===========================================================================
 */
 
-#ifdef CORE_SUC
-
-#if defined( _WIN64 )
-	#include "core.win64.suc.cpp"
-#elif __linux__
-	#include "core.linux.suc.cpp"
+#if defined( _WIN32 )
+	#include "win64/core.win64.suc.cpp"
+#elif defined( __linux__ )
+	#include "win64/core.linux.suc.cpp"
 #else
-	#error Unrecognised platform.
+	#error Unrecognised platform!
 #endif
 
-#include <typecast.inl>
-#include <array.inl>
-#include <ring.inl>
-#include "allocation_context.cpp"
-#include "memory_tracking.cpp"
-#include "allocator_linear.cpp"
 #include "cmd_line_args.cpp"
+#include "core_math.cpp"
 #include "core_string.cpp"
 #include "debug.cpp"
 #include "file.cpp"
+#include "hash.xxhash.cpp"
 #include "hashmap.cpp"
-#include "math.cpp"
-#include "random.cpp"
+#include "intrinsics.clang.cpp"
+#include "linear_allocator.cpp"
 #include "paths.cpp"
-#include "string_helpers.cpp"
+#include "random.cpp"
 #include "string_builder.cpp"
 #include "temp_storage.cpp"
-
-// things we use external libraries for
-#include "core_process.subprocess.cpp"
-#include "hash.xxhash.cpp"
-
-#endif // CORE_SUC

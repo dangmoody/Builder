@@ -28,13 +28,14 @@ SOFTWARE.
 
 #include <hashmap.h>
 
+#include <core_helpers.h>
+#include <defer.h>
 #include <debug.h>
-#include <allocation_context.h>
 #include <typecast.inl>
-#define NOMINMAX
 #include <core_math.h>
 
 #include <memory.h>	// memset
+#include <malloc.h>
 
 /*
 ================================================================================================
@@ -44,20 +45,26 @@ SOFTWARE.
 ================================================================================================
 */
 
+#if defined( __clang__ )
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#pragma clang diagnostic ignored "-Wc++98-compat"
+#pragma clang diagnostic ignored "-Wdouble-promotion"
+#pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
+#endif
+
 Hashmap* hashmap_create( const u32 starting_capacity, float32 normalized_max_utilisation, bool8 should_grow ) {
 	assert( starting_capacity );
 	assert( normalized_max_utilisation > 0.0f );
 	assert( normalized_max_utilisation <= 1.0f );
 
-	Hashmap* map = cast( Hashmap*, mem_alloc( sizeof( Hashmap ) ) );
+	Hashmap* map = cast( Hashmap*, malloc( sizeof( Hashmap ) ) );
 	map->capacity = starting_capacity;
-	map->buckets = cast( HashmapBucket*, mem_alloc( starting_capacity * sizeof( HashmapBucket ) ) );
+	map->buckets = cast( HashmapBucket*, malloc( starting_capacity * sizeof( HashmapBucket ) ) );
 	map->should_grow = should_grow;
 	map->max_utilisation = normalized_max_utilisation;
 
 	hashmap_reset( map );
-
-	map->allocator = mem_get_current_allocator();
 
 	return map;
 }
@@ -65,15 +72,11 @@ Hashmap* hashmap_create( const u32 starting_capacity, float32 normalized_max_uti
 void hashmap_destroy( Hashmap* map ) {
 	assert( map );
 
-	mem_push_allocator( map->allocator );
-
-	mem_free( map->buckets );
+	free( map->buckets );
 	map->buckets = NULL;
 
-	mem_free( map );
+	free( map );
 	map = NULL;
-
-	mem_pop_allocator();
 }
 
 inline void set_key_at_index( Hashmap* map, u32 index, u64 key ) {
@@ -109,8 +112,8 @@ inline u32 try_get_index_of_hash( const Hashmap* map, const u64 key ) {
 }
 
 u32 hashmap_get_value( const Hashmap* map, const u64 key ) {
-	assertf( key != HASHMAP_UNUSED_BUCKET, "Key cannot equal empty bucket value (0)" );
-	assertf( key != HASHMAP_TOMBSTONE_BUCKET, "Key cannot equal Tombstone (u32 MAX)" );
+	assert( key != HASHMAP_UNUSED_BUCKET && "Key cannot equal empty bucket value (0)" );
+	assert( key != HASHMAP_TOMBSTONE_BUCKET && "Key cannot equal Tombstone (u32 MAX)" );
 
 	u32 i = try_get_index_of_hash( map, key );
 
@@ -139,15 +142,12 @@ void hashmap_set_value( Hashmap* map, const u64 key, const u32 value ) {
 		float32 utilization = cast( float32, map->usage_count + map->tombstone_count ) / cast( float32, map->capacity );
 		if ( utilization > map->max_utilisation ) {
 			if ( map->should_grow ) {
-				mem_push_allocator( map->allocator );
-				defer( mem_pop_allocator() );
-
 				HashmapBucket* old_buckets = map->buckets;
-				defer( mem_free( old_buckets ) );
+				defer { free( old_buckets ); };
 
 				u32 old_capacity = map->capacity;
-				map->capacity = hlml::max( cast( u32, cast( float32, map->capacity ) * 1.5f ), 2U );
-				map->buckets = cast( HashmapBucket*, mem_alloc( map->capacity * sizeof( HashmapBucket ) ) );
+				map->capacity = max( cast( u32, cast( float32, map->capacity ) * 1.5f ), 2U );
+				map->buckets = cast( HashmapBucket*, malloc( map->capacity * sizeof( HashmapBucket ) ) );
 				// Note(Tom): I don't love that this isn't a memset anymore. this isn's possible if we keep caring about values of unused buckets: unused value != empty bucket.
 				// I suggest we start leaving them untouched. Yes they have stale old data in them, but so long as people are using set that should never be an issue
 				// (we're testing this right?)
@@ -175,8 +175,8 @@ void hashmap_set_value( Hashmap* map, const u64 key, const u32 value ) {
 }
 
 void hashmap_remove_key( Hashmap* map, const u64 key ) {
-	assertf( key != HASHMAP_UNUSED_BUCKET, "Key cannot equal empty bucket value (0)" );
-	assertf( key != HASHMAP_TOMBSTONE_BUCKET, "Key cannot equal Tombstone (u32 MAX)" );
+	assert( key != HASHMAP_UNUSED_BUCKET && "Key cannot equal empty bucket value (0)" );
+	assert( key != HASHMAP_TOMBSTONE_BUCKET && "Key cannot equal Tombstone (u32 MAX)" );
 
 	u32 i = try_get_index_of_hash( map, key );
 	u64 key_at_location = hashmap_internal_combine_at_index( map, i );
@@ -219,3 +219,7 @@ u32 hashmap_internal_get_lo_part( const u64 key ) {
 u32 hashmap_internal_get_hi_part( const u64 key ) {
 	return trunc_cast( u32, key & 0xFFFFFFFF );
 }
+
+#if defined( __clang__ )
+#pragma clang diagnostic pop
+#endif

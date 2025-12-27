@@ -28,7 +28,7 @@ SOFTWARE.
 
 #pragma once
 
-#include "core_types.h"
+#include "int_types.h"
 #include "dll_export.h"
 
 /*
@@ -37,17 +37,17 @@ SOFTWARE.
 	File IO
 
 	Set of basic functions for interacting with Files.  All implementations are OS dependent
-	and nothing uses the CRT.  All functions are also thread-safe.
+	and nothing uses the CRT.
 
 ================================================================================================
 */
 
-#define INVALID_FILE_HANDLE U64_MAX
-
-#ifdef __linux__
+#if defined( __clang__ )
 #pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wpadded"
-#endif // __linux__
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif
+
+#define INVALID_FILE_HANDLE U64_MAX
 
 struct File {
 	u64		handle;
@@ -114,7 +114,7 @@ CORE_API bool8	file_write( File* file, const char* data );
 CORE_API bool8	file_write( File* file, const void* data, const u64 offset, const u64 size );
 
 // Writes a string to the file and gives you a new line afterwards
-CORE_API bool8	file_write_line(File* file, const char* line);
+CORE_API bool8	file_write_line( File* file, const char* line );
 
 // Returns true if successfully deletes the file, otherwise returns false.
 CORE_API bool8	file_delete( const char* filename );
@@ -145,6 +145,6 @@ CORE_API bool8	folder_delete( const char* path );
 // Returns true if the given folder path exists, otherwise returns false.
 CORE_API bool8	folder_exists( const char* path );
 
-#ifdef __linux__
+#if defined( __clang__ )
 #pragma clang diagnostic pop
-#endif //__linux__
+#endif

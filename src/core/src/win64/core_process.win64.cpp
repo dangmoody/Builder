@@ -26,16 +26,19 @@ SOFTWARE.
 ===========================================================================
 */
 
-#if defined( _WIN32 ) && !defined( CORE_USE_SUBPROCESS )
+#ifdef _WIN32
 
 #include <core_process.h>
 
-#include <allocation_context.h>
 #include <typecast.inl>
 #include <string_builder.h>
-#include <array.inl>
+#include <core_array.inl>
+#include <core_helpers.h>
+#include <defer.h>
 
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #include <Windows.h>
 
 /*
@@ -59,12 +62,7 @@ Process* process_create( Array<const char*>* args, Array<const char*>* environme
 
 	unused( environment_variables );
 
-	//TODO(TOM): Figure out how to configure the file IO allocator
-	Allocator* platform_allocator = g_core_ptr->allocator_stack[0];
-	mem_push_allocator( platform_allocator );
-	defer( mem_pop_allocator() );
-
-	Process* process = cast( Process*, mem_alloc( sizeof( Process ) ) );
+	Process* process = cast( Process*, malloc( sizeof( Process ) ) );
 
 	SECURITY_ATTRIBUTES sec_attr = { sizeof( SECURITY_ATTRIBUTES ), NULL, TRUE };
 
@@ -91,7 +89,7 @@ Process* process_create( Array<const char*>* args, Array<const char*>* environme
 		combined_args_length += args->count - 1;	// one space between each argument
 		combined_args_length += 1;					// null terminator
 
-		combined_args = cast( char*, mem_alloc( combined_args_length * sizeof( char ) ) );
+		combined_args = cast( char*, malloc( combined_args_length * sizeof( char ) ) );
 
 		For ( u64, arg_index, 0, args->count ) {
 			const char* arg = ( *args )[arg_index];
@@ -106,7 +104,7 @@ Process* process_create( Array<const char*>* args, Array<const char*>* environme
 		}
 		combined_args[combined_args_length - 1] = 0;
 	}
-	defer( mem_free( combined_args ) );
+	defer { free( combined_args ); };
 
 	if ( flags & PROCESS_FLAG_ASYNC ) {
 		process->event_stdout = CreateEvent( &sec_attr, 1, 1, NULL );
@@ -167,7 +165,7 @@ void process_destroy( Process* process ) {
 		process->event_stdout = NULL;
 	}
 
-	mem_free( process );
+	free( process );
 	process = NULL;
 }
 
@@ -216,4 +214,4 @@ u32 process_read_stdout( Process* process, char* out_buffer, const u32 count ) {
 	return bytes_read;
 }
 
-#endif // defined( _WIN32 ) && !defined( CORE_USE_SUBPROCESS )
+#endif // _WIN32

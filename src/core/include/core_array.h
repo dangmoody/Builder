@@ -29,14 +29,26 @@ SOFTWARE.
 #pragma once
 
 #include "int_types.h"
-#include "dll_export.h"
 
-struct CommandLineArgs {
-	s32		count;
-	char**	data;
+template<class T>
+struct Array {
+	T*			data;
+	u64			count;
+	u64			alloced;
+
+	void		zero();
+	void		free();
+
+	void		reset();
+
+	void		add( const T& element );
+	void		add_range( const T* ptr, const u64 count );
+	void		add_range( const Array<T>* array );
+
+	void		reserve( const u64 new_alloced );
+
+	void		resize( const u64 count );
+
+	T&			operator[]( const u64 index );
+	const T&	operator[]( const u64 index ) const;
 };
-
-extern CommandLineArgs		g_cmd_line_args;
-
-CORE_API void				set_command_line_args( int argc, char** argv );
-CORE_API CommandLineArgs	get_command_line_args( void );

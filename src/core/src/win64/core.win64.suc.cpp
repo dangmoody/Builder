@@ -26,17 +26,15 @@ SOFTWARE.
 ===========================================================================
 */
 
-#pragma once
+#ifdef _WIN32
 
-#include "int_types.h"
-#include "dll_export.h"
+#include "core_process.win64.cpp"
+#include "core_thread.win64.cpp"
+#include "date_and_time.win64.cpp"
+#include "debug.win64.cpp"
+#include "file.win64.cpp"
+#include "library.win64.cpp"
+#include "paths.win64.cpp"
+#include "timer.win64.cpp"
 
-struct CommandLineArgs {
-	s32		count;
-	char**	data;
-};
-
-extern CommandLineArgs		g_cmd_line_args;
-
-CORE_API void				set_command_line_args( int argc, char** argv );
-CORE_API CommandLineArgs	get_command_line_args( void );
+#endif // _WIN32

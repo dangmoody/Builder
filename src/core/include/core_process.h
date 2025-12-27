@@ -28,8 +28,7 @@ SOFTWARE.
 
 #pragma once
 
-#include "core_types.h"
-#include "array.h"
+#include "int_types.h"
 #include "dll_export.h"
 
 struct Process;

@@ -28,7 +28,18 @@ SOFTWARE.
 
 #include <paths.h>
 
+#include <core_helpers.h>
 #include <temp_storage.h>
+#include <typecast.inl>
+
+#include <string.h>
+
+#if defined( __clang__ )
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
+#pragma clang diagnostic ignored "-Wunsafe-buffer-usage-in-libc-call"
+#endif
 
 static const char* get_last_slash( const char* path ) {
 	const char* last_slash = NULL;
@@ -99,3 +110,7 @@ const char* path_remove_file_extension( const char* filename ) {
 
 	return result;
 }
+
+#if defined( __clang__ )
+#pragma clang diagnostic pop
+#endif

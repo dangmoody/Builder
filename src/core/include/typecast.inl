@@ -28,10 +28,8 @@ SOFTWARE.
 
 #pragma once
 
-#include "core_types.h"
+#include "int_types.h"
 #include "debug.h"
-
-#include <float.h>
 
 /*
 ================================================================================================
@@ -46,13 +44,17 @@ SOFTWARE.
 #define trunc_cast( Type, x )		trunc_cast_internal<Type>( (x) )
 
 
-// DO NOT CALL THESE ONES!
-template<class OutType, class InType>
-OutType trunc_cast_internal( const InType in ) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wfloat-equal"
 #pragma clang diagnostic ignored "-Wsign-compare"
-	bool8 is_input_floating_point = cast( InType, 0.5 ) != 0;
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
+
+// DO NOT CALL THIS DIRECTLY!
+// USE THE MACROS ABOVE!
+template<class OutType, class InType>
+OutType trunc_cast_internal( const InType in ) {
+	//bool8 is_input_floating_point = cast( InType, 0.5 ) != 0;
 	bool8 is_output_floating_point = cast( OutType, 0.5 ) != 0;
 
 	bool8 is_input_signed = cast( InType, -1 ) < 0;
@@ -62,8 +64,8 @@ OutType trunc_cast_internal( const InType in ) {
 	OutType max_output_value = 0;
 
 	if ( is_output_floating_point ) {
-		min_output_value = cast( OutType, -FLT_MAX );
-		max_output_value = cast( OutType, FLT_MAX );
+		min_output_value = cast( OutType, -FLOAT32_MAX );
+		max_output_value = cast( OutType, FLOAT32_MAX );
 	} else {
 		if ( is_output_signed ) {
 			max_output_value = cast( OutType, ( 1ULL << ( sizeof( OutType ) * 8 - 1 ) ) - 1 );
@@ -81,5 +83,6 @@ OutType trunc_cast_internal( const InType in ) {
 	assert( in <= cast( OutType, max_output_value ) );
 
 	return cast( OutType, in );
-#pragma clang diagnostic pop
 }
+
+#pragma clang diagnostic pop

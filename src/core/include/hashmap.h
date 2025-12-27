@@ -28,19 +28,31 @@ SOFTWARE.
 
 #pragma once
 
-#include "core_types.h"
+#include "int_types.h"
 #include "dll_export.h"
+
+/*
+================================================================================================
+
+	Hashmap
+
+	TODO(TOM): document this
+
+================================================================================================
+*/
+
+#if defined( __clang__ )
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpadded"
+#pragma clang diagnostic ignored "-Wc++98-compat"
+#pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
+#endif
 
 struct Allocator;
 
 constexpr u64 HASHMAP_UNUSED_BUCKET 	= 0U;
 constexpr u64 HASHMAP_TOMBSTONE_BUCKET 	= 0xffffffffffffffffU;
 constexpr u32 HASHMAP_INVALID_VALUE 	= 0xffffffffU;
-
-#ifdef __linux__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wpadded"
-#endif // __linux__
 
 struct HashmapBucket {
 	u32		key_hi;
@@ -56,7 +68,6 @@ struct Hashmap {
 	float32			max_utilisation;
 	bool8			should_grow;
 	HashmapBucket*	buckets;
-	Allocator*		allocator;
 };
 
 CORE_API Hashmap*	hashmap_create( u32 starting_capacity, float32 normalized_max_utilisation = 0.5f, bool8 should_grow = true );
@@ -75,6 +86,6 @@ CORE_API u64		hashmap_internal_combine_at_index( const Hashmap* map, const u32 i
 CORE_API u32		hashmap_internal_get_lo_part( const u64 key );
 CORE_API u32		hashmap_internal_get_hi_part( const u64 key );
 
-#ifdef __linux__
+#if defined( __clang__ )
 #pragma clang diagnostic pop
-#endif //__linux__
+#endif

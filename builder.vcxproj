@@ -91,60 +91,50 @@
   <ItemGroup>
     <ClCompile Include="src\backend_msvc.cpp" />
     <ClCompile Include="src\builder.cpp" />
-    <ClCompile Include="src\core\src\3rdparty\xxhash\xxhash.c" />
-    <ClCompile Include="src\core\src\allocation_context.cpp" />
-    <ClCompile Include="src\core\src\allocator_linear.cpp" />
-    <ClCompile Include="src\core\src\allocator_malloc.cpp" />
     <ClCompile Include="src\backend_clang.cpp" />
     <ClCompile Include="src\core\src\cmd_line_args.cpp" />
-    <ClCompile Include="src\core\src\core.linux.suc.cpp" />
     <ClCompile Include="src\core\src\core.suc.cpp" />
-    <ClCompile Include="src\core\src\core.win64.suc.cpp" />
-    <ClCompile Include="src\core\src\core_process.subprocess.cpp" />
+    <ClCompile Include="src\core\src\core_math.cpp" />
     <ClCompile Include="src\core\src\core_string.cpp" />
     <ClCompile Include="src\core\src\debug.cpp" />
     <ClCompile Include="src\core\src\file.cpp" />
     <ClCompile Include="src\core\src\hash.xxhash.cpp" />
     <ClCompile Include="src\core\src\hashmap.cpp" />
-    <ClCompile Include="src\core\src\linux\allocator_malloc.linux.cpp" />
-    <ClCompile Include="src\core\src\linux\core_process.linux.cpp" />
+    <ClCompile Include="src\core\src\intrinsics.clang.cpp" />
+    <ClCompile Include="src\core\src\linear_allocator.cpp" />
+    <ClCompile Include="src\core\src\linux\core.linux.suc.cpp" />
     <ClCompile Include="src\core\src\linux\debug.linux.cpp" />
     <ClCompile Include="src\core\src\linux\file.linux.cpp" />
-    <ClCompile Include="src\core\src\linux\init.linux.cpp" />
     <ClCompile Include="src\core\src\linux\library.linux.cpp" />
     <ClCompile Include="src\core\src\linux\paths.linux.cpp" />
     <ClCompile Include="src\core\src\linux\timer.linux.cpp" />
-    <ClCompile Include="src\core\src\math.cpp" />
-    <ClCompile Include="src\core\src\memory_tracking.cpp" />
     <ClCompile Include="src\core\src\paths.cpp" />
     <ClCompile Include="src\core\src\random.cpp" />
     <ClCompile Include="src\core\src\string_builder.cpp" />
-    <ClCompile Include="src\core\src\string_helpers.cpp" />
     <ClCompile Include="src\core\src\temp_storage.cpp" />
-    <ClCompile Include="src\core\src\win64\allocator_malloc.win64.cpp" />
+    <ClCompile Include="src\core\src\win64\core.win64.suc.cpp" />
     <ClCompile Include="src\core\src\win64\core_process.win64.cpp" />
+    <ClCompile Include="src\core\src\win64\core_thread.win64.cpp" />
     <ClCompile Include="src\core\src\win64\date_and_time.win64.cpp" />
     <ClCompile Include="src\core\src\win64\debug.win64.cpp" />
     <ClCompile Include="src\core\src\win64\file.win64.cpp" />
-    <ClCompile Include="src\core\src\win64\init.win64.cpp" />
     <ClCompile Include="src\core\src\win64\library.win64.cpp" />
     <ClCompile Include="src\core\src\win64\paths.win64.cpp" />
     <ClCompile Include="src\core\src\win64\timer.win64.cpp" />
+    <ClCompile Include="src\core\src\xxhash\xxhash.c" />
     <ClCompile Include="src\visual_studio.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\builder.h" />
     <ClInclude Include="src\builder_local.h" />
-    <ClInclude Include="src\core\include\allocation_context.h" />
-    <ClInclude Include="src\core\include\allocator.h" />
-    <ClInclude Include="src\core\include\allocator_linear.h" />
-    <ClInclude Include="src\core\include\allocator_malloc.h" />
-    <ClInclude Include="src\core\include\array.h" />
     <ClInclude Include="src\core\include\cmd_line_args.h" />
+    <ClInclude Include="src\core\include\core_array.h" />
+    <ClInclude Include="src\core\include\core_helpers.h" />
     <ClInclude Include="src\core\include\core_math.h" />
+    <ClInclude Include="src\core\include\core_memory.h" />
     <ClInclude Include="src\core\include\core_process.h" />
     <ClInclude Include="src\core\include\core_string.h" />
-    <ClInclude Include="src\core\include\core_types.h" />
+    <ClInclude Include="src\core\include\core_thread.h" />
     <ClInclude Include="src\core\include\date_and_time.h" />
     <ClInclude Include="src\core\include\debug.h" />
     <ClInclude Include="src\core\include\defer.h" />
@@ -152,21 +142,16 @@
     <ClInclude Include="src\core\include\file.h" />
     <ClInclude Include="src\core\include\hash.h" />
     <ClInclude Include="src\core\include\hashmap.h" />
+    <ClInclude Include="src\core\include\int_types.h" />
     <ClInclude Include="src\core\include\library.h" />
-    <ClInclude Include="src\core\include\memory_tracking.h" />
-    <ClInclude Include="src\core\include\memory_units.h" />
+    <ClInclude Include="src\core\include\linear_allocator.h" />
     <ClInclude Include="src\core\include\paths.h" />
     <ClInclude Include="src\core\include\random.h" />
-    <ClInclude Include="src\core\include\ring.h" />
     <ClInclude Include="src\core\include\string_builder.h" />
-    <ClInclude Include="src\core\include\string_helpers.h" />
     <ClInclude Include="src\core\include\temp_storage.h" />
     <ClInclude Include="src\core\include\timer.h" />
-    <ClInclude Include="src\core\src\3rdparty\stb\stb_sprintf.h" />
-    <ClInclude Include="src\core\src\3rdparty\subprocess\subprocess.h" />
-    <ClInclude Include="src\core\src\3rdparty\xxhash\xxhash.h" />
-    <ClInclude Include="src\core\src\core_local.h" />
     <ClInclude Include="src\core\src\file_local.h" />
+    <ClInclude Include="src\core\src\xxhash\xxhash.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".gitignore" />
@@ -180,8 +165,7 @@
     <None Include="scripts\download_dependencies.sh" />
     <None Include="scripts\make_release.bat" />
     <None Include="scripts\make_release.sh" />
-    <None Include="src\core\include\array.inl" />
-    <None Include="src\core\include\ring.inl" />
+    <None Include="src\core\include\core_array.inl" />
     <None Include="src\core\include\typecast.inl" />
   </ItemGroup>
   <ItemGroup>

@@ -63,17 +63,6 @@ static File open_file_internal( const char* filename, int flags ) {
 	return { trunc_cast( u64, handle ), 0 };
 }
 
-static bool8 create_folder_internal( const char* path ) {
-	int result = mkdir( path, S_IRWXU | S_IRWXG | S_IRWXO );
-	int err = errno;
-
-	if ( ( result != 0 ) && ( err != EEXIST ) ) {
-		assertf( result == 0, "ERROR: Failed to create directory \"%s\": %s\n", path, strerror( err ) );
-	}
-
-	return result == 0;
-}
-
 File file_open( const char* filename ) {
 	assert( filename );
 
@@ -271,6 +260,17 @@ bool8 file_exists( const char* filename ) {
 	assert( filename );
 
 	return access( filename, 0 ) == 0;
+}
+
+bool8 create_folder_internal( const char* path ) {
+	int result = mkdir( path, S_IRWXU | S_IRWXG | S_IRWXO );
+	int err = errno;
+
+	if ( ( result != 0 ) && ( err != EEXIST ) ) {
+		assertf( result == 0, "ERROR: Failed to create directory \"%s\": %s\n", path, strerror( err ) );
+	}
+
+	return result == 0;
 }
 
 bool8 folder_delete( const char* path ) {

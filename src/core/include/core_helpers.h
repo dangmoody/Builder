@@ -26,56 +26,41 @@ SOFTWARE.
 ===========================================================================
 */
 
-#ifdef _WIN32
+#pragma once
 
-#include <library.h>
-
-#include <debug.h>
-#include <typecast.inl>
-
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <Windows.h>
+#include "int_types.h"
 
 /*
 ================================================================================================
 
-	Library
+	Core Helpers
+
+	TODO(DM): 23/12/2025: core_helpers.h doesnt seem like the right name for this header
 
 ================================================================================================
 */
 
-Library library_load( const char* name ) {
-	assert( name );
+// returns number of elements in static array
+#define count_of( x )					( sizeof( (x) ) / sizeof( (x)[0] ) )
 
-	HMODULE library = LoadLibraryA( name );
+// use this to avoid compiler warning about unused variable if you need to keep it
+#define unused( x )						( (void) (x) )
 
-	assertf( library, "Failed to load dynamic library \"%s\": 0x%X", name, GetLastError() );
+// for loop helper macro
+// DM: these exist because I'm getting bored of typing the whole thing out every time and it feels like boiler-plate
+#define For( Type, it, start, count )	for ( Type it = (start); it < (count); it++ )
 
-	return { library };
-}
+// reverse for loop helper macro
+#define RFor( Type, it, start, count )	for ( Type it = (count); it-- > (start); )
 
-void library_unload( Library* library ) {
-	assert( library && library->ptr );
+// returns the amount of padding required to align x up to the next aligned address
+// TODO(DM): 23/12/2025:
+//	make this into a real function
+//	does this want to be here or in core_math.h?
+#define padding_up( x, alignment )		( (alignment) - 1 ) & ~( (alignment) - 1 )
 
-	BOOL freed = FreeLibrary( cast( HMODULE, library->ptr ) );
-
-	assert( freed );
-	unused( freed );
-
-	library->ptr = NULL;
-}
-
-void* library_get_proc_address( const Library library, const char* func_name ) {
-	assert( library.ptr );
-	assert( func_name );
-
-	FARPROC proc_addr = GetProcAddress( cast( HMODULE, library.ptr ), func_name );
-
-	//assert( proc_addr );
-
-	return cast( void*, proc_addr );
-}
-
-#endif // _WIN32
+// returns the input 'x' that has been aligned up by 'alignment' to the next largest value, in bytes
+// TODO(DM): 23/12/2025:
+//	make this into a real function
+//	does this want to be here or in core_math.h?
+#define align_up( x, alignment )		( (x) + padding_up( x, alignment ) )

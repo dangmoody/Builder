@@ -28,87 +28,54 @@ SOFTWARE.
 
 #include <debug.h>
 
-/*
-================================================================================================
+#include <stdio.h>
+#include <stdarg.h>
 
-	Platform-agnostic debug
-
-================================================================================================
-*/
-
-//Note(Tom): Question for Dan: is this going to be a problem across lib divides like you found with core context?
-static LogVerbosity g_current_verbosity = LOG_VERBOSITY_INFO;
-
-static void log( LogVerbosity required_verbosity, ConsoleTextColor prefix_color, ConsoleTextColor message_color, const char* prefix, const char* function, const char* fmt, va_list args ) {
-	if ( g_current_verbosity < required_verbosity ) {
-		return;
-	}
-
-	set_console_text_color( prefix_color );
-
-#ifdef LOG_SHOW_FUNCTIONS
-	printf( "%s(%s):  ", prefix, function );
-#else
-	unused( function );
-
-	printf( "%s:  ", prefix );
+#if defined( __clang__ )
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-nonliteral"
+#pragma clang diagnostic ignored "-Wunsafe-buffer-usage-in-libc-call"
 #endif
 
-	set_console_text_color( message_color );
+void warning( const char* fmt, ... ) {
+	set_console_text_color( CONSOLE_TEXT_COLOR_RED );
 
-	vprintf( fmt, args );
+	printf( "WARNING: " );
 
-	set_console_text_color( CONSOLE_TEXT_COLOR_DEFAULT );
-}
+	set_console_text_color( CONSOLE_TEXT_COLOR_YELLOW );
 
-void info_internal(const char* function, const char* fmt, ... ) {
 	va_list args;
 	va_start( args, fmt );
-	log( LOG_VERBOSITY_INFO, CONSOLE_TEXT_COLOR_BRIGHT_BLUE, CONSOLE_TEXT_COLOR_LIGHT_GRAY, "INFO", function, fmt, args );
+	vfprintf( stderr, fmt, args );
 	va_end( args );
 }
 
-void warning_internal( const char* function, const char* fmt, ... ) {
+void error( const char* fmt, ... ) {
+	set_console_text_color( CONSOLE_TEXT_COLOR_RED );
+
+	printf( "ERROR: " );
+
+	set_console_text_color( CONSOLE_TEXT_COLOR_YELLOW );
+
 	va_list args;
 	va_start( args, fmt );
-	log( LOG_VERBOSITY_WARNING, CONSOLE_TEXT_COLOR_RED, CONSOLE_TEXT_COLOR_YELLOW, "WARNING", function, fmt, args );
+	vfprintf( stderr, fmt, args );
 	va_end( args );
 }
 
-void error_internal( const char* function, const char* fmt, ... ) {
+void fatal_error( const char* fmt, ... ) {
+	set_console_text_color( CONSOLE_TEXT_COLOR_RED );
+
+	printf( "FATAL ERROR: " );
+
+	set_console_text_color( CONSOLE_TEXT_COLOR_YELLOW );
+
 	va_list args;
 	va_start( args, fmt );
-	log( LOG_VERBOSITY_ERROR, CONSOLE_TEXT_COLOR_RED, CONSOLE_TEXT_COLOR_YELLOW, "ERROR", function, fmt, args );
+	vfprintf( stderr, fmt, args );
 	va_end( args );
 }
 
-void set_log_verbosity( LogVerbosity verbosity ) {
-	g_current_verbosity = verbosity;
-}
-
-LogVerbosity get_log_verbosity() {
-	return g_current_verbosity;
-}
-
-void fatal_error_internal( const char* file, const int line, const char* prefix, const char* fmt, ... ) {
-#if defined( _WIN32 ) && defined( _DEBUG )
-	_CrtSetReportMode( _CRT_ASSERT, _CRTDBG_MODE_WNDW );
+#if defined( __clang__ )
+#pragma clang diagnostic pop
 #endif
-
-	va_list args;
-	va_start( args, fmt );
-
-	// build error msg
-	int len = string_vsnprintf( NULL, 0, fmt, args );
-	len++;	// + 1 for null terminator
-
-	// u64 total_length = trunc_cast( u64, len );
-
-	char* error_msg = cast( char*, alloca( len ) );
-	string_vsnprintf( error_msg, len, fmt, args );
-	error_msg[len - 1] = 0;
-
-	assert_dialog_internal( file, line, prefix, error_msg );
-
-	va_end( args );
-}

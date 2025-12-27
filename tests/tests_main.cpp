@@ -1,15 +1,46 @@
+/*
+===========================================================================
+
+Builder
+
+Copyright (c) 2025 Dan Moody
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+===========================================================================
+*/
+
+
 #include "../include/builder.h"
 
-#include "../src/core/src/core.suc.cpp"
-
-#ifdef __linux__
-//#include <assert.h>
-#endif // __linux__
+#include "../src/core/include/debug.h"
+#include "../src/core/include/core_array.inl"
+#include "../src/core/include/core_process.h"
+#include "../src/core/include/core_helpers.h"
+#include "../src/core/include/defer.h"
+#include "../src/core/include/file.h"
+#include "../src/core/include/core_string.h"
+#include "../src/core/include/string_builder.h"
+#include "../src/core/include/paths.h"
 
 #define TEMPERDEV_ASSERT assert
 #define TEMPER_IMPLEMENTATION
-#include "../src/core/include/file.h"
-#include "../src/core/include/string_helpers.h"
 #include "temper/temper.h"
 
 #if defined( _WIN32 )
@@ -43,7 +74,7 @@ static const char* GetFileExtensionFromBinaryType( BinaryType type ) {
 #error Unrecognised paltform.
 #endif
 
-	assertf( false, "Something went really wrong here.\n" );
+	assertf( false );
 
 	return "ERROR";
 }
@@ -68,10 +99,11 @@ static s32 RunProc( Array<const char*>* args, String* outStdout = NULL, const bo
 
 	TEMPER_CHECK_TRUE_M( process, "Failed to run process \"%s\".  Did you type the path correctly?\n", ( *args )[0] );
 
-	defer( process_destroy( process ) );
+	defer { process_destroy( process ); };
 
 	StringBuilder sb = {};
 	string_builder_reset( &sb );
+	defer { string_builder_destroy( &sb ); };
 
 	char buffer[1024] = {};
 	while ( process_read_stdout( process, buffer, count_of( buffer ) ) ) {
@@ -111,7 +143,8 @@ TEMPER_TEST( Compile_Basic, TEMPER_FLAG_SHOULD_RUN ) {
 
 	TEMPER_CHECK_TRUE( file_exists( sourceFile ) );
 
-	Array<const char*> args;
+	Array<const char*> args = {};
+	defer { args.free(); };
 	args.add( BUILDER_EXE_PATH );
 	args.add( sourceFile );
 
@@ -138,7 +171,8 @@ TEMPER_TEST_PARAMETRIC( Compile_SetBuilderOptions, TEMPER_FLAG_SHOULD_RUN, const
 
 	TEMPER_CHECK_TRUE( file_exists( sourceFile ) );
 
-	Array<const char*> args;
+	Array<const char*> args = {};
+	defer { args.free(); };
 	args.add( BUILDER_EXE_PATH );
 	args.add( sourceFile );
 	args.add( tprintf( "--config=%s", config ) );
@@ -190,7 +224,8 @@ TEMPER_TEST_PARAMETRIC( SetCompilerPath, TEMPER_FLAG_SHOULD_RUN, const compiler_
 
 	s32 exitCode = 0;
 
-	Array<const char*> args;
+	Array<const char*> args = {};
+	defer { args.free(); };
 
 	// compile the program
 	{
@@ -228,9 +263,12 @@ TEMPER_TEST( Compile_MultipleSourceFiles, TEMPER_FLAG_SHOULD_RUN ) {
 
 	TEMPER_CHECK_TRUE( file_exists( buildSourceFile ) );
 
+	Array<const char*> args = {};
+	defer { args.free(); };
+
 	// compile the program
 	{
-		Array<const char*> args;
+		args.reset();
 		args.add( BUILDER_EXE_PATH );
 		args.add( buildSourceFile );
 
@@ -255,9 +293,12 @@ TEMPER_TEST( Compile_MultipleSourceFiles, TEMPER_FLAG_SHOULD_RUN ) {
 
 	TEMPER_CHECK_TRUE( file_exists( buildSourceFile ) );
 
+	Array<const char*> args = {};
+	defer { args.free(); };
+
 	// compile the program
 	{
-		Array<const char*> args;
+		args.reset();
 		args.add( BUILDER_EXE_PATH );
 		args.add( buildSourceFile );
 
@@ -272,7 +313,7 @@ TEMPER_TEST( Compile_MultipleSourceFiles, TEMPER_FLAG_SHOULD_RUN ) {
 
 	// run the program
 	{
-		Array<const char*> args;
+		args.reset();
 		args.add( binaryFilename );
 
 		s32 testProgramExitCode = RunProc( &args );
@@ -284,7 +325,8 @@ TEMPER_TEST( Compile_MultipleSourceFiles, TEMPER_FLAG_SHOULD_RUN ) {
 TEMPER_TEST( Compile_StaticLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 	// now build the exe that uses it
 	{
-		Array<const char*> args;
+		Array<const char*> args = {};
+		defer { args.free(); };
 		args.add( BUILDER_EXE_PATH );
 		args.add( "tests/test_static_lib/build.cpp" );
 		args.add( "--config=program" );
@@ -297,7 +339,8 @@ TEMPER_TEST( Compile_StaticLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 
 	// run the program to make sure everything actually works
 	{
-		Array<const char*> args;
+		Array<const char*> args = {};
+		defer { args.free(); };
 		args.add( tprintf( "tests/test_static_lib/bin/test_static_library_program%s", GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) ) );
 		s32 exitCode = RunProc( &args );
 
@@ -327,6 +370,7 @@ TEMPER_TEST( Compile_DynamicLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 	// now build the exe
 	{
 		Array<const char*> args;
+		defer { args.free(); };
 		args.add( BUILDER_EXE_PATH );
 		args.add( "tests/test_dynamic_lib/build.cpp" );
 		args.add( "--config=program" );
@@ -344,6 +388,7 @@ TEMPER_TEST( Compile_DynamicLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 	// run the program to make sure everything actually works
 	{
 		Array<const char*> args;
+		defer { args.free(); };
 		args.add( exeFilename );
 
 		s32 runProgramExitCode = RunProc( &args );
@@ -358,7 +403,8 @@ TEMPER_TEST( RebuildSkipping, TEMPER_FLAG_SHOULD_SKIP ) {
 
 TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 	Array<const char*> args;
-	
+	defer { args.free(); };
+
 	// need to find where msbuild lives on windows
 #ifdef _WIN32
 	std::string msbuildInstallationPath;
@@ -366,6 +412,7 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 	// detect where msbuild is stored
 	{
 		String vswhereStdout;
+		defer { string_free( &vswhereStdout ); };
 
 		args.reset();
 		args.add( "C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe" );
@@ -447,9 +494,6 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 }
 
 int main( int argc, char** argv ) {
-	core_init( MEM_KILOBYTES( 64 ) );
-	defer( core_shutdown() );
-
 	TEMPER_RUN( argc, argv );
 
 	int exitCode = TEMPER_GET_EXIT_CODE();

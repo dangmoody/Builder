@@ -29,12 +29,13 @@ SOFTWARE.
 #include <string_builder.h>
 
 #include <debug.h>
-#include <allocation_context.h>
-#include <string_helpers.h>
 #include <typecast.inl>
 
 #include <stdio.h>
 #include <stdarg.h>
+#include <memory.h>
+#include <malloc.h>
+#include <string.h>
 
 /*
 ================================================================================================
@@ -44,6 +45,14 @@ SOFTWARE.
 ================================================================================================
 */
 
+#if defined( __clang__ )
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#pragma clang diagnostic ignored "-Wformat-nonliteral"
+#pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
+#pragma clang diagnostic ignored "-Wunsafe-buffer-usage-in-libc-call"
+#endif
+
 void string_builder_reset( StringBuilder* builder ) {
 	assert( builder );
 
@@ -52,11 +61,11 @@ void string_builder_reset( StringBuilder* builder ) {
 	while ( current ) {
 		StringBuilderBuffer* next = current->next;
 
-		mem_free( current->data );
+		free( current->data );
 		current->data = NULL;
 
 		current->next = NULL;
-		mem_free( current );
+		free( current );
 
 		current = next;
 	}
@@ -71,14 +80,14 @@ static void string_builder_appendfv( StringBuilder* builder, const char* fmt, va
 	assert( fmt );
 	assert( args );
 
-	StringBuilderBuffer* buffer = cast( StringBuilderBuffer*, mem_alloc( sizeof( StringBuilderBuffer ) ) );
+	StringBuilderBuffer* buffer = cast( StringBuilderBuffer*, malloc( sizeof( StringBuilderBuffer ) ) );
 	//buffer->next = NULL;
 	memset( buffer, 0, sizeof( StringBuilderBuffer ) );
 
-	buffer->length = trunc_cast( u32, string_vsnprintf( NULL, 0, fmt, args ) );
+	buffer->length = trunc_cast( u32, vsnprintf( NULL, 0, fmt, args ) );
 
-	buffer->data = cast( char*, mem_alloc( trunc_cast( u64, ( buffer->length + 1 ) ) * sizeof( char ) ) );
-	string_vsnprintf( buffer->data, buffer->length + 1, fmt, args );
+	buffer->data = cast( char*, malloc( trunc_cast( u64, ( buffer->length + 1 ) ) * sizeof( char ) ) );
+	vsnprintf( buffer->data, buffer->length + 1, fmt, args );
 	buffer->data[buffer->length] = 0;
 
 	// if no head then this is the first element
@@ -123,7 +132,7 @@ const char* string_builder_to_string( StringBuilder* builder ) {
 
 	total_length += 1;
 
-	result = cast( char*, mem_alloc( total_length * sizeof( char ) ) );
+	result = cast( char*, malloc( total_length * sizeof( char ) ) );
 
 	current = builder->head;
 
@@ -139,3 +148,7 @@ const char* string_builder_to_string( StringBuilder* builder ) {
 
 	return result;
 }
+
+#if defined( __clang__ )
+#pragma clang diagnostic pop
+#endif

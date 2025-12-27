@@ -28,9 +28,10 @@ SOFTWARE.
 
 #include "builder_local.h"
 
-#include "core/include/allocation_context.h"
-#include "core/include/array.inl"
-#include "core/include/string_helpers.h"
+#include "core/include/core_helpers.h"
+#include "core/include/core_array.inl"
+#include "core/include/core_string.h"
+#include "core/include/defer.h"
 #include "core/include/string_builder.h"
 #include "core/include/paths.h"
 #include "core/include/core_process.h"
@@ -40,7 +41,6 @@ SOFTWARE.
 #include "core/include/hash.h"
 #include "core/include/timer.h"
 #include "core/include/library.h"
-#include "core/include/core_string.h"
 #include "core/include/hashmap.h"
 #include "core/include/file.h"
 
@@ -89,6 +89,7 @@ enum buildResult_t {
 
 u64 GetLastFileWriteTime( const char* filename ) {
 	u64 lastWriteTime = 0;
+
 	if ( !file_get_last_write_time( filename, &lastWriteTime ) ) {
 		assert( false );
 	}
@@ -113,7 +114,7 @@ static const char* GetFileExtensionFromBinaryType( BinaryType type ) {
 #error Unrecognised paltform.
 #endif
 
-	assertf( false, "Something went really wrong here.\n" );
+	assert( false );
 
 	return "ERROR";
 }
@@ -173,7 +174,7 @@ static const char* BuildConfig_ToString( const BuildConfig* config ) {
 
 	auto PrintCStringArray = [&builder]( const char* name, const std::vector<const char*>& array ) {
 		string_builder_appendf( &builder, "\t%s: { ", name );
-		For( u64, i, 0, array.size() ) {
+		For ( u64, i, 0, array.size() ) {
 			string_builder_appendf( &builder, "%s", array[i] );
 
 			if ( i < array.size() - 1 ) {
@@ -185,7 +186,7 @@ static const char* BuildConfig_ToString( const BuildConfig* config ) {
 
 	auto PrintSTDStringArray = [&builder]( const char* name, const std::vector<std::string>& array ) {
 		string_builder_appendf( &builder, "\t%s: { ", name );
-		For( u64, i, 0, array.size() ) {
+		For ( u64, i, 0, array.size() ) {
 			string_builder_appendf( &builder, "%s", array[i].c_str() );
 
 			if ( i < array.size() - 1 ) {
@@ -265,8 +266,7 @@ s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVariables,
 		printf( "\n" );
 	}
 
-	// DM!!! put the async flag back when done getting this running
-	Process* process = process_create( args, environmentVariables, /*PROCESS_FLAG_ASYNC |*/ PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
+	Process* process = process_create( args, environmentVariables, PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
 
 	if ( !process ) {
 		error(
@@ -338,7 +338,7 @@ static s32 ShowUsage( const s32 exitCode ) {
 static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, compilerBackend_t* compilerBackend ) {
 	// create binary folder
 	if ( !folder_create_if_it_doesnt_exist( config->binary_folder.c_str() ) ) {
-		errorCode_t errorCode = get_last_error_code();
+		s32 errorCode = get_last_error_code();
 		fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".  Error code: " ERROR_CODE_FORMAT "", SET_BUILDER_OPTIONS_FUNC_NAME, config->binary_folder.c_str(), errorCode );
 		return BUILD_RESULT_FAILED;
 	}
@@ -346,7 +346,7 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 	// create intermediate folder
 	const char* intermediatePath = tprintf( "%s%c%s", config->binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
 	if ( !folder_create_if_it_doesnt_exist( intermediatePath ) ) {
-		errorCode_t errorCode = get_last_error_code();
+		s32 errorCode = get_last_error_code();
 		fatal_error( "Failed to create intermediate binary folder.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
 		return BUILD_RESULT_FAILED;
 	}
@@ -637,7 +637,6 @@ static void ReadIncludeDependenciesFile( buildContext_t* context ) {
 	const char* includeDepsFilename = GetIncludeDepsFilename( context );
 
 	byteBuffer_t byteBuffer = {};
-	byteBuffer.data.allocator = mem_get_current_allocator();
 
 	// there wont be an include dependencies file on the first build or if you nuked the binaries folder (for instance)
 	// so this is allowed to fail
@@ -728,7 +727,7 @@ static bool8 WriteIncludeDependenciesFile( buildContext_t* context ) {
 	}
 
 	if ( !file_write_entire( includeDepsFilename, byteBuffer.data.data, byteBuffer.data.count ) ) {
-		errorCode_t errorCode = get_last_error_code();
+		s32 errorCode = get_last_error_code();
 		error( "Failed to write file \"%s\".  Error code: " ERROR_CODE_FORMAT ".\n", includeDepsFilename, errorCode );
 		return false;
 	}
@@ -745,9 +744,6 @@ int main( int argc, char** argv ) {
 	float64 buildInfoReadTimeMS = -1.0;
 	float64 buildInfoWriteTimeMS = -1.0;
 
-	core_init( MEM_MEGABYTES( 128 ) );	// TODO(DM): 26/03/2025: can we just use defaults for this now?
-	defer( core_shutdown() );
-
 	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {
@@ -757,6 +753,11 @@ int main( int argc, char** argv ) {
 #else
 		.verbose		= false,
 #endif
+	};
+
+	defer {
+		string_free( &context.inputFilePath );
+		string_free( &context.dotBuilderFolder );
 	};
 
 	// parse command line args
@@ -875,8 +876,7 @@ int main( int argc, char** argv ) {
 		const char* inputFileNoPath = path_remove_path_from_file( context.inputFile );
 		const char* inputFileNoPathOrExtension = path_remove_file_extension( inputFileNoPath );
 
-		context.inputFilePath = inputFilePath;
-
+		string_printf( &context.inputFilePath, inputFilePath );
 		string_printf( &context.dotBuilderFolder, "%s%c.builder", context.inputFilePath.data, PATH_SEPARATOR );
 	}
 
@@ -897,7 +897,7 @@ int main( int argc, char** argv ) {
 	}
 
 	compilerBackend.Init( &compilerBackend );
-	defer( compilerBackend.Shutdown( &compilerBackend ) );
+	defer { compilerBackend.Shutdown( &compilerBackend ); };
 
 	// user config build step
 	// see if they have set_builder_options() overridden
@@ -994,8 +994,12 @@ int main( int argc, char** argv ) {
 	BuilderOptions options = {};
 
 	Library library = library_load( userConfigFullBinaryName );
-	assertf( library.ptr, "Failed to load the user-config build DLL \"%s\".  This should never happen!\n", userConfigFullBinaryName );
-	defer( library_unload( &library ) );
+	if ( !library.ptr ) {
+		fatal_error( "Failed to load the user-config build DLL \"%s\".  This should never happen!\n", userConfigFullBinaryName );
+		QUIT_ERROR();
+	}
+
+	defer { library_unload( &library ); };
 
 	typedef void ( *setBuilderOptionsFunc_t )( BuilderOptions* options );
 	typedef void ( *preBuildFunc_t )();
@@ -1121,7 +1125,8 @@ int main( int argc, char** argv ) {
 
 			// check that the compiler the user wants to run even exists
 			{
-				Array<const char*> args;
+				Array<const char*> args = {};
+				defer { args.free(); };
 				args.add( compilerBackend.compilerPath.data );
 				Process* process = process_create( &args, NULL, 0 );
 				if ( !process ) {
@@ -1133,7 +1138,9 @@ int main( int argc, char** argv ) {
 
 		// check that version of the compiler the user actually has is what they expect it to be
 		if ( !options.compiler_version.empty() ) {
-			String compilerVersion = compilerBackend.GetCompilerVersion( &compilerBackend );
+			String compilerVersion = {};
+			defer { string_free( &compilerVersion ); };
+			compilerBackend.GetCompilerVersion( &compilerBackend, &compilerVersion );
 
 			if ( !string_equals( compilerVersion.data, options.compiler_version.c_str() ) ) {
 				warning(
@@ -1232,7 +1239,7 @@ int main( int argc, char** argv ) {
 
 		const char* oldCWD = path_current_working_directory();
 		path_set_current_directory( context.inputFilePath.data );
-		defer( path_set_current_directory( oldCWD ) );
+		defer { path_set_current_directory( oldCWD ); };
 
 		preBuildFunc();
 	}
@@ -1329,7 +1336,7 @@ int main( int argc, char** argv ) {
 
 		const char* oldCWD = path_current_working_directory();
 		path_set_current_directory( context.inputFilePath.data );
-		defer( path_set_current_directory( oldCWD ) );
+		defer { path_set_current_directory( oldCWD ); };
 
 		postBuildFunc();
 	}
@@ -1343,14 +1350,12 @@ int main( int argc, char** argv ) {
 	float64 totalTimeEnd = time_ms();
 
 	{
-		using namespace hlml;
-
 		printf( "Build finished:\n" );
 		printf( "    User config build:   %f ms%s\n", userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? " (skipped)" : "" );
-		if ( !doubleeq( compilerBackendInitTimeMS, -1.0 ) ) {
+		if ( !float64_equals( compilerBackendInitTimeMS, -1.0 ) ) {
 			printf( "    Compiler init time:  %f ms\n", compilerBackendInitTimeMS );
 		}
-		if ( !doubleeq( setBuilderOptionsTimeMS, -1.0 ) ) {
+		if ( !float64_equals( setBuilderOptionsTimeMS, -1.0 ) ) {
 			printf( "    set_builder_options: %f ms\n", setBuilderOptionsTimeMS );
 		}
 		if ( options.generate_solution && !isVisualStudioBuild ) {

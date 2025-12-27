@@ -28,7 +28,7 @@ SOFTWARE.
 
 #pragma once
 
-#include "core_types.h"
+#include "int_types.h"
 #include "dll_export.h"
 
 // Generates a seed for random number generation based on time.

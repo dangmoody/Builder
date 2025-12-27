@@ -26,17 +26,39 @@ SOFTWARE.
 ===========================================================================
 */
 
-#pragma once
+#include <core_math.h>
 
-#include "int_types.h"
-#include "dll_export.h"
+#include <math.h>
 
-struct CommandLineArgs {
-	s32		count;
-	char**	data;
-};
+#if defined( __clang__ )
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
+#endif
 
-extern CommandLineArgs		g_cmd_line_args;
+bool8 float32_equals( const float32 a, const float32 b ) {
+	return fabsf( a - b ) < 0.0001f;
+}
 
-CORE_API void				set_command_line_args( int argc, char** argv );
-CORE_API CommandLineArgs	get_command_line_args( void );
+bool8 float64_equals( const float64 a, const float64 b ) {
+	return fabs( a - b ) < 0.0001;
+}
+
+u32 min( const u32 a, const u32 b ) {
+	return ( a < b ) ? a : b;
+}
+
+u32 max( const u32 a, const u32 b ) {
+	return ( a > b ) ? a : b;
+}
+
+u64	next_power_of_2_up( const u64 number ) {
+	return ( number == 1 ) ? 1 : 1 << ( 64 - get_num_leading_zeros( number - 1 ) );
+}
+
+u64 next_multiple_of_4_up( const u64 number ) {
+	return ( number + 3 ) & -4ULL;
+}
+
+#if defined( __clang__ )
+#pragma clang diagnostic pop
+#endif

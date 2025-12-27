@@ -30,26 +30,6 @@ SOFTWARE.
 
 #include <debug.h>
 
-#include <core_types.h>
-#include <string_helpers.h>
-#include <typecast.inl>
-
-#include <stdio.h>	// printf, vprintf
-#include <stdlib.h>	// malloc, free
-#include <malloc.h>	// alloca
-#include <errno.h>  // linux specific error code handling
-#include <string.h> // linux specific error code conversion to string
-
-#include <stdarg.h>
-
-/*
-================================================================================================
-
-	Linux debug
-
-================================================================================================
-*/
-
 void set_console_text_color( const ConsoleTextColor color ) {
 	const char* color_linux = NULL;
 
@@ -67,47 +47,11 @@ void set_console_text_color( const ConsoleTextColor color ) {
 	printf( "%s", color_linux );
 }
 
-#ifdef _DEBUG
-void dump_callstack( void ) {
-	printf(
-		"Callstack:\n"
-		"TODO(DM): this\n"
-	);
-}
-#endif // _DEBUG
-
-static void assert_dialog_internal( const char* file, const int line, const char* prefix, const char* msg ) {
-	set_console_text_color( CONSOLE_TEXT_COLOR_RED );
-
-	printf( "%s: %s line %d: ", prefix, file, line );
-
-	set_console_text_color( CONSOLE_TEXT_COLOR_YELLOW );
-
-	printf( "%s\n", msg );
-
-#ifdef _DEBUG
-	dump_callstack();
-#endif
-
-	set_console_text_color( CONSOLE_TEXT_COLOR_DEFAULT );
-
-#ifdef _DEBUG
-	//_CrtDbgReport( _CRT_ASSERT, file, line, NULL, msg );
-#else
-	// TODO (MY) - maybe consider revisiting
-	// MessageBox( NULL, msg, "ASSERTION ERROR", MB_OK );
-#endif
-    printf( "FATAL ERROR!\n" );    // DM!!! whats the linux equivalent of MessageBox()?
-}
-
-errorCode_t get_last_error_code() {
-	errorCode_t captured_error = errno;
-
-	if ( captured_error != 0 ) {
-		printf( "Linux error: %s\n", strerror( captured_error ) );
-	}
-
-	return captured_error;
+s32 get_last_error_code() {
+	// errno is a global and therefore not thread safe
+	// so it MUST ALWAYS be cached ASAP
+	int err = errno;
+	return err;
 }
 
 #endif // __linux__

@@ -29,12 +29,15 @@ SOFTWARE.
 #include "builder_local.h"
 
 #include "core/include/debug.h"
-#include "core/include/string_helpers.h"
+#include "core/include/core_string.h"
 #include "core/include/paths.h"
-#include "core/include/array.inl"
+#include "core/include/core_array.inl"
 #include "core/include/file.h"
 #include "core/include/core_process.h"
 #include "core/include/string_builder.h"
+#include "core/include/core_helpers.h"
+#include "core/include/typecast.inl"
+#include "core/include/defer.h"
 
 struct clangState_t {
 	Array<const char*>			args;
@@ -77,12 +80,12 @@ static void ReadDependencyFile( const char* depFilename, std::vector<std::string
 	char* depFileBuffer = NULL;
 
 	if ( !file_read_entire( depFilename, &depFileBuffer ) ) {
-		errorCode_t errorCode = get_last_error_code();
+		s32 errorCode = get_last_error_code();
 		fatal_error( "Failed to read \"%s\".  This should never happen! Error code: " ERROR_CODE_FORMAT "\n", depFilename, errorCode );
 		return;
 	}
 
-	defer( file_free_buffer( &depFileBuffer ) );
+	defer { file_free_buffer( &depFileBuffer ); };
 
 	outIncludeDependencies.clear();
 
@@ -132,9 +135,9 @@ static void ReadDependencyFile( const char* depFilename, std::vector<std::string
 
 		// get the substring we actually need
 		std::string dependencyFilename( dependencyStart, dependencyFilenameLength );
-		For ( u64, i, 0, dependencyFilename.size() ) {
-			if ( dependencyFilename[i] == '\\' && dependencyFilename[i + 1] == ' ' ) {
-				dependencyFilename.erase( i, 1 );
+		For ( u64, charIndex, 0, dependencyFilename.size() ) {
+			if ( dependencyFilename[charIndex] == '\\' && dependencyFilename[charIndex + 1] == ' ' ) {
+				dependencyFilename.erase( charIndex, 1 );
 			}
 		}
 
@@ -164,14 +167,18 @@ static void ReadDependencyFile( const char* depFilename, std::vector<std::string
 //================================================================
 
 static bool8 Clang_Init( compilerBackend_t* backend ) {
-	backend->data = cast( clangState_t*, mem_alloc( sizeof( clangState_t ) ) );
-	new( backend->data ) clangState_t;
+	backend->data = cast( clangState_t*, malloc( sizeof( clangState_t ) ) );
+	memset( backend->data, 0, sizeof( clangState_t ) );
 
 	return true;
 }
 
 static void Clang_Shutdown( compilerBackend_t* backend ) {
-	mem_free( backend->data );
+	clangState_t* clangState = cast( clangState_t*, backend->data );
+
+	clangState->args.free();
+
+	free( backend->data );
 	backend->data = NULL;
 }
 
@@ -396,14 +403,13 @@ static void Clang_GetIncludeDependenciesFromSourceFileBuild( compilerBackend_t* 
 	outIncludeDependencies = clangState->includeDependencies;
 }
 
-static String Clang_GetCompilerVersion( compilerBackend_t* backend ) {
+static void Clang_GetCompilerVersion( compilerBackend_t* backend, String* outCompilerVersion ) {
 	clangState_t* clangState = cast( clangState_t*, backend->data );
-
-	String compilerVersion;
 
 	const char* clangVersionPrefix = "clang version ";
 
-	Array<const char*> args;
+	Array<const char*> args = {};
+	defer { args.free(); };
 	args.add( backend->compilerPath.data );
 	args.add( "-v" );
 
@@ -411,12 +417,12 @@ static String Clang_GetCompilerVersion( compilerBackend_t* backend ) {
 
 	if ( !process ) {
 		error( "Failed to find process \"%s\".  Did you type it correctly?\n", args[0] );
-		return String();
+		return;
 	}
 
 	StringBuilder clangOutput = {};
 	string_builder_reset( &clangOutput );
-	defer( string_builder_destroy( &clangOutput ) );
+	defer { string_builder_destroy( &clangOutput ); };
 
 	char buffer[1024] = {};
 	u64 bytesRead = U64_MAX;
@@ -440,25 +446,22 @@ static String Clang_GetCompilerVersion( compilerBackend_t* backend ) {
 
 		u64 versionLength = cast( u64, versionEnd ) - cast( u64, versionStart );
 
-		string_copy_from_c_string( &compilerVersion, versionStart, versionLength );
+		string_copy_from_c_string( outCompilerVersion, versionStart, versionLength );
 	}
 
 	process_join( process );
 
 	process_destroy( process );
 	process = NULL;
-
-	return compilerVersion;
 }
 
-static String GCC_GetCompilerVersion( compilerBackend_t* backend ) {
+static void GCC_GetCompilerVersion( compilerBackend_t* backend, String* outCompilerVersion ) {
 	clangState_t* clangState = cast( clangState_t*, backend->data );
-
-	String compilerVersion;
 
 	const char* gccVersionPrefix = "gcc version ";
 
-	Array<const char*> args;
+	Array<const char*> args = {};
+	defer { args.free(); };
 	args.add( backend->compilerPath.data );
 	args.add( "-v" );
 
@@ -468,7 +471,7 @@ static String GCC_GetCompilerVersion( compilerBackend_t* backend ) {
 
 	StringBuilder gccOutput = {};
 	string_builder_reset( &gccOutput );
-	defer( string_builder_destroy( &gccOutput ) );
+	defer { string_builder_destroy( &gccOutput ); };
 
 	char buffer[1024] = {};
 	u64 bytesRead = U64_MAX;
@@ -490,15 +493,13 @@ static String GCC_GetCompilerVersion( compilerBackend_t* backend ) {
 
 		u64 versionLength = cast( u64, versionEnd ) - cast( u64, versionStart );
 
-		string_copy_from_c_string( &compilerVersion, versionStart, versionLength );
+		string_copy_from_c_string( outCompilerVersion, versionStart, versionLength );
 	}
 
 	process_join( process );
 
 	process_destroy( process );
 	process = NULL;
-
-	return compilerVersion;
 }
 
 void CreateCompilerBackend_Clang( compilerBackend_t* outBackend, const char* compilerPath ) {
@@ -512,7 +513,6 @@ void CreateCompilerBackend_Clang( compilerBackend_t* outBackend, const char* com
 #endif
 
 	*outBackend = compilerBackend_t {
-		.data										= NULL,
 		.Init										= Clang_Init,
 		.Shutdown									= Clang_Shutdown,
 		.CompileSourceFile							= Clang_CompileSourceFile,
@@ -523,19 +523,16 @@ void CreateCompilerBackend_Clang( compilerBackend_t* outBackend, const char* com
 
 	const char* pathToCompiler = path_remove_file_from_path( compilerPath );
 	if ( pathToCompiler == NULL ) {
-		outBackend->compilerPath = compilerPath;
-		outBackend->linkerPath = linkerExe;
+		string_copy_from_c_string( &outBackend->compilerPath, compilerPath );
+		string_copy_from_c_string( &outBackend->linkerPath, linkerExe );
 	} else {
-		outBackend->compilerPath = tprintf( "%s%c%s", pathToCompiler, PATH_SEPARATOR, clangExe );
-		outBackend->linkerPath = tprintf( "%s%c%s", pathToCompiler, PATH_SEPARATOR, linkerExe );
+		string_printf( &outBackend->compilerPath, pathToCompiler, PATH_SEPARATOR, clangExe );
+		string_printf( &outBackend->linkerPath, pathToCompiler, PATH_SEPARATOR, linkerExe );
 	}
 }
 
 void CreateCompilerBackend_GCC( compilerBackend_t* outBackend, const char* compilerPath ) {
 	*outBackend = compilerBackend_t {
-		.compilerPath								= tprintf( "%s%cgcc", compilerPath, PATH_SEPARATOR ),
-		.linkerPath									= tprintf( "%s%cld", compilerPath, PATH_SEPARATOR ),
-		.data										= NULL,
 		.Init										= Clang_Init,
 		.Shutdown									= Clang_Shutdown,
 		.CompileSourceFile							= Clang_CompileSourceFile,
@@ -549,10 +546,10 @@ void CreateCompilerBackend_GCC( compilerBackend_t* outBackend, const char* compi
 
 	const char* pathToCompiler = path_remove_file_from_path( compilerPath );
 	if ( pathToCompiler == NULL ) {
-		outBackend->compilerPath = compilerExe;
-		outBackend->linkerPath = linkerExe;
+		string_copy_from_c_string( &outBackend->compilerPath, compilerExe );
+		string_copy_from_c_string( &outBackend->linkerPath, linkerExe );
 	} else {
-		outBackend->compilerPath = tprintf( "%s%c%s", pathToCompiler, PATH_SEPARATOR, compilerExe );
-		outBackend->linkerPath = tprintf( "%s%c%s", pathToCompiler, PATH_SEPARATOR, linkerExe );
+		string_printf( &outBackend->compilerPath, "%s%c%s", pathToCompiler, PATH_SEPARATOR, compilerExe );
+		string_printf( &outBackend->linkerPath, "%s%c%s", pathToCompiler, PATH_SEPARATOR, linkerExe );
 	}
 }

@@ -25,18 +25,38 @@ SOFTWARE.
 
 ===========================================================================
 */
+#ifdef _WIN32
 
-#pragma once
+#include <core_thread.h>
 
-#include "int_types.h"
-#include "dll_export.h"
+#include <debug.h>
 
-struct CommandLineArgs {
-	s32		count;
-	char**	data;
-};
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 
-extern CommandLineArgs		g_cmd_line_args;
+#include <Windows.h>
 
-CORE_API void				set_command_line_args( int argc, char** argv );
-CORE_API CommandLineArgs	get_command_line_args( void );
+Thread thread_create( ThreadFunc thread_func, void* data ) {
+	HANDLE handle = CreateThread( NULL, 0, thread_func, data, 0, 0 );
+
+	assert( handle );
+
+	return { handle };
+}
+
+void thread_destroy( Thread* thread ) {
+	assert( thread );
+	assert( thread->ptr );
+
+	CloseHandle( cast( HANDLE, thread->ptr ) );
+	thread->ptr = NULL;
+}
+
+void thread_sleep( const float64 seconds ) {
+	DWORD ms = cast( DWORD, seconds ) * 1000;
+
+	Sleep( ms );
+}
+
+#endif // _WIN32

@@ -28,86 +28,34 @@ SOFTWARE.
 
 #pragma once
 
-#include "core_types.h"
+#include "int_types.h"
 #include "dll_export.h"
 
-#define HLML_ASSERT assert
-#if 1
-#include "3rdparty/hlml/hlml.h"
-#else
-#include "3rdparty/hlml/bool2.h"
-#include "3rdparty/hlml/bool3.h"
-#include "3rdparty/hlml/bool3.h"
-#include "3rdparty/hlml/int2.h"
-#include "3rdparty/hlml/int3.h"
-#include "3rdparty/hlml/int3.h"
-#include "3rdparty/hlml/uint2.h"
-#include "3rdparty/hlml/uint3.h"
-#include "3rdparty/hlml/uint3.h"
-#include "3rdparty/hlml/float2.h"
-#include "3rdparty/hlml/float3.h"
-#include "3rdparty/hlml/float3.h"
-#include "3rdparty/hlml/double2.h"
-#include "3rdparty/hlml/double3.h"
-#include "3rdparty/hlml/double3.h"
-
-#include "3rdparty/hlml/bool2x2.h"
-#include "3rdparty/hlml/bool2x3.h"
-#include "3rdparty/hlml/bool2x4.h"
-#include "3rdparty/hlml/bool3x2.h"
-#include "3rdparty/hlml/bool3x3.h"
-#include "3rdparty/hlml/bool3x4.h"
-#include "3rdparty/hlml/bool4x2.h"
-#include "3rdparty/hlml/bool4x3.h"
-#include "3rdparty/hlml/bool4x4.h"
-#include "3rdparty/hlml/int2x2.h"
-#include "3rdparty/hlml/int2x3.h"
-#include "3rdparty/hlml/int2x4.h"
-#include "3rdparty/hlml/int3x2.h"
-#include "3rdparty/hlml/int3x3.h"
-#include "3rdparty/hlml/int3x4.h"
-#include "3rdparty/hlml/int4x2.h"
-#include "3rdparty/hlml/int4x3.h"
-#include "3rdparty/hlml/int4x4.h"
-#include "3rdparty/hlml/uint2x2.h"
-#include "3rdparty/hlml/uint2x3.h"
-#include "3rdparty/hlml/uint2x4.h"
-#include "3rdparty/hlml/uint3x2.h"
-#include "3rdparty/hlml/uint3x3.h"
-#include "3rdparty/hlml/uint3x4.h"
-#include "3rdparty/hlml/uint4x2.h"
-#include "3rdparty/hlml/uint4x3.h"
-#include "3rdparty/hlml/uint4x4.h"
-#include "3rdparty/hlml/float2x2.h"
-#include "3rdparty/hlml/float2x3.h"
-#include "3rdparty/hlml/float2x4.h"
-#include "3rdparty/hlml/float3x2.h"
-#include "3rdparty/hlml/float3x3.h"
-#include "3rdparty/hlml/float3x4.h"
-#include "3rdparty/hlml/float4x2.h"
-#include "3rdparty/hlml/float4x3.h"
-#include "3rdparty/hlml/float4x4.h"
-#include "3rdparty/hlml/double2x2.h"
-#include "3rdparty/hlml/double2x3.h"
-#include "3rdparty/hlml/double2x4.h"
-#include "3rdparty/hlml/double3x2.h"
-#include "3rdparty/hlml/double3x3.h"
-#include "3rdparty/hlml/double3x4.h"
-#include "3rdparty/hlml/double4x2.h"
-#include "3rdparty/hlml/double4x3.h"
-#include "3rdparty/hlml/double4x4.h"
-
-#include "3rdparty/hlml/hlml_constants.h"
-#include "3rdparty/hlml/hlml_constants_sse.h"
-#include "3rdparty/hlml/hlml_defines.h"
-#include "3rdparty/hlml/hlml_functions_scalar.h"
-#include "3rdparty/hlml/hlml_functions_scalar_sse.h"
-#include "3rdparty/hlml/hlml_functions_vector.h"
-#include "3rdparty/hlml/hlml_functions_vector_sse.h"
-#include "3rdparty/hlml/hlml_functions_quaternion.h"
-#include "3rdparty/hlml/hlml_functions_matrix.h"
+#ifndef NOMINMAX
+#define NOMINMAX
 #endif
 
+/*
+================================================================================================
+
+	Core Math
+
+	Just a collection of math helper functions.
+
+================================================================================================
+*/
+
+// Returns true if 'a' is within an epsilon range to 'b', otherwise returns false.
+CORE_API bool8	float32_equals( const float32 a, const float32 b );
+
+// Returns true if 'a' is within an epsilon range to 'b', otherwise returns false.
+CORE_API bool8	float64_equals( const float64 a, const float64 b );
+
+// Returns whichever value is smallest.
+CORE_API u32	min( const u32 a, const u32 b );
+
+// Returns whichever value is largest.
+CORE_API u32	max( const u32 a, const u32 b );
 
 // Returns the number of zeros on the left hand side of 'number' when viewed in base 2.
 CORE_API s32	get_num_leading_zeros( const u64 number );

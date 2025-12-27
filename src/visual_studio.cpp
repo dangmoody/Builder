@@ -28,10 +28,11 @@ SOFTWARE.
 
 #include "builder_local.h"
 
-#include "core/include/core_types.h"
+#include "core/include/int_types.h"
+#include "core/include/core_helpers.h"
 #include "core/include/string_builder.h"
-#include "core/include/string_helpers.h"
-#include "core/include/array.inl"
+#include "core/include/core_string.h"
+#include "core/include/core_array.inl"
 #include "core/include/file.h"
 #include "core/include/paths.h"
 #include "core/include/typecast.inl"
@@ -39,6 +40,7 @@ SOFTWARE.
 #include "core/include/hash.h"
 #include "core/include/hashmap.h"
 #include "core/include/debug.h"
+#include "core/include/defer.h"
 
 #if defined( _WIN32 )
 #include <Shlwapi.h>
@@ -122,7 +124,7 @@ static void VS_DeleteOldProjectFilesCallback( const FileInfo* fileInfo, void* us
 	visualStudioNukeContext_t* nukeContext = cast( visualStudioNukeContext_t*, userData );
 
 	if ( fileInfo->is_directory && string_equals( fileInfo->filename, ".vs" ) ) {
-		nukeContext->dotVSFolder = fileInfo->full_filename;
+		string_printf( &nukeContext->dotVSFolder, fileInfo->full_filename );
 	}
 
 	For ( u32, fileExtensionIndex, 0, nukeContext->fileExtensionsToCheck.count ) {
@@ -160,7 +162,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 	Array<char*> projectFolders;
 
 	Hashmap* projectFolderIndices = hashmap_create( 1 );
-	defer( hashmap_destroy( projectFolderIndices ) );
+	defer { hashmap_destroy( projectFolderIndices ); };
 
 	struct guidParentMapping_t {
 		u64	guidIndex;
@@ -239,6 +241,8 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 	// but keep the root because we're about to re-populate it
 	{
 		visualStudioNukeContext_t nukeContext = {};
+		defer { string_free( &nukeContext.dotVSFolder ); };
+		defer { nukeContext.fileExtensionsToCheck.free(); };
 		nukeContext.fileExtensionsToCheck.add( ".sln" );
 		nukeContext.fileExtensionsToCheck.add( ".vcxproj" );
 		nukeContext.fileExtensionsToCheck.add( ".vcxproj.user" );
@@ -260,7 +264,8 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 	assert( pathFromSolutionToInputFile != NULL || !string_equals( pathFromSolutionToInputFile, "" ) );
 
 	// give each project a guid
-	Array<const char*> projectGuids;
+	Array<const char*> projectGuids = {};
+	defer { projectGuids.free(); };
 	projectGuids.resize( options->solution.projects.size() );
 
 	For ( u64, guidIndex, 0, projectGuids.count ) {
@@ -268,7 +273,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 	}
 
 	if ( !folder_create_if_it_doesnt_exist( visualStudioProjectFilesPath ) ) {
-		errorCode_t errorCode = get_last_error_code();
+		s32 errorCode = get_last_error_code();
 		error( "Failed to create the Visual Studio Solution folder.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
 
 		return false;
@@ -280,7 +285,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 		bool8 written = file_write_entire( filename, msg, msgLength );
 
 		if ( !written ) {
-			errorCode_t errorCode = get_last_error_code();
+			s32 errorCode = get_last_error_code();
 			error( "Failed to write \"%s\": " ERROR_CODE_FORMAT ".\n", filename, errorCode );
 
 			return false;
@@ -404,11 +409,15 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 		// get all the files that the project will know about
 		// the arrays in here get referred to multiple times throughout generating the files for the project
-		Array<visualStudioFileFilter_t> sourceFiles;
-		Array<visualStudioFileFilter_t> headerFiles;
-		Array<visualStudioFileFilter_t> otherFiles;
+		Array<visualStudioFileFilter_t> sourceFiles = {};
+		defer { sourceFiles.free(); };
+		Array<visualStudioFileFilter_t> headerFiles = {};
+		defer { headerFiles.free(); };
+		Array<visualStudioFileFilter_t> otherFiles = {};
+		defer { otherFiles.free(); };
 
-		Array<const char*> filterPaths;
+		Array<const char*> filterPaths = {};
+		defer { filterPaths.free(); };
 
 		// get every single file from all the code_folder entries that the user specified
 		// only get the ones that have the file extensions the user asked for
@@ -503,7 +512,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 			StringBuilder vcxprojContent = {};
 			string_builder_reset( &vcxprojContent );
-			defer( string_builder_destroy( &vcxprojContent ) );
+			defer { string_builder_destroy( &vcxprojContent ); };
 
 			string_builder_appendf( &vcxprojContent, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
 			string_builder_appendf( &vcxprojContent, "<Project DefaultTargets=\"Build\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n" );
@@ -711,7 +720,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 			StringBuilder vcxprojContent = {};
 			string_builder_reset( &vcxprojContent );
-			defer( string_builder_destroy( &vcxprojContent ) );
+			defer { string_builder_destroy( &vcxprojContent ); };
 
 			string_builder_appendf( &vcxprojContent, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
 			string_builder_appendf( &vcxprojContent, "<Project ToolsVersion=\"Current\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n" );
@@ -776,7 +785,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 			StringBuilder vcxprojContent = {};
 			string_builder_reset( &vcxprojContent );
-			defer( string_builder_destroy( &vcxprojContent ) );
+			defer { string_builder_destroy( &vcxprojContent ); };
 
 			string_builder_appendf( &vcxprojContent, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
 			string_builder_appendf( &vcxprojContent, "<Project ToolsVersion=\"4.0\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n" );
@@ -843,7 +852,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 		StringBuilder slnContent = {};
 		string_builder_reset( &slnContent );
-		defer( string_builder_destroy( &slnContent ) );
+		defer { string_builder_destroy( &slnContent ); };
 
 		string_builder_appendf( &slnContent, "\n" );
 		string_builder_appendf( &slnContent, "Microsoft Visual Studio Solution File, Format Version 12.00\n" );

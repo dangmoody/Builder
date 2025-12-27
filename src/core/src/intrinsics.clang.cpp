@@ -25,18 +25,20 @@ SOFTWARE.
 
 ===========================================================================
 */
+#ifdef __clang__
 
-#pragma once
+#include <core_math.h>
 
-#include "int_types.h"
-#include "dll_export.h"
+s32 get_num_leading_zeros( const u64 number ) {
+	return __builtin_clzll( number );
+}
 
-struct CommandLineArgs {
-	s32		count;
-	char**	data;
-};
+s32 get_num_trailing_zeros( const u64 number ) {
+	return __builtin_ctzll( number );
+}
 
-extern CommandLineArgs		g_cmd_line_args;
+s32 get_num_set_bits( const u64 number ) {
+	return __builtin_popcountll( number );
+}
 
-CORE_API void				set_command_line_args( int argc, char** argv );
-CORE_API CommandLineArgs	get_command_line_args( void );
+#endif // __clang__

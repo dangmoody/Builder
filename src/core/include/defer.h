@@ -1,62 +1,137 @@
-/*
-===========================================================================
+/** @file deferpp.h
+    @brief Deferpp (Defer++) is Go-like DEFER construction for C++11,
+           pure C++, no dependencies!
+    
+    Single header. No installation required, no build needed.
+    Copy this file to any location in your project you like :)
+    Created by Pavlo M, https://github.com/olvap80
+    
+    Usage:
+@code
+    {
+        auto resource = AcquireSomeResource(parameters_here)
+        DEFER{ FreeThatResource(resource); };
+        
+        ... //work with resource
+    }
+    //Note: code after DEFER is called when leaving scope due to any reason
+    //      (one can reach scope end, issue return/break/continue or throw
+    //       some exception, and there is guarantee deferred code is called)
+@endcode
+    
+    This is quick alternative for RAII: to ensure cleanup code is called
+    when scope is exited, so that one does not need to write RAII wrapper
+    class for every kind of resource.
+    See also sample test fragment (demo) at the bottom of this file.
 
-Core
 
-Copyright (c) 2025 Dan Moody
+Copyright (c) 2015-2018, Pavlo M, https://github.com/olvap80
+All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
 
-===========================================================================
+* Neither the name of deferpp nor the names of its
+  contributors may be used to endorse or promote products derived from
+  this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+#ifndef DEFERPP_H_ONCE
+#define DEFERPP_H_ONCE
 
-#pragma once
+#if defined( __clang__ )
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wc++98-compat"
+#endif
 
-/*
-================================================================================================
+///Defer following code until enclosing scope is exited
+/** Usage: DEFER{ some_code_to_be_deferred }; 
+    Remember that some_code_to_be_deferred shall not allow
+    exceptions to be propagated out of curly braces */
+#define defer \
+        const auto DEFER_CAT_ID(callOnScopeExit,__LINE__) \
+          = (Defer_SupportNamespace::tagClassForLambda) ->* [&]()
 
-	Defer macro for C++ like what Go and Jai have
-	Taken from https://www.gingerbill.org/article/2015/08/19/defer-in-cpp/
 
-================================================================================================
-*/
+//==============================================================================
+//Implementation details follow
 
-template <typename CodeToRun>
-struct RunOnExitScope {
-	CodeToRun	code_to_run;
-	RunOnExitScope( CodeToRun the_code_to_run )
-		: code_to_run( the_code_to_run )
-	{
-	}
 
-	~RunOnExitScope() {
-		code_to_run();
-	}
-};
+//Helper macro to expand and concatenate macro arguments into combined identifier
+#define DEFER_CAT_ID(a,b) DEFER_CAT_ID_EXPANDED_HELPER(a,b)
+//helper macro to concatenate expanded macro arguments
+#define DEFER_CAT_ID_EXPANDED_HELPER(a,b) a##b
 
-template <typename CodeToRun>
-RunOnExitScope<CodeToRun> defer_func( CodeToRun code_to_run ) {
-	return RunOnExitScope<CodeToRun>( code_to_run );
+namespace Defer_SupportNamespace{
+    ///Helper type to trigger operator ->*
+    struct TagClassForLambda{ constexpr TagClassForLambda() = default; };
+    ///Use this "instance" to trigger overloaded operator ->*
+    /** The trick with tagClassForLambda is needed
+        to infer the type of the lambda */
+    constexpr TagClassForLambda tagClassForLambda;
+
+    ///RAII for implementing DEFER behavior
+    template<class Lambda>
+    class CallOnScopeExit{
+    public:
+        ///Create RAII wrapper around Lambda
+        /** Using Lambda directly, optimizer takes case due to [&]() in front */
+        constexpr CallOnScopeExit(Lambda initialLambda)
+            : lambda(initialLambda), 
+              isOwner(true)
+        {}
+    
+        ///Usually optimized away due to RVO
+        CallOnScopeExit(CallOnScopeExit&& other)
+            : lambda(other.lambda), isOwner(true)
+        {
+            other.isOwner = false;
+        }
+
+        //ensure copy changes go only through move constructor
+        CallOnScopeExit(const CallOnScopeExit& other) = delete;
+        CallOnScopeExit& operator=(const CallOnScopeExit& other) = delete;
+
+        ///Actual lambda call once CallOnScopeExit goes out of scope
+        ~CallOnScopeExit(){
+            if( isOwner ){ //condition is usually optimized away
+                lambda();
+            }
+        }
+
+    private:
+        const Lambda lambda; ///< Hold lambda, avoid slow std::function here
+        bool isOwner; ///< Ensure 100% lambda is called only one time
+    };
+
+    ///Helper operator to easy catch lambda for DEFER macro
+    /** Use template to avoid slow std::function
+        (raw lambda is copied/stored here) */
+    template<class Lambda>
+    constexpr CallOnScopeExit<Lambda> operator ->* (const TagClassForLambda&, Lambda lambda){
+        return CallOnScopeExit<Lambda>(lambda);
+    }
 }
 
-#define DEFER_1( x, y )	x ## y
-#define DEFER_2( x, y )	DEFER_1( x, y )
-#define DEFER_3( x )	DEFER_2( x, __COUNTER__ )
+#if defined( __clang__ )
+#pragma clang diagnostic pop
+#endif
 
-#define defer( code )	auto DEFER_3( _defer_ ) = defer_func( [&]() { code; } )
+#endif /*DEFERPP_H_ONCE*/

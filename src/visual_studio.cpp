@@ -554,7 +554,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 				//to = path_canonicalise( to );
 
 				const char* pathFromSolutionToBinary = path_relative_path_to( from, to );
-				pathFromSolutionToBinary = cast( char*, path_remove_file_from_path( pathFromSolutionToBinary ) );
+				pathFromSolutionToBinary = path_remove_file_from_path( pathFromSolutionToBinary );
 
 				For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
 					const char* platform = options->solution.platforms[platformIndex].c_str();

@@ -26,7 +26,7 @@ SOFTWARE.
 ===========================================================================
 */
 
-#ifdef _WIN32
+#if defined( CORE_SUC ) && defined( _WIN32 )
 
 #include "core_process.win64.cpp"
 #include "core_thread.win64.cpp"
@@ -37,4 +37,4 @@ SOFTWARE.
 #include "paths.win64.cpp"
 #include "timer.win64.cpp"
 
-#endif // _WIN32
+#endif // defined( CORE_SUC ) && defined( _WIN32 )

@@ -26,7 +26,7 @@ SOFTWARE.
 ===========================================================================
 */
 
-#ifdef __linux__
+#if defined( CORE_SUC ) && defined( __linux__ )
 
 #include "debug.linux.cpp"
 #include "file.linux.cpp"
@@ -34,4 +34,4 @@ SOFTWARE.
 #include "paths.linux.cpp"
 #include "timer.linux.cpp"
 
-#endif // __linux__
+#endif // defined( CORE_SUC ) && defined( __linux__ )

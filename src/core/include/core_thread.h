@@ -35,15 +35,11 @@ struct Thread {
 	void*	ptr;
 };
 
-#ifdef _WIN32
-	#define ThreadCode DWORD
-#else
-	#define ThreadCode int
-#endif
-
 typedef s64 ( *ThreadFunc )( void* data );
 
 CORE_API Thread	thread_create( ThreadFunc thread_func, void* data );
+
+CORE_API void	thread_wait_for_idle( Thread* thread );
 
 CORE_API void	thread_destroy( Thread* thread );
 

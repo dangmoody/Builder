@@ -1005,12 +1005,12 @@ int main( int argc, char** argv ) {
 	typedef void ( *preBuildFunc_t )();
 	typedef void ( *postBuildFunc_t )();
 
-	preBuildFunc_t preBuildFunc = cast( preBuildFunc_t, library_get_proc_address( library, PRE_BUILD_FUNC_NAME ) );
-	postBuildFunc_t postBuildFunc = cast( postBuildFunc_t, library_get_proc_address( library, POST_BUILD_FUNC_NAME ) );
+	preBuildFunc_t preBuildFunc = cast( preBuildFunc_t, library_get_symbol( library, PRE_BUILD_FUNC_NAME ) );
+	postBuildFunc_t postBuildFunc = cast( postBuildFunc_t, library_get_symbol( library, POST_BUILD_FUNC_NAME ) );
 
 	{
 		// now get the user-specified options
-		setBuilderOptionsFunc_t setBuilderOptionsFunc = cast( setBuilderOptionsFunc_t, library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME ) );
+		setBuilderOptionsFunc_t setBuilderOptionsFunc = cast( setBuilderOptionsFunc_t, library_get_symbol( library, SET_BUILDER_OPTIONS_FUNC_NAME ) );
 
 		if ( setBuilderOptionsFunc ) {
 			float64 setBuilderOptionsTimeStart = time_ms();

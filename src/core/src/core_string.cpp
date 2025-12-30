@@ -135,11 +135,11 @@ bool8 string_contains( const char* str, const char* substring ) {
 	return strstr( str, substring ) != NULL;
 }
 
-const char* temp_c_string( const char* from ) {
+char* temp_c_string( const char* from ) {
 	return temp_c_string( from, strlen( from ) );
 }
 
-const char* temp_c_string( const char* from, const u64 length ) {
+char* temp_c_string( const char* from, const u64 length ) {
 	char* result = cast( char*, mem_temp_alloc( ( length + 1 ) * sizeof( char ) ) );
 	strncpy( result, from, length * sizeof( char ) );
 	result[length] = 0;

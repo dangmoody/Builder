@@ -26,6 +26,8 @@ SOFTWARE.
 ===========================================================================
 */
 
+#ifdef CORE_SUC
+
 #if defined( _WIN32 )
 	#include "win64/core.win64.suc.cpp"
 #elif defined( __linux__ )
@@ -47,3 +49,5 @@ SOFTWARE.
 #include "random.cpp"
 #include "string_builder.cpp"
 #include "temp_storage.cpp"
+
+#endif // CORE_SUC

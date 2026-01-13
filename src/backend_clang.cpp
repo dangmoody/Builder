@@ -52,6 +52,9 @@ static const char* LanguageVersionToCompilerArg( const LanguageVersion languageV
 	switch ( languageVersion ) {
 		case LANGUAGE_VERSION_C89:		return "-std=c89";
 		case LANGUAGE_VERSION_C99:		return "-std=c99";
+		case LANGUAGE_VERSION_C11:		return "-std=c11";
+		case LANGUAGE_VERSION_C17:		return "-std=c17";
+		case LANGUAGE_VERSION_C23:		return "-std=c23";
 		case LANGUAGE_VERSION_CPP11:	return "-std=c++11";
 		case LANGUAGE_VERSION_CPP14:	return "-std=c++14";
 		case LANGUAGE_VERSION_CPP17:	return "-std=c++17";

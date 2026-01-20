@@ -41,7 +41,8 @@ SOFTWARE.
 #ifdef _WIN32
 	#define debug_break			__debugbreak
 #elif defined(__linux__)
-	#define debug_break			abort( SIGTRAP )
+	#include <signal.h>
+	#define debug_break()		raise( SIGTRAP )
 #else
 	#error Unrecognised platform!
 #endif

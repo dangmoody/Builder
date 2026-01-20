@@ -1125,7 +1125,7 @@ int main( int argc, char** argv ) {
 				args.add( compilerBackend.compilerPath.data );
 				Process* process = process_create( &args, NULL, 0 );
 				if ( !process ) {
-					printf( "Can't find path to overridden compiler \"%s\".  Did you type it correctly?\n", compilerBackend.compilerPath.data );
+					error( "Can't find path to overridden compiler \"%s\".  Did you type it correctly?\n", compilerBackend.compilerPath.data );
 					QUIT_ERROR();
 				}
 			}

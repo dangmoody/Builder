@@ -64,8 +64,8 @@ SOFTWARE.
 
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
-	BUILDER_VERSION_MINOR	= 9,
-	BUILDER_VERSION_PATCH	= 1,
+	BUILDER_VERSION_MINOR	= 10,
+	BUILDER_VERSION_PATCH	= 0,
 };
 
 enum buildResult_t {
@@ -1130,7 +1130,7 @@ int main( int argc, char** argv ) {
 				args.add( compilerBackend.compilerPath.data );
 				Process* process = process_create( &args, NULL, 0 );
 				if ( !process ) {
-					printf( "Can't find path to overridden compiler \"%s\".  Did you type it correctly?\n", compilerBackend.compilerPath.data );
+					error( "Can't find path to overridden compiler \"%s\".  Did you type it correctly?\n", compilerBackend.compilerPath.data );
 					QUIT_ERROR();
 				}
 			}

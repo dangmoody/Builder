@@ -1,3 +1,10 @@
+v0.10.0, <RELEASE DATE HERE>:
+
+* Added LANGUAGE_VERSION_C11, LANGUAGE_VERSION_C17, and LANGUAGE_VERSION_C23.
+	* Microsoft's post-C99 support isn't great, so you'll need to take care of that yourself, but Builder at least exposes the options for you now.
+
+----------------------------------------------------------------
+
 v0.9.1, 26/12/2025:
 
 * Stopped the program from crashing if the overridden compiler can't be found.  Instead, show an error and exit gracefully.

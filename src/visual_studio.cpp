@@ -445,6 +445,15 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 
 				const char* searchPath = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, codeFolder );
 
+				if ( !folder_exists( searchPath ) ) {
+					error(
+						"You've asked me to include a code_folder called \"%s\" when trying to generate the Visual Studio project \"%s\", but I couldn't find one.\n"
+						"Make sure the path is correct, that it actually exists, and so on.\n"
+						, searchPath, project->name.c_str()
+					);
+					return false;
+				}
+
 				if ( !file_get_all_files_in_folder( searchPath, true, false, VisualStudio_OnFoundSourceFile, &visitorData ) ) {
 					error( "Failed to get all files in \"%s\" (including subdirectories).\n", searchPath );
 					return false;

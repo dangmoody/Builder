@@ -36,3 +36,9 @@ x64
 # rider stuff
 #
 .idea
+
+
+#
+# zed stuff
+#
+.zed

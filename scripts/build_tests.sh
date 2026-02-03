@@ -35,6 +35,8 @@ if [[ "$config" != "release" ]]; then
 	optimisation="-O3"
 fi
 
+source_files="tests/tests_main.cpp src/builder.cpp src/visual_studio.cpp src/backend_clang.cpp src/backend_msvc.cpp"
+
 defines="-DCORE_SUC -DHLML_NAMESPACE -DCORE_USE_SUBPROCESS"
 if [[ "$config" == "debug" ]]; then
 	defines="$defines -D_DEBUG"
@@ -42,6 +44,6 @@ elif [[ "$config" == "release" ]]; then
 	defines="$defines -DNDEBUG"
 fi
 
-args="${clang_dir}/bin/clang ${symbols} ${optimization} -lstdc++ -luuid -std=c++20 -fexceptions -ferror-limit=0 -o ${bin_folder}/builder_tests_${config} tests/tests_main.cpp ${defines} -Isrc/core/include"
+args="${clang_dir}/bin/clang ${symbols} ${optimization} -lstdc++ -luuid -std=c++20 -fexceptions -ferror-limit=0 -o ${bin_folder}/builder_tests_${config} ${source_files} ${defines} -Isrc/core/include"
 echo ${args}
 ${args}

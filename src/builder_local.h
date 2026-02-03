@@ -103,6 +103,11 @@ struct buildContext_t {
 	bool8								verbose;
 };
 
+// shared entry point
+// used in the actual builder program
+// also used by tests so they dont have to start a separate subprocess to build
+int			BuilderMain( const int firstArg, int argc, char** argv );
+
 u64			GetLastFileWriteTime( const char* filename );
 
 bool8		NukeFolder( const char* folder, const bool8 deleteRootFolder, const bool8 verbose );
@@ -114,7 +119,7 @@ bool8		FileIsHeaderFile( const char* filename );
 
 const char*	BuildConfig_GetFullBinaryName( const BuildConfig* config );
 
-s32			RunProc( Array<const char*>* args, Array<const char*>* environmentVariables, const procFlags_t procFlags = 0 );
+s32			RunProc( Array<const char*>* args, Array<const char*>* environmentVariables, const procFlags_t procFlags = 0, String* outStdout = NULL );
 
 bool8		GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* options );
 

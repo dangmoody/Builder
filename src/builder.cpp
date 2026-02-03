@@ -253,7 +253,7 @@ const char* BuildConfig_GetFullBinaryName( const BuildConfig* config ) {
 	return string_builder_to_string( &sb );
 }
 
-s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVariables, const procFlags_t procFlags ) {
+s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVariables, const procFlags_t procFlags, String* outStdout ) {
 	assert( args );
 	assert( args->data );
 	assert( args->count >= 1 );
@@ -267,6 +267,11 @@ s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVariables,
 
 	// DM!!! put the async flag back when done getting this running
 	Process* process = process_create( args, environmentVariables, /*PROCESS_FLAG_ASYNC |*/ PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
+
+	defer(
+		process_destroy( process );
+		process = NULL;
+	);
 
 	if ( !process ) {
 		error(
@@ -282,21 +287,23 @@ s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVariables,
 	}
 
 	// show stdout
-	if ( procFlags & PROC_FLAG_SHOW_STDOUT ) {
-		char buffer[1024] = { 0 };
-		u64 bytesRead = U64_MAX;
+	StringBuilder sb = {};
+	string_builder_reset( &sb );
 
-		while ( ( bytesRead = process_read_stdout( process, buffer, 1024 ) ) ) {
-			buffer[bytesRead] = 0;
+	char buffer[1024] = {};
+	while ( process_read_stdout( process, buffer, count_of( buffer ) ) ) {
+		string_builder_appendf( &sb, buffer );
 
+		if ( procFlags & PROC_FLAG_SHOW_STDOUT ) {
 			printf( "%s", buffer );
 		}
 	}
 
-	s32 exitCode = process_join( process );
+	if ( outStdout ) {
+		*outStdout = string_builder_to_string( &sb );
+	}
 
-	process_destroy( process );
-	process = NULL;
+	s32 exitCode = process_join( process );
 
 	return exitCode;
 }
@@ -736,7 +743,7 @@ static bool8 WriteIncludeDependenciesFile( buildContext_t* context ) {
 	return true;
 }
 
-int main( int argc, char** argv ) {
+int BuilderMain( const int firstArg, int argc, char** argv ) {
 	float64 totalTimeStart = time_ms();
 
 	float64 userConfigBuildTimeMS = -1.0;
@@ -765,7 +772,7 @@ int main( int argc, char** argv ) {
 
 	bool8 isVisualStudioBuild = false;
 
-	For ( s32, argIndex, 1, argc ) {
+	For ( s32, argIndex, firstArg, argc ) {
 		const char* arg = argv[argIndex];
 		const u64 argLen = strlen( arg );
 

@@ -1,4 +1,4 @@
-#include "../include/builder.h"
+#include "../src/builder_local.h"
 
 #include "../src/core/src/core.suc.cpp"
 
@@ -48,48 +48,48 @@ static const char* GetFileExtensionFromBinaryType( BinaryType type ) {
 	return "ERROR";
 }
 
-static s32 RunProc( Array<const char*>* args, String* outStdout = NULL, const bool8 showStdout = false ) {
-	assert( args );
-	assert( args->count > 0 );
+// static s32 RunProc( Array<const char*>* args, String* outStdout = NULL, const bool8 showStdout = false ) {
+// 	assert( args );
+// 	assert( args->count > 0 );
 
-	/*For ( u64, argIndex, 0, args->count ) {
-		printf( "%s ", ( *args )[argIndex] );
-	}
-	printf( "\n" );*/
+// 	/*For ( u64, argIndex, 0, args->count ) {
+// 		printf( "%s ", ( *args )[argIndex] );
+// 	}
+// 	printf( "\n" );*/
 
-	Process* process = process_create( args, NULL, /*PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR*/0 );
+// 	Process* process = process_create( args, NULL, /*PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR*/0 );
 
-	if ( !process ) {
-		// DM: 20/07/2025: I'm not 100% sure that its totally ok to have -1 as our own special exit code to mean that the process couldnt be found
-		// its totally possible for other processes to return -1 and have it mean something else
-		// the interpretation of the exit code of the processes we run is the responsibility of the calling code and were probably making a lot of assumptions there
-		return -1;
-	}
+// 	if ( !process ) {
+// 		// DM: 20/07/2025: I'm not 100% sure that its totally ok to have -1 as our own special exit code to mean that the process couldnt be found
+// 		// its totally possible for other processes to return -1 and have it mean something else
+// 		// the interpretation of the exit code of the processes we run is the responsibility of the calling code and were probably making a lot of assumptions there
+// 		return -1;
+// 	}
 
-	TEMPER_CHECK_TRUE_M( process, "Failed to run process \"%s\".  Did you type the path correctly?\n", ( *args )[0] );
+// 	TEMPER_CHECK_TRUE_M( process, "Failed to run process \"%s\".  Did you type the path correctly?\n", ( *args )[0] );
 
-	defer( process_destroy( process ) );
+// 	defer( process_destroy( process ) );
 
-	StringBuilder sb = {};
-	string_builder_reset( &sb );
+// 	StringBuilder sb = {};
+// 	string_builder_reset( &sb );
 
-	char buffer[1024] = {};
-	while ( process_read_stdout( process, buffer, count_of( buffer ) ) ) {
-		string_builder_appendf( &sb, buffer );
+// 	char buffer[1024] = {};
+// 	while ( process_read_stdout( process, buffer, count_of( buffer ) ) ) {
+// 		string_builder_appendf( &sb, buffer );
 
-		if ( showStdout ) {
-			printf( "%s", buffer );
-		}
-	}
+// 		if ( showStdout ) {
+// 			printf( "%s", buffer );
+// 		}
+// 	}
 
-	if ( outStdout ) {
-		*outStdout = string_builder_to_string( &sb );
-	}
+// 	if ( outStdout ) {
+// 		*outStdout = string_builder_to_string( &sb );
+// 	}
 
-	s32 exitCode = process_join( process );
+// 	s32 exitCode = process_join( process );
 
-	return exitCode;
-}
+// 	return exitCode;
+// }
 
 static void DoBinaryFilesPostCheck( const char* testName, const char* buildSourceFile ) {
 	const char* buildSourceFileNoExtension = path_remove_file_extension( buildSourceFile );
@@ -111,11 +111,10 @@ TEMPER_TEST( Compile_Basic, TEMPER_FLAG_SHOULD_RUN ) {
 
 	TEMPER_CHECK_TRUE( file_exists( sourceFile ) );
 
-	Array<const char*> args;
-	args.add( BUILDER_EXE_PATH );
-	args.add( sourceFile );
+	Array<char*> args;
+	args.add( cast( char*, sourceFile ) );
 
-	s32 exitCode = RunProc( &args );
+	s32 exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
 
 	TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 
@@ -139,11 +138,10 @@ TEMPER_TEST_PARAMETRIC( Compile_SetBuilderOptions, TEMPER_FLAG_SHOULD_RUN, const
 	TEMPER_CHECK_TRUE( file_exists( sourceFile ) );
 
 	Array<const char*> args;
-	args.add( BUILDER_EXE_PATH );
 	args.add( sourceFile );
 	args.add( tprintf( "--config=%s", config ) );
 
-	s32 exitCode = RunProc( &args );
+	s32 exitCode = BuilderMain( 0, trunc_cast( int, args.count ), cast( char**, &args.data ) );
 	TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 
 	TEMPER_CHECK_TRUE( folder_exists( tprintf( "tests/test_set_builder_options/bin/%s", config ) ) );
@@ -195,9 +193,8 @@ TEMPER_TEST_PARAMETRIC( SetCompilerPath, TEMPER_FLAG_SHOULD_RUN, const compiler_
 	// compile the program
 	{
 		args.reset();
-		args.add( BUILDER_EXE_PATH );
 		args.add( buildSourceFile );
-		exitCode = RunProc( &args );
+		exitCode = BuilderMain( 0, trunc_cast( int, args.count ), cast( char**, &args.data ) );
 
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 
@@ -208,7 +205,7 @@ TEMPER_TEST_PARAMETRIC( SetCompilerPath, TEMPER_FLAG_SHOULD_RUN, const compiler_
 	{
 		args.reset();
 		args.add( tprintf( "tests/test_override_path_%s/test_override_path_%s%s", compilerName, compilerName, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) ) );
-		exitCode = RunProc( &args );
+		exitCode = BuilderMain( 0, trunc_cast( int, args.count ), cast( char**, &args.data ) );
 
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 	}
@@ -231,10 +228,9 @@ TEMPER_TEST( Compile_MultipleSourceFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	// compile the program
 	{
 		Array<const char*> args;
-		args.add( BUILDER_EXE_PATH );
 		args.add( buildSourceFile );
 
-		s32 exitCode = RunProc( &args );
+		s32 exitCode = BuilderMain( 0, trunc_cast( int, args.count ), cast( char**, &args.data ) );
 
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 
@@ -258,10 +254,9 @@ TEMPER_TEST( Compile_MultipleSourceFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	// compile the program
 	{
 		Array<const char*> args;
-		args.add( BUILDER_EXE_PATH );
 		args.add( buildSourceFile );
 
-		s32 exitCode = RunProc( &args );
+		s32 exitCode = BuilderMain( 0, trunc_cast( int, args.count ), cast( char**, &args.data ) );
 
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 	}
@@ -285,10 +280,9 @@ TEMPER_TEST( Compile_StaticLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 	// now build the exe that uses it
 	{
 		Array<const char*> args;
-		args.add( BUILDER_EXE_PATH );
 		args.add( "tests/test_static_lib/build.cpp" );
 		args.add( "--config=program" );
-		s32 exitCode = RunProc( &args );
+		s32 exitCode = BuilderMain( 0, trunc_cast( int, args.count ), cast( char**, &args.data ) );
 
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 
@@ -299,7 +293,7 @@ TEMPER_TEST( Compile_StaticLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 	{
 		Array<const char*> args;
 		args.add( tprintf( "tests/test_static_lib/bin/test_static_library_program%s", GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) ) );
-		s32 exitCode = RunProc( &args );
+		s32 exitCode = RunProc( &args, NULL );
 
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 	}
@@ -327,11 +321,10 @@ TEMPER_TEST( Compile_DynamicLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 	// now build the exe
 	{
 		Array<const char*> args;
-		args.add( BUILDER_EXE_PATH );
 		args.add( "tests/test_dynamic_lib/build.cpp" );
 		args.add( "--config=program" );
 
-		s32 buildExitCode = RunProc( &args );
+		s32 buildExitCode = BuilderMain( 0, trunc_cast( int, args.count ), cast( char**, &args.data ) );
 
 		TEMPER_CHECK_TRUE_M( buildExitCode == 0, "Exit code actually returned %d.\n", buildExitCode );
 
@@ -346,7 +339,7 @@ TEMPER_TEST( Compile_DynamicLibrary, TEMPER_FLAG_SHOULD_RUN ) {
 		Array<const char*> args;
 		args.add( exeFilename );
 
-		s32 runProgramExitCode = RunProc( &args );
+		s32 runProgramExitCode = RunProc( &args, NULL );
 
 		TEMPER_CHECK_TRUE_M( runProgramExitCode == 0, "Exit code actually returned %d.\n", runProgramExitCode );
 	}
@@ -358,7 +351,7 @@ TEMPER_TEST( RebuildSkipping, TEMPER_FLAG_SHOULD_SKIP ) {
 
 TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 	Array<const char*> args;
-	
+
 	// need to find where msbuild lives on windows
 #ifdef _WIN32
 	std::string msbuildInstallationPath;
@@ -409,10 +402,9 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 	// generate the solution
 	{
 		args.reset();
-		args.add( BUILDER_EXE_PATH );
 		args.add( "tests/test_generate_visual_studio_files/generate_solution.cpp" );
 
-		s32 exitCode = RunProc( &args );
+		s32 exitCode = BuilderMain( 0, trunc_cast( int, args.count ), cast( char**, &args.data ) );
 
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 	}

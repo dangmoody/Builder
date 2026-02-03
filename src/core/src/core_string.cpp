@@ -135,6 +135,25 @@ bool8 string_contains( const char* str, const char* substring ) {
 	return strstr( str, substring ) != NULL;
 }
 
+const char* temp_printf( const char* fmt, ... ) {
+	assert( fmt );
+
+	va_list args;
+	va_start( args, fmt );
+
+	s64 string_length = string_vsnprintf( NULL, 0, fmt, args );
+	string_length += 1;	// + 1 for null terminator
+
+	char* out_string = cast( char*, mem_temp_alloc( trunc_cast( u64, string_length ) * sizeof( char ) ) );
+
+	string_vsnprintf( out_string, string_length, fmt, args );
+	out_string[string_length - 1] = 0;
+
+	va_end( args );
+
+	return out_string;
+}
+
 char* temp_c_string( const char* from ) {
 	return temp_c_string( from, strlen( from ) );
 }

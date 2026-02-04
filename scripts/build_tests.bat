@@ -40,7 +40,7 @@ if /I [%config%]==[release] (
 	set optimisation=-O3 -ffast-math
 )
 
-set source_files=tests\\tests_main.cpp src\\builder.cpp src\\visual_studio.cpp src\\backend_clang.cpp src\\backend_msvc.cpp
+set source_files=tests\\tests_main.cpp src\\builder.cpp src\\visual_studio.cpp src\\backend_clang.cpp src\\backend_msvc.cpp src\\core\\src\\core.suc.cpp
 
 set defines=-D_CRT_SECURE_NO_WARNINGS -DCORE_SUC -DCORE_USE_SUBPROCESS -DHLML_NAMESPACE
 if /I [%config%]==[debug] (
@@ -73,6 +73,6 @@ goto :EOF
 
 
 :ShowUsage
-echo Usage: build.bat [debug^|release]
+echo Usage: build_tests.bat [debug^|release]
 
 goto :EOF

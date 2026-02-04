@@ -20,9 +20,6 @@ fi
 builder_dir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")/..
 clang_dir="${builder_dir}/clang"
 
-source ${builder_dir}/scripts/build.sh ${config}
-echo ""
-
 echo Building tests config "$config"...
 
 bin_folder="${builder_dir}/bin"
@@ -35,9 +32,9 @@ if [[ "$config" != "release" ]]; then
 	optimisation="-O3"
 fi
 
-source_files="tests/tests_main.cpp src/builder.cpp src/visual_studio.cpp src/backend_clang.cpp src/backend_msvc.cpp"
+source_files="tests/tests_main.cpp src/builder.cpp src/visual_studio.cpp src/backend_clang.cpp src/backend_msvc.cpp src/core/src/core.suc.cpp"
 
-defines="-DCORE_SUC -DHLML_NAMESPACE -DCORE_USE_SUBPROCESS"
+defines="-DCORE_SUC -DHLML_NAMESPACE -DCORE_USE_SUBPROCESS -DHASHMAP_HIDE_MISSING_KEY_WARNING"
 if [[ "$config" == "debug" ]]; then
 	defines="$defines -D_DEBUG"
 elif [[ "$config" == "release" ]]; then

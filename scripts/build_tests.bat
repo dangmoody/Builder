@@ -40,7 +40,7 @@ if /I [%config%]==[release] (
 	set optimisation=-O3 -ffast-math
 )
 
-set source_files=tests\\tests_main.cpp
+set source_files=tests\\tests_main.cpp src\\builder.cpp src\\visual_studio.cpp src\\backend_clang.cpp src\\backend_msvc.cpp
 
 set defines=-D_CRT_SECURE_NO_WARNINGS -DCORE_SUC -DCORE_USE_SUBPROCESS -DHLML_NAMESPACE
 if /I [%config%]==[debug] (

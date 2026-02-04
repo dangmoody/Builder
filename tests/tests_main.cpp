@@ -95,7 +95,7 @@ static void DoBinaryFilesPostCheck( const char* testName, const char* buildSourc
 	const char* buildSourceFileNoExtension = path_remove_file_extension( buildSourceFile );
 
 	TEMPER_CHECK_TRUE( folder_exists( tprintf( "tests/%s/.builder", testName ) ) );
-	TEMPER_CHECK_TRUE( file_exists(    tprintf( "tests/%s/.builder/%s%s", testName, buildSourceFileNoExtension, GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) ) ) );
+	TEMPER_CHECK_TRUE( file_exists(   tprintf( "tests/%s/.builder/%s%s", testName, buildSourceFileNoExtension, GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) ) ) );
 
 #ifdef _WIN32
 	//TEMPER_CHECK_TRUE( file_exists(    tprintf( "tests/%s/.builder/%s.exp", testName, buildSourceFileNoExtension ) ) );	// optional
@@ -105,63 +105,122 @@ static void DoBinaryFilesPostCheck( const char* testName, const char* buildSourc
 #endif
 }
 
-TEMPER_TEST( Compile_Basic, TEMPER_FLAG_SHOULD_RUN ) {
-	const char* sourceFile = "tests/test_basic/test_basic.cpp";
-	const char* binaryFilename = tprintf( "tests/test_basic/test_basic%s", GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
+//TEMPER_TEST( Compile_Basic, TEMPER_FLAG_SHOULD_RUN ) {
+//	const char* sourceFile = "tests/test_basic/test_basic.cpp";
+//	const char* binaryFilename = tprintf( "tests/test_basic/test_basic%s", GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
+//
+//	TEMPER_CHECK_TRUE( file_exists( sourceFile ) );
+//
+//	Array<const char*> args;
+//	args.add( sourceFile );
+//
+//	s32 exitCode = BuilderMain( 0, trunc_cast( int, args.count ), cast( char**, args.data ) );
+//
+//	TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
+//
+//	// now run the program we just built
+//	{
+//		TEMPER_CHECK_TRUE( file_exists( binaryFilename ) );
+//
+//#ifdef _WIN32
+//		TEMPER_CHECK_TRUE( file_exists( "tests/test_basic/test_basic.pdb" ) );
+//		TEMPER_CHECK_TRUE( file_exists( "tests/test_basic/test_basic.ilk" ) );
+//#endif
+//	}
+//
+//	DoBinaryFilesPostCheck( "test_basic", "test_basic.cpp" );
+//}
 
-	TEMPER_CHECK_TRUE( file_exists( sourceFile ) );
+struct buildTest_t {
+	const char*	buildSourceFile;
+	const char*	config;			// can be NULL
+	const char*	binaryFolder;	// if NULL, assumed that no folder was created as part of the build
+	const char*	binaryName;		// if NULL, assumed to be the same as buildSourceFile except it ends with .exe (on windows)
+	bool8		hasSymbols;
+};
 
-	Array<char*> args;
-	args.add( cast( char*, sourceFile ) );
+TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t* test ) {
+	TEMPER_CHECK_TRUE( file_exists( test->buildSourceFile ) );
 
-	s32 exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
+	// binary name doesnt have to be set by users, but we need it
+	// this is the default
+	const char* binaryFilename = test->binaryName;
+	if ( binaryFilename ) {
+		const char* buildSourceFileNoExtension = path_remove_file_extension( test->buildSourceFile );
 
-	TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
+		binaryFilename = tprintf( "%s%s", buildSourceFileNoExtension, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
+	}
+
+	// DM: 04/02/2026: this is stupid and ugly
+	// args should also be const because we never actually modify them
+	// I know how to get this done, leave this work with me
+	s32 exitCode = 0;
+
+	// test doing the actual build
+	{
+		Array<char*> args;
+		args.add( cast( char*, test->buildSourceFile ) );
+		if ( test->config ) {
+			args.add( cast( char*, test->config ) );
+		}
+
+		exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
+
+		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
+	}
+
+	const char* fullBinaryName = tprintf( "%s%s", test->binaryFolder ? test->binaryFolder : "", binaryFilename );
+
+	// check the binaries exist
+	{
+		if ( test->binaryFolder ) {
+			TEMPER_CHECK_TRUE_M( file_exists( test->binaryFolder ), "Binary folder \"%s\" was expected, but it wasn't found.\n", test->binaryFolder );
+		}
+
+		TEMPER_CHECK_TRUE( file_exists( fullBinaryName ) );
+
+		if ( test->hasSymbols ) {
+			// windows generates PDBs and ILKs by default with symbols enabled
+#ifdef _WIN32
+			const char* pdbName = tprintf( "%s.pdb", test->binaryName );
+			const char* ilkName = tprintf( "%s.ilk", test->binaryName );
+
+			TEMPER_CHECK_TRUE_M( file_exists( pdbName ), "Symbol file \"%s\" was expected, but it wasn't found.\n", pdbName );
+			TEMPER_CHECK_TRUE_M( file_exists( ilkName ), "Symbol file \"%s\" was expected, but it wasn't found.\n", ilkName );
+#endif
+		}
+	}
 
 	// now run the program we just built
 	{
-		TEMPER_CHECK_TRUE( file_exists( binaryFilename ) );
+		Array<const char*> args;
+		args.add( fullBinaryName );
 
-#ifdef _WIN32
-		TEMPER_CHECK_TRUE( file_exists( "tests/test_basic/test_basic.pdb" ) );
-		TEMPER_CHECK_TRUE( file_exists( "tests/test_basic/test_basic.ilk" ) );
-#endif
+		exitCode = RunProc( &args, NULL );
+
+		TEMPER_CHECK_TRUE( exitCode == 0, "When trying to run \"%s\", the exit code actually returned %d.\n", test->binaryName, exitCode );
 	}
-
-	DoBinaryFilesPostCheck( "test_basic", "test_basic.cpp" );
 }
 
-TEMPER_TEST_PARAMETRIC( Compile_SetBuilderOptions, TEMPER_FLAG_SHOULD_RUN, const char* config ) {
-	const char* sourceFile = "tests/test_set_builder_options/test_set_builder_options.cpp";
-	const char* binaryFilename = tprintf( "tests/test_set_builder_options/bin/%s/kenneth%s", config, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
+	.buildSourceFile	= "test_basic/test_basic.cpp",
+	.binaryName			= "test_basic",
+	.hasSymbols			= true,
+} );
 
-	TEMPER_CHECK_TRUE( file_exists( sourceFile ) );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
+	.buildSourceFile	= "test_set_builder_options/test_set_builder_options.cpp",
+	.config				= "debug",
+	.binaryFolder		= "test_set_builder_options/bin/debug",
+	.binaryName			= "kenneth",
+} );
 
-	Array<const char*> args;
-	args.add( sourceFile );
-	args.add( tprintf( "--config=%s", config ) );
-
-	s32 exitCode = BuilderMain( 0, trunc_cast( int, args.count ), cast( char**, &args.data ) );
-	TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
-
-	TEMPER_CHECK_TRUE( folder_exists( tprintf( "tests/test_set_builder_options/bin/%s", config ) ) );
-	TEMPER_CHECK_TRUE( file_exists( binaryFilename ) );
-
-#ifdef _WIN32
-	if ( string_equals( config, "debug" ) ) {
-		TEMPER_CHECK_TRUE( file_exists( tprintf( "tests/test_set_builder_options/bin/%s/kenneth.pdb", config ) ) );
-		TEMPER_CHECK_TRUE( file_exists( tprintf( "tests/test_set_builder_options/bin/%s/kenneth.ilk", config ) ) );
-	} else {
-		TEMPER_CHECK_TRUE( !file_exists( tprintf( "tests/test_set_builder_options/bin/%s/kenneth.pdb", config ) ) );
-		TEMPER_CHECK_TRUE( !file_exists( tprintf( "tests/test_set_builder_options/bin/%s/kenneth.ilk", config ) ) );
-	}
-#endif
-
-	DoBinaryFilesPostCheck( "test_set_builder_options", "test_set_builder_options.cpp" );
-}
-
-TEMPER_INVOKE_PARAMETRIC_TEST( Compile_SetBuilderOptions, "release" );
-TEMPER_INVOKE_PARAMETRIC_TEST( Compile_SetBuilderOptions, "debug" );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
+	.buildSourceFile	= "test_set_builder_options/test_set_builder_options.cpp",
+	.config				= "release",
+	.binaryFolder		= "test_set_builder_options/bin/release",
+	.binaryName			= "kenneth",
+} );
 
 enum compiler_t {
 	COMPILER_CLANG	= 0,

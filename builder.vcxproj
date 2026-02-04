@@ -130,6 +130,7 @@
     <ClCompile Include="src\core\src\win64\library.win64.cpp" />
     <ClCompile Include="src\core\src\win64\paths.win64.cpp" />
     <ClCompile Include="src\core\src\win64\timer.win64.cpp" />
+    <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\visual_studio.cpp" />
   </ItemGroup>
   <ItemGroup>

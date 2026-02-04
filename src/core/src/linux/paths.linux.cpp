@@ -65,16 +65,23 @@ const char* path_app_path() {
 }
 
 const char* path_current_working_directory() {
-	char temp[PATH_MAX];
-
-	const char* cwd = getcwd( temp, sizeof( temp ) );
-
-	if ( !cwd ) {
+	char* cwd = getcwd( NULL, PATH_MAX * sizeof( char ) );
+	if ( cwd == NULL ) {
 		int err = errno;
 		fatal_error( "Failed to get CWD: %s.\n", strerror( err ) );
 	}
 
+#if 1
 	return cwd;
+#else
+	u64 cwdLength = strlen( cwd ) * sizeof( char );
+
+	char* result = cast( char*, mem_temp_alloc( cwdLength + 1 ) );
+	strncpy( result, cwd, cwdLength );
+	result[cwdLength] = 0;
+
+	return result;
+#endif
 }
 
 const char* path_absolute_path( const char* file ) {

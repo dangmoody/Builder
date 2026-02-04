@@ -196,10 +196,10 @@ static bool8 Clang_CompileSourceFile( compilerBackend_t* backend, const char* so
 
 	const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
 
-	const char* intermediatePath = tprintf( "%s%c%s", config->binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
-	const char* intermediateFilename = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
+	const char* intermediatePath = temp_printf( "%s%c%s", config->binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
+	const char* intermediateFilename = temp_printf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
 
-	const char* depFilename = tprintf( "%s%c%s.d", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
+	const char* depFilename = temp_printf( "%s%c%s.d", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
 
 	Array<const char*>& args = clangState->args;
 	args.reserve(
@@ -247,11 +247,11 @@ static bool8 Clang_CompileSourceFile( compilerBackend_t* backend, const char* so
 	args.add( sourceFile );
 
 	For ( u32, defineIndex, 0, config->defines.size() ) {
-		args.add( tprintf( "-D%s", config->defines[defineIndex].c_str() ) );
+		args.add( temp_printf( "-D%s", config->defines[defineIndex].c_str() ) );
 	}
 
 	For ( u32, includeIndex, 0, config->additional_includes.size() ) {
-		args.add( tprintf( "-I%s", config->additional_includes[includeIndex].c_str() ) );
+		args.add( temp_printf( "-I%s", config->additional_includes[includeIndex].c_str() ) );
 	}
 
 	// must come before ignored warnings
@@ -340,7 +340,7 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t* backend, const Arra
 #if defined( _WIN32 )
 		args.add( "/lib" );
 
-		args.add( tprintf( "/OUT:%s", fullBinaryName ) );
+		args.add( temp_printf( "/OUT:%s", fullBinaryName ) );
 #elif defined( __linux__ )
 		args.add( "rc" );
 		args.add( fullBinaryName );
@@ -361,20 +361,20 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t* backend, const Arra
 		args.add_range( &intermediateFiles );
 
 		For ( u32, libPathIndex, 0, config->additional_lib_paths.size() ) {
-			args.add( tprintf( "-L%s", config->additional_lib_paths[libPathIndex].c_str() ) );
+			args.add( temp_printf( "-L%s", config->additional_lib_paths[libPathIndex].c_str() ) );
 		}
 
 		For ( u32, libIndex, 0, config->additional_libs.size() ) {
 			std::string& staticLib = config->additional_libs[libIndex];
 
 #if defined( _WIN32 )
-			args.add( tprintf( "-l%s", staticLib.c_str() ) );
+			args.add( temp_printf( "-l%s", staticLib.c_str() ) );
 #elif defined( __linux__ )
 			if ( string_starts_with( staticLib.c_str(), "lib" ) ) {
 				staticLib.erase( 0, strlen( "lib" ) );
-				args.add( tprintf( "-l%s", staticLib.c_str() ) );
+				args.add( temp_printf( "-l%s", staticLib.c_str() ) );
 			} else {
-				args.add( tprintf( "-l:%s", staticLib.c_str() ) );
+				args.add( temp_printf( "-l:%s", staticLib.c_str() ) );
 			}
 #endif
 		}
@@ -384,7 +384,7 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t* backend, const Arra
 #ifdef __linux__
 		if ( config->binary_type == BINARY_TYPE_EXE ) {
 			const char* fullBinaryPath = path_remove_file_from_path( fullBinaryName );
-			args.add( tprintf( "-Wl,-rpath=%s", fullBinaryPath ) );
+			args.add( temp_printf( "-Wl,-rpath=%s", fullBinaryPath ) );
 		}
 #endif
 

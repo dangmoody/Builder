@@ -33,7 +33,7 @@ SOFTWARE.
 
 #include <debug.h>
 #include <defer.h>
-#include <temp_storage.h>
+//#include <temp_storage.h>
 #include <typecast.inl>
 #include <paths.h>
 #include <core_array.inl>
@@ -110,8 +110,8 @@ bool8 file_copy( const char* original_path, const char* new_path ) {
 	assert( original_path );
 	assert( new_path );
 
-	BOOL copied = CopyFileA( original_path, new_path, FALSE );
-	assertf( copied, "Failed to copy file \"%s\" to \"%s\": 0x%x.", original_path, new_path, GetLastError() );
+	BOOL copied = CopyFile( original_path, new_path, FALSE );
+	//assertf( copied, "Failed to copy file \"%s\" to \"%s\": 0x%x.", original_path, new_path, GetLastError() );
 
 	return cast( bool8, copied );
 }
@@ -120,11 +120,10 @@ bool8 file_rename( const char* old_filename, const char* new_filename ) {
 	assert( old_filename );
 	assert( new_filename );
 
-	bool8 renamed = cast( bool8, MoveFileA( old_filename, new_filename ) );
+	BOOL renamed = MoveFile( old_filename, new_filename );
+	//assertf( renamed, "Failed to rename file \"%s\" to \"%s\": 0x%x.", old_filename, new_filename, GetLastError() );
 
-	assertf( renamed, "Failed to rename file \"%s\" to \"%s\": 0x%x.", old_filename, new_filename, GetLastError() );
-
-	return renamed;
+	return cast( bool8, renamed );
 }
 
 bool8 file_read( File* file, const u64 offset, const u64 size, void* out_data ) {
@@ -152,13 +151,13 @@ bool8 file_read( File* file, const u64 offset, const u64 size, void* out_data ) 
 		result = GetOverlappedResult( handle, &overlapped, &bytes_read, TRUE );
 		if ( !result ) {
 			last_error = GetLastError();
-			assertf( result, "Failed to read from file 0x%x.", GetLastError() );
+			//assertf( result, "Failed to read from file 0x%x.", GetLastError() );
 			return 0;
 		}
 	}
 
 	if ( !result || bytes_read != bytes_to_read ) {
-		assertf( result, "Failed to read all required data from file 0x%x.", GetLastError() );
+		//assertf( result, "Failed to read all required data from file 0x%x.", GetLastError() );
 		return 0;
 	}
 
@@ -191,13 +190,13 @@ bool8 file_write( File* file, const void* data, const u64 offset, const u64 size
 		result = GetOverlappedResult( handle, &overlapped, &bytes_written, TRUE );
 		if ( !result ) {
 			last_error = GetLastError();
-			assertf( result, "Failed to write to file 0x%x.", GetLastError() );
+			//assertf( result, "Failed to write to file 0x%x.", GetLastError() );
 			return 0;
 		}
 	}
 
 	if ( !result || bytes_written != bytes_to_write ) {
-		assertf( result, "Failed to write all required data to file 0x%x.", GetLastError() );
+		//assertf( result, "Failed to write all required data to file 0x%x.", GetLastError() );
 		return 0;
 	}
 
@@ -206,7 +205,7 @@ bool8 file_write( File* file, const void* data, const u64 offset, const u64 size
 
 bool8 file_delete( const char* filename ) {
 	BOOL result = DeleteFile( filename );
-	assertf( result, "Failed to delete file %s: 0x%x.", filename, GetLastError() );
+	//assertf( result, "Failed to delete file %s: 0x%x.", filename, GetLastError() );
 	return cast( bool8, result );
 }
 
@@ -272,9 +271,9 @@ bool8 file_get_all_files_in_folder( const char* path, const bool8 recursive, con
 
 		const char* search_path = NULL;
 		if ( string_ends_with( dir, "/" ) ) {
-			search_path = tprintf( "%s*", dir );
+			search_path = temp_printf( "%s*", dir );
 		} else {
-			search_path = tprintf( "%s%c*", dir, '/' );
+			search_path = temp_printf( "%s%c*", dir, '/' );
 		}
 
 		WIN32_FIND_DATA find_data = {};
@@ -290,7 +289,7 @@ bool8 file_get_all_files_in_folder( const char* path, const bool8 recursive, con
 				.last_write_time	= ( trunc_cast( u64, find_data.ftLastWriteTime.dwHighDateTime ) << 32 ) | find_data.ftLastWriteTime.dwLowDateTime,
 				.size_bytes			= ( trunc_cast( u64, find_data.nFileSizeHigh ) << 32 ) | find_data.nFileSizeLow,
 				.filename			= find_data.cFileName,
-				.full_filename		= tprintf( "%s%c%s", dir, '/', file_info.filename ),
+				.full_filename		= temp_printf( "%s%c%s", dir, '/', file_info.filename ),
 			};
 
 			if ( file_info.is_directory ) {

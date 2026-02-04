@@ -111,7 +111,6 @@
     <ClCompile Include="src\core\src\paths.cpp" />
     <ClCompile Include="src\core\src\random.cpp" />
     <ClCompile Include="src\core\src\string_builder.cpp" />
-    <ClCompile Include="src\core\src\temp_storage.cpp" />
     <ClCompile Include="src\core\src\win64\core.win64.suc.cpp" />
     <ClCompile Include="src\core\src\win64\core_process.win64.cpp" />
     <ClCompile Include="src\core\src\win64\core_thread.win64.cpp" />
@@ -148,7 +147,6 @@
     <ClInclude Include="src\core\include\paths.h" />
     <ClInclude Include="src\core\include\random.h" />
     <ClInclude Include="src\core\include\string_builder.h" />
-    <ClInclude Include="src\core\include\temp_storage.h" />
     <ClInclude Include="src\core\include\timer.h" />
     <ClInclude Include="src\core\src\file_local.h" />
     <ClInclude Include="src\core\src\xxhash\xxhash.h" />

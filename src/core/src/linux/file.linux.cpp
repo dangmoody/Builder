@@ -222,7 +222,7 @@ bool8 file_get_all_files_in_folder( const char* path, const bool8 recursive, con
 				continue;
 			}
 
-			const char* full_filename = tprintf( "%s%c%s", directory, PATH_SEPARATOR, entry->d_name );
+			const char* full_filename = temp_printf( "%s%c%s", directory, PATH_SEPARATOR, entry->d_name );
 
 			struct stat file_stat = {};
 			if ( stat( full_filename, &file_stat ) != 0 ) {

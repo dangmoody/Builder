@@ -30,7 +30,7 @@ SOFTWARE.
 
 #include <paths.h>
 
-#include <temp_storage.h>
+//#include <temp_storage.h>
 #include <debug.h>
 #include <typecast.inl>
 
@@ -51,14 +51,14 @@ SOFTWARE.
 */
 
 const char* path_app_path() {
-	char* app_full_path = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
+	char* app_full_path = cast( char*, temp_alloc( MAX_PATH * sizeof( char ) ) );
 	DWORD length = GetModuleFileNameA( NULL, app_full_path, MAX_PATH );
 
 	return app_full_path;
 }
 
 const char* path_current_working_directory() {
-	char* cwd = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
+	char* cwd = cast( char*, temp_alloc( MAX_PATH * sizeof( char ) ) );
 	DWORD length = GetCurrentDirectory( MAX_PATH, cwd );
 	cwd[length] = 0;
 
@@ -68,7 +68,7 @@ const char* path_current_working_directory() {
 const char* path_absolute_path( const char* file ) {
 	assert( file );
 
-	char* absolute_path = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
+	char* absolute_path = cast( char*, temp_alloc( MAX_PATH * sizeof( char ) ) );
 	GetFullPathName( file, MAX_PATH, absolute_path, NULL );
 	return absolute_path;
 }
@@ -88,7 +88,7 @@ const char* path_canonicalise( const char* path ) {
 
 	u64 max_path_length = ( strlen( path_copy ) + 1 ) * sizeof( char );
 
-	char* result = cast( char*, mem_temp_alloc( max_path_length ) );
+	char* result = cast( char*, temp_alloc( max_path_length ) );
 
 	BOOL success = PathCanonicalizeA( result, path_copy );
 	assert( success );
@@ -124,7 +124,7 @@ char* path_relative_path_to( const char* path_from, const char* path_to ) {
 	assert( path_from );
 	assert( path_to );
 
-	char* result = cast( char*, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
+	char* result = cast( char*, temp_alloc( MAX_PATH * sizeof( char ) ) );
 
 	if ( !PathRelativePathTo( result, path_fix_slashes( path_from ), FILE_ATTRIBUTE_DIRECTORY, path_fix_slashes( path_to ), FILE_ATTRIBUTE_DIRECTORY ) ) {
 		error( "Unable to compute relative path, ensure provided paths exist.\nFrom Path: %s\nTo Path: %s", path_from, path_to );

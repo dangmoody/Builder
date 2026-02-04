@@ -218,7 +218,7 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 
 	// get latest version of msvc
 	{
-		const char* msvcVersionSearchFolder = tprintf( "%s\\VC\\Tools\\MSVC", msvcRootFolder.c_str() );
+		const char* msvcVersionSearchFolder = temp_printf( "%s\\VC\\Tools\\MSVC", msvcRootFolder.c_str() );
 
 		if ( !file_get_all_files_in_folder( msvcVersionSearchFolder, false, true, OnMSVCVersionFound, msvcState ) ) {
 			fatal_error( "Failed to query all MSVC version folders.  This should never happen! Error code: " ERROR_CODE_FORMAT "\n" );
@@ -236,7 +236,7 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 	// and even then we still have to manually construct the windows SDK folders! AAARGH!
 	Array<const char*> args = {};
 	defer { args.free(); };
-	args.add( tprintf( "%s\\VC\\Auxiliary\\Build\\vcvars64.bat", msvcRootFolder.c_str() ) );
+	args.add( temp_printf( "%s\\VC\\Auxiliary\\Build\\vcvars64.bat", msvcRootFolder.c_str() ) );
 	args.add( "&&" );
 	args.add( "set" );
 
@@ -326,8 +326,8 @@ static bool8 MSVC_CompileSourceFile( compilerBackend_t* backend, const char* sou
 
 	const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
 
-	const char* intermediatePath = tprintf( "%s%c%s", config->binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
-	const char* intermediateFilename = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
+	const char* intermediatePath = temp_printf( "%s%c%s", config->binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
+	const char* intermediateFilename = temp_printf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
 
 	config->additional_includes.push_back( "." );
 
@@ -371,18 +371,18 @@ static bool8 MSVC_CompileSourceFile( compilerBackend_t* backend, const char* sou
 
 	args.add( OptimizationLevelToCompilerArg( config->optimization_level ) );
 
-	args.add( tprintf( "/Fo%s", intermediateFilename ) );
+	args.add( temp_printf( "/Fo%s", intermediateFilename ) );
 
 	args.add( "/showIncludes" );
 
 	args.add( sourceFile );
 
 	For ( u32, defineIndex, 0, config->defines.size() ) {
-		args.add( tprintf( "/D%s", config->defines[defineIndex].c_str() ) );
+		args.add( temp_printf( "/D%s", config->defines[defineIndex].c_str() ) );
 	}
 
 	For ( u32, includeIndex, 0, config->additional_includes.size() ) {
-		args.add( tprintf( "/I%s", config->additional_includes[includeIndex].c_str() ) );
+		args.add( temp_printf( "/I%s", config->additional_includes[includeIndex].c_str() ) );
 	}
 
 	// must come before ignored warnings
@@ -548,7 +548,7 @@ static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t* backend, const Array
 
 	const char* compilerPathOnly = path_remove_file_from_path( backend->compilerPath.data );
 	if ( compilerPathOnly ) {
-		args.add( tprintf( "%s%c%s", compilerPathOnly, PATH_SEPARATOR, backend->linkerPath.data ) );
+		args.add( temp_printf( "%s%c%s", compilerPathOnly, PATH_SEPARATOR, backend->linkerPath.data ) );
 	} else {
 		args.add( backend->linkerPath.data );
 	}
@@ -563,12 +563,12 @@ static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t* backend, const Array
 		args.add( "/DEBUG" );
 	}
 
-	args.add( tprintf( "/OUT:%s", fullBinaryName ) );
+	args.add( temp_printf( "/OUT:%s", fullBinaryName ) );
 
 	args.add_range( &intermediateFiles );
 
 	For ( u32, libPathIndex, 0, config->additional_lib_paths.size() ) {
-		args.add( tprintf( "/LIBPATH:\"%s\"", config->additional_lib_paths[libPathIndex].c_str() ) );
+		args.add( temp_printf( "/LIBPATH:\"%s\"", config->additional_lib_paths[libPathIndex].c_str() ) );
 	}
 
 	For ( u32, libIndex, 0, config->additional_libs.size() ) {

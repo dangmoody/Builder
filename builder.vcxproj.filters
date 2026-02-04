@@ -60,9 +60,6 @@
     <ClCompile Include="src\core\src\string_builder.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\core\src\temp_storage.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\backend_clang.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -165,9 +162,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\core\include\string_builder.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\core\include\temp_storage.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\core\include\timer.h">

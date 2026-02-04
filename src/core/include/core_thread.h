@@ -35,12 +35,16 @@ struct Thread {
 	void*	ptr;
 };
 
-typedef s64 ( *ThreadFunc )( void* data );
+typedef s32 ( *ThreadFunc )( void* data );
 
+// Creates and immediately executes a thread that runs 'thread_func' with 'data' passed through.
 CORE_API Thread	thread_create( ThreadFunc thread_func, void* data );
 
-CORE_API void	thread_wait_for_idle( Thread* thread );
-
+// Waits for the thread to stop running, then destroys it.
 CORE_API void	thread_destroy( Thread* thread );
 
+// Waits (blocking) for the thread to stop executing.  Returns when that happens.
+CORE_API void	thread_wait_for_idle( Thread* thread );
+
+// Sleeps the thread for the specified time in seconds.
 CORE_API void	thread_sleep( const float64 seconds );

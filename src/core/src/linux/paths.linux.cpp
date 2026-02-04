@@ -33,7 +33,7 @@ SOFTWARE.
 #include <core_types.h>
 #include <debug.h>
 #include <paths.h>
-#include <temp_storage.h>
+//#include <temp_storage.h>
 #include <string_builder.h>
 
 #include <stdio.h>
@@ -51,7 +51,7 @@ SOFTWARE.
 */
 
 const char* path_app_path() {
-	char* result = cast( char*, mem_temp_alloc( PATH_MAX * sizeof( char ) ) );
+	char* result = cast( char*, temp_alloc( PATH_MAX * sizeof( char ) ) );
 	s64 length = readlink( "/proc/self/exe", result, PATH_MAX );
 
 	if ( length == -1 ) {
@@ -159,7 +159,7 @@ char* path_relative_path_to( const char* path_from, const char* path_to ) {
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcast-qual"
-	//char* result = cast( char*, mem_temp_alloc( PATH_MAX * sizeof( char ) ) );
+	//char* result = cast( char*, temp_alloc( PATH_MAX * sizeof( char ) ) );
 	char* result = cast( char*, string_builder_to_string( &sb ) );
 #pragma clang diagnostic pop
 

@@ -76,7 +76,7 @@ CORE_API bool8			string_ends_with( const char* str, const char* suffix );
 // Returns true if string 'str' has EXACTLY the contents of 'substring' somewhere in it.  Case sensitive.
 CORE_API bool8			string_contains( const char* str, const char* substring );
 
-// Returns a string that is the result of calling sprintf with the given format string and var args allocated via temp storage.
+// Returns a printf-formatted string with the given format string and var args that's been allocated via temp storage.
 CORE_API const char*	temp_printf( const char* fmt, ... );
 
 // Returns a copy of 'from' that has been allocated on temp storage.

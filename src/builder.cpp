@@ -37,7 +37,7 @@ SOFTWARE.
 #include "core/include/core_process.h"
 #include "core/include/file.h"
 #include "core/include/typecast.inl"
-#include "core/include/temp_storage.h"
+//#include "core/include/temp_storage.h"
 #include "core/include/hash.h"
 #include "core/include/timer.h"
 #include "core/include/library.h"
@@ -344,7 +344,7 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 	}
 
 	// create intermediate folder
-	const char* intermediatePath = tprintf( "%s%c%s", config->binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
+	const char* intermediatePath = temp_printf( "%s%c%s", config->binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
 	if ( !folder_create_if_it_doesnt_exist( intermediatePath ) ) {
 		s32 errorCode = get_last_error_code();
 		fatal_error( "Failed to create intermediate binary folder.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
@@ -402,10 +402,10 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 		const char* sourceFile = config->source_files[sourceFileIndex].c_str();
 		const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
 
-		const char* intermediateFilename = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
+		const char* intermediateFilename = temp_printf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
 		intermediateFiles.add( intermediateFilename );
 
-		const char* depFilename = tprintf( "%s%c%s.d", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
+		const char* depFilename = temp_printf( "%s%c%s.d", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
 
 		u32 sourceFileHashmapIndex = hashmap_get_value( context->sourceFileIndices, hash_string( sourceFile, 0 ) );
 
@@ -595,7 +595,7 @@ static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContex
 		if ( inputFileIsSameAsSourceFile ) {
 			visitorData.searchFilter = context->inputFile;
 		} else {
-			visitorData.searchFilter = tprintf( "%s%c%s", context->inputFilePath.data, '/', sourceFile );
+			visitorData.searchFilter = temp_printf( "%s%c%s", context->inputFilePath.data, '/', sourceFile );
 		}
 
 		if ( !file_get_all_files_in_folder( context->inputFilePath.data, recursive, false, SourceFileVisitor, &visitorData ) ) {
@@ -628,7 +628,7 @@ struct byteBuffer_t {
 
 static const char* GetIncludeDepsFilename( buildContext_t* context ) {
 	const char* inputFileStripped = path_remove_path_from_file( path_remove_file_extension( context->inputFile ) );
-	const char* includeDepsFilename = tprintf( "%s%c%s.include_dependencies", context->dotBuilderFolder.data, PATH_SEPARATOR, inputFileStripped );
+	const char* includeDepsFilename = temp_printf( "%s%c%s.include_dependencies", context->dotBuilderFolder.data, PATH_SEPARATOR, inputFileStripped );
 
 	return includeDepsFilename;
 }
@@ -888,9 +888,9 @@ int main( int argc, char** argv ) {
 	compilerBackend_t compilerBackend;
 	{
 //#ifdef BUILDER_RETAIL
-		const char* defaultCompilerPath = tprintf( "%s%c..%cclang%cbin%cclang", path_remove_file_from_path( path_app_path() ), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
+		const char* defaultCompilerPath = temp_printf( "%s%c..%cclang%cbin%cclang", path_remove_file_from_path( path_app_path() ), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
 //#else
-//		const char* defaultCompilerPath = tprintf( "%s%c..%c..%c..%cclang%cbin%cclang", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
+//		const char* defaultCompilerPath = temp_printf( "%s%c..%c..%c..%cclang%cbin%cclang", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
 //#endif
 
 		CreateCompilerBackend_Clang( &compilerBackend, defaultCompilerPath );
@@ -925,9 +925,9 @@ int main( int argc, char** argv ) {
 			.additional_includes = {
 				// add the folder that builder lives in as an additional include path otherwise people have no real way of being able to include it
 //#ifdef BUILDER_RETAIL
-				tprintf( "%s%c..%cinclude", path_remove_file_from_path( path_app_path() ), PATH_SEPARATOR, PATH_SEPARATOR ),
+				temp_printf( "%s%c..%cinclude", path_remove_file_from_path( path_app_path() ), PATH_SEPARATOR, PATH_SEPARATOR ),
 //#else
-//				tprintf( "%s%c..%c..%c..%cinclude", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR ),
+//				temp_printf( "%s%c..%c..%c..%cinclude", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR ),
 //#endif
 			},
 			.additional_libs = {
@@ -1253,7 +1253,7 @@ int main( int argc, char** argv ) {
 
 		// make sure that the binary folder and binary name are at least set to defaults
 		if ( !config->binary_folder.empty() ) {
-			config->binary_folder = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, config->binary_folder.c_str() );
+			config->binary_folder = temp_printf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, config->binary_folder.c_str() );
 		} else {
 			config->binary_folder = context.inputFilePath.data;
 		}
@@ -1273,7 +1273,7 @@ int main( int argc, char** argv ) {
 			const char* additionalInclude = config->additional_includes[includeIndex].c_str();
 
 			if ( !path_is_absolute( additionalInclude ) ) {
-				config->additional_includes[includeIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalInclude );
+				config->additional_includes[includeIndex] = temp_printf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalInclude );
 			}
 		}
 
@@ -1282,7 +1282,7 @@ int main( int argc, char** argv ) {
 			const char* additionalLibPath = config->additional_lib_paths[libPathIndex].c_str();
 
 			if ( !path_is_absolute( additionalLibPath ) ) {
-				config->additional_lib_paths[libPathIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalLibPath );
+				config->additional_lib_paths[libPathIndex] = temp_printf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalLibPath );
 			}
 		}
 
@@ -1328,7 +1328,8 @@ int main( int argc, char** argv ) {
 			}
 		}
 
-		mem_reset_temp_storage();
+		//mem_reset_temp_storage();
+		ResetTempStorage( temp );
 	}
 
 	if ( postBuildFunc ) {

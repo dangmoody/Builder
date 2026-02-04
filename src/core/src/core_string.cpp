@@ -141,12 +141,12 @@ const char* temp_printf( const char* fmt, ... ) {
 	va_list args;
 	va_start( args, fmt );
 
-	s64 string_length = string_vsnprintf( NULL, 0, fmt, args );
+	u64 string_length = cast( u64, vsnprintf( NULL, 0, fmt, args ) );
 	string_length += 1;	// + 1 for null terminator
 
-	char* out_string = cast( char*, mem_temp_alloc( trunc_cast( u64, string_length ) * sizeof( char ) ) );
+	char* out_string = cast( char*, temp_alloc( string_length * sizeof( char ) ) );
 
-	string_vsnprintf( out_string, string_length, fmt, args );
+	vsnprintf( out_string, string_length, fmt, args );
 	out_string[string_length - 1] = 0;
 
 	va_end( args );
@@ -159,7 +159,7 @@ char* temp_c_string( const char* from ) {
 }
 
 char* temp_c_string( const char* from, const u64 length ) {
-	char* result = cast( char*, mem_temp_alloc( ( length + 1 ) * sizeof( char ) ) );
+	char* result = cast( char*, temp_alloc( ( length + 1 ) * sizeof( char ) ) );
 	strncpy( result, from, length * sizeof( char ) );
 	result[length] = 0;
 

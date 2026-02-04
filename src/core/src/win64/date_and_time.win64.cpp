@@ -45,7 +45,7 @@ SOFTWARE.
 */
 
 void date_and_time_get( DateAndTime* out_date_and_time ) {
-	assertf( out_date_and_time, "out_date_and_time MUST be non-NULL!" );
+	assert( out_date_and_time );
 
 	SYSTEMTIME system_time = {};
 	GetSystemTime( &system_time );

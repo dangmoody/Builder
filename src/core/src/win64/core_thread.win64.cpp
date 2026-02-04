@@ -30,6 +30,7 @@ SOFTWARE.
 #include <core_thread.h>
 
 #include <debug.h>
+#include <typecast.inl>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -37,10 +38,33 @@ SOFTWARE.
 
 #include <Windows.h>
 
-Thread thread_create( ThreadFunc thread_func, void* data ) {
-	HANDLE handle = CreateThread( NULL, 0, thread_func, data, 0, 0 );
+struct ThreadBootstrapData {
+	ThreadFunc	thread_func;
+	void*		data;
+};
 
-	assert( handle );
+static DWORD thread_bootstrap( void* data ) {
+	assert( data );
+
+	ThreadBootstrapData* bootstrap_data = cast( ThreadBootstrapData*, data );
+
+	assert( bootstrap_data->thread_func );
+	assert( bootstrap_data->data );
+
+	s32 thread_return_code = bootstrap_data->thread_func( bootstrap_data->data );
+
+	return cast( DWORD, thread_return_code );
+}
+
+Thread thread_create( ThreadFunc thread_func, void* data ) {
+	assert( thread_func );
+	assert( data );
+
+	HANDLE handle = CreateThread( NULL, 0, thread_bootstrap, data, 0, 0 );
+
+	if ( handle == INVALID_HANDLE_VALUE ) {
+		return { NULL };
+	}
 
 	return { handle };
 }
@@ -49,8 +73,20 @@ void thread_destroy( Thread* thread ) {
 	assert( thread );
 	assert( thread->ptr );
 
+	// TODO(DM): 03/02/2026: is this expected behaviour user-side?
+	// do we make users do this themselves?
+	thread_wait_for_idle( thread );
+
 	CloseHandle( cast( HANDLE, thread->ptr ) );
 	thread->ptr = NULL;
+}
+
+void thread_wait_for_idle( Thread* thread ) {
+	HANDLE handle = cast( HANDLE, thread->ptr );
+
+	DWORD exit_code = WaitForSingleObjectEx( handle, INFINITE, TRUE );
+
+	assert( exit_code != WAIT_FAILED );
 }
 
 void thread_sleep( const float64 seconds ) {

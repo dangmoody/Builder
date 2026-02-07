@@ -1,5 +1,6 @@
 v0.10.0, <RELEASE DATE HERE>:
 
+* Fixed root-folder source files not getting included in the build when globbing.
 * Added LANGUAGE_VERSION_C11, LANGUAGE_VERSION_C17, and LANGUAGE_VERSION_C23.
 	* Microsoft's post-C99 support isn't great, so you'll need to take care of that yourself, but Builder at least exposes the options for you now.
 

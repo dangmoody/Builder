@@ -7,6 +7,7 @@ clang
 releases
 bug_reports
 *.o
+intermediate
 
 # ignore tools folder, but dont ignore 7zip
 tools/*

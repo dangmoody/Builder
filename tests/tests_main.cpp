@@ -48,6 +48,26 @@ struct buildTest_t {
 	bool8		noSymbolFiles;
 };
 
+struct buildTestGeneratedFiles_t {
+	Array<const char*>	folders;
+	Array<const char*>	files;
+	Array<const char*>	fileExtensionsToCheck;
+};
+
+static void GetAllGeneratedFiles( const FileInfo* fileInfo, void* data ) {
+	buildTestGeneratedFiles_t* generatedFiles = cast( buildTestGeneratedFiles_t*, data );
+
+	if ( fileInfo->is_directory ) {
+		generatedFiles->folders.add( fileInfo->full_filename );
+	} else {
+		For ( u32, fileExtensionIndex, 0, generatedFiles->fileExtensionsToCheck.count ) {
+			if ( string_ends_with( fileInfo->full_filename, generatedFiles->fileExtensionsToCheck[fileExtensionIndex] ) ) {
+				generatedFiles->files.add( fileInfo->full_filename );
+			}
+		}
+	}
+}
+
 TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 	TEMPER_CHECK_TRUE_M( test.buildSourceFile, "A test MUST have its own build source file, otherwise Builder doesn't know what to build.\n" );
 	TEMPER_CHECK_TRUE_M( test.rootDir, "A test MUST live in its own folder, you need to tell me what the \"root\" folder for this test is.\n" );
@@ -57,14 +77,16 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 	// then come back when were done
 	const char* oldCWD = path_current_working_directory();
 	TEMPER_CHECK_TRUE_M( path_set_current_directory( test.rootDir ), "Failed to cd into the test folder \"%s\".\n", test.rootDir );
-	defer( path_set_current_directory( oldCWD ) );
+	defer( TEMPER_CHECK_TRUE_M( path_set_current_directory( oldCWD ), "Failed to cd back out of the test folder.\n" ) );
 
 	TEMPER_CHECK_TRUE( file_exists( test.buildSourceFile ) );
+
+	const char* buildSourceFileWithoutExtension = path_remove_file_extension( test.buildSourceFile );
 
 	// binary name doesnt have to be set by users, but we need it
 	// this is the default
 	if ( !test.binaryName ) {
-		test.binaryName = path_remove_file_extension( test.buildSourceFile );
+		test.binaryName = buildSourceFileWithoutExtension;
 	}
 
 	s32 exitCode = 0;
@@ -95,35 +117,39 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 		fullBinaryName = tprintf( "%s%s", test.binaryName, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
 	}
 
-	// check the binaries exist
+	const char* dotBuilderFolder = ".builder";
+
+	// get all the files that this test will generate
+	// we will want these later to check if they got successfully deleted (tests should clean up after themselves properly)
+	buildTestGeneratedFiles_t generatedFiles = {};
+	generatedFiles.fileExtensionsToCheck.add( GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
+	generatedFiles.fileExtensionsToCheck.add( GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
+	generatedFiles.fileExtensionsToCheck.add( GetFileExtensionFromBinaryType( BINARY_TYPE_STATIC_LIBRARY ) );
+	generatedFiles.fileExtensionsToCheck.add( ".include_dependencies" );
+	generatedFiles.fileExtensionsToCheck.add( ".pdb" );
+	generatedFiles.fileExtensionsToCheck.add( ".exp" );
+	generatedFiles.fileExtensionsToCheck.add( ".ilk" );
+	generatedFiles.fileExtensionsToCheck.add( ".o" );
+	generatedFiles.fileExtensionsToCheck.add( ".d" );
+
+	TEMPER_CHECK_TRUE( file_get_all_files_in_folder( dotBuilderFolder, true, true, GetAllGeneratedFiles, &generatedFiles ) );
+	if ( test.binaryFolder ) {
+		TEMPER_CHECK_TRUE( file_get_all_files_in_folder( test.binaryFolder, true, true, GetAllGeneratedFiles, &generatedFiles ) );
+	} else {
+		// if there is no binary folder specified then binaries get made in the same folder as the build source file
+		TEMPER_CHECK_TRUE( file_get_all_files_in_folder( "./", false, false, GetAllGeneratedFiles, &generatedFiles ) );
+
+		// if there is no binary folder specified then an intermediate folder gets made in the same folder as the build source file
+		TEMPER_CHECK_TRUE( file_get_all_files_in_folder( "intermediate", true, true, GetAllGeneratedFiles, &generatedFiles ) );
+	}
+
+	// we only care that certain files and folders got generated
 	{
-		if ( test.binaryFolder ) {
-			TEMPER_CHECK_TRUE_M( file_exists( test.binaryFolder ), "Binary folder \"%s\" was expected, but it wasn't found.\n", test.binaryFolder );
+		TEMPER_CHECK_TRUE( file_exists( fullBinaryName ) );
+		TEMPER_CHECK_TRUE( folder_exists( dotBuilderFolder ) );
 
-			const char* intermediateFolder = tprintf( "%s%cintermediate", test.binaryFolder, PATH_SEPARATOR );
-			TEMPER_CHECK_TRUE_M( file_exists( intermediateFolder ), "Intermediate folder \"%s\" was expected, but it wasn't found.\n", intermediateFolder );
-		}
-
-		TEMPER_CHECK_TRUE_M( file_exists( fullBinaryName ), "Binary file \"%s\" was expected, but it wasn't found.\n", fullBinaryName );
-
-		if ( !test.noSymbolFiles ) {
-			// windows generates PDBs and ILKs by default with symbols enabled
-#ifdef _WIN32
-			const char* pdbName = NULL;
-			const char* ilkName = NULL;
-
-			if ( test.binaryFolder ) {
-				pdbName = tprintf( "%s%c%s.pdb", test.binaryFolder, PATH_SEPARATOR, test.binaryName );
-				ilkName = tprintf( "%s%c%s.ilk", test.binaryFolder, PATH_SEPARATOR, test.binaryName );
-			} else {
-				pdbName = tprintf( "%s.pdb", test.binaryName );
-				ilkName = tprintf( "%s.ilk", test.binaryName );
-			}
-
-			TEMPER_CHECK_TRUE_M( file_exists( pdbName ), "Symbol file \"%s\" was expected, but it wasn't found.\n", pdbName );
-			TEMPER_CHECK_TRUE_M( file_exists( ilkName ), "Symbol file \"%s\" was expected, but it wasn't found.\n", ilkName );
-#endif
-		}
+		const char* userConfigBuildDLLFilename = tprintf( "%s%c%s%s", dotBuilderFolder, PATH_SEPARATOR, buildSourceFileWithoutExtension, GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
+		TEMPER_CHECK_TRUE( file_exists( userConfigBuildDLLFilename ) );
 	}
 
 	// now run the program we just built
@@ -136,7 +162,22 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 		TEMPER_CHECK_TRUE_M( exitCode == test.expectedExitCode, "When trying to run \"%s\", the exit code was expected to be %d but it actually returned %d.\n", test.binaryName, test.expectedExitCode, exitCode );
 	}
 
-	// TODO(DM): 06/02/2026: now cleanup all the generated files now that the test is done
+	// cleanup all generated files
+	{
+		For ( u32, fileIndex, 0, generatedFiles.files.count ) {
+			const char* generatedFile = generatedFiles.files[fileIndex];
+
+			TEMPER_CHECK_TRUE_M(  file_delete( generatedFile ), "Couldn't delete file \"%s\".\n", generatedFile );
+			TEMPER_CHECK_TRUE_M( !file_exists( generatedFile ), "We deleted the file \"%s\" just now, but the OS tells us it still exists?\n", generatedFile );
+		}
+
+		For ( u32, folderIndex, 0, generatedFiles.folders.count ) {
+			const char* generatedFolder = generatedFiles.folders[folderIndex];
+
+			TEMPER_CHECK_TRUE_M( folder_delete( generatedFolder ), "Couldn't delete folder \"%s\".\n", generatedFolder );
+			TEMPER_CHECK_TRUE_M( !folder_exists( generatedFolder ), "We deleted the folder \"%s\" just now, but the OS tells us it still exists?\n", generatedFolder );
+		}
+	}
 }
 
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {

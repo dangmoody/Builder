@@ -49,12 +49,14 @@ struct buildTest_t {
 };
 
 TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
+	TEMPER_CHECK_TRUE_M( test.buildSourceFile, "A test MUST have its own build source file, otherwise Builder doesn't know what to build.\n" );
+	TEMPER_CHECK_TRUE_M( test.rootDir, "A test MUST live in its own folder, you need to tell me what the \"root\" folder for this test is.\n" );
+	
 	// move ourselves to the root folder of that test
 	// run the test from that folder
 	// then come back when were done
-	TEMPER_CHECK_TRUE_M( test.rootDir, "Each test lives in its own folder, you need to tell me what the \"root\" folder for this test is.\n" );
 	const char* oldCWD = path_current_working_directory();
-	TEMPER_CHECK_TRUE_M( path_set_current_directory( test.rootDir ), "Failed to cd into the test folder.\n" );
+	TEMPER_CHECK_TRUE_M( path_set_current_directory( test.rootDir ), "Failed to cd into the test folder \"%s\".\n", test.rootDir );
 	defer( path_set_current_directory( oldCWD ) );
 
 	TEMPER_CHECK_TRUE( file_exists( test.buildSourceFile ) );

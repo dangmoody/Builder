@@ -45,7 +45,7 @@ struct buildTest_t {
 	const char*	binaryFolder;	// if NULL, assumed that no folder was created as part of the build
 	const char*	binaryName;		// if NULL, assumed to be the same as buildSourceFile except it ends with .exe (on windows)
 	s32			expectedExitCode;
-	bool8		noSymbols;
+	bool8		noSymbolFiles;
 };
 
 TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
@@ -104,7 +104,7 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 
 		TEMPER_CHECK_TRUE_M( file_exists( fullBinaryName ), "Binary file \"%s\" was expected, but it wasn't found.\n", fullBinaryName );
 
-		if ( !test.noSymbols ) {
+		if ( !test.noSymbolFiles ) {
 			// windows generates PDBs and ILKs by default with symbols enabled
 #ifdef _WIN32
 			const char* pdbName = NULL;
@@ -158,7 +158,7 @@ TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 	.binaryFolder		= "bin/release",
 	.binaryName			= "kenneth",
 	.expectedExitCode	= 420,
-	.noSymbols			= true,
+	.noSymbolFiles		= true,
 } );
 
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
@@ -196,6 +196,7 @@ TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 	.rootDir			= "tests/test_override_path_gcc",
 	.buildSourceFile	= "test_override_path_gcc.cpp",
+	.noSymbolFiles		= true,	// gcc doesnt produce separate pdb files, symbols get put directly into the exe
 } );
 
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {

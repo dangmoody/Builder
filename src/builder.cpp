@@ -581,7 +581,15 @@ struct sourceFileFindVisitorData_t {
 static void SourceFileVisitor( const FileInfo* fileInfo, void* userData ) {
 	sourceFileFindVisitorData_t* visitorData2 = cast( sourceFileFindVisitorData_t*, userData );
 
-	if ( FileMatchesFilter( fileInfo->full_filename, visitorData2->searchFilter ) ) {
+	const char* checkAgainst = NULL;
+
+	if ( string_contains( visitorData2->searchFilter, "/" ) || string_contains( visitorData2->searchFilter, "\\" ) ) {
+		checkAgainst = fileInfo->full_filename;
+	} else {
+		checkAgainst = fileInfo->filename;
+	}
+
+	if ( FileMatchesFilter( checkAgainst, visitorData2->searchFilter ) ) {
 		visitorData2->sourceFiles.push_back( fileInfo->full_filename );
 	}
 }
@@ -654,7 +662,10 @@ static void ReadIncludeDependenciesFile( buildContext_t* context ) {
 	}
 
 	auto ByteBuffer_Read_U32 = []( byteBuffer_t* buffer ) -> u32 {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-align"
 		u32* result = cast( u32*, &buffer->data[buffer->readOffset] );
+#pragma clang diagnostic pop
 
 		buffer->readOffset += sizeof( u32 );
 

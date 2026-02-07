@@ -15,19 +15,6 @@
 #include "../src/core/include/string_helpers.h"
 #include "temper/temper.h"
 
-#if defined( _WIN32 )
-	#if defined( _DEBUG )
-		#define BUILDER_EXE_PATH "bin/builder_debug.exe"
-	#elif defined( NDEBUG )
-		#define BUILDER_EXE_PATH "bin/builder_release.exe"
-	#endif
-#elif defined( __linux__ )
-	#if defined( _DEBUG )
-		#define BUILDER_EXE_PATH "bin/builder_debug"
-	#elif defined( NDEBUG )
-		#define BUILDER_EXE_PATH "bin/builder_release"
-	#endif
-#endif
 
 static const char* GetFileExtensionFromBinaryType( BinaryType type ) {
 #ifdef _WIN32
@@ -51,47 +38,31 @@ static const char* GetFileExtensionFromBinaryType( BinaryType type ) {
 	return "ERROR";
 }
 
-static void DoBinaryFilesPostCheck( const char* testName, const char* buildSourceFile ) {
-	const char* buildSourceFileNoExtension = path_remove_file_extension( buildSourceFile );
-
-	TEMPER_CHECK_TRUE( folder_exists( tprintf( "tests/%s/.builder", testName ) ) );
-	TEMPER_CHECK_TRUE( file_exists(   tprintf( "tests/%s/.builder/%s%s", testName, buildSourceFileNoExtension, GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) ) ) );
-
-#ifdef _WIN32
-	//TEMPER_CHECK_TRUE( file_exists(    tprintf( "tests/%s/.builder/%s.exp", testName, buildSourceFileNoExtension ) ) );	// optional
-	TEMPER_CHECK_TRUE( file_exists(    tprintf( "tests/%s/.builder/%s.ilk", testName, buildSourceFileNoExtension ) ) );
-	//TEMPER_CHECK_TRUE( file_exists(    tprintf( "tests/%s/.builder/%s.lib", testName, buildSourceFileNoExtension ) ) );	// optional
-	TEMPER_CHECK_TRUE( file_exists(    tprintf( "tests/%s/.builder/%s.pdb", testName, buildSourceFileNoExtension ) ) );
-#endif
-}
-
 struct buildTest_t {
 	const char*	rootDir;		// whats the root folder of this test?
 	const char*	buildSourceFile;
 	const char*	config;			// can be NULL
 	const char*	binaryFolder;	// if NULL, assumed that no folder was created as part of the build
 	const char*	binaryName;		// if NULL, assumed to be the same as buildSourceFile except it ends with .exe (on windows)
-	bool8		hasSymbols;
+	s32			expectedExitCode;
+	bool8		noSymbols;
 };
 
-TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const buildTest_t& test ) {
+TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 	// move ourselves to the root folder of that test
 	// run the test from that folder
 	// then come back when were done
 	TEMPER_CHECK_TRUE_M( test.rootDir, "Each test lives in its own folder, you need to tell me what the \"root\" folder for this test is.\n" );
 	const char* oldCWD = path_current_working_directory();
-	path_set_current_directory( test.rootDir );
+	TEMPER_CHECK_TRUE_M( path_set_current_directory( test.rootDir ), "Failed to cd into the test folder.\n" );
 	defer( path_set_current_directory( oldCWD ) );
 
 	TEMPER_CHECK_TRUE( file_exists( test.buildSourceFile ) );
 
 	// binary name doesnt have to be set by users, but we need it
 	// this is the default
-	const char* binaryFilename = test.binaryName;
-	if ( !binaryFilename ) {
-		const char* buildSourceFileNoExtension = path_remove_file_extension( test.buildSourceFile );
-
-		binaryFilename = tprintf( "%s%s", buildSourceFileNoExtension, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
+	if ( !test.binaryName ) {
+		test.binaryName = path_remove_file_extension( test.buildSourceFile );
 	}
 
 	s32 exitCode = 0;
@@ -102,21 +73,24 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const buildTest_t& te
 		// args should also be const because we never actually modify them
 		// I know how to get this done, leave this work with me
 		Array<char*> args;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-qual"
 		args.add( cast( char*, test.buildSourceFile ) );
+#pragma clang diagnostic pop
 		if ( test.config ) {
 			args.add( tprintf( "--config=%s", test.config ) );
 		}
 
 		exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
 
-		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
+		TEMPER_CHECK_TRUE_M( exitCode == 0, "BuilderMain() actually returned %d.\n", exitCode );
 	}
 
 	const char* fullBinaryName = NULL;
 	if ( test.binaryFolder ) {
-		fullBinaryName = tprintf( "%s%c%s", test.binaryFolder, PATH_SEPARATOR, binaryFilename );
+		fullBinaryName = tprintf( "%s%c%s%s", test.binaryFolder, PATH_SEPARATOR, test.binaryName, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
 	} else {
-		fullBinaryName = test.binaryName;
+		fullBinaryName = tprintf( "%s%s", test.binaryName, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
 	}
 
 	// check the binaries exist
@@ -128,13 +102,21 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const buildTest_t& te
 			TEMPER_CHECK_TRUE_M( file_exists( intermediateFolder ), "Intermediate folder \"%s\" was expected, but it wasn't found.\n", intermediateFolder );
 		}
 
-		TEMPER_CHECK_TRUE( file_exists( fullBinaryName ) );
+		TEMPER_CHECK_TRUE_M( file_exists( fullBinaryName ), "Binary file \"%s\" was expected, but it wasn't found.\n", fullBinaryName );
 
-		if ( test.hasSymbols ) {
+		if ( !test.noSymbols ) {
 			// windows generates PDBs and ILKs by default with symbols enabled
 #ifdef _WIN32
-			const char* pdbName = tprintf( "%s.pdb", test.binaryName );
-			const char* ilkName = tprintf( "%s.ilk", test.binaryName );
+			const char* pdbName = NULL;
+			const char* ilkName = NULL;
+
+			if ( test.binaryFolder ) {
+				pdbName = tprintf( "%s%c%s.pdb", test.binaryFolder, PATH_SEPARATOR, test.binaryName );
+				ilkName = tprintf( "%s%c%s.ilk", test.binaryFolder, PATH_SEPARATOR, test.binaryName );
+			} else {
+				pdbName = tprintf( "%s.pdb", test.binaryName );
+				ilkName = tprintf( "%s.ilk", test.binaryName );
+			}
 
 			TEMPER_CHECK_TRUE_M( file_exists( pdbName ), "Symbol file \"%s\" was expected, but it wasn't found.\n", pdbName );
 			TEMPER_CHECK_TRUE_M( file_exists( ilkName ), "Symbol file \"%s\" was expected, but it wasn't found.\n", ilkName );
@@ -149,15 +131,15 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const buildTest_t& te
 
 		exitCode = RunProc( &args, NULL );
 
-		TEMPER_CHECK_TRUE_M( exitCode == 0, "When trying to run \"%s\", the exit code actually returned %d.\n", test.binaryName, exitCode );
+		TEMPER_CHECK_TRUE_M( exitCode == test.expectedExitCode, "When trying to run \"%s\", the exit code was expected to be %d but it actually returned %d.\n", test.binaryName, test.expectedExitCode, exitCode );
 	}
+
+	// TODO(DM): 06/02/2026: now cleanup all the generated files now that the test is done
 }
 
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 	.rootDir			= "tests/test_basic",
 	.buildSourceFile	= "test_basic.cpp",
-	.binaryName			= "test_basic",
-	.hasSymbols			= true,
 } );
 
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
@@ -166,6 +148,7 @@ TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 	.config				= "debug",
 	.binaryFolder		= "bin/debug",
 	.binaryName			= "kenneth",
+	.expectedExitCode	= 420,
 } );
 
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
@@ -174,156 +157,52 @@ TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 	.config				= "release",
 	.binaryFolder		= "bin/release",
 	.binaryName			= "kenneth",
+	.expectedExitCode	= 420,
+	.noSymbols			= true,
 } );
 
-enum compiler_t {
-	COMPILER_CLANG	= 0,
-	COMPILER_GCC,
-	COMPILER_MSVC,
-};
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
+	.rootDir			= "tests/test_multiple_source_files",
+	.buildSourceFile	= "build.cpp",
+	.binaryFolder		= "bin",
+	.binaryName			= "marco_polo",
+} );
 
-TEMPER_TEST_PARAMETRIC( SetCompilerPath, TEMPER_FLAG_SHOULD_RUN, const compiler_t compiler ) {
-	auto GetCompilerName = []( const compiler_t compilerType ) -> const char* {
-		switch ( compilerType ) {
-			case COMPILER_CLANG:	return "clang";
-			case COMPILER_GCC:		return "gcc";
-			case COMPILER_MSVC:		return "msvc";
-		}
-	};
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
+	.rootDir			= "tests/test_static_lib",
+	.buildSourceFile	= "build.cpp",
+	.config				= "program",
+	.binaryFolder		= "bin",
+	.binaryName			= "test_static_library_program",
+} );
 
-	const char* compilerName = GetCompilerName( compiler );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
+	.rootDir			= "tests/test_dynamic_lib",
+	.buildSourceFile	= "build.cpp",
+	.config				= "program",
+	.binaryFolder		= "bin",
+	.binaryName			= "test_dynamic_library_program",
+} );
 
-	printf( "Overriding default Builder compiler for %s\n", compilerName );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
+	.rootDir			= "tests/test_override_path_clang",
+	.buildSourceFile	= "test_override_path_clang.cpp",
+} );
 
-	char* buildSourceFile = tprintf( "tests/test_override_path_%s/test_override_path_%s.cpp", compilerName, compilerName );
-
-	TEMPER_CHECK_TRUE( file_exists( buildSourceFile ) );
-
-	s32 exitCode = 0;
-
-	// compile the program
-	{
-		Array<char*> args;
-		args.add( buildSourceFile );
-		exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
-
-		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
-
-		TEMPER_CHECK_TRUE( file_exists( tprintf( "tests/test_override_path_%s/test_override_path_%s%s", compilerName, compilerName, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) ) ) );
-	}
-
-	// run the program
-	{
-		Array<const char*> args;
-		args.add( tprintf( "tests/test_override_path_%s/test_override_path_%s%s", compilerName, compilerName, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) ) );
-		exitCode = RunProc( &args, NULL );
-
-		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
-	}
-
-	DoBinaryFilesPostCheck( tprintf( "test_override_path_%s", compilerName ), tprintf( "test_override_path_%s.cpp", compilerName ) );
-}
-
-TEMPER_INVOKE_PARAMETRIC_TEST( SetCompilerPath, COMPILER_CLANG );
 #ifdef _WIN32
-TEMPER_INVOKE_PARAMETRIC_TEST( SetCompilerPath, COMPILER_GCC );
-TEMPER_INVOKE_PARAMETRIC_TEST( SetCompilerPath, COMPILER_MSVC );
+// TODO(DM): 06/02/2026:
+//	make the gcc override test run on linux
+//	why does GGC not produce symbols?
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
+	.rootDir			= "tests/test_override_path_gcc",
+	.buildSourceFile	= "test_override_path_gcc.cpp",
+} );
+
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
+	.rootDir			= "tests/test_override_path_msvc",
+	.buildSourceFile	= "test_override_path_msvc.cpp",
+} );
 #endif
-
-TEMPER_TEST( Compile_MultipleSourceFiles, TEMPER_FLAG_SHOULD_RUN ) {
-	const char* buildSourceFile = "tests/test_multiple_source_files/build.cpp";
-	const char* binaryFilename = tprintf( "tests/test_multiple_source_files/bin/marco_polo%s", GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
-
-	TEMPER_CHECK_TRUE( file_exists( buildSourceFile ) );
-
-	// compile the program
-	{
-		Array<char*> args;
-		args.add( cast( char*, buildSourceFile ) );
-
-		s32 exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
-
-		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
-
-		TEMPER_CHECK_TRUE( file_exists( binaryFilename ) );
-	}
-
-	// run the program
-	{
-		// TODO(DM): this
-	}
-
-	DoBinaryFilesPostCheck( "test_multiple_source_files", "build.cpp" );
-}
-
-TEMPER_TEST( Compile_StaticLibrary, TEMPER_FLAG_SHOULD_RUN ) {
-	// now build the exe that uses it
-	{
-		Array<char*> args;
-		args.add( cast( char*, "tests/test_static_lib/build.cpp" ) );
-		args.add( cast( char*, "--config=program" ) );
-		s32 exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
-
-		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
-
-		DoBinaryFilesPostCheck( "test_static_lib", "build.cpp" );
-	}
-
-	// run the program to make sure everything actually works
-	{
-		Array<const char*> args;
-		args.add( tprintf( "tests/test_static_lib/bin/test_static_library_program%s", GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) ) );
-		s32 exitCode = RunProc( &args, NULL );
-
-		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
-	}
-}
-
-TEMPER_TEST( Compile_DynamicLibrary, TEMPER_FLAG_SHOULD_RUN ) {
-#if defined( _WIN32 )
-	const char* dynamicLibraryFilename = tprintf( "tests/test_dynamic_lib/bin/test_dynamic_lib%s", GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
-#elif defined( __linux__ )
-	const char* dynamicLibraryFilename = tprintf( "tests/test_dynamic_lib/bin/libtest_dynamic_lib%s", GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
-#endif
-
-	const char* exeFilename = tprintf( "tests/test_dynamic_lib/bin/test_dynamic_library_program%s", GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
-
-	if ( file_exists( dynamicLibraryFilename ) ) {
-		file_delete( dynamicLibraryFilename );
-		TEMPER_CHECK_TRUE( !file_exists( dynamicLibraryFilename ) );
-	}
-
-	if ( file_exists( exeFilename ) ) {
-		file_delete( exeFilename );
-		TEMPER_CHECK_TRUE( !file_exists( exeFilename ) );
-	}
-
-	// now build the exe
-	{
-		Array<char*> args;
-		args.add( cast( char*, "tests/test_dynamic_lib/build.cpp" ) );
-		args.add( cast( char*, "--config=program" ) );
-
-		s32 buildExitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
-
-		TEMPER_CHECK_TRUE_M( buildExitCode == 0, "Exit code actually returned %d.\n", buildExitCode );
-
-		TEMPER_CHECK_TRUE( file_exists( dynamicLibraryFilename ) );
-		TEMPER_CHECK_TRUE( file_exists( exeFilename ) );
-
-		DoBinaryFilesPostCheck( "test_dynamic_lib", "build.cpp" );
-	}
-
-	// run the program to make sure everything actually works
-	{
-		Array<const char*> args;
-		args.add( exeFilename );
-
-		s32 runProgramExitCode = RunProc( &args, NULL );
-
-		TEMPER_CHECK_TRUE_M( runProgramExitCode == 0, "Exit code actually returned %d.\n", runProgramExitCode );
-	}
-}
 
 TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 	// need to find where msbuild lives on windows
@@ -341,7 +220,7 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 		args.add( "*" );
 		args.add( "-requires" );
 		args.add( "Microsoft.Component.MSBuild" );
-		s32 exitCode = RunProc( &args, &vswhereStdout );
+		s32 exitCode = RunProc( &args, NULL, 0, &vswhereStdout );
 
 		// fail test if vswhere errors
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Failed to run vswhere.exe properly.  Exit code actually returned %d.\n", exitCode );
@@ -376,17 +255,20 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 	// generate the solution
 	{
 		Array<char*> args;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-qual"
 		args.add( cast( char*, "tests/test_generate_visual_studio_files/generate_solution.cpp" ) );
+#pragma clang diagnostic pop
 
 		s32 exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
 
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 	}
 
-	// DM: apparently MSBuild isnt properly supported on linux so this isnt possible
+	// DM: apparently msbuild isnt properly supported on linux so this isnt possible
 	// I'm not convinced by that answer, but all of my reading says so
 #ifdef _WIN32
-	// build the app project in the solution via MSBuild
+	// build the app project in the solution via msbuild
 	{
 		Array<const char*> args;
 #if defined( _WIN32 )
@@ -396,7 +278,7 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 #endif
 		args.add( "tests/test_generate_visual_studio_files/visual_studio/app.vcxproj" );
 		args.add( "/property:Platform=x64" );
-		s32 exitCode = RunProc( &args );
+		s32 exitCode = RunProc( &args, NULL );
 
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 	}
@@ -405,7 +287,7 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 	{
 		Array<const char*> args;
 		args.add( "tests/test_generate_visual_studio_files/bin/debug/the-app.exe" );
-		s32 exitCode = RunProc( &args );
+		s32 exitCode = RunProc( &args, NULL );
 
 		TEMPER_CHECK_TRUE_M( exitCode == 69420, "Exit code actually returned %d.\n", exitCode );
 	}

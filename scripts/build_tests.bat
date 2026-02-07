@@ -42,7 +42,7 @@ if /I [%config%]==[release] (
 
 set source_files=tests\\tests_main.cpp src\\builder.cpp src\\visual_studio.cpp src\\backend_clang.cpp src\\backend_msvc.cpp src\\core\\src\\core.suc.cpp
 
-set defines=-D_CRT_SECURE_NO_WARNINGS -DCORE_SUC -DCORE_USE_SUBPROCESS -DHLML_NAMESPACE
+set defines=-D_CRT_SECURE_NO_WARNINGS -DCORE_USE_XXHASH -DCORE_USE_SUBPROCESS -DCORE_SUC -DHASHMAP_HIDE_MISSING_KEY_WARNING -DHLML_NAMESPACE
 if /I [%config%]==[debug] (
 	set defines=!defines! -D_DEBUG
 )
@@ -53,7 +53,7 @@ if /I [%config%]==[release] (
 
 set includes=-Isrc/core/include
 
-set libraries=-luser32.lib -lShlwapi.lib -lDbgHelp.lib
+set libraries=-luser32.lib -lShlwapi.lib -lDbgHelp.lib -lOle32.lib
 if /I [%config%]==[debug] (
 	set libraries=!libraries! -lmsvcrtd.lib
 )

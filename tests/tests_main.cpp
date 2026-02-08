@@ -181,12 +181,12 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 }
 
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
-	.rootDir			= "tests/test_basic",
+	.rootDir			= "test_basic",
 	.buildSourceFile	= "test_basic.cpp",
 } );
 
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
-	.rootDir			= "tests/test_set_builder_options",
+	.rootDir			= "test_set_builder_options",
 	.buildSourceFile	= "test_set_builder_options.cpp",
 	.config				= "debug",
 	.binaryFolder		= "bin/debug",
@@ -195,7 +195,7 @@ TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 } );
 
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
-	.rootDir			= "tests/test_set_builder_options",
+	.rootDir			= "test_set_builder_options",
 	.buildSourceFile	= "test_set_builder_options.cpp",
 	.config				= "release",
 	.binaryFolder		= "bin/release",
@@ -205,14 +205,14 @@ TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 } );
 
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
-	.rootDir			= "tests/test_multiple_source_files",
+	.rootDir			= "test_multiple_source_files",
 	.buildSourceFile	= "build.cpp",
 	.binaryFolder		= "bin",
 	.binaryName			= "marco_polo",
 } );
 
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
-	.rootDir			= "tests/test_static_lib",
+	.rootDir			= "test_static_lib",
 	.buildSourceFile	= "build.cpp",
 	.config				= "program",
 	.binaryFolder		= "bin",
@@ -220,7 +220,7 @@ TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 } );
 
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
-	.rootDir			= "tests/test_dynamic_lib",
+	.rootDir			= "test_dynamic_lib",
 	.buildSourceFile	= "build.cpp",
 	.config				= "program",
 	.binaryFolder		= "bin",
@@ -228,7 +228,7 @@ TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 } );
 
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
-	.rootDir			= "tests/test_override_path_clang",
+	.rootDir			= "test_override_path_clang",
 	.buildSourceFile	= "test_override_path_clang.cpp",
 } );
 
@@ -237,13 +237,13 @@ TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 //	make the gcc override test run on linux
 //	why does GGC not produce symbols?
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
-	.rootDir			= "tests/test_override_path_gcc",
+	.rootDir			= "test_override_path_gcc",
 	.buildSourceFile	= "test_override_path_gcc.cpp",
 	.noSymbolFiles		= true,	// gcc doesnt produce separate pdb files, symbols get put directly into the exe
 } );
 
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
-	.rootDir			= "tests/test_override_path_msvc",
+	.rootDir			= "test_override_path_msvc",
 	.buildSourceFile	= "test_override_path_msvc.cpp",
 } );
 #endif
@@ -301,7 +301,7 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 		Array<char*> args;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcast-qual"
-		args.add( cast( char*, "tests/test_generate_visual_studio_files/generate_solution.cpp" ) );
+		args.add( cast( char*, "test_generate_visual_studio_files/generate_solution.cpp" ) );
 #pragma clang diagnostic pop
 
 		s32 exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
@@ -320,7 +320,7 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 #elif defined( __linux__ )
 		args.add( "msbuild" );
 #endif
-		args.add( "tests/test_generate_visual_studio_files/visual_studio/app.vcxproj" );
+		args.add( "test_generate_visual_studio_files/visual_studio/app.vcxproj" );
 		args.add( "/property:Platform=x64" );
 		s32 exitCode = RunProc( &args, NULL );
 
@@ -330,7 +330,7 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 	// run the program, make sure it returns the correct exit code
 	{
 		Array<const char*> args;
-		args.add( "tests/test_generate_visual_studio_files/bin/debug/the-app.exe" );
+		args.add( "test_generate_visual_studio_files/bin/debug/the-app.exe" );
 		s32 exitCode = RunProc( &args, NULL );
 
 		TEMPER_CHECK_TRUE_M( exitCode == 69420, "Exit code actually returned %d.\n", exitCode );

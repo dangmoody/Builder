@@ -1156,7 +1156,7 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 			if ( !string_equals( compilerVersion.data, options.compiler_version.c_str() ) ) {
 				warning(
 					"I see that you are using compiler version \"%s\", but compiler version \"%s\" was set in %s.\n"
-					"I will still compile, but things may not work as you expect.\n\n"
+					"I will still go ahead with building the program, but things may not work as you expect.\n\n"
 					, compilerVersion.data, options.compiler_version.c_str(), SET_BUILDER_OPTIONS_FUNC_NAME
 				);
 			}

@@ -235,7 +235,6 @@ TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 #ifdef _WIN32
 // TODO(DM): 06/02/2026:
 //	make the gcc override test run on linux
-//	why does GGC not produce symbols?
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 	.rootDir			= "test_override_path_gcc",
 	.buildSourceFile	= "test_override_path_gcc.cpp",

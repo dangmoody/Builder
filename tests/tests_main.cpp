@@ -248,6 +248,8 @@ TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 #endif
 
 TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
+	s32 exitCode = -1;
+
 	// need to find where msbuild lives on windows
 #ifdef _WIN32
 	std::string msbuildInstallationPath;
@@ -263,7 +265,7 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 		args.add( "*" );
 		args.add( "-requires" );
 		args.add( "Microsoft.Component.MSBuild" );
-		s32 exitCode = RunProc( &args, NULL, 0, &vswhereStdout );
+		exitCode = RunProc( &args, NULL, 0, &vswhereStdout );
 
 		// fail test if vswhere errors
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Failed to run vswhere.exe properly.  Exit code actually returned %d.\n", exitCode );
@@ -296,14 +298,14 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 #endif
 
 	// generate the solution
-	{
+	if ( exitCode == 0 ) {
 		Array<char*> args;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcast-qual"
 		args.add( cast( char*, "test_generate_visual_studio_files/generate_solution.cpp" ) );
 #pragma clang diagnostic pop
 
-		s32 exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
+		exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
 
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 	}
@@ -312,25 +314,27 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 	// I'm not convinced by that answer, but all of my reading says so
 #ifdef _WIN32
 	// build the app project in the solution via msbuild
-	{
+	if ( exitCode == 0 ) {
+		String msbuildStdout;
+
 		Array<const char*> args;
 #if defined( _WIN32 )
-		args.add( tprintf( "%s/MSBuild/Current/Bin/MSBuild.exe", msbuildInstallationPath.c_str() ) );	// TODO(DM): query for this instead
+		args.add( tprintf( "%s%cMSBuild%cCurrent%cBin%cMSBuild.exe", msbuildInstallationPath.c_str(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR ) );	// TODO(DM): query for this instead
 #elif defined( __linux__ )
 		args.add( "msbuild" );
 #endif
 		args.add( "test_generate_visual_studio_files/visual_studio/app.vcxproj" );
 		args.add( "/property:Platform=x64" );
-		s32 exitCode = RunProc( &args, NULL );
+		exitCode = RunProc( &args, NULL, PROC_FLAG_SHOW_STDOUT );
 
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 	}
 
 	// run the program, make sure it returns the correct exit code
-	{
+	if ( exitCode == 0 ) {
 		Array<const char*> args;
 		args.add( "test_generate_visual_studio_files/bin/debug/the-app.exe" );
-		s32 exitCode = RunProc( &args, NULL );
+		exitCode = RunProc( &args, NULL );
 
 		TEMPER_CHECK_TRUE_M( exitCode == 69420, "Exit code actually returned %d.\n", exitCode );
 	}

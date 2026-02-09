@@ -268,11 +268,6 @@ s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVariables,
 	// DM!!! put the async flag back when done getting this running
 	Process* process = process_create( args, environmentVariables, /*PROCESS_FLAG_ASYNC |*/ PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
 
-	defer(
-		process_destroy( process );
-		process = NULL;
-	);
-
 	if ( !process ) {
 		error(
 			"Failed to run process \"%s\".\n"
@@ -285,6 +280,11 @@ s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVariables,
 		// the interpretation of the exit code of the processes we run is the responsibility of the calling code and were probably making a lot of assumptions there
 		return -1;
 	}
+
+	defer(
+		process_destroy( process );
+		process = NULL;
+	);
 
 	// show stdout
 	StringBuilder sb = {};

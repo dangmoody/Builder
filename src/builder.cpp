@@ -1035,6 +1035,8 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 
 			setBuilderOptionsTimeMS = setBuilderOptionsTimeEnd - setBuilderOptionsTimeStart;
 
+			context.forceRebuild = options.force_rebuild;
+
 			// if the user wants to generate a visual studio solution then do that now
 			if ( options.generate_solution && !isVisualStudioBuild ) {
 				// you either want to generate a visual studio solution or build this config, but not both

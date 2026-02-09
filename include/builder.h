@@ -228,6 +228,11 @@ struct BuilderOptions {
 	// If you don't use Visual Studio then ignore this.
 	VisualStudioSolution		solution;
 
+	// Set this to true if you want Builder to force-rebuild your program.
+	// All binaries and intermediate files will get rebuilt.
+	// This is really only useful to those who are either using an editor + command line workflow, or just hate incremental builds.
+	bool						force_rebuild;
+
 	// Do you want to generate a Visual Studio solution?
 	// If this is set to true, then a code build will NOT happen.
 	// If you don't use Visual Studio then ignore this.

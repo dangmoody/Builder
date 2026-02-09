@@ -553,7 +553,7 @@ static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t* backend, const Array
 	args.add_range( &intermediateFiles );
 
 	For ( u32, libPathIndex, 0, config->additional_lib_paths.size() ) {
-		args.add( tprintf( "/LIBPATH:\"%s\"", config->additional_lib_paths[libPathIndex].c_str() ) );
+		args.add( tprintf( "/LIBPATH:%s", config->additional_lib_paths[libPathIndex].c_str() ) );
 	}
 
 	For ( u32, libIndex, 0, config->additional_libs.size() ) {

@@ -1,9 +1,12 @@
 v0.10.0, <RELEASE DATE HERE>:
 
+* Added BuilderOptions::force_rebuild.
+	* This is really only useful to those who are either using an editor + command line workflow, or just hate incremental builds.
 * Added LANGUAGE_VERSION_C11, LANGUAGE_VERSION_C17, and LANGUAGE_VERSION_C23.
 	* Microsoft's post-C99 support isn't great, so you'll need to take care of that yourself, but Builder at least exposes the options for you now.
 * Better warning message when the version of the override compiler you want to use doesn't match what Builder found.
 * Fixed root-folder source files not getting included in the build when globbing.
+* Fixed additional library paths not getting detected properly by MSVC.
 
 ----------------------------------------------------------------
 

@@ -31,24 +31,23 @@ if not exist %intermediate_path% (
 )
 
 set symbols="-g"
-:: if /I [%config%]==[debug] (
-:: 	set symbols=
-:: )
 
 set optimisation=""
 if /I [%config%]==[release] (
 	set optimisation=-O3 -ffast-math
 )
 
+set program_name=""
+
 set source_files=tests\\tests_main.cpp src\\builder.cpp src\\visual_studio.cpp src\\backend_clang.cpp src\\backend_msvc.cpp src\\core\\src\\core.suc.cpp
 
 set defines=-D_CRT_SECURE_NO_WARNINGS -DCORE_USE_XXHASH -DCORE_USE_SUBPROCESS -DCORE_SUC -DHASHMAP_HIDE_MISSING_KEY_WARNING -DHLML_NAMESPACE
 if /I [%config%]==[debug] (
-	set defines=!defines! -D_DEBUG
-)
-
-if /I [%config%]==[release] (
-	set defines=!defines! -DNDEBUG
+	set program_name=builder_%config%
+	set defines=!defines! -D_DEBUG -DBUILDER_PROGRAM_NAME=\"!program_name!\"
+) else if /I [%config%]==[release] (
+	set program_name=builder
+	set defines=!defines! -DNDEBUG _DBUILDER_PROGRAM_NAME=\"!program_name!\"
 )
 
 set includes=-Isrc/core/include

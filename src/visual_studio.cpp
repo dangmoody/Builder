@@ -654,9 +654,11 @@ bool8 GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* opt
 					const char* inputFileNoPath = path_remove_path_from_file( context->inputFile );
 					const char* inputFileRelative = tprintf( "%s%c%s", pathFromSolutionToInputFile, PATH_SEPARATOR, inputFileNoPath );
 
-					string_builder_appendf( &vcxprojContent, "\t\t<NMakeBuildCommandLine>\"%s\" %s %s%s %s</NMakeBuildCommandLine>\n", path_app_path(), inputFileRelative, ARG_CONFIG, fullConfigName, ARG_VISUAL_STUDIO_BUILD );
-					string_builder_appendf( &vcxprojContent, "\t\t<NMakeReBuildCommandLine>\"%s\" %s %s%s %s</NMakeReBuildCommandLine>\n", path_app_path(), inputFileRelative, ARG_CONFIG, fullConfigName, ARG_VISUAL_STUDIO_BUILD );
-					string_builder_appendf( &vcxprojContent, "\t\t<NMakeCleanCommandLine>\"%s\" %s %s</NMakeCleanCommandLine>\n", path_app_path(), ARG_NUKE, config->options.binary_folder.c_str() );
+					const char* appPath = path_remove_file_from_path( path_app_path() );
+
+					string_builder_appendf( &vcxprojContent, "\t\t<NMakeBuildCommandLine>\"%s%c%s\" %s %s%s %s</NMakeBuildCommandLine>\n", appPath, PATH_SEPARATOR, BUILDER_PROGRAM_NAME, inputFileRelative, ARG_CONFIG, fullConfigName, ARG_VISUAL_STUDIO_BUILD );
+					string_builder_appendf( &vcxprojContent, "\t\t<NMakeReBuildCommandLine>\"%s%c%s\" %s %s%s %s</NMakeReBuildCommandLine>\n", appPath, PATH_SEPARATOR, BUILDER_PROGRAM_NAME, inputFileRelative, ARG_CONFIG, fullConfigName, ARG_VISUAL_STUDIO_BUILD );
+					string_builder_appendf( &vcxprojContent, "\t\t<NMakeCleanCommandLine>\"%s%c%s\" %s %s</NMakeCleanCommandLine>\n", appPath, PATH_SEPARATOR, BUILDER_PROGRAM_NAME, ARG_NUKE, config->options.binary_folder.c_str() );
 
 					// preprocessor definitions
 					string_builder_appendf( &vcxprojContent, "\t\t<NMakePreprocessorDefinitions>" );

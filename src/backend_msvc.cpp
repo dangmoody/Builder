@@ -130,9 +130,12 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 		return true;
 	};
 
-	auto ParseTagArray = []( const char* fileBuffer, const char* tag, std::vector<std::string>& outArray ) {
+	auto ParseTagArray = []( const char* fileBuffer, const char* tag, std::vector<std::string>& outArray ) -> bool8 {
 		const char* lineStart = strstr( fileBuffer, tag );
-		assert( lineStart );
+		if ( !lineStart ) {
+			return false;
+		}
+
 		lineStart += strlen( tag );
 
 		while ( *lineStart == ' ' ) {
@@ -140,8 +143,14 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 		}
 
 		const char* lineEnd = strchr( lineStart, '\n' );
+		if ( !lineEnd ) {
+			return false;
+		}
 
 		const char* semicolon = strchr( lineStart, ';' );
+		if ( !semicolon ) {
+			return false;
+		}
 
 		while ( cast( u64, semicolon ) < cast( u64, lineEnd ) ) {
 			u64 pathLength = cast( u64, semicolon ) - cast( u64, lineStart );
@@ -153,7 +162,7 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 			semicolon = strchr( lineStart, ';' );
 		}
 
-		return outArray;
+		return true;
 	};
 
 	msvcState_t* msvcState = cast( msvcState_t*, mem_alloc( sizeof( msvcState_t ) ) );
@@ -252,15 +261,24 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 	const char* outputBuffer = string_builder_to_string( &vcvarsOutput );
 
 	{
-		ParseTagArray( outputBuffer, "INCLUDE=", msvcState->windowsIncludes );
-		ParseTagArray( outputBuffer, "LIB=", msvcState->windowsLibPaths );
+		if ( !ParseTagArray( outputBuffer, "INCLUDE=", msvcState->windowsIncludes ) ) {
+			return false;
+		}
+
+		if ( !ParseTagArray( outputBuffer, "LIB=", msvcState->windowsLibPaths ) ) {
+			return false;
+		}
 
 		std::string windowsSDKVersion;
-		ParseTagString( outputBuffer, "WindowsSDKLibVersion=", windowsSDKVersion );
+		if ( !ParseTagString( outputBuffer, "WindowsSDKLibVersion=", windowsSDKVersion ) ) {
+			return false;
+		}
 		windowsSDKVersion.pop_back();		// remove trailing slash
 
 		std::string windowsSDKRootFolder;
-		ParseTagString( outputBuffer, "WindowsSdkDir=", windowsSDKRootFolder );
+		if ( !ParseTagString( outputBuffer, "WindowsSdkDir=", windowsSDKRootFolder ) ) {
+			return false;
+		}
 		windowsSDKRootFolder.pop_back();	// remove trailing slash
 
 		// add windows sdk lib folders that we need too

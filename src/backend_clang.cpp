@@ -40,6 +40,9 @@ struct clangState_t {
 	Array<const char*>			args;
 
 	std::vector<std::string>	includeDependencies;
+
+	// TODO(DM): 11/02/2026: remove this when eds command archetype changes get merged in
+	const char*					arPath;	// static library linker for gcc (on windows and linux) and clang (linux)
 };
 
 // TODO(DM): 20/07/2025: do we want to ignore this warning via the build script?
@@ -169,6 +172,11 @@ static void ReadDependencyFile( const char* depFilename, std::vector<std::string
 static bool8 Clang_Init( compilerBackend_t* backend ) {
 	backend->data = cast( clangState_t*, mem_alloc( sizeof( clangState_t ) ) );
 	new( backend->data ) clangState_t;
+
+	// TODO(DM): 11/02/2026: remove this when eds command archetype changes get merged in
+	clangState_t* clangState = cast( clangState_t*, backend->data );
+	const char* compilerPathOnly = path_remove_file_from_path( backend->compilerPath.data );
+	clangState->arPath = tprintf( "%s%car", compilerPathOnly, PATH_SEPARATOR );
 
 	return true;
 }
@@ -307,6 +315,10 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t* backend, const Arra
 	assert( backend );
 	assert( config );
 
+	// TODO(DM): 11/02/2026: remove this when eds command archetype changes get merged in
+	bool8 isClang = string_ends_with( backend->compilerPath.data, "clang" ) || string_ends_with( backend->compilerPath.data, "clang++" );
+	bool8 isGCC = string_ends_with( backend->compilerPath.data, "gcc" ) || string_ends_with( backend->compilerPath.data, "g++" );
+
 	const char* fullBinaryName = BuildConfig_GetFullBinaryName( config );
 
 	clangState_t* clangState = cast( clangState_t*, backend->data );
@@ -328,13 +340,19 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t* backend, const Arra
 	// so there is no real "link" step in this case, the .o files are just "archived" together
 	// for dynamic libraries and executables clang and gcc recommend you call the compiler again and just pass in all the intermediate files
 	if ( config->binary_type == BINARY_TYPE_STATIC_LIBRARY ) {
-		args.add( backend->linkerPath.data );
-
 #if defined( _WIN32 )
-		args.add( "/lib" );
-
-		args.add( tprintf( "/OUT:%s", fullBinaryName ) );
+		// TODO(DM): 11/02/2026: remove this when eds command archetype changes get merged in
+		if ( isGCC ) {
+			args.add( clangState->arPath );
+			args.add( "rc" );
+			args.add( fullBinaryName );
+		} else {
+			args.add( backend->linkerPath.data );
+			args.add( "/lib" );
+			args.add( tprintf( "/OUT:%s", fullBinaryName ) );
+		}
 #elif defined( __linux__ )
+		args.add( clangState->arPath );
 		args.add( "rc" );
 		args.add( fullBinaryName );
 #endif
@@ -357,19 +375,27 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t* backend, const Arra
 			args.add( tprintf( "-L%s", config->additional_lib_paths[libPathIndex].c_str() ) );
 		}
 
-		For ( u32, libIndex, 0, config->additional_libs.size() ) {
-			std::string& staticLib = config->additional_libs[libIndex];
-
-#if defined( _WIN32 )
-			args.add( tprintf( "-l%s", staticLib.c_str() ) );
-#elif defined( __linux__ )
-			if ( string_starts_with( staticLib.c_str(), "lib" ) ) {
-				staticLib.erase( 0, strlen( "lib" ) );
-				args.add( tprintf( "-l%s", staticLib.c_str() ) );
-			} else {
-				args.add( tprintf( "-l:%s", staticLib.c_str() ) );
+		// TODO(DM): 11/02/2026: does just mean we dont care about file extensions when linking to static libraries?
+		// this is turning into a mess
+		if ( isGCC ) {
+			For ( u32, libIndex, 0, config->additional_libs.size() ) {
+				args.add( tprintf( "-l%s", path_remove_file_extension( config->additional_libs[libIndex].c_str() ) ) );
 			}
-#endif
+		} else {
+			For ( u32, libIndex, 0, config->additional_libs.size() ) {
+				std::string& staticLib = config->additional_libs[libIndex];
+
+	#if defined( _WIN32 )
+				args.add( tprintf( "-l%s", staticLib.c_str() ) );
+	#elif defined( __linux__ )
+				if ( string_starts_with( staticLib.c_str(), "lib" ) ) {
+					staticLib.erase( 0, strlen( "lib" ) );
+					args.add( tprintf( "-l%s", staticLib.c_str() ) );
+				} else {
+					args.add( tprintf( "-l:%s", staticLib.c_str() ) );
+				}
+	#endif
+			}
 		}
 
 		// TODO(DM): 09/10/2025: this works fine but do we want to expose this to the user?

@@ -1,6 +1,6 @@
 #include <builder.h>
 
-BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
+static void get_build_configs( BuilderOptions* options ) {
 	BuildConfig library = {
 		.name				= "library",
 		.binary_folder		= "bin",

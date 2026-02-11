@@ -1,8 +1,6 @@
 #include <builder.h>
 
-#include <stdio.h>
-
-BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
+static void get_build_configs( BuilderOptions* options ) {
 	BuildConfig config = {
 		.binary_folder	= "bin",
 		.binary_name	= "marco_polo",

@@ -93,7 +93,7 @@
     <ClCompile Include="tests_main.cpp" />
     <ClCompile Include="test_basic\test_basic.cpp" />
     <ClCompile Include="test_compiler_path\test_compiler_path.cpp" />
-    <ClCompile Include="test_dynamic_lib\build.cpp" />
+    <ClCompile Include="test_dynamic_lib\build_configs.cpp" />
     <ClCompile Include="test_dynamic_lib\lib\lib.cpp" />
     <ClCompile Include="test_dynamic_lib\program\program.cpp" />
     <ClCompile Include="test_generate_visual_studio_files\generate_solution.cpp" />
@@ -103,7 +103,7 @@
     <ClCompile Include="test_generate_visual_studio_files\src\app\main.cpp" />
     <ClCompile Include="test_generate_visual_studio_files\src\library1\library1.cpp" />
     <ClCompile Include="test_generate_visual_studio_files\src\library2\library2.cpp" />
-    <ClCompile Include="test_multiple_source_files\build.cpp" />
+    <ClCompile Include="test_multiple_source_files\build_configs.cpp" />
     <ClCompile Include="test_multiple_source_files\src\main.cpp" />
     <ClCompile Include="test_multiple_source_files\src\marco.linux.cpp" />
     <ClCompile Include="test_multiple_source_files\src\marco.win64.cpp" />
@@ -113,7 +113,7 @@
     <ClCompile Include="test_override_path_gcc\test_override_path_gcc.cpp" />
     <ClCompile Include="test_override_path_msvc\test_override_path_msvc.cpp" />
     <ClCompile Include="test_set_builder_options\test_set_builder_options.cpp" />
-    <ClCompile Include="test_static_lib\build.cpp" />
+    <ClCompile Include="test_static_lib\build_configs.cpp" />
     <ClCompile Include="test_static_lib\lib\lib.cpp" />
     <ClCompile Include="test_static_lib\program\program.cpp" />
     <ClCompile Include="test_third_party_libraries\build.cpp" />

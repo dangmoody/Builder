@@ -37,7 +37,43 @@ SOFTWARE.
 #include "core/include/string_builder.h"
 #include "core/include/core_process.h"
 #include "core/include/file.h"
+#include "core/include/temp_storage.h"
 
+#include <io.h>	// _get_osfhandle()
+
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wnon-virtual-dtor"
+
+struct DECLSPEC_UUID( "B41463C3-8866-43B5-BC33-2B0676F7F42E" ) DECLSPEC_NOVTABLE ISetupInstance : public IUnknown {
+	STDMETHOD( GetInstanceId )( _Out_ BSTR * pbstrInstanceId ) = 0;
+	STDMETHOD( GetInstallDate )( _Out_ LPFILETIME pInstallDate ) = 0;
+	STDMETHOD( GetInstallationName )( _Out_ BSTR* pbstrInstallationName ) = 0;
+	STDMETHOD( GetInstallationPath )( _Out_ BSTR* pbstrInstallationPath ) = 0;
+	STDMETHOD( GetInstallationVersion )( _Out_ BSTR* pbstrInstallationVersion ) = 0;
+	STDMETHOD( GetDisplayName )( _In_ LCID lcid, _Out_ BSTR* pbstrDisplayName ) = 0;
+	STDMETHOD( GetDescription )( _In_ LCID lcid, _Out_ BSTR* pbstrDescription ) = 0;
+	STDMETHOD( ResolvePath )( _In_opt_z_ LPCOLESTR pwszRelativePath, _Out_ BSTR* pbstrAbsolutePath ) = 0;
+};
+
+struct DECLSPEC_UUID( "6380BCFF-41D3-4B2E-8B2E-BF8A6810C848" ) DECLSPEC_NOVTABLE IEnumSetupInstances : public IUnknown {
+	STDMETHOD( Next )( _In_ ULONG celt, _Out_writes_to_( celt, *pceltFetched ) ISetupInstance** rgelt, _Out_opt_ _Deref_out_range_( 0, celt ) ULONG* pceltFetched ) = 0;
+	STDMETHOD( Skip )( _In_ ULONG celt ) = 0;
+	STDMETHOD( Reset )( void ) = 0;
+	STDMETHOD( Clone )( _Deref_out_opt_ IEnumSetupInstances** ppenum ) = 0;
+};
+
+struct DECLSPEC_UUID( "42843719-DB4C-46C2-8E7C-64F1816EFD5B" ) DECLSPEC_NOVTABLE ISetupConfiguration : public IUnknown {
+	STDMETHOD( EnumInstances )( _Out_ IEnumSetupInstances** ppEnumInstances ) = 0;
+	STDMETHOD( GetInstanceForCurrentProcess )( _Out_ ISetupInstance** ppInstance ) = 0;
+	STDMETHOD( GetInstanceForPath )( _In_z_ LPCWSTR wzPath, _Out_ ISetupInstance** ppInstance ) = 0;
+};
+
+#pragma clang diagnostic pop
+
+struct windowsSDKVersion_t {
+	s32	v0, v1, v2, v3;
+};
 
 struct msvcState_t {
 	Array<const char*>			args;
@@ -49,7 +85,7 @@ struct msvcState_t {
 
 	String						compilerVersion;
 
-	u32							versionMask;
+	windowsSDKVersion_t			windowsSDKVersion;
 };
 
 //================================================================
@@ -88,233 +124,224 @@ static const char* OptimizationLevelToCompilerArg( const OptimizationLevel level
 	}
 }
 
-static void OnMSVCVersionFound( const FileInfo* fileInfo, void* userData ) {
-	msvcState_t* msvcState2 = cast( msvcState_t*, userData );
-
-	u32 version0 = 0;
-	u32 version1 = 0;
-	u32 version2 = 0;
-	sscanf( fileInfo->filename, "%u.%u.%u", &version0, &version1, &version2 );
-
-	u32 mask = ( version0 << 24 ) | ( version1 << 16 ) | ( version2 );
-
-	if ( mask > msvcState2->versionMask ) {
-		msvcState2->versionMask = mask;
-
-		msvcState2->compilerVersion = fileInfo->filename;
+static void OnWindowsSDKVersionFound( const FileInfo* fileInfo, void* data ) {
+	if ( !fileInfo->is_directory ) {
+		return;
 	}
+
+	msvcState_t* msvcState = cast( msvcState_t*, data );
+
+	s32 v0, v1, v2, v3;
+	sscanf( fileInfo->filename, "%d.%d.%d.%d", &v0, &v1, &v2, &v3 );
+
+	if ( v0 < msvcState->windowsSDKVersion.v0 ) return;
+	if ( v1 < msvcState->windowsSDKVersion.v1 ) return;
+	if ( v2 < msvcState->windowsSDKVersion.v2 ) return;
+	if ( v3 < msvcState->windowsSDKVersion.v3 ) return;
+
+	msvcState->windowsSDKVersion.v0 = v0;
+	msvcState->windowsSDKVersion.v1 = v1;
+	msvcState->windowsSDKVersion.v2 = v2;
+	msvcState->windowsSDKVersion.v3 = v3;
+}
+
+static const char* FindRegistryValueFromKey( const HKEY key, const char* valueName ) {
+	DWORD valueStrLength = 0;
+
+	LSTATUS status = RegQueryValueExA( key, valueName, NULL, NULL, NULL, &valueStrLength );
+
+	if ( status != ERROR_SUCCESS ) {
+		return NULL;
+	}
+
+	char* valueStr = cast( char*, mem_temp_alloc( ( valueStrLength + 1 ) * sizeof( char ) ) );
+
+	//while ( 1 )
+	{
+		DWORD type;
+		status = RegQueryValueExA( key, valueName, NULL, &type, cast( LPBYTE, valueStr ), &valueStrLength );
+
+		if ( type != REG_SZ ) {
+			return NULL;
+		}
+
+		if ( status == ERROR_SUCCESS ) {
+			valueStr[valueStrLength] = 0;
+			return valueStr;
+		} else if ( status == ERROR_MORE_DATA ) {
+			assert( false );	// should never get here
+		}
+	}
+
+	return NULL;
 }
 
 //================================================================
 
+// Querying for Windows SDK and MSVC is based off code from https://gist.github.com/andrewrk/ffb272748448174e6cdb4958dae9f3d8
+// DM: I'm just straight lifting stuff from the code listing linked above - idc anymore
+// its ridiculous that Microsoft genuinely think this isnt a frankly retarded way of grabbing some simple information off your PC
+
 static bool8 MSVC_Init( compilerBackend_t* backend ) {
-	auto ParseTagString = []( const char* fileBuffer, const char* tag, std::string& outString ) -> bool8 {
-		const char* lineStart = strstr( fileBuffer, tag );
-		if ( !lineStart ) {
-			return false;
-		}
-
-		lineStart += strlen( tag );
-
-		while ( *lineStart == ' ' ) {
-			lineStart++;
-		}
-
-		const char* lineEnd = NULL;
-		if ( !lineEnd ) lineEnd = strchr( lineStart, '\r' );
-		if ( !lineEnd ) lineEnd = strchr( lineStart, '\n' );
-		assert( lineEnd );
-
-		outString = std::string( lineStart, lineEnd );
-
-		return true;
-	};
-
-	auto ParseTagArray = []( const char* fileBuffer, const char* tag, std::vector<std::string>& outArray ) -> bool8 {
-		const char* lineStart = strstr( fileBuffer, tag );
-		if ( !lineStart ) {
-			return false;
-		}
-
-		lineStart += strlen( tag );
-
-		while ( *lineStart == ' ' ) {
-			lineStart++;
-		}
-
-		const char* lineEnd = strchr( lineStart, '\n' );
-		if ( !lineEnd ) {
-			return false;
-		}
-
-		const char* semicolon = strchr( lineStart, ';' );
-		if ( !semicolon ) {
-			return false;
-		}
-
-		while ( cast( u64, semicolon ) < cast( u64, lineEnd ) ) {
-			u64 pathLength = cast( u64, semicolon ) - cast( u64, lineStart );
-			std::string path( lineStart, pathLength );
-
-			outArray.push_back( path );
-
-			lineStart = semicolon + 1;
-			semicolon = strchr( lineStart, ';' );
-		}
-
-		return true;
-	};
-
 	msvcState_t* msvcState = cast( msvcState_t*, mem_alloc( sizeof( msvcState_t ) ) );
 	new( msvcState ) msvcState_t;
-
-	msvcState->versionMask = 0;
+	memset( msvcState, 0, sizeof( msvcState_t ) );
 
 	backend->data = msvcState;
 
-	std::string msvcRootFolder;
-	String clPath;
-
-	// call vswhere.exe to get the MSVC root folder
+	// get the latest version of the windows sdk
+	// DM: you think this is bad? you aint seen nothing yet! see the next code block down!
 	{
-		Array<const char*> args;
-		args.add( "C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe" );
-		args.add( "-all" );
-		args.add( "-products" );
-		args.add( "*" );
+		HKEY key;
 
-		Process* process = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
+		LSTATUS status = RegOpenKeyExA( HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows Kits\\Installed Roots", 0, KEY_QUERY_VALUE | KEY_WOW64_32KEY | KEY_ENUMERATE_SUB_KEYS, &key );
 
-		if ( !process ) {
-			error( "I can't find vswhere.exe in the default install directory on your PC (\"%s\").  I need this to be able to build with MSVC.  Sorry.\n" );
-			return false;
-		}
-
-		StringBuilder processStdout = {};
-		string_builder_reset( &processStdout );
-		defer( string_builder_destroy( &processStdout ) );
-
-		char buffer[1024] = {};
-		u64 bytesRead = U64_MAX;
-		while ( ( bytesRead = process_read_stdout( process, buffer, 1024 ) ) ) {
-			buffer[bytesRead] = 0;
-
-			string_builder_appendf( &processStdout, "%s", buffer );
-		}
-
-		s32 exitCode = process_join( process );
-
-		const char* outputBuffer = string_builder_to_string( &processStdout );
-
-		if ( !ParseTagString( outputBuffer, "installationPath:", msvcRootFolder ) ) {
+		if ( status != ERROR_SUCCESS ) {
 			error(
-				"Failed to find MSVC tag \"installationPath\" from vswhere.exe.\n"
-				"This means you don't actually have an installation of MSVC (cl.exe) on your machine.  You need to go and install that.\n"
+				"Failed to get Windows SDK installation directory from your Windows registry.  This likely means you don't have the Windows SDK installed on your machine.\n"
+				"In order to build using MSVC (which you asked me to do) then you will need to install a version of the Windows SDK on your PC.\n"
 			);
+
 			return false;
 		}
 
-		process_destroy( process );
-		process = NULL;
+		defer( RegCloseKey( key ) );
+
+		const char* windowsSDKRoot = FindRegistryValueFromKey( key, "KitsRoot10" );
+
+		assert( windowsSDKRoot );
+
+		// get the latest version of the windows sdk
+		const char* windowsSDKFolder = tprintf( "%s\\Lib", windowsSDKRoot );
+
+		if ( !file_get_all_files_in_folder( windowsSDKFolder, false, true, OnWindowsSDKVersionFound, msvcState ) ) {
+			error( "Failed to query your Windows SDK root folder for the version of the Windows SDK that you asked for.  Do you definitely have it installed?\n" );
+			return false;
+		}
 	}
 
-	// get latest version of msvc
+	// get the latest version of MSVC in the most retarded way possible
+	// DM: I can only assume at this point that Microsoft are running some sick social experiment to see just how much unnecessary work they can put a programmer through before they snap
 	{
-		const char* msvcVersionSearchFolder = tprintf( "%s\\VC\\Tools\\MSVC", msvcRootFolder.c_str() );
+		CoInitializeEx( NULL, COINIT_MULTITHREADED );
 
-		if ( !file_get_all_files_in_folder( msvcVersionSearchFolder, false, true, OnMSVCVersionFound, msvcState ) ) {
-			fatal_error( "Failed to query all MSVC version folders.  This should never happen! Error code: " ERROR_CODE_FORMAT "\n" );
+		GUID myUID						= { 0x42843719, 0xDB4C, 0x46C2, { 0x8E, 0x7C, 0x64, 0xF1, 0x81, 0x6E, 0xFD, 0x5B } };
+		GUID CLSID_SetupConfiguration	= { 0x177F0C4A, 0x1CD3, 0x4DE7, { 0xA3, 0x2C, 0x71, 0xDB, 0xBB, 0x9F, 0xA3, 0x6D } };
+
+		ISetupConfiguration* setupConfig = NULL;
+		HRESULT hr = CoCreateInstance( CLSID_SetupConfiguration, NULL, CLSCTX_INPROC_SERVER, myUID, cast( void**, &setupConfig ) );
+
+		if ( FAILED( hr ) ) {
 			return false;
+		}
+
+		defer( setupConfig->Release() );
+
+		IEnumSetupInstances* instances = NULL;
+		hr = setupConfig->EnumInstances( &instances );
+
+		if ( FAILED( hr ) ) {
+			return false;
+		}
+
+		if ( !instances ) {
+			return false;
+		}
+
+		defer( instances->Release() );
+
+		while ( 1 ) {
+			ULONG found = 0;
+
+			ISetupInstance* instance = NULL;
+			hr = instances->Next( 1, &instance, &found );
+
+			if ( FAILED( hr ) ) {
+				return false;
+			}
+
+			defer( instance->Release() );
+
+			char* visualStudioInstallationPath = NULL;
+			BSTR visualStudioInstallationPathWide = NULL;
+			hr = instance->GetInstallationPath( &visualStudioInstallationPathWide );
+
+			if ( FAILED( hr ) ) {
+				return false;
+			}
+
+			defer( SysFreeString( visualStudioInstallationPathWide ) );
+
+			// TODO(DM): GetInstallationPath() returns a wide string but Core doesnt support those yet
+			// make Core support wide strings and then remove this conversion
+			{
+				UINT wideLength = SysStringLen( visualStudioInstallationPathWide );
+
+				int utf8Length = WideCharToMultiByte( CP_UTF8, 0, visualStudioInstallationPathWide, trunc_cast( int, wideLength ), NULL, 0, NULL, NULL );
+
+				if ( utf8Length < 0 ) {
+					return NULL;
+				}
+
+				visualStudioInstallationPath = cast( char*, mem_temp_alloc( trunc_cast( u64, utf8Length + 1 ) * sizeof( char ) ) );
+
+				int converted = WideCharToMultiByte( CP_UTF8, 0, visualStudioInstallationPathWide, trunc_cast( int, wideLength ), visualStudioInstallationPath, utf8Length, NULL, NULL );
+
+				if ( !converted ) {
+					return false;
+				}
+
+				visualStudioInstallationPath[utf8Length] = 0;
+			}
+
+			// the "default" version of MSVC on your machine is in this file
+			// so now we need to read a file in order to get a version number
+			const char* toolsFilename = tprintf( "%s\\VC\\Auxiliary\\Build\\Microsoft.VCToolsVersion.default.txt", visualStudioInstallationPath );
+
+			const char* checkAgainst = "C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Auxiliary\\Build\\Microsoft.VCToolsVersion.default.txt";
+			assert( string_equals( toolsFilename, checkAgainst ) );
+
+			// file_read_entire() wont work here because your MSVC installation is probably inside C:/Program Files (even though we cant assume that) so access will get denied when trying to read that file
+			// so now we have to basically break into our own filesystem and do a glorified memcpy
+			char* msvcVersion = NULL;
+			FILE* f = fopen( toolsFilename, "rt" );
+			if ( !f ) {
+				return false;
+			}
+
+			defer( fclose( f ) );
+
+			HANDLE handle = cast( HANDLE, _get_osfhandle( _fileno( f ) ) );
+			if ( handle == INVALID_HANDLE_VALUE ) {
+				return false;
+			}
+
+			LARGE_INTEGER fileSize = { { 0 } };
+			if ( !GetFileSizeEx( handle, &fileSize ) ) {
+				return false;
+			}
+
+			msvcVersion = cast( char*, mem_temp_alloc( trunc_cast( u64, fileSize.QuadPart ) * sizeof( char ) ) );
+			if ( !fgets( msvcVersion, trunc_cast( int, fileSize.QuadPart ), f ) ) {
+				return NULL;
+			}
+
+			// the version file actually ends with a newline (because ofc it does) so get rid of that
+			char* newline = strchr( msvcVersion, '\n' );
+			if ( newline ) {
+				*newline = 0;
+			}
+
+			const char* clPath = tprintf( "%s\\VC\\Tools\\MSVC\\%s\\bin\\Hostx64\\x64\\cl.exe", visualStudioInstallationPath, msvcVersion );
+
+			if ( file_exists( clPath ) ) {
+				printf( "Found cl.exe located at: \"%s\".\n", clPath );
+				break;
+			}
 		}
 	}
 
-	// now use MSVC root folder and the correct MSVC version to get the path to cl.exe
-	string_printf( &clPath, "%s\\VC\\Tools\\MSVC\\%s\\bin\\Hostx64\\x64", msvcRootFolder.c_str(), msvcState->compilerVersion.data );
-
-	// now microsoft need us to tell their own compiler that runs on their own platform (specifically FOR their own platform) where their own include and library folders are, sigh...
-	// the way we do that is by manually calling a vcvars*.bat script and using the information it gives us back to know which include and lib folders to look for
-	// and even then we still have to manually construct the windows SDK folders! AAARGH!
-	Array<const char*> args;
-	args.add( tprintf( "%s\\VC\\Auxiliary\\Build\\vcvars64.bat", msvcRootFolder.c_str() ) );
-	args.add( "&&" );
-	args.add( "set" );
-
-	Process* vcvarsProcess = process_create( &args, NULL, /*PROCESS_FLAG_ASYNC*/0 );
-
-	if ( !vcvarsProcess ) {
-		error( "Failed to run vcvars64.bat.  Builder currently expects this to be installed in the default directory.  Sorry.\n" );
-		return false;
-	}
-
-	StringBuilder vcvarsOutput = {};
-	string_builder_reset( &vcvarsOutput );
-	defer( string_builder_destroy( &vcvarsOutput ) );
-
-	char buffer[1024] = {};
-	u64 bytesRead = U64_MAX;
-	while ( ( bytesRead = process_read_stdout( vcvarsProcess, buffer, 1024 ) ) ) {
-		buffer[bytesRead] = 0;
-
-		string_builder_appendf( &vcvarsOutput, "%s", buffer );
-	}
-
-	const char* outputBuffer = string_builder_to_string( &vcvarsOutput );
-
-	{
-		if ( !ParseTagArray( outputBuffer, "INCLUDE=", msvcState->windowsIncludes ) ) {
-			return false;
-		}
-
-		if ( !ParseTagArray( outputBuffer, "LIB=", msvcState->windowsLibPaths ) ) {
-			return false;
-		}
-
-		std::string windowsSDKVersion;
-		if ( !ParseTagString( outputBuffer, "WindowsSDKLibVersion=", windowsSDKVersion ) ) {
-			return false;
-		}
-		windowsSDKVersion.pop_back();		// remove trailing slash
-
-		std::string windowsSDKRootFolder;
-		if ( !ParseTagString( outputBuffer, "WindowsSdkDir=", windowsSDKRootFolder ) ) {
-			return false;
-		}
-		windowsSDKRootFolder.pop_back();	// remove trailing slash
-
-		// add windows sdk lib folders that we need too
-		std::string windowsSDKLibFolder = windowsSDKRootFolder + PATH_SEPARATOR + "Lib" + PATH_SEPARATOR + windowsSDKVersion + PATH_SEPARATOR + "um" + PATH_SEPARATOR + "x64";
-		msvcState->windowsLibPaths.push_back( windowsSDKLibFolder );
-
-		// set PATH environment variable
-		SetEnvironmentVariable( "PATH", clPath.data );
-
-		// set include environment variable
-		StringBuilder msvcIncludes = {};
-		string_builder_reset( &msvcIncludes );
-		For ( u64, includeIndex, 0, msvcState->windowsIncludes.size() - 1 ) {
-			string_builder_appendf( &msvcIncludes, "%s;", msvcState->windowsIncludes[includeIndex].c_str() );
-		}
-		string_builder_appendf( &msvcIncludes, "%s", msvcState->windowsIncludes[msvcState->windowsIncludes.size() - 1].c_str() );
-		const char* includeEnvVar = string_builder_to_string( &msvcIncludes );
-		SetEnvironmentVariable( "INCLUDE", includeEnvVar );	// TODO(DM): 25/07/2025: do we want an os level wrapper for this?
-
-		// set lib path environment variable
-		StringBuilder msvcLibs = {};
-		string_builder_reset( &msvcLibs );
-		For ( u64, libPathIndex, 0, msvcState->windowsLibPaths.size() - 1 ) {
-			string_builder_appendf( &msvcLibs, "%s;", msvcState->windowsLibPaths[libPathIndex].c_str() );
-		}
-		string_builder_appendf( &msvcLibs, "%s", msvcState->windowsLibPaths[msvcState->windowsLibPaths.size() - 1].c_str() );
-		const char* libsEnvVar = string_builder_to_string( &msvcLibs );
-		SetEnvironmentVariable( "LIB", libsEnvVar );	// TODO(DM): 25/07/2025: do we want an os level wrapper for this?
-	}
-
-	s32 exitCode = process_join( vcvarsProcess );
-
-	process_destroy( vcvarsProcess );
-	vcvarsProcess = NULL;
-
-	return exitCode == 0;
+	return true;
 }
 
 static void MSVC_Shutdown( compilerBackend_t* backend ) {

@@ -52,7 +52,7 @@ if /I [%config%]==[debug] (
 
 set includes=-Isrc/core/include
 
-set libraries=-luser32.lib -lShlwapi.lib -lDbgHelp.lib -lOle32.lib
+set libraries=-luser32.lib -lShlwapi.lib -lDbgHelp.lib -lOle32.lib -lAdvapi32.lib -lOleAut32.lib
 if /I [%config%]==[debug] (
 	set libraries=!libraries! -lmsvcrtd.lib
 )

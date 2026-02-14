@@ -1148,6 +1148,9 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 					error( "Can't find path to overridden compiler \"%s\".  Did you type it correctly?\n", compilerBackend.compilerPath.data );
 					QUIT_ERROR();
 				}
+				process_join( process );	// doesnt matter what the exit code is here
+				process_destroy( process );
+				process = NULL;
 			}
 		}
 

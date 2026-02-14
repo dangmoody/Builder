@@ -306,9 +306,6 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 			// so now we need to read a file in order to get a version number
 			const char* toolsFilename = tprintf( "%s\\VC\\Auxiliary\\Build\\Microsoft.VCToolsVersion.default.txt", visualStudioInstallationPath );
 
-			const char* checkAgainst = "C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Auxiliary\\Build\\Microsoft.VCToolsVersion.default.txt";
-			assert( string_equals( toolsFilename, checkAgainst ) );
-
 			// file_read_entire() wont work here because your MSVC installation is probably inside C:/Program Files (even though we cant assume that) so access will get denied when trying to read that file
 			// so now we have to basically break into our own filesystem and do a glorified memcpy
 			char* msvcVersion = NULL;

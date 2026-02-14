@@ -223,13 +223,21 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 	// get the latest version of MSVC in the most retarded way possible
 	// DM: I can only assume at this point that Microsoft are running some sick social experiment to see just how much unnecessary work they can put a programmer through before they snap
 	{
-		CoInitializeEx( NULL, COINIT_MULTITHREADED );
+		HRESULT hr = S_OK;
+
+		hr = CoInitializeEx( NULL, COINIT_MULTITHREADED );
+
+		if ( FAILED( hr ) ) {
+			return false;
+		}
+
+		defer( CoUninitialize() );
 
 		GUID myUID						= { 0x42843719, 0xDB4C, 0x46C2, { 0x8E, 0x7C, 0x64, 0xF1, 0x81, 0x6E, 0xFD, 0x5B } };
 		GUID CLSID_SetupConfiguration	= { 0x177F0C4A, 0x1CD3, 0x4DE7, { 0xA3, 0x2C, 0x71, 0xDB, 0xBB, 0x9F, 0xA3, 0x6D } };
 
 		ISetupConfiguration* setupConfig = NULL;
-		HRESULT hr = CoCreateInstance( CLSID_SetupConfiguration, NULL, CLSCTX_INPROC_SERVER, myUID, cast( void**, &setupConfig ) );
+		hr = CoCreateInstance( CLSID_SetupConfiguration, NULL, CLSCTX_INPROC_SERVER, myUID, cast( void**, &setupConfig ) );
 
 		if ( FAILED( hr ) ) {
 			return false;

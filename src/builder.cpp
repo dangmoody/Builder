@@ -903,18 +903,10 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 	ReadIncludeDependenciesFile( &context );
 
 	// init default compiler backend (the version of clang that builder came with)
-	compilerBackend_t compilerBackend;
-	{
-//#ifdef BUILDER_RETAIL
-		const char* defaultCompilerPath = tprintf( "%s%c..%cclang%cbin%cclang", path_remove_file_from_path( path_app_path() ), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
-//#else
-//		const char* defaultCompilerPath = tprintf( "%s%c..%c..%c..%cclang%cbin%cclang", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
-//#endif
-
-		CreateCompilerBackend_Clang( &compilerBackend, defaultCompilerPath );
-	}
-
-	compilerBackend.Init( &compilerBackend );
+	compilerBackend_t compilerBackend = {};
+	CreateCompilerBackend_Clang( &compilerBackend );
+	const char* defaultCompilerPath = tprintf( "%s%c..%cclang%cbin%cclang", path_remove_file_from_path( path_app_path() ), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
+	compilerBackend.Init( &compilerBackend, defaultCompilerPath, std::string() );
 	defer( compilerBackend.Shutdown( &compilerBackend ) );
 
 	// user config build step
@@ -1101,12 +1093,12 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 			}
 
 			if ( string_ends_with( options.compiler_path.c_str(), "clang" ) ) {
-				CreateCompilerBackend_Clang( &compilerBackend, options.compiler_path.c_str() );
+				CreateCompilerBackend_Clang( &compilerBackend );
 			} else if ( string_ends_with( options.compiler_path.c_str(), "gcc" ) ) {
-				CreateCompilerBackend_GCC( &compilerBackend, options.compiler_path.c_str() );
+				CreateCompilerBackend_GCC( &compilerBackend );
 			} else if ( string_ends_with( options.compiler_path.c_str(), "cl" ) ) {
 #ifdef _WIN32
-				CreateCompilerBackend_MSVC( &compilerBackend, options.compiler_path.c_str() );
+				CreateCompilerBackend_MSVC( &compilerBackend );
 #else
 				error(
 					"It appears you want to compile with MSVC on a non-Windows platform.\n"
@@ -1128,29 +1120,32 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 
 			// init new compiler backend
 			{
-				float64 compilerBackInitStart = time_ms();
+				float64 compilerBackendInitStart = time_ms();
 
-				if ( !compilerBackend.Init( &compilerBackend ) ) {
+				if ( !compilerBackend.Init( &compilerBackend, options.compiler_path.c_str(), options.compiler_version.c_str() ) ) {
 					QUIT_ERROR();
 				}
 
-				float64 compilerBackInitEnd = time_ms();
+				float64 compilerBackendInitEnd = time_ms();
 
-				compilerBackendInitTimeMS = compilerBackInitEnd - compilerBackInitStart;
+				compilerBackendInitTimeMS = compilerBackendInitEnd - compilerBackendInitStart;
 			}
+		}
 
-			// check that the compiler the user wants to run even exists
-			{
-				Array<const char*> args;
-				args.add( compilerBackend.compilerPath.data );
-				Process* process = process_create( &args, NULL, 0 );
-				if ( !process ) {
-					error( "Can't find path to overridden compiler \"%s\".  Did you type it correctly?\n", compilerBackend.compilerPath.data );
-					QUIT_ERROR();
-				}
-				process_join( process );	// doesnt matter what the exit code is here
-				process_destroy( process );
-				process = NULL;
+		{
+			String compilerPath = compilerBackend.GetCompilerPath( &compilerBackend );
+#ifdef _WIN32
+			const char *compilerPathPlusExtension = NULL;
+			if ( string_ends_with( compilerPath.data, ".exe" ) ) {
+				compilerPathPlusExtension = compilerPath.data;
+			} else {
+				compilerPathPlusExtension = tprintf( "%s.exe", compilerPath.data );
+			}
+#endif
+
+			if ( !file_exists( compilerPathPlusExtension ) ) {
+				error( "Can't find path to overridden compiler \"%s\".  Did you type it correctly?\n", compilerPath.data );
+				QUIT_ERROR();
 			}
 		}
 

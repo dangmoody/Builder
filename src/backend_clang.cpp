@@ -41,8 +41,11 @@ struct clangState_t {
 
 	std::vector<std::string>	includeDependencies;
 
-	// TODO(DM): 11/02/2026: remove this when eds command archetype changes get merged in
-	const char*					arPath;	// static library linker for gcc (on windows and linux) and clang (linux)
+	// TODO(DM): 11/02/2026: remove these when eds command archetype changes get merged in
+	String						compilerPath;
+	String						compilerVersion;
+	String						linkerPath;
+	String						arPath;	// static library linker for gcc (on windows and linux) and clang (linux)
 };
 
 // TODO(DM): 20/07/2025: do we want to ignore this warning via the build script?
@@ -167,16 +170,57 @@ static void ReadDependencyFile( const char* depFilename, std::vector<std::string
 	}
 }
 
+static void ResolveCompilerAndLinkerPaths( clangState_t *clangState, const char *compilerPath, const char *compilerName, const char *linkerName ) {
+	const char *pathToCompiler = path_remove_file_from_path( compilerPath );
+
+	if ( pathToCompiler == NULL ) {
+		clangState->compilerPath = compilerPath;
+		clangState->linkerPath = linkerName;
+	} else {
+		clangState->compilerPath = tprintf( "%s%c%s", pathToCompiler, PATH_SEPARATOR, compilerName );
+		clangState->linkerPath = tprintf( "%s%c%s", pathToCompiler, PATH_SEPARATOR, linkerName );
+	}
+}
+
 //================================================================
 
-static bool8 Clang_Init( compilerBackend_t* backend ) {
+static bool8 Clang_Init( compilerBackend_t* backend, const std::string &compilerPath, const std::string &compilerVersion ) {
 	backend->data = cast( clangState_t*, mem_alloc( sizeof( clangState_t ) ) );
 	new( backend->data ) clangState_t;
 
-	// TODO(DM): 11/02/2026: remove this when eds command archetype changes get merged in
 	clangState_t* clangState = cast( clangState_t*, backend->data );
-	const char* compilerPathOnly = path_remove_file_from_path( backend->compilerPath.data );
-	clangState->arPath = tprintf( "%s%car", compilerPathOnly, PATH_SEPARATOR );
+
+	clangState->compilerVersion = compilerVersion.c_str();
+
+	const char *clangExe = "clang";
+#if defined( _WIN32 )
+	const char *linkerExe = "lld-link";
+#elif defined( __linux__ )
+	const char *linkerExe = "llvm-ar";
+#else
+	#error Unrecognised platform.
+#endif
+
+	ResolveCompilerAndLinkerPaths( clangState, compilerPath.c_str(), clangExe, linkerExe );
+
+	const char *pathToCompiler = path_remove_file_from_path( compilerPath.c_str() );
+	string_printf( &clangState->arPath, "%s%car", pathToCompiler, PATH_SEPARATOR );
+
+	return true;
+}
+
+static bool8 GCC_Init( compilerBackend_t *backend, const std::string &compilerPath, const std::string &compilerVersion ) {
+	backend->data = cast( clangState_t *, mem_alloc( sizeof( clangState_t ) ) );
+	new( backend->data ) clangState_t;
+
+	clangState_t *clangState = cast( clangState_t *, backend->data );
+
+	clangState->compilerVersion = compilerVersion.c_str();
+
+	ResolveCompilerAndLinkerPaths( clangState, compilerPath.c_str(), "gcc", "ld" );
+
+	const char *pathToCompiler = path_remove_file_from_path( compilerPath.c_str() );
+	string_printf( &clangState->arPath, "%s%car", pathToCompiler, PATH_SEPARATOR );
 
 	return true;
 }
@@ -192,8 +236,8 @@ static bool8 Clang_CompileSourceFile( compilerBackend_t* backend, const char* so
 
 	clangState_t* clangState = cast( clangState_t*, backend->data );
 
-	bool8 isClang = string_ends_with( backend->compilerPath.data, "clang" ) || string_ends_with( backend->compilerPath.data, "clang++" );
-	bool8 isGCC = string_ends_with( backend->compilerPath.data, "gcc" ) || string_ends_with( backend->compilerPath.data, "g++" );
+	bool8 isClang = string_ends_with( clangState->compilerPath.data, "clang" ) || string_ends_with( clangState->compilerPath.data, "clang++" );
+	bool8 isGCC = string_ends_with( clangState->compilerPath.data, "gcc" ) || string_ends_with( clangState->compilerPath.data, "g++" );
 
 	const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
 
@@ -224,7 +268,7 @@ static bool8 Clang_CompileSourceFile( compilerBackend_t* backend, const char* so
 
 	args.reset();
 
-	args.add( backend->compilerPath.data );
+	args.add( clangState->compilerPath.data );
 
 	args.add( "-c" );
 
@@ -315,13 +359,14 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t* backend, const Arra
 	assert( backend );
 	assert( config );
 
+	clangState_t *clangState = cast( clangState_t *, backend->data );
+
 	// TODO(DM): 11/02/2026: remove this when eds command archetype changes get merged in
-	bool8 isClang = string_ends_with( backend->compilerPath.data, "clang" ) || string_ends_with( backend->compilerPath.data, "clang++" );
-	bool8 isGCC = string_ends_with( backend->compilerPath.data, "gcc" ) || string_ends_with( backend->compilerPath.data, "g++" );
+	bool8 isClang = string_ends_with( clangState->compilerPath.data, "clang" ) || string_ends_with( clangState->compilerPath.data, "clang++" );
+	bool8 isGCC = string_ends_with( clangState->compilerPath.data, "gcc" ) || string_ends_with( clangState->compilerPath.data, "g++" );
 
 	const char* fullBinaryName = BuildConfig_GetFullBinaryName( config );
 
-	clangState_t* clangState = cast( clangState_t*, backend->data );
 	Array<const char*>& args = clangState->args;
 	args.reserve(
 		1 + // lld-link
@@ -343,11 +388,11 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t* backend, const Arra
 #if defined( _WIN32 )
 		// TODO(DM): 11/02/2026: remove this when eds command archetype changes get merged in
 		if ( isGCC ) {
-			args.add( clangState->arPath );
+			args.add( clangState->arPath.data );
 			args.add( "rc" );
 			args.add( fullBinaryName );
 		} else {
-			args.add( backend->linkerPath.data );
+			args.add( clangState->linkerPath.data );
 			args.add( "/lib" );
 			args.add( tprintf( "/OUT:%s", fullBinaryName ) );
 		}
@@ -359,7 +404,7 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t* backend, const Arra
 
 		args.add_range( &intermediateFiles );
 	} else {
-		args.add( backend->compilerPath.data );
+		args.add( clangState->compilerPath.data );
 
 		if ( config->binary_type == BINARY_TYPE_DYNAMIC_LIBRARY ) {
 			args.add( "-shared" );
@@ -425,6 +470,12 @@ static void Clang_GetIncludeDependenciesFromSourceFileBuild( compilerBackend_t* 
 	outIncludeDependencies = clangState->includeDependencies;
 }
 
+static String Clang_GetCompilerPath( compilerBackend_t* backend ) {
+	clangState_t *clangState = cast( clangState_t *, backend->data );
+
+	return clangState->compilerPath;
+}
+
 static String Clang_GetCompilerVersion( compilerBackend_t* backend ) {
 	clangState_t* clangState = cast( clangState_t*, backend->data );
 
@@ -433,7 +484,7 @@ static String Clang_GetCompilerVersion( compilerBackend_t* backend ) {
 	const char* clangVersionPrefix = "clang version ";
 
 	Array<const char*> args;
-	args.add( backend->compilerPath.data );
+	args.add( clangState->compilerPath.data );
 	args.add( "-v" );
 
 	Process* process = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
@@ -488,12 +539,15 @@ static String GCC_GetCompilerVersion( compilerBackend_t* backend ) {
 	const char* gccVersionPrefix = "gcc version ";
 
 	Array<const char*> args;
-	args.add( backend->compilerPath.data );
+	args.add( clangState->compilerPath.data );
 	args.add( "-v" );
 
 	Process* process = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
 
-	assert( process );
+	if ( !process ) {
+		error( "Failed to find process \"%s\".  Did you type it correctly?\n", args[0] );
+		return String();
+	}
 
 	StringBuilder gccOutput = {};
 	string_builder_reset( &gccOutput );
@@ -527,19 +581,10 @@ static String GCC_GetCompilerVersion( compilerBackend_t* backend ) {
 	process_destroy( process );
 	process = NULL;
 
-	return compilerVersion;
+	return compilerVersion.data;
 }
 
-void CreateCompilerBackend_Clang( compilerBackend_t* outBackend, const char* compilerPath ) {
-	const char* clangExe = "clang";
-#if defined( _WIN32 )
-	const char* linkerExe = "lld-link";
-#elif defined( __linux__ )
-	const char* linkerExe = "llvm-ar";
-#else
-#error Unrecognised platform.
-#endif
-
+void CreateCompilerBackend_Clang( compilerBackend_t* outBackend ) {
 	*outBackend = compilerBackend_t {
 		.data										= NULL,
 		.Init										= Clang_Init,
@@ -547,41 +592,20 @@ void CreateCompilerBackend_Clang( compilerBackend_t* outBackend, const char* com
 		.CompileSourceFile							= Clang_CompileSourceFile,
 		.LinkIntermediateFiles						= Clang_LinkIntermediateFiles,
 		.GetIncludeDependenciesFromSourceFileBuild	= Clang_GetIncludeDependenciesFromSourceFileBuild,
+		.GetCompilerPath							= Clang_GetCompilerPath,
 		.GetCompilerVersion							= Clang_GetCompilerVersion,
 	};
-
-	const char* pathToCompiler = path_remove_file_from_path( compilerPath );
-	if ( pathToCompiler == NULL ) {
-		outBackend->compilerPath = compilerPath;
-		outBackend->linkerPath = linkerExe;
-	} else {
-		outBackend->compilerPath = tprintf( "%s%c%s", pathToCompiler, PATH_SEPARATOR, clangExe );
-		outBackend->linkerPath = tprintf( "%s%c%s", pathToCompiler, PATH_SEPARATOR, linkerExe );
-	}
 }
 
-void CreateCompilerBackend_GCC( compilerBackend_t* outBackend, const char* compilerPath ) {
+void CreateCompilerBackend_GCC( compilerBackend_t* outBackend ) {
 	*outBackend = compilerBackend_t {
-		.compilerPath								= tprintf( "%s%cgcc", compilerPath, PATH_SEPARATOR ),
-		.linkerPath									= tprintf( "%s%cld", compilerPath, PATH_SEPARATOR ),
 		.data										= NULL,
-		.Init										= Clang_Init,
+		.Init										= GCC_Init,
 		.Shutdown									= Clang_Shutdown,
 		.CompileSourceFile							= Clang_CompileSourceFile,
 		.LinkIntermediateFiles						= Clang_LinkIntermediateFiles,
 		.GetIncludeDependenciesFromSourceFileBuild	= Clang_GetIncludeDependenciesFromSourceFileBuild,
+		.GetCompilerPath							= Clang_GetCompilerPath,
 		.GetCompilerVersion							= GCC_GetCompilerVersion,
 	};
-
-	const char* compilerExe = "gcc";
-	const char* linkerExe = "ld";
-
-	const char* pathToCompiler = path_remove_file_from_path( compilerPath );
-	if ( pathToCompiler == NULL ) {
-		outBackend->compilerPath = compilerExe;
-		outBackend->linkerPath = linkerExe;
-	} else {
-		outBackend->compilerPath = tprintf( "%s%c%s", pathToCompiler, PATH_SEPARATOR, compilerExe );
-		outBackend->linkerPath = tprintf( "%s%c%s", pathToCompiler, PATH_SEPARATOR, linkerExe );
-	}
 }

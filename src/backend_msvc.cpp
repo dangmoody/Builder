@@ -71,19 +71,26 @@ struct DECLSPEC_UUID( "42843719-DB4C-46C2-8E7C-64F1816EFD5B" ) DECLSPEC_NOVTABLE
 
 #pragma clang diagnostic pop
 
+struct msvcVersion_t {
+	s32	v0, v1, v2;
+};
+
 struct windowsSDKVersion_t {
 	s32	v0, v1, v2, v3;
 };
 
 struct msvcState_t {
+	String						compilerPath;
+	String						compilerVersion;
+	String						linkerPath;
+
 	Array<const char*>			args;
 
-	std::vector<std::string>	windowsIncludes;
-	std::vector<std::string>	windowsLibPaths;
+	// windows sdk includes, msvc includes, that kind of thing
+	std::vector<std::string>	microsoftCoreIncludes;
+	std::vector<std::string>	microsoftCoreLibPaths;
 
 	std::vector<std::string>	includeDependencies;
-
-	String						compilerVersion;
 
 	windowsSDKVersion_t			windowsSDKVersion;
 };
@@ -122,6 +129,21 @@ static const char* OptimizationLevelToCompilerArg( const OptimizationLevel level
 		case OPTIMIZATION_LEVEL_O2:	return "/O2";
 		case OPTIMIZATION_LEVEL_O3:	return "/O2";	// DM!!! 22/07/2025: whats the real answer here?
 	}
+}
+
+static void OnMSVCVersionFound( const FileInfo *fileInfo, void *userData ) {
+	if ( !fileInfo->is_directory ) {
+		return;
+	}
+
+	Array<const char *> *msvcVersions = cast( Array<const char *> *, userData );
+
+	/*u32 v0 = 0;
+	u32 v1 = 0;
+	u32 v2 = 0;
+	sscanf( fileInfo->filename, "%u.%u.%u", &v0, &v1, &v2 );*/
+
+	(*msvcVersions).add( tprintf( fileInfo->filename ) );
 }
 
 static void OnWindowsSDKVersionFound( const FileInfo* fileInfo, void* data ) {
@@ -182,10 +204,9 @@ static const char* FindRegistryValueFromKey( const HKEY key, const char* valueNa
 // DM: I'm just straight lifting stuff from the code listing linked above - idc anymore
 // its ridiculous that Microsoft genuinely think this isnt a frankly retarded way of grabbing some simple information off your PC
 
-static bool8 MSVC_Init( compilerBackend_t* backend ) {
+static bool8 MSVC_Init( compilerBackend_t *backend, const std::string &compilerPath, const std::string &compilerVersion ) {
 	msvcState_t* msvcState = cast( msvcState_t*, mem_alloc( sizeof( msvcState_t ) ) );
 	new( msvcState ) msvcState_t;
-	memset( msvcState, 0, sizeof( msvcState_t ) );
 
 	backend->data = msvcState;
 
@@ -218,11 +239,17 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 			error( "Failed to query your Windows SDK root folder for the version of the Windows SDK that you asked for.  Do you definitely have it installed?\n" );
 			return false;
 		}
+
+		msvcState->microsoftCoreIncludes.push_back( tprintf( "%sinclude\\%d.%d.%d.%d\\ucrt", windowsSDKRoot, msvcState->windowsSDKVersion.v0, msvcState->windowsSDKVersion.v1, msvcState->windowsSDKVersion.v2, msvcState->windowsSDKVersion.v3 ) );
+
+		msvcState->microsoftCoreLibPaths.push_back( tprintf( "%sLib\\%d.%d.%d.%d\\ucrt\\x64", windowsSDKRoot, msvcState->windowsSDKVersion.v0, msvcState->windowsSDKVersion.v1, msvcState->windowsSDKVersion.v2, msvcState->windowsSDKVersion.v3 ) );
+		msvcState->microsoftCoreLibPaths.push_back( tprintf( "%sLib\\%d.%d.%d.%d\\um\\x64", windowsSDKRoot, msvcState->windowsSDKVersion.v0, msvcState->windowsSDKVersion.v1, msvcState->windowsSDKVersion.v2, msvcState->windowsSDKVersion.v3 ) );
 	}
 
-	// get the latest version of MSVC in the most retarded way possible
+	// get all versions of MSVC
+	// thanks to Microsoft we will be doing that in the most retarded way possible
 	// DM: I can only assume at this point that Microsoft are running some sick social experiment to see just how much unnecessary work they can put a programmer through before they snap
-	{
+	if ( string_equals( compilerPath.c_str(), "cl" ) || string_equals( compilerPath.c_str(), "cl.exe" ) ) {
 		HRESULT hr = S_OK;
 
 		hr = CoInitializeEx( NULL, COINIT_MULTITHREADED );
@@ -258,19 +285,17 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 
 		defer( instances->Release() );
 
-		while ( 1 ) {
-			ULONG found = 0;
+		//Array<const char *> msvcRootFolders;
+		const char			*msvcRootFolder;
+		Array<const char *>	foundMSVCVersions;
 
-			ISetupInstance* instance = NULL;
-			hr = instances->Next( 1, &instance, &found );
+		ULONG found = 0;
+		ISetupInstance *instance = NULL;
 
-			if ( FAILED( hr ) ) {
-				return false;
-			}
+		hr = instances->Next( 1, &instance, &found );
 
-			defer( instance->Release() );
-
-			char* visualStudioInstallationPath = NULL;
+		while ( found ) {
+			char *visualStudioInstallationPath = NULL;
 			BSTR visualStudioInstallationPathWide = NULL;
 			hr = instance->GetInstallationPath( &visualStudioInstallationPathWide );
 
@@ -288,10 +313,10 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 				int utf8Length = WideCharToMultiByte( CP_UTF8, 0, visualStudioInstallationPathWide, trunc_cast( int, wideLength ), NULL, 0, NULL, NULL );
 
 				if ( utf8Length < 0 ) {
-					return NULL;
+					return false;
 				}
 
-				visualStudioInstallationPath = cast( char*, mem_temp_alloc( trunc_cast( u64, utf8Length + 1 ) * sizeof( char ) ) );
+				visualStudioInstallationPath = cast( char *, mem_temp_alloc( trunc_cast( u64, utf8Length + 1 ) * sizeof( char ) ) );
 
 				int converted = WideCharToMultiByte( CP_UTF8, 0, visualStudioInstallationPathWide, trunc_cast( int, wideLength ), visualStudioInstallationPath, utf8Length, NULL, NULL );
 
@@ -302,48 +327,75 @@ static bool8 MSVC_Init( compilerBackend_t* backend ) {
 				visualStudioInstallationPath[utf8Length] = 0;
 			}
 
-			// the "default" version of MSVC on your machine is in this file
-			// so now we need to read a file in order to get a version number
-			const char* toolsFilename = tprintf( "%s\\VC\\Auxiliary\\Build\\Microsoft.VCToolsVersion.default.txt", visualStudioInstallationPath );
+			//char *msvcVersion = NULL;
+			//{
+			//	// the "default" version of MSVC on your machine is in this file
+			//	// so now we need to read a file in order to get a version number
+			//	const char *toolsFilename = tprintf( "%s\\VC\\Auxiliary\\Build\\Microsoft.VCToolsVersion.default.txt", visualStudioInstallationPath );
 
-			// file_read_entire() wont work here because your MSVC installation is probably inside C:/Program Files (even though we cant assume that) so access will get denied when trying to read that file
-			// so now we have to basically break into our own filesystem and do a glorified memcpy
-			char* msvcVersion = NULL;
-			FILE* f = fopen( toolsFilename, "rt" );
-			if ( !f ) {
+			//	// file_read_entire() wont work here because your MSVC installation is probably inside C:/Program Files (even though we cant assume that) so access will get denied when trying to read that file
+			//	// so now we have to basically break into our own filesystem and do a glorified memcpy
+			//	FILE *f = fopen( toolsFilename, "rt" );
+			//	if ( !f ) {
+			//		return false;
+			//	}
+
+			//	defer(
+			//		fclose( f );
+			//		f = NULL;
+			//	);
+
+			//	HANDLE handle = cast( HANDLE, _get_osfhandle( _fileno( f ) ) );
+			//	if ( handle == INVALID_HANDLE_VALUE ) {
+			//		return false;
+			//	}
+
+			//	LARGE_INTEGER fileSize = { { 0 } };
+			//	if ( !GetFileSizeEx( handle, &fileSize ) ) {
+			//		return false;
+			//	}
+
+			//	msvcVersion = cast( char *, mem_temp_alloc( trunc_cast( u64, fileSize.QuadPart ) * sizeof( char ) ) );
+			//	if ( !fgets( msvcVersion, trunc_cast( int, fileSize.QuadPart ), f ) ) {
+			//		return NULL;
+			//	}
+
+			//	// the version file actually ends with a newline (because ofc it does) so get rid of that
+			//	char *newline = strchr( msvcVersion, '\n' );
+			//	if ( newline ) {
+			//		*newline = 0;
+			//	}
+			//}
+
+			msvcRootFolder = tprintf( "%s\\VC\\Tools\\MSVC", visualStudioInstallationPath );
+
+			if ( !file_get_all_files_in_folder( msvcRootFolder, false, true, OnMSVCVersionFound, &foundMSVCVersions ) ) {
 				return false;
 			}
 
-			defer( fclose( f ) );
+			instance->Release();
 
-			HANDLE handle = cast( HANDLE, _get_osfhandle( _fileno( f ) ) );
-			if ( handle == INVALID_HANDLE_VALUE ) {
-				return false;
-			}
+			hr = instances->Next( 1, &instance, &found );
+		}
 
-			LARGE_INTEGER fileSize = { { 0 } };
-			if ( !GetFileSizeEx( handle, &fileSize ) ) {
-				return false;
-			}
+		// if no matching version is found then just use the newest version
+		u32 useVersionIndex = 0;
 
-			msvcVersion = cast( char*, mem_temp_alloc( trunc_cast( u64, fileSize.QuadPart ) * sizeof( char ) ) );
-			if ( !fgets( msvcVersion, trunc_cast( int, fileSize.QuadPart ), f ) ) {
-				return NULL;
-			}
+		For ( u32, versionIndex, 0, foundMSVCVersions.count ) {
+			if ( string_equals( foundMSVCVersions[versionIndex], compilerVersion.c_str() ) ) {
+				useVersionIndex = versionIndex;
 
-			// the version file actually ends with a newline (because ofc it does) so get rid of that
-			char* newline = strchr( msvcVersion, '\n' );
-			if ( newline ) {
-				*newline = 0;
-			}
-
-			const char* clPath = tprintf( "%s\\VC\\Tools\\MSVC\\%s\\bin\\Hostx64\\x64\\cl.exe", visualStudioInstallationPath, msvcVersion );
-
-			if ( file_exists( clPath ) ) {
-				printf( "Found cl.exe located at: \"%s\".\n", clPath );
 				break;
 			}
 		}
+
+		msvcState->compilerVersion = foundMSVCVersions[useVersionIndex];
+
+		string_printf( &msvcState->compilerPath, "%s\\%s\\bin\\Hostx64\\x64\\cl", msvcRootFolder, msvcState->compilerVersion.data );
+		string_printf( &msvcState->linkerPath, "%s\\%s\\bin\\Hostx64\\x64\\link", msvcRootFolder, msvcState->compilerVersion.data );
+
+		msvcState->microsoftCoreIncludes.push_back( tprintf( "%s\\%s\\include", msvcRootFolder, msvcState->compilerVersion.data ) );
+		msvcState->microsoftCoreLibPaths.push_back( tprintf( "%s\\%s\\lib\\x64", msvcRootFolder, msvcState->compilerVersion.data ) );
 	}
 
 	return true;
@@ -392,7 +444,7 @@ static bool8 MSVC_CompileSourceFile( compilerBackend_t* backend, const char* sou
 
 	args.reset();
 
-	args.add( backend->compilerPath.data );
+	args.add( msvcState->compilerPath.data );
 
 	args.add( "/c" );
 
@@ -414,6 +466,10 @@ static bool8 MSVC_CompileSourceFile( compilerBackend_t* backend, const char* sou
 
 	For ( u32, defineIndex, 0, config->defines.size() ) {
 		args.add( tprintf( "/D%s", config->defines[defineIndex].c_str() ) );
+	}
+
+	For ( u32, includeIndex, 0, msvcState->microsoftCoreIncludes.size() ) {
+		args.add( tprintf( "/I%s", msvcState->microsoftCoreIncludes[includeIndex].c_str() ) );
 	}
 
 	For ( u32, includeIndex, 0, config->additional_includes.size() ) {
@@ -581,17 +637,12 @@ static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t* backend, const Array
 
 	args.reset();
 
-	const char* compilerPathOnly = path_remove_file_from_path( backend->compilerPath.data );
-	if ( compilerPathOnly ) {
-		args.add( tprintf( "%s%c%s", compilerPathOnly, PATH_SEPARATOR, backend->linkerPath.data ) );
-	} else {
-		args.add( backend->linkerPath.data );
-	}
+	args.add( msvcState->linkerPath.data );
 
 	if ( config->binary_type == BINARY_TYPE_STATIC_LIBRARY ) {
 		args.add( "/lib" );
 	} else if ( config->binary_type == BINARY_TYPE_DYNAMIC_LIBRARY ) {
-		args.add( "/shared" );
+		args.add( "/DLL" );
 	}
 
 	if ( !config->remove_symbols ) {
@@ -601,6 +652,10 @@ static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t* backend, const Array
 	args.add( tprintf( "/OUT:%s", fullBinaryName ) );
 
 	args.add_range( &intermediateFiles );
+
+	For ( u32, libPathIndex, 0, msvcState->microsoftCoreLibPaths.size() ) {
+		args.add( tprintf( "/LIBPATH:%s", msvcState->microsoftCoreLibPaths[libPathIndex].c_str() ) );
+	}
 
 	For ( u32, libPathIndex, 0, config->additional_lib_paths.size() ) {
 		args.add( tprintf( "/LIBPATH:%s", config->additional_lib_paths[libPathIndex].c_str() ) );
@@ -621,22 +676,27 @@ static void MSVC_GetIncludeDependenciesFromSourceFileBuild( compilerBackend_t* b
 	outIncludeDependencies = msvcState->includeDependencies;
 }
 
+static String MSVC_GetCompilerPath( compilerBackend_t *backend ) {
+	msvcState_t *msvcState = cast( msvcState_t *, backend->data );
+
+	return msvcState->compilerPath;
+}
+
 static String MSVC_GetCompilerVersion( compilerBackend_t* backend ) {
 	msvcState_t* msvcState = cast( msvcState_t*, backend->data );
 
 	return msvcState->compilerVersion;
 }
 
-void CreateCompilerBackend_MSVC( compilerBackend_t* outBackend, const char* compilerPath ) {
+void CreateCompilerBackend_MSVC( compilerBackend_t* outBackend ) {
 	*outBackend = compilerBackend_t {
-		.compilerPath								= compilerPath,
-		.linkerPath									= "link",
 		.data										= NULL,
 		.Init										= MSVC_Init,
 		.Shutdown									= MSVC_Shutdown,
 		.CompileSourceFile							= MSVC_CompileSourceFile,
 		.LinkIntermediateFiles						= MSVC_LinkIntermediateFiles,
 		.GetIncludeDependenciesFromSourceFileBuild	= MSVC_GetIncludeDependenciesFromSourceFileBuild,
+		.GetCompilerPath							= MSVC_GetCompilerPath,
 		.GetCompilerVersion							= MSVC_GetCompilerVersion,
 	};
 }

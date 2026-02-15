@@ -69,21 +69,20 @@ enum procFlagBits_t {
 typedef u32 procFlags_t;
 
 struct compilerBackend_t {
-	String	compilerPath;
-	String	linkerPath;
 	void*	data;
 
-	bool8	( *Init )( compilerBackend_t* backend );
+	bool8	( *Init )( compilerBackend_t* backend, const std::string &compilerPath, const std::string &compilerVersion );
 	void	( *Shutdown )( compilerBackend_t* backend );
 	bool8	( *CompileSourceFile )( compilerBackend_t* backend, const char* sourceFile, BuildConfig* config );
 	bool8	( *LinkIntermediateFiles )( compilerBackend_t* backend, const Array<const char*>& intermediateFiles, BuildConfig* config );
 	void	( *GetIncludeDependenciesFromSourceFileBuild )( compilerBackend_t* backend, std::vector<std::string>& includeDependencies );
+	String	( *GetCompilerPath )( compilerBackend_t *backend );
 	String	( *GetCompilerVersion )( compilerBackend_t* backend );
 };
 
-void			CreateCompilerBackend_Clang( compilerBackend_t* outBackend, const char* compilerPath );
-void			CreateCompilerBackend_MSVC( compilerBackend_t* outBackend, const char* compilerPath );
-void			CreateCompilerBackend_GCC( compilerBackend_t* outBackend, const char* compilerPath );
+void			CreateCompilerBackend_Clang( compilerBackend_t* outBackend );
+void			CreateCompilerBackend_MSVC( compilerBackend_t* outBackend );
+void			CreateCompilerBackend_GCC( compilerBackend_t* outBackend );
 
 struct includeDependencies_t {
 	std::string					filename;

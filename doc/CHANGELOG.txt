@@ -6,7 +6,11 @@ v0.10.0, <RELEASE DATE HERE>:
 	* Microsoft's post-C99 support isn't great, so you'll need to take care of that yourself, but Builder at least exposes the options for you now.
 * Better warning message when the version of the override compiler you want to use doesn't match what Builder found.
 * Fixed root-folder source files not getting included in the build when globbing.
-* Fixed additional library paths not getting detected properly by MSVC.
+* MSVC:
+	* Rewrote how MSVC compiler paths and versions are queried for, as well as Windows SDK and MSVC include/lib paths.
+		* It's more robust, but also means that builds using MSVC are faster now.
+	* Fixed additional library paths not getting detected properly by MSVC.
+	* Fixed bad option being sent to link.exe when making DLLs.
 
 ----------------------------------------------------------------
 

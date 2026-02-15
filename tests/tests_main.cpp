@@ -124,7 +124,6 @@ static void GetAllGeneratedFiles( const FileInfo* fileInfo, void* data ) {
 }
 
 TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
-	TEMPER_CHECK_TRUE_M( test.buildSourceFile, "A test MUST have its own build source file, otherwise Builder doesn't know what to build.\n" );
 	TEMPER_CHECK_TRUE_M( test.rootDir, "A test MUST live in its own folder, you need to tell me what the \"root\" folder for this test is.\n" );
 
 	auto DoBuildTest = []( buildTest_t testData, const char* buildSourceFilename ) {
@@ -241,7 +240,7 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 	if ( test.defaultCompilerOnly ) {
 		TEMPER_CHECK_TRUE( file_exists( test.buildSourceFile ) );
 
-		DoBuildTest( test, NULL );
+		DoBuildTest( test, test.buildSourceFile );
 	} else {
 		TEMPER_CHECK_TRUE_M( file_exists( "build_configs.cpp" ), "This test is building for all the compilers, which means you must have a \"build_config.cpp\" file that holds all your build configs inside a function called \"get_build_configs()\".\n" );
 

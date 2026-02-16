@@ -92,7 +92,9 @@
   <ItemGroup>
     <ClCompile Include="tests_main.cpp" />
     <ClCompile Include="test_basic\test_basic.cpp" />
-    <ClCompile Include="test_compiler_path\test_compiler_path.cpp" />
+    <ClCompile Include="test_compilation_database\build_configs.cpp" />
+    <ClCompile Include="test_compilation_database\src\helper.cpp" />
+    <ClCompile Include="test_compilation_database\src\main.cpp" />
     <ClCompile Include="test_dynamic_lib\build_configs.cpp" />
     <ClCompile Include="test_dynamic_lib\lib\lib.cpp" />
     <ClCompile Include="test_dynamic_lib\program\program.cpp" />
@@ -132,12 +134,11 @@
     <Content Include="test_static_lib\.builder\build.so" />
     <Content Include="test_static_lib\.builder\intermediate\build.cpp.d" />
     <Content Include="test_static_lib\.builder\intermediate\build.cpp.o" />
-    <Content Include="test_static_lib\bin\intermediate\lib.cpp.d" />
-    <Content Include="test_static_lib\bin\intermediate\lib.cpp.o" />
-    <Content Include="test_static_lib\bin\intermediate\program.cpp.d" />
-    <Content Include="test_static_lib\bin\intermediate\program.cpp.o" />
-    <Content Include="test_static_lib\bin\test_static_lib.a" />
-    <Content Include="test_static_lib\bin\test_static_library_program" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="test_compilation_database\.builder\" />
+    <Folder Include="test_compilation_database\bin\" />
+    <Folder Include="test_static_lib\bin\" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" Condition="'$(OS)' == 'Windows_NT'" />
   <ImportGroup Label="ExtensionTargets">

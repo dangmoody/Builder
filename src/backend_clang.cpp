@@ -230,128 +230,50 @@ static void Clang_Shutdown( compilerBackend_t* backend ) {
 	backend->data = NULL;
 }
 
-static bool8 Clang_CompileSourceFile( compilerBackend_t* backend, const char* sourceFile, BuildConfig* config ) {
+static bool8 Clang_CompileSourceFile(
+	compilerBackend_t* backend,
+	buildContext_t* buildContext,
+	BuildConfig* config,
+	compilationCommandArchetype_t& cmdArchetype,
+	const char* sourceFile,
+	bool recordCompilation )
+{
 	assert( backend );
 	assert( sourceFile );
 
 	clangState_t* clangState = cast( clangState_t*, backend->data );
 
-	bool8 isClang = string_ends_with( clangState->compilerPath.data, "clang" ) || string_ends_with( clangState->compilerPath.data, "clang++" );
-	bool8 isGCC = string_ends_with( clangState->compilerPath.data, "gcc" ) || string_ends_with( clangState->compilerPath.data, "g++" );
-
 	const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
-
 	const char* intermediatePath = tprintf( "%s%c%s", config->binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
-	const char* intermediateFilename = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
-
 	const char* depFilename = tprintf( "%s%c%s.d", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
+	
+	Array<const char*> finalArgs = cmdArchetype.baseArgs;
 
-	Array<const char*>& args = clangState->args;
-	args.reserve(
-		1 +	// clang/gcc
-		1 +	// -shared/-lib
-		1 +	// -c
-		1 +	// std=
-		1 +	// symbols
-		1 +	// optimisation
-		1 +	// -o
-		1 +	// intermediate filename
-		3 +	// -MD -MF <filename>
-		1 +	// source file
-		config->defines.size() +
-		config->additional_includes.size() +
-		config->additional_lib_paths.size() +
-		config->additional_libs.size() +
-		config->warning_levels.size() +
-		config->ignore_warnings.size()
-	);
-
-	args.reset();
-
-	args.add( clangState->compilerPath.data );
-
-	args.add( "-c" );
-
-	if ( config->language_version != LANGUAGE_VERSION_UNSET ) {
-		args.add( LanguageVersionToCompilerArg( config->language_version ) );
+	// Fill up remaining arguments
+	
+	// Dependency Flags/File
+	For( u64, flagIndex, 0, cmdArchetype.dependencyFlags.count) {
+		finalArgs.add( cmdArchetype.dependencyFlags[flagIndex] );
 	}
+	finalArgs.add( tprintf( "%s%c%s.d", intermediatePath, PATH_SEPARATOR, sourceFileNoPath ) );
 
-	if ( !config->remove_symbols ) {
-		args.add( "-g" );
-	}
+	// Output Flag/File
+	finalArgs.add( cmdArchetype.outputFlag );
+	finalArgs.add( tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, path_remove_file_extension( sourceFileNoPath ) ) );
 
-	args.add( OptimizationLevelToCompilerArg( config->optimization_level ) );
-
-	args.add( "-o" );
-	args.add( intermediateFilename );
-
-	args.add( "-MMD" );			// generate the dependency file
-	args.add( "-MF" );			// set the name of the dependency file to...
-	args.add( depFilename );	// ...this
-
-	args.add( sourceFile );
-
-	For ( u32, defineIndex, 0, config->defines.size() ) {
-		args.add( tprintf( "-D%s", config->defines[defineIndex].c_str() ) );
-	}
-
-	For ( u32, includeIndex, 0, config->additional_includes.size() ) {
-		args.add( tprintf( "-I%s", config->additional_includes[includeIndex].c_str() ) );
-	}
-
-	// must come before ignored warnings
-	if ( config->warnings_as_errors ) {
-		args.add( "-Werror" );
-	}
-
-	// warning levels
-	{
-		std::vector<std::string> allowedWarningLevels = {
-			"-Wall",
-			"-Wextra",
-			"-Wpedantic",
-		};
-
-		// gcc doesnt have this as a warning level but clang does
-		if ( isClang ) {
-			allowedWarningLevels.push_back( "-Weverything" );
-		}
-
-		For ( u64, warningLevelIndex, 0, config->warning_levels.size() ) {
-			const std::string& warningLevel = config->warning_levels[warningLevelIndex];
-
-			bool8 found = false;
-
-			For ( u64, allowedWarningLevelIndex, 0, allowedWarningLevels.size() ) {
-				if ( allowedWarningLevels[allowedWarningLevelIndex] == warningLevel ) {	// TODO(DM): 14/06/2025: better to compare hashes here instead?
-					found = true;
-					break;
-				}
-			}
-
-			if ( !found ) {
-				error( "\"%s\" is not allowed as a warning level.\n", warningLevel.c_str() );
-				return false;
-			}
-
-			args.add( warningLevel.c_str() );
-		}
-	}
-
-	For ( u64, ignoreWarningIndex, 0, config->ignore_warnings.size() ) {
-		args.add( config->ignore_warnings[ignoreWarningIndex].c_str() );
-	}
-
-	For ( u64, additionalArgumentIndex, 0, config->additional_compiler_arguments.size() ) {
-		args.add( config->additional_compiler_arguments[additionalArgumentIndex].c_str() );
-	}
-
-	s32 exitCode = RunProc( &args, NULL, PROC_FLAG_SHOW_ARGS | PROC_FLAG_SHOW_STDOUT );
+	// Source File
+	finalArgs.add( sourceFile );
+	
+	s32 exitCode = RunProc( &finalArgs, NULL, PROC_FLAG_SHOW_ARGS | PROC_FLAG_SHOW_STDOUT );
 
 	if ( exitCode == 0 ) {
 		ReadDependencyFile( depFilename, clangState->includeDependencies );
 	}
 
+	if ( recordCompilation ) {
+		RecordCompilationDatabaseEntry( buildContext, sourceFile, finalArgs );
+	}
+	
 	return exitCode == 0;
 }
 
@@ -459,6 +381,128 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t* backend, const Arra
 	s32 exitCode = RunProc( &args, NULL, PROC_FLAG_SHOW_ARGS | PROC_FLAG_SHOW_STDOUT );
 
 	return exitCode == 0;
+}
+
+static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t* backend, const BuildConfig* config, compilationCommandArchetype_t& outCmdArchetype ) {
+
+	clangState_t *clangState = cast( clangState_t *, backend->data );
+	
+	const char* compilerPath = clangState->compilerPath.data;
+	
+	bool8 isClang = string_ends_with( compilerPath, "clang" ) || string_ends_with( compilerPath, "clang++" );
+
+	// Not used originally but leaving here for clarity
+	//bool8 isGCC = string_ends_with( backend->compilerPath.data, "gcc" ) || string_ends_with( backend->compilerPath.data, "g++" ); not used
+
+	const u64 definesCount              = config->defines.size();
+	const u64 additionalIncludesCount   = config->additional_includes.size();
+	const u64 ignoredWarningsCount      = config->ignore_warnings.size();
+	const u64 additionalArgsCount       = config->additional_compiler_arguments.size();
+
+	// Only reserve up enough up to additionalArgsCount,
+	// as we keep dependency flags, and the output flag separate
+	Array<const char*>& baseArgs = outCmdArchetype.baseArgs;
+	baseArgs.reserve(
+		1                       + // compiler path
+		1                       + // compile flag
+		1                       + // lang version flag
+		1                       + // symbols flag
+		1                       + // opt level flag
+		definesCount            +
+		additionalIncludesCount +
+		1                       + // warning as error flag
+		1                       + // warning level flag
+		ignoredWarningsCount    +
+		additionalArgsCount     +
+		2 );                      // dependency flags
+
+	// Compiler Path
+	baseArgs.add( compilerPath );
+
+	// Compile Flag
+	baseArgs.add( "-c" );
+
+	// Language Version
+	if ( config->language_version != LANGUAGE_VERSION_UNSET ) {
+		baseArgs.add( LanguageVersionToCompilerArg( config->language_version ) );
+	}
+
+	// Symbols Flag
+	if ( !config->remove_symbols ) {
+		baseArgs.add( "-g" );
+	}
+
+	// Optimization Level
+	baseArgs.add( OptimizationLevelToCompilerArg( config->optimization_level ) );
+
+	// Defines
+	For ( u32, defineIndex, 0, definesCount ) {
+		baseArgs.add( tprintf( "-D%s", config->defines[defineIndex].c_str() ) );
+	}
+
+	// Additional Includes
+	For ( u32, includeIndex, 0, additionalIncludesCount ) {
+		baseArgs.add( tprintf( "-I%s", config->additional_includes[includeIndex].c_str() ) );
+	}
+	
+	// Warning As Error
+	if ( config->warnings_as_errors ) {
+		baseArgs.add( "-Werror" );
+	}
+
+	// Warning Level
+	{
+		std::vector<std::string> allowedWarningLevels = {
+			"-Wall",
+			"-Wextra",
+			"-Wpedantic",
+		};
+
+		// gcc doesnt have this as a warning level but clang does
+		if ( isClang ) {
+			allowedWarningLevels.push_back( "-Weverything" );
+		}
+
+		//outArchetype.allowedWarningLevels.reserve( config->warning_levels.size() );
+		For ( u64, warningLevelIndex, 0, config->warning_levels.size() ) {
+			const std::string& warningLevel = config->warning_levels[warningLevelIndex];
+
+			bool8 found = false;
+
+			For ( u64, allowedWarningLevelIndex, 0, allowedWarningLevels.size() ) {
+				if ( allowedWarningLevels[allowedWarningLevelIndex] == warningLevel ) {	// TODO(DM): 14/06/2025: better to compare hashes here instead?
+					found = true;
+					break;
+				}
+			}
+
+			if ( !found ) {
+				error( "\"%s\" is not allowed as a warning level.\n", warningLevel.c_str() );
+				return false;
+			}
+
+			baseArgs.add( warningLevel.c_str() );
+		}
+	}
+
+	// Ignored Warnings
+	For ( u64, ignoreWarningIndex, 0, ignoredWarningsCount ) {
+		baseArgs.add( config->ignore_warnings[ignoreWarningIndex].c_str() );
+	}
+
+	// Additional Arguments
+	For ( u64, additionalArgumentIndex, 0, additionalArgsCount ) {
+		baseArgs.add( config->additional_compiler_arguments[additionalArgumentIndex].c_str() );
+	}
+
+	// Dependency Flags
+	outCmdArchetype.dependencyFlags.add( "-MMD" );
+	outCmdArchetype.dependencyFlags.add( "-MF" );
+
+	// Output Flag
+	outCmdArchetype.outputFlag = "-o";
+	
+	return true;
 }
 
 // only call this after compilation has finished successfully
@@ -591,6 +635,7 @@ void CreateCompilerBackend_Clang( compilerBackend_t* outBackend ) {
 		.Shutdown									= Clang_Shutdown,
 		.CompileSourceFile							= Clang_CompileSourceFile,
 		.LinkIntermediateFiles						= Clang_LinkIntermediateFiles,
+		.GetCompilationCommandArchetype				= Clang_GetCompilationCommandArchetype,
 		.GetIncludeDependenciesFromSourceFileBuild	= Clang_GetIncludeDependenciesFromSourceFileBuild,
 		.GetCompilerPath							= Clang_GetCompilerPath,
 		.GetCompilerVersion							= Clang_GetCompilerVersion,
@@ -604,6 +649,7 @@ void CreateCompilerBackend_GCC( compilerBackend_t* outBackend ) {
 		.Shutdown									= Clang_Shutdown,
 		.CompileSourceFile							= Clang_CompileSourceFile,
 		.LinkIntermediateFiles						= Clang_LinkIntermediateFiles,
+		.GetCompilationCommandArchetype				= Clang_GetCompilationCommandArchetype,
 		.GetIncludeDependenciesFromSourceFileBuild	= Clang_GetIncludeDependenciesFromSourceFileBuild,
 		.GetCompilerPath							= Clang_GetCompilerPath,
 		.GetCompilerVersion							= GCC_GetCompilerVersion,

@@ -237,6 +237,10 @@ struct BuilderOptions {
 	// If this is set to true, then a code build will NOT happen.
 	// If you don't use Visual Studio then ignore this.
 	bool						generate_solution;
+	
+	// Do you want to generate a compilation_commands.json for Clang tooling?
+	// If true, the file will be generated IF the build is successful. 
+	bool						generate_compilation_database;
 };
 
 static void add_build_config_unique( BuildConfig* config, std::vector<BuildConfig>& out_configs );

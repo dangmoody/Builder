@@ -342,7 +342,7 @@ static s32 ShowUsage( const s32 exitCode ) {
 	return exitCode;
 }
 
-static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, compilerBackend_t* compilerBackend ) {
+static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, compilerBackend_t* compilerBackend, bool generateCompilationDatabase ) {
 	// create binary folder
 	if ( !folder_create_if_it_doesnt_exist( config->binary_folder.c_str() ) ) {
 		errorCode_t errorCode = get_last_error_code();
@@ -401,7 +401,18 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 
 		return false;
 	};
+	
+	// Process only once how the base compilation command should look like, fill up dep/output/source args later for each source file
+	compilationCommandArchetype_t cmdArchetype{};
+	if ( !compilerBackend->GetCompilationCommandArchetype( compilerBackend, config, cmdArchetype ) ) {
+		error( "Failed to generate compilation command.\n" );
+		return BUILD_RESULT_FAILED;
+	}
 
+	if ( generateCompilationDatabase ) {
+		context->compilationDatabase.reserve( config->source_files.size() );
+	}
+	
 	// compile step
 	// make .o files for all compilation units
 	// TODO(DM): 14/06/2025: embarrassingly parallel
@@ -409,7 +420,7 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 		const char* sourceFile = config->source_files[sourceFileIndex].c_str();
 		const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
 
-		const char* intermediateFilename = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
+		const char* intermediateFilename = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, path_remove_file_extension( sourceFileNoPath ) );
 		intermediateFiles.add( intermediateFilename );
 
 		const char* depFilename = tprintf( "%s%c%s.d", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
@@ -421,7 +432,7 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 			continue;
 		}
 
-		if ( !compilerBackend->CompileSourceFile( compilerBackend, sourceFile, config ) ) {
+		if ( !compilerBackend->CompileSourceFile( compilerBackend, context, config, cmdArchetype, sourceFile, generateCompilationDatabase ) ) {
 			error( "Compile failed.\n" );
 			return BUILD_RESULT_FAILED;
 		}
@@ -754,6 +765,222 @@ static bool8 WriteIncludeDependenciesFile( buildContext_t* context ) {
 	return true;
 }
 
+
+void RecordCompilationDatabaseEntry(
+	buildContext_t* buildContext,
+	const char* sourceFileName,
+	const Array<const char*>& compilationCommandArray ) {
+	
+	compilationDatabaseEntry_t entry;
+	entry.directory  = path_absolute_path( buildContext->inputFilePath.data );
+	entry.file       = path_absolute_path( sourceFileName );
+	
+	entry.arguments.reserve( compilationCommandArray.count );
+	For( u64, argIndex, 0, compilationCommandArray.count ) {
+		const char* arg = compilationCommandArray[argIndex];
+		// The reason for this is because Core uses a thirdparty library under-the-hood in prcoess_create for subprocesses,
+		// which requires that the args list contains `NULL` at the end of the array, so we just insert one at the end so the user doesn't have to.
+		if ( !arg ) {
+			continue;
+		}
+		
+		entry.arguments.emplace_back( arg );
+	}
+	
+	buildContext->compilationDatabase.emplace_back( entry );
+}
+
+enum flagArgumentFormBits_t {
+	JOINED      = bit( 0 ),
+	SEPARATE    = bit( 1 ),
+	COLON       = bit( 2 )
+};
+typedef u32 argumentForms_t;
+
+struct flagRule_t {
+    const char* flag = nullptr;
+    argumentForms_t forms;
+};
+
+static constexpr flagRule_t flagArgumentRules[] = {
+	// MSVC
+	{ "/I",     JOINED | SEPARATE },
+	{ "/Fo",    JOINED | SEPARATE },
+	{ "/Fd",    COLON | SEPARATE },
+	{ "/Fp",    JOINED | COLON | SEPARATE },
+	{ "/Yu",    JOINED },
+	{ "/Yc",    JOINED },
+	{ "/Fi",    SEPARATE },
+	{ "@",      JOINED }, // ED: not supported for now
+	
+	// Clang/GCC
+	{ "-I",         JOINED | SEPARATE },
+	{ "-isystem",   SEPARATE },
+	{ "-iquote",    SEPARATE },
+	{ "-idirafter", SEPARATE },
+	{ "-imacros",   SEPARATE },
+	{ "-include",   SEPARATE },
+	{ "-F",         SEPARATE },
+	{ "-MF",        SEPARATE },
+	{ "-MT",        SEPARATE },
+	{ "-o",         SEPARATE }
+};
+
+static const flagRule_t* IsFlagMatch( const char* arg ) {
+	for ( const auto &r : flagArgumentRules ) {
+		if ( string_starts_with(arg, r.flag) ) {
+			return &r;
+		}
+	}
+
+	return nullptr;
+}
+
+static void FixCompilatiomDatabasePath( std::string& path  ) {
+	for ( char& c : path ) {
+		if (c == '\\') {
+			c = '/';
+		}
+	}
+}
+
+// Processes the compilation arguments and sanitizes those that are paths arguments, to follow the json format,
+// but following the possible combinations in which the compile flag can be provided, based on the compiler
+// (see flagRule_t). This was thought as a more optimal way of doing it, instead of checking character by character for each argument.
+// Also, AFAIK paths in compilation databases are expected to be full paths. 
+static void SanitizeCompilationDatabaseArgs( std::vector<std::string>& args ) {
+
+	For ( size_t, argIndex, 0, args.size() ) {
+
+		std::string& arg = args[argIndex];
+		if ( arg.empty() ) {
+			continue;
+		}
+		
+		const size_t argLength = arg.size();
+		const char* argPtr = arg.c_str();
+		
+		const flagRule_t *rule = IsFlagMatch( arg.c_str() );
+		
+		// Paths not related to compiler-specific flags
+		if (!rule) {
+			if ( path_is_absolute( argPtr ) || FileIsSourceFile( argPtr ) || FileIsHeaderFile( argPtr) ) {
+				std::string path = path_absolute_path( arg.c_str() );
+				FixCompilatiomDatabasePath( path );
+				arg = std::move( path );
+			}
+
+			continue;
+		}
+ 
+		u64 ruleLength = strlen( rule->flag );
+		const argumentForms_t ruleForms = rule->forms;
+		const char* ruleFlag = rule->flag;
+		
+		bool handled = false;
+
+		// Joined form
+		if ( ( ruleForms & JOINED ) && argLength > ruleLength && arg.compare( 0, ruleLength, ruleFlag ) == 0 ) {
+			std::string path = path_absolute_path( arg.substr( ruleLength ).c_str() );
+			if ( !path.empty() ) {
+				FixCompilatiomDatabasePath( path );
+				arg = ruleFlag + path;
+				handled = true;
+			}
+		}
+
+		// Colon form
+		if ( !handled && ( ruleForms & COLON ) && argLength > ruleLength && arg[ruleLength] == ':' ) {
+			std::string path = path_absolute_path( arg.substr( ruleLength + 1 ).c_str() );
+			FixCompilatiomDatabasePath( path );
+			arg = std::string( ruleFlag ) + ":" + path;
+			handled = true;
+		}
+
+		// Separate form
+		if ( !handled && ( ruleForms & SEPARATE ) ) {
+			if ( argIndex + 1 < args.size() ) {
+				std::string& nextArg = args[++argIndex];
+				std::string path = path_absolute_path( nextArg.c_str() );
+				FixCompilatiomDatabasePath( path );
+				nextArg = std::move( path );
+			}
+		}
+	}
+}
+
+static bool WriteCompilationDatabase( buildContext_t* context ) {
+	
+	if ( context->compilationDatabase.empty() ) {
+		return true;
+	}
+
+	StringBuilder sb = {};
+	string_builder_reset( &sb );
+	defer( string_builder_destroy( &sb ) );
+
+	string_builder_appendf( &sb, "[\n" );
+
+	const u64 entriesCount = context->compilationDatabase.size();
+	For ( u64, i, 0, entriesCount ) {
+		
+		compilationDatabaseEntry_t& entry = context->compilationDatabase[i];
+		
+		FixCompilatiomDatabasePath( entry.directory );
+		FixCompilatiomDatabasePath( entry.file );
+		
+		const char* directory = entry.directory.c_str();
+		const char* file = entry.file.c_str();		
+		
+		string_builder_appendf(
+			&sb,
+			"  {\n"
+			"    \"directory\": \"%s\",\n"
+			"    \"file\": \"%s\",\n"
+			"    \"arguments\": [\n",
+			directory,
+			file
+		);
+
+		SanitizeCompilationDatabaseArgs( entry.arguments );
+		
+		const u64 argumentsCount = entry.arguments.size();
+		For ( u64, argIndex, 0, argumentsCount ) {
+			string_builder_appendf(
+				&sb,
+				"      \"%s\"%s\n",
+				entry.arguments[argIndex].c_str(),
+				( argIndex + 1 < argumentsCount ) ? "," : ""
+			);
+		}
+
+		string_builder_appendf(
+			&sb,
+			"    ]\n"
+			"  }%s\n",
+			( i + 1 < entriesCount ) ? "," : ""
+		);
+	}
+
+	string_builder_appendf( &sb, "]\n" );
+
+	const char* json = string_builder_to_string( &sb );
+	assert( json );
+
+	const char* outputFilename = tprintf( "%s%ccompile_commands.json", context->inputFilePath.data, PATH_SEPARATOR );
+	if ( !file_write_entire( outputFilename, json, strlen( json ) ) ) {
+		errorCode_t errorCode = get_last_error_code();
+		error(
+			"Failed to write compilation database \"%s\". Error code: " ERROR_CODE_FORMAT "\n",
+			outputFilename,
+			errorCode
+		);
+		return false;
+	}
+
+	return true;
+}
+
 int BuilderMain( const int firstArg, int argc, char** argv ) {
 	float64 totalTimeStart = time_ms();
 
@@ -974,7 +1201,7 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 
 		userConfigFullBinaryName = BuildConfig_GetFullBinaryName( &userConfigBuildConfig );
 
-		userConfigBuildResult = BuildBinary( &context, &userConfigBuildConfig, &compilerBackend );
+		userConfigBuildResult = BuildBinary( &context, &userConfigBuildConfig, &compilerBackend, false );
 
 		switch ( userConfigBuildResult ) {
 			case BUILD_RESULT_SUCCESS:
@@ -1317,7 +1544,7 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 		{
 			float64 buildTimeStart = time_ms();
 
-			buildResult_t buildResult = BuildBinary( &context, config, &compilerBackend );
+			buildResult_t buildResult = BuildBinary( &context, config, &compilerBackend, options.generate_compilation_database );
 
 			float64 buildTimeEnd = time_ms();
 
@@ -1354,6 +1581,11 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 
 	if ( numSuccessfulBuilds > 0 && numFailedBuilds == 0 ) {
 		if ( !WriteIncludeDependenciesFile( &context ) ) {
+			QUIT_ERROR();
+		}
+		
+		if ( options.generate_compilation_database && !WriteCompilationDatabase( &context ) ){
+			context.compilationDatabase.clear();
 			QUIT_ERROR();
 		}
 	}

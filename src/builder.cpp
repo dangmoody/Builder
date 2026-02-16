@@ -1134,11 +1134,10 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 
 		{
 			String compilerPath = compilerBackend.GetCompilerPath( &compilerBackend );
+			const char *compilerPathPlusExtension = compilerPath.data;
 #ifdef _WIN32
-			const char *compilerPathPlusExtension = NULL;
-			if ( string_ends_with( compilerPath.data, ".exe" ) ) {
-				compilerPathPlusExtension = compilerPath.data;
-			} else {
+			// windows also requires the file extension to properly check for if a file exists
+			if ( !string_ends_with( compilerPath.data, ".exe" ) ) {
 				compilerPathPlusExtension = tprintf( "%s.exe", compilerPath.data );
 			}
 #endif

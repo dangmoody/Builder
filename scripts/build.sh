@@ -43,11 +43,13 @@ source_files="$source_folder/main.cpp $source_folder/builder.cpp $source_folder/
 
 defines="-D_CRT_SECURE_NO_WARNINGS -DCORE_USE_XXHASH -DCORE_SUC -DCORE_USE_SUBPROCESS -DHASHMAP_HIDE_MISSING_KEY_WARNING -DHLML_NAMESPACE"
 if [[ "$config" == "debug" ]]; then
-	defines="$defines -D_DEBUG"
+	program_name=\"builder_$config\"
+	defines="$defines -D_DEBUG -DBUILDER_PROGRAM_NAME=$program_name"
 fi
 
 if [[ "$config" == "release" ]]; then
-	defines="$defines -DNDEBUG"
+	program_name=\"builder\"
+	defines="$defines -DNDEBUG -DBUILDER_PROGRAM_NAME=$program_name"
 fi
 
 includes="-I${builder_dir}/src/core/include"

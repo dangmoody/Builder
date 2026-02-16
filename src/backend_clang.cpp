@@ -397,7 +397,7 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t* backend, const Arra
 			args.add( tprintf( "/OUT:%s", fullBinaryName ) );
 		}
 #elif defined( __linux__ )
-		args.add( clangState->arPath );
+		args.add( clangState->arPath.data );
 		args.add( "rc" );
 		args.add( fullBinaryName );
 #endif

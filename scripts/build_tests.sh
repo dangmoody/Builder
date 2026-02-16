@@ -36,9 +36,11 @@ source_files="tests/tests_main.cpp src/builder.cpp src/visual_studio.cpp src/bac
 
 defines="-DCORE_SUC -DHLML_NAMESPACE -DCORE_USE_SUBPROCESS -DHASHMAP_HIDE_MISSING_KEY_WARNING"
 if [[ "$config" == "debug" ]]; then
-	defines="$defines -D_DEBUG"
+	program_name=\"builder_$config\"
+	defines="$defines -D_DEBUG -DBUILDER_PROGRAM_NAME=$program_name"
 elif [[ "$config" == "release" ]]; then
-	defines="$defines -DNDEBUG"
+	program_name=\"builder\"
+	defines="$defines -DNDEBUG -DBUILDER_PROGRAM_NAME=$program_name"
 fi
 
 args="${clang_dir}/bin/clang ${symbols} ${optimization} -lstdc++ -luuid -std=c++20 -fexceptions -ferror-limit=0 -o ${bin_folder}/builder_tests_${config} ${source_files} ${defines} -Isrc/core/include"

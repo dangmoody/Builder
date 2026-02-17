@@ -466,7 +466,7 @@ TEMPER_TEST( ValidateCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 	//     "Error while trying to load a compilation database"
 
 	Array<const char*> args;
-	args.add( "clang-tidy" );
+	args.add( "../clang/bin/clang-tidy" );
 	args.add( sourceFile );
 	args.add( tprintf( "-p=%s", compileCommandsDir ) );
 	args.add( "--checks=-*" );  // Disable all checks - we only want to test DB loading

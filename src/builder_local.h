@@ -68,13 +68,20 @@ enum procFlagBits_t {
 };
 typedef u32 procFlags_t;
 
+struct compilationCommandArchetype_t {
+	Array<const char*> baseArgs;
+	Array<const char*> dependencyFlags;
+	const char* outputFlag = nullptr;
+};
+
 struct compilerBackend_t {
 	void*	data;
 
 	bool8	( *Init )( compilerBackend_t* backend, const std::string &compilerPath, const std::string &compilerVersion );
 	void	( *Shutdown )( compilerBackend_t* backend );
-	bool8	( *CompileSourceFile )( compilerBackend_t* backend, const char* sourceFile, BuildConfig* config );
+	bool8	( *CompileSourceFile )( compilerBackend_t* backend, buildContext_t* buildContext, BuildConfig* config, compilationCommandArchetype_t& commandArchetype, const char* sourceFile, bool recordCompilation );
 	bool8	( *LinkIntermediateFiles )( compilerBackend_t* backend, const Array<const char*>& intermediateFiles, BuildConfig* config );
+	bool8	( *GetCompilationCommandArchetype )( const compilerBackend_t* backend, const BuildConfig* config, compilationCommandArchetype_t& outCmdArchetype );
 	void	( *GetIncludeDependenciesFromSourceFileBuild )( compilerBackend_t* backend, std::vector<std::string>& includeDependencies );
 	String	( *GetCompilerPath )( compilerBackend_t *backend );
 	String	( *GetCompilerVersion )( compilerBackend_t* backend );
@@ -89,17 +96,25 @@ struct includeDependencies_t {
 	std::vector<std::string>	includeDependencies;
 };
 
+struct compilationDatabaseEntry_t {
+	std::vector<std::string> arguments;
+	std::string directory;
+	std::string file;
+	std::string outputFile; 
+};
+
 struct buildContext_t {
-	Hashmap*							configIndices;
-	Hashmap*							sourceFileIndices;
-	std::vector<includeDependencies_t>	sourceFileIncludeDependencies;
+	Hashmap*								configIndices;
+	Hashmap*								sourceFileIndices;
+	std::vector<includeDependencies_t>		sourceFileIncludeDependencies;
 
-	const char*							inputFile;
-	String								inputFilePath;
-	String								dotBuilderFolder;
+	const char*								inputFile;
+	String									inputFilePath;
+	String									dotBuilderFolder;
 
-	bool8								forceRebuild;
-	bool8								verbose;
+	bool8									forceRebuild;
+	bool8									verbose;
+	std::vector<compilationDatabaseEntry_t> compilationDatabase;
 };
 
 // shared entry point
@@ -118,6 +133,11 @@ bool8		FileIsSourceFile( const char* filename );
 bool8		FileIsHeaderFile( const char* filename );
 
 const char*	BuildConfig_GetFullBinaryName( const BuildConfig* config );
+
+void		RecordCompilationDatabaseEntry(
+			buildContext_t* buildContext,
+			const char* sourceFileName,
+			const Array<const char*>& compilationCommandArray);
 
 s32			RunProc( Array<const char*>* args, Array<const char*>* environmentVariables, const procFlags_t procFlags = 0, String* outStdout = NULL );
 

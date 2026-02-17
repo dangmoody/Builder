@@ -406,144 +406,37 @@ static void MSVC_Shutdown( compilerBackend_t* backend ) {
 	backend->data = NULL;
 }
 
-static bool8 MSVC_CompileSourceFile( compilerBackend_t* backend, const char* sourceFile, BuildConfig* config ) {
+static bool8 MSVC_CompileSourceFile(
+	compilerBackend_t* backend,
+	buildContext_t* buildContext,
+	BuildConfig* config,
+	compilationCommandArchetype_t& cmdArchetype,
+	const char* sourceFile,
+	bool recordCompilation )
+{
 	assert( backend );
 	assert( sourceFile );
 	assert( config );
 
 	const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
-
+	const char* sourceFileNoExtension = path_remove_file_extension( sourceFileNoPath );
 	const char* intermediatePath = tprintf( "%s%c%s", config->binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
-	const char* intermediateFilename = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
 
-	config->additional_includes.push_back( "." );
+	config->additional_includes.emplace_back( "." );
 
 	msvcState_t* msvcState = cast( msvcState_t*, backend->data );
 
 	msvcState->includeDependencies.clear();
 
-	Array<const char*>& args = msvcState->args;
-	args.reserve(
-		1 +	// cl
-		1 +	// /c
-		1 +	// /std=
-		1 +	// /DEBUG
-		1 +	// /O*
-		1 +	// /Fo:<intermediate filename>
-		1 + // /showIncludes
-		3 +	// -MD -MF <filename>
-		1 +	// source file
-		config->defines.size() +
-		config->additional_includes.size() +	// /I <include>
-		config->additional_lib_paths.size() +
-		config->additional_libs.size() +
-		1 +	// /WX
-		config->warning_levels.size() +
-		config->ignore_warnings.size()
-	);
+	Array<const char*> finalArgs = cmdArchetype.baseArgs;
 
-	args.reset();
+	// Fill up remaining arguments
+	
+	// Output Flag/File
+	finalArgs.add( tprintf("%s%s%c%s.o", cmdArchetype.outputFlag, intermediatePath, PATH_SEPARATOR, sourceFileNoExtension ) );
 
-	args.add( msvcState->compilerPath.data );
-
-	args.add( "/c" );
-
-	if ( config->language_version != LANGUAGE_VERSION_UNSET ) {
-		args.add( LanguageVersionToCompilerArg( config->language_version ) );
-	}
-
-	if ( !config->remove_symbols ) {
-		args.add( "/DEBUG" );
-	}
-
-	args.add( OptimizationLevelToCompilerArg( config->optimization_level ) );
-
-	args.add( tprintf( "/Fo%s", intermediateFilename ) );
-
-	args.add( "/showIncludes" );
-
-	args.add( sourceFile );
-
-	For ( u32, defineIndex, 0, config->defines.size() ) {
-		args.add( tprintf( "/D%s", config->defines[defineIndex].c_str() ) );
-	}
-
-	For ( u32, includeIndex, 0, msvcState->microsoftCoreIncludes.size() ) {
-		args.add( tprintf( "/I%s", msvcState->microsoftCoreIncludes[includeIndex].c_str() ) );
-	}
-
-	For ( u32, includeIndex, 0, config->additional_includes.size() ) {
-		args.add( tprintf( "/I%s", config->additional_includes[includeIndex].c_str() ) );
-	}
-
-	// must come before ignored warnings
-	if ( config->warnings_as_errors ) {
-		args.add( "/WX" );
-	}
-
-	// warning levels
-	{
-		std::vector<std::string> allowedWarningLevels = {
-			"/W",
-			"/W0",
-			"/W1",
-			"/W2",
-			"/W3",
-			"/W4",
-			"/Wall",
-		};
-
-		// MSVC only allows one warning level to be set
-		if ( config->warning_levels.size() > 1 ) {
-			StringBuilder builder;
-			string_builder_reset( &builder );
-
-			string_builder_appendf( &builder, "MSVC only allows ONE of the following warning levels to be set:\n" );
-
-			For ( u64, allowedWarningLevelIndex, 0, allowedWarningLevels.size() ) {
-				string_builder_appendf( &builder, "%s, ", allowedWarningLevels[allowedWarningLevelIndex].c_str() );
-			}
-
-			error( "%s\n", string_builder_to_string( &builder ) );
-
-			return false;
-		}
-
-		For ( u64, warningLevelIndex, 0, config->warning_levels.size() ) {
-			const std::string& warningLevel = config->warning_levels[warningLevelIndex];
-
-			bool8 found = false;
-
-			For ( u64, allowedWarningLevelIndex, 0, allowedWarningLevels.size() ) {
-				if ( allowedWarningLevels[allowedWarningLevelIndex] == warningLevel ) {	// TODO(DM): 14/06/2025: better to compare hashes here instead?
-					found = true;
-					break;
-				}
-			}
-
-			if ( !found ) {
-				error( "\"%s\" is not allowed as a warning level.\n", warningLevel.c_str() );
-				return false;
-			}
-
-			args.add( warningLevel.c_str() );
-		}
-	}
-
-	For ( u64, ignoreWarningIndex, 0, config->ignore_warnings.size() ) {
-		args.add( config->ignore_warnings[ignoreWarningIndex].c_str() );
-	}
-
-	For ( u64, additionalArgumentIndex, 0, config->additional_compiler_arguments.size() ) {
-		args.add( config->additional_compiler_arguments[additionalArgumentIndex].c_str() );
-	}
-
-	{
-		For ( u64, argIndex, 0, args.count ) {
-			printf( "%s ", msvcState->args[argIndex] );
-		}
-		printf( "\n" );
-	}
+	// Source File
+	finalArgs.add( sourceFile );
 
 	// MSVC doesnt output include dependencies to .d files
 	// it only supports printing them to stdout
@@ -553,7 +446,7 @@ static bool8 MSVC_CompileSourceFile( compilerBackend_t* backend, const char* sou
 	string_builder_reset( &processStdout );
 	defer( string_builder_destroy( &processStdout ) );
 	{
-		Process* process = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
+		Process* process = process_create( &finalArgs, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
 
 		char buffer[1024] = { 0 };
 		u64 bytesRead = U64_MAX;
@@ -613,6 +506,10 @@ static bool8 MSVC_CompileSourceFile( compilerBackend_t* backend, const char* sou
 			lineStart = lineEnd + 1;
 		}
 	}
+	
+	if ( recordCompilation ) {
+		RecordCompilationDatabaseEntry( buildContext, sourceFile, finalArgs );
+	}
 
 	return exitCode == 0;
 }
@@ -670,6 +567,143 @@ static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t* backend, const Array
 	return exitCode == 0;
 }
 
+static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t* backend, const BuildConfig* config, compilationCommandArchetype_t& outCmdArchetype ) {
+
+	msvcState_t* msvcState = cast( msvcState_t*, backend->data );
+	
+	const u64 definesCount               = config->defines.size();
+	const u64 microsoftCoreIncludesCount = msvcState->microsoftCoreIncludes.size();
+	const u64 additionalIncludesCount    = config->additional_includes.size();
+	const u64 ignoredWarningsCount       = config->ignore_warnings.size();
+	const u64 additionalArgsCount        = config->additional_compiler_arguments.size();
+
+	Array<const char*>& baseArgs = outCmdArchetype.baseArgs;
+	baseArgs.reserve(
+		1                          + // compilerPath
+		1                          + // compile flag
+		1                          + // lang version flag
+		1                          + // symbols flag
+		1                          + // opt level flag
+		definesCount               +
+		microsoftCoreIncludesCount +
+		additionalIncludesCount	   +
+		1                          + // warning as error flag
+		1                          + // warning level flag
+		ignoredWarningsCount       +
+		additionalArgsCount
+	);
+
+	// Compiler Path
+	baseArgs.add( msvcState->compilerPath.data );
+
+	// Compile Flag
+	baseArgs.add( "/c" );
+
+	// Language Version
+	if ( config->language_version != LANGUAGE_VERSION_UNSET ) {
+		baseArgs.add( LanguageVersionToCompilerArg( config->language_version ) );
+	}
+
+	// Symbols Flag
+	if ( !config->remove_symbols ) {
+		baseArgs.add( "/DEBUG" );
+	}
+
+	// Optimization Level
+	baseArgs.add( OptimizationLevelToCompilerArg( config->optimization_level ) );
+
+	// Diagnostics Flag
+	baseArgs.add( "/showIncludes" );
+
+	// Defines
+	For ( u32, defineIndex, 0, definesCount ) {
+		baseArgs.add( tprintf( "/D%s", config->defines[defineIndex].c_str() ) );
+	}
+	
+	// Microsoft Core Includes
+	For ( u32, includeIndex, 0, microsoftCoreIncludesCount ) {
+		baseArgs.add( tprintf( "/I%s", msvcState->microsoftCoreIncludes[includeIndex].c_str() ) );
+	}
+
+	// Additional Includes
+	For ( u32, includeIndex, 0, additionalIncludesCount ) {
+		baseArgs.add( tprintf( "/I%s", config->additional_includes[includeIndex].c_str() ) );
+	}
+
+	// Warning As Error
+	if ( config->warnings_as_errors ) {
+		baseArgs.add( "/WX" );
+	}
+
+	// Warning Level
+	{
+		std::vector<std::string> allowedWarningLevels = {
+			"/W",
+			"/W0",
+			"/W1",
+			"/W2",
+			"/W3",
+			"/W4",
+			"/Wall",
+		};
+
+		// MSVC only allows one warning level to be set
+		if ( config->warning_levels.size() > 1 ) {
+			StringBuilder builder;
+			string_builder_reset( &builder );
+
+			string_builder_appendf( &builder, "MSVC only allows ONE of the following warning levels to be set:\n" );
+
+			For ( u64, allowedWarningLevelIndex, 0, allowedWarningLevels.size() ) {
+				string_builder_appendf( &builder, "%s, ", allowedWarningLevels[allowedWarningLevelIndex].c_str() );
+			}
+
+			error( "%s\n", string_builder_to_string( &builder ) );
+
+			return false;
+		}
+
+		For ( u64, warningLevelIndex, 0, config->warning_levels.size() )
+		{
+			const std::string& warningLevel = config->warning_levels[warningLevelIndex];
+
+			bool8 found = false;
+
+			For ( u64, allowedWarningLevelIndex, 0, allowedWarningLevels.size() ) {
+				if ( allowedWarningLevels[allowedWarningLevelIndex] == warningLevel ) {	// TODO(DM): 14/06/2025: better to compare hashes here instead?
+					found = true;
+					break;
+				}
+			}
+
+			if ( !found ) {
+				error( "\"%s\" is not allowed as a warning level.\n", warningLevel.c_str() );
+				return false;
+			}
+
+			baseArgs.add( warningLevel.c_str() );
+		}
+	}
+
+	// Ignored Warnings
+	For ( u64, ignoreWarningIndex, 0, ignoredWarningsCount ) {
+		baseArgs.add( config->ignore_warnings[ignoreWarningIndex].c_str() );
+	}
+
+	// Additional Arguments
+	For ( u64, additionalArgumentIndex, 0, additionalArgsCount ) {
+		baseArgs.add( config->additional_compiler_arguments[additionalArgumentIndex].c_str() );
+	}
+
+	// Dependency Flags
+	// MSVC doesn't have any
+	
+	// Output Flag
+	outCmdArchetype.outputFlag = "/Fo";
+
+	return true;
+}
+
 static void MSVC_GetIncludeDependenciesFromSourceFileBuild( compilerBackend_t* backend, std::vector<std::string>& outIncludeDependencies ) {
 	msvcState_t* msvcState = cast( msvcState_t*, backend->data );
 
@@ -695,6 +729,7 @@ void CreateCompilerBackend_MSVC( compilerBackend_t* outBackend ) {
 		.Shutdown									= MSVC_Shutdown,
 		.CompileSourceFile							= MSVC_CompileSourceFile,
 		.LinkIntermediateFiles						= MSVC_LinkIntermediateFiles,
+		.GetCompilationCommandArchetype		        = MSVC_GetCompilationCommandArchetype,
 		.GetIncludeDependenciesFromSourceFileBuild	= MSVC_GetIncludeDependenciesFromSourceFileBuild,
 		.GetCompilerPath							= MSVC_GetCompilerPath,
 		.GetCompilerVersion							= MSVC_GetCompilerVersion,

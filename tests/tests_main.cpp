@@ -181,6 +181,7 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 		generatedFiles.fileExtensionsToCheck.add( ".ilk" );
 		generatedFiles.fileExtensionsToCheck.add( ".o" );
 		generatedFiles.fileExtensionsToCheck.add( ".d" );
+		generatedFiles.fileExtensionsToCheck.add( ".json" );
 
 		TEMPER_CHECK_TRUE( file_get_all_files_in_folder( dotBuilderFolder, true, true, GetAllGeneratedFiles, &generatedFiles ) );
 		if ( testData.binaryFolder ) {
@@ -423,6 +424,69 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 		TEMPER_CHECK_TRUE_M( exitCode == 69420, "Exit code actually returned %d.\n", exitCode );
 	}
 #endif // _WIN32
+}
+
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
+	.rootDir			= "test_compilation_database",
+	.binaryFolder		= "bin",
+	.binaryName			= "test_compilation_database_program"
+} );
+
+// Validates the generated compile_commands.json by feeding it to clang-tidy.
+// If clang-tidy can successfully load the compilation database, it proves
+// the JSON is correctly formatted according to the specification.
+// https://clang.llvm.org/docs/JSONCompilationDatabase.html
+TEMPER_TEST( ValidateCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
+    const char* sourceFile = "tests/test_compilation_database/main.cpp";
+    const char* compileCommandsDir = "test_compilation_database";
+    const char* compileCommandsPath = "test_compilation_database/compile_commands.json";
+
+    TEMPER_CHECK_TRUE_M( file_exists( compileCommandsPath ), "compile_commands.json does not exist at %s\n", compileCommandsPath );
+
+    char* content = NULL;
+	u64 contentLength = 0;
+    file_read_entire( compileCommandsPath, &content, &contentLength );
+    defer( file_free_buffer( &content ) );
+	
+	// Count occurrences of "file": which indicates individual entries
+	u64 entriesCount = 0;
+	const char* ptr = content;
+	while ( ( ptr = strstr( ptr, "\"file\":" ) ) != NULL ) {
+		entriesCount++;
+		ptr++;
+	}
+
+    TEMPER_CHECK_TRUE_M( entriesCount == 2, "compile_commands.json file contains an unexpected number of entries (2)" );
+
+    // clang-tidy -p <build-path> <source-file> --checks=-*
+    //
+    // Using --checks=-* disables all actual checks, so we only test whether
+    // clang-tidy can successfully load the compilation database.
+    // If the compile_commands.json is malformed, clang-tidy will fail with an error like:
+    //     "Error while trying to load a compilation database"
+
+    Array<const char*> args;
+    args.add( "clang-tidy" );
+    args.add( sourceFile );
+    args.add( tprintf( "-p=%s", compileCommandsDir ) );
+    args.add( "--checks=-*" );  // Disable all checks - we only want to test DB loading
+
+    Array<const char*> stdout_output;
+    s32 exitCode = RunProc( &args, &stdout_output, false );
+    bool isValid = true;
+    // Check for specific error messages that indicate database problems
+    if ( stdout_output.data ) {
+        if ( strstr( *stdout_output.data, "Error while trying to load a compilation database" ) ) {
+            printf( "clang-tidy failed to load compilation database: %s\n", *stdout_output.data );
+            isValid = false;
+        }
+        if ( strstr( *stdout_output.data, "error: no compilation database found" ) ) {
+            printf( "clang-tidy could not find compilation database\n" );
+            isValid = false;
+        }
+    }
+
+    TEMPER_CHECK_TRUE_M( isValid, "clang-tidy failed to load compile_commands.json - the file may be malformed\n" );
 }
 
 int main( int argc, char** argv ) {

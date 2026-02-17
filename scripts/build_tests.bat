@@ -47,7 +47,7 @@ if /I [%config%]==[debug] (
 	set defines=!defines! -D_DEBUG -DBUILDER_PROGRAM_NAME=\"!program_name!\"
 ) else if /I [%config%]==[release] (
 	set program_name=builder
-	set defines=!defines! -DNDEBUG _DBUILDER_PROGRAM_NAME=\"!program_name!\"
+	set defines=!defines! -DNDEBUG -DBUILDER_PROGRAM_NAME=\"!program_name!\"
 )
 
 set includes=-Isrc/core/include

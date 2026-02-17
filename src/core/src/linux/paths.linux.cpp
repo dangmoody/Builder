@@ -84,12 +84,15 @@ const char* path_current_working_directory() {
 #endif
 }
 
-const char* path_absolute_path( const char* file ) {
-	unused( file );
+const char *path_absolute_path( const char *path ) {
+	const char *abs_path = realpath( path, NULL );
 
-	assert( false );
+	if ( !abs_path ) {
+		int err = errno;
+		return NULL;
+	}
 
-	return NULL;
+	return abs_path;
 }
 
 bool8 path_is_absolute( const char* path ) {

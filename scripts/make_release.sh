@@ -27,7 +27,9 @@ releases_folder=${builder_dir}/releases
 source ${builder_dir}/scripts/build_tests.sh release
 
 # run the tests and make sure they pass
-${builder_dir}/bin/builder_tests_release
+pushd ${builder_dir}/tests
+../bin/builder_tests_release
+popd
 
 mkdir -p ${releases_folder}
 

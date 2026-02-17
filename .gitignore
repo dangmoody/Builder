@@ -8,6 +8,7 @@ releases
 bug_reports
 *.o
 intermediate
+compile_commands.json
 
 # ignore tools folder, but dont ignore 7zip
 tools/*

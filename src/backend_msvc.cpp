@@ -105,16 +105,16 @@ static const char* LanguageVersionToCompilerArg( const LanguageVersion languageV
 	assert( languageVersion != LANGUAGE_VERSION_UNSET );
 
 	switch ( languageVersion ) {
-		case LANGUAGE_VERSION_C89:		return "/std=c89";
-		case LANGUAGE_VERSION_C99:		return "/std=c99";
-		case LANGUAGE_VERSION_C11:		return "/std=c11";
-		case LANGUAGE_VERSION_C17:		return "/std=c17";
-		case LANGUAGE_VERSION_C23:		return "/std=c23";
-		case LANGUAGE_VERSION_CPP11:	return "/std=c++11";
-		case LANGUAGE_VERSION_CPP14:	return "/std=c++14";
-		case LANGUAGE_VERSION_CPP17:	return "/std=c++17";
-		case LANGUAGE_VERSION_CPP20:	return "/std=c++20";
-		case LANGUAGE_VERSION_CPP23:	return "/std=c++23";
+		case LANGUAGE_VERSION_C89:		return "/std:c89";
+		case LANGUAGE_VERSION_C99:		return "/std:c99";
+		case LANGUAGE_VERSION_C11:		return "/std:c11";
+		case LANGUAGE_VERSION_C17:		return "/std:c17";
+		case LANGUAGE_VERSION_C23:		return "/std:c23";
+		case LANGUAGE_VERSION_CPP11:	return "/std:c++11";
+		case LANGUAGE_VERSION_CPP14:	return "/std:c++14";
+		case LANGUAGE_VERSION_CPP17:	return "/std:c++17";
+		case LANGUAGE_VERSION_CPP20:	return "/std:c++20";
+		case LANGUAGE_VERSION_CPP23:	return "/std:c++23";
 	}
 
 	return NULL;
@@ -431,7 +431,7 @@ static bool8 MSVC_CompileSourceFile(
 	Array<const char*> finalArgs = cmdArchetype.baseArgs;
 
 	// Fill up remaining arguments
-	
+
 	// Output Flag/File
 	finalArgs.add( tprintf("%s%s%c%s.o", cmdArchetype.outputFlag, intermediatePath, PATH_SEPARATOR, sourceFileNoExtension ) );
 
@@ -506,7 +506,7 @@ static bool8 MSVC_CompileSourceFile(
 			lineStart = lineEnd + 1;
 		}
 	}
-	
+
 	if ( recordCompilation ) {
 		RecordCompilationDatabaseEntry( buildContext, sourceFile, finalArgs );
 	}
@@ -570,7 +570,7 @@ static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t* backend, const Array
 static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t* backend, const BuildConfig* config, compilationCommandArchetype_t& outCmdArchetype ) {
 
 	msvcState_t* msvcState = cast( msvcState_t*, backend->data );
-	
+
 	const u64 definesCount               = config->defines.size();
 	const u64 microsoftCoreIncludesCount = msvcState->microsoftCoreIncludes.size();
 	const u64 additionalIncludesCount    = config->additional_includes.size();
@@ -619,7 +619,7 @@ static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t* backe
 	For ( u32, defineIndex, 0, definesCount ) {
 		baseArgs.add( tprintf( "/D%s", config->defines[defineIndex].c_str() ) );
 	}
-	
+
 	// Microsoft Core Includes
 	For ( u32, includeIndex, 0, microsoftCoreIncludesCount ) {
 		baseArgs.add( tprintf( "/I%s", msvcState->microsoftCoreIncludes[includeIndex].c_str() ) );
@@ -697,7 +697,7 @@ static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t* backe
 
 	// Dependency Flags
 	// MSVC doesn't have any
-	
+
 	// Output Flag
 	outCmdArchetype.outputFlag = "/Fo";
 

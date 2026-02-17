@@ -1,5 +1,8 @@
 v0.10.0, <RELEASE DATE HERE>:
 
+* Added support for generating compilation database JSON files (thanks @eddyowen!).
+	* You can generate this via BuilderOptions::generate_compilation_database.
+	* For editors that support this (CLion, Visual Studio Code, and others), this allows projects using Builder to have proper syntax highlighting and IntelliSense support without any additional setup.
 * Added BuilderOptions::force_rebuild.
 	* This is really only useful to those who are either using an editor + command line workflow, or just hate incremental builds.
 * Added LANGUAGE_VERSION_C11, LANGUAGE_VERSION_C17, and LANGUAGE_VERSION_C23.

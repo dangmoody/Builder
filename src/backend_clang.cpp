@@ -204,7 +204,12 @@ static bool8 Clang_Init( compilerBackend_t* backend, const std::string &compiler
 	ResolveCompilerAndLinkerPaths( clangState, compilerPath.c_str(), clangExe, linkerExe );
 
 	const char *pathToCompiler = path_remove_file_from_path( compilerPath.c_str() );
+
+#if defined( _WIN32 )
 	string_printf( &clangState->arPath, "%s%car", pathToCompiler, PATH_SEPARATOR );
+#elif defined( __linux__ )
+	string_printf( &clangState->arPath, "%s%c%s", pathToCompiler, PATH_SEPARATOR, linkerExe );
+#endif
 
 	return true;
 }
@@ -246,11 +251,11 @@ static bool8 Clang_CompileSourceFile(
 	const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
 	const char* intermediatePath = tprintf( "%s%c%s", config->binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
 	const char* depFilename = tprintf( "%s%c%s.d", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
-	
+
 	Array<const char*> finalArgs = cmdArchetype.baseArgs;
 
 	// Fill up remaining arguments
-	
+
 	// Dependency Flags/File
 	For( u64, flagIndex, 0, cmdArchetype.dependencyFlags.count) {
 		finalArgs.add( cmdArchetype.dependencyFlags[flagIndex] );
@@ -263,7 +268,7 @@ static bool8 Clang_CompileSourceFile(
 
 	// Source File
 	finalArgs.add( sourceFile );
-	
+
 	s32 exitCode = RunProc( &finalArgs, NULL, PROC_FLAG_SHOW_ARGS | PROC_FLAG_SHOW_STDOUT );
 
 	if ( exitCode == 0 ) {
@@ -273,7 +278,7 @@ static bool8 Clang_CompileSourceFile(
 	if ( recordCompilation ) {
 		RecordCompilationDatabaseEntry( buildContext, sourceFile, finalArgs );
 	}
-	
+
 	return exitCode == 0;
 }
 
@@ -386,9 +391,9 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t* backend, const Arra
 static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t* backend, const BuildConfig* config, compilationCommandArchetype_t& outCmdArchetype ) {
 
 	clangState_t *clangState = cast( clangState_t *, backend->data );
-	
+
 	const char* compilerPath = clangState->compilerPath.data;
-	
+
 	bool8 isClang = string_ends_with( compilerPath, "clang" ) || string_ends_with( compilerPath, "clang++" );
 
 	// Not used originally but leaving here for clarity
@@ -444,7 +449,7 @@ static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t* back
 	For ( u32, includeIndex, 0, additionalIncludesCount ) {
 		baseArgs.add( tprintf( "-I%s", config->additional_includes[includeIndex].c_str() ) );
 	}
-	
+
 	// Warning As Error
 	if ( config->warnings_as_errors ) {
 		baseArgs.add( "-Werror" );
@@ -501,7 +506,7 @@ static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t* back
 
 	// Output Flag
 	outCmdArchetype.outputFlag = "-o";
-	
+
 	return true;
 }
 

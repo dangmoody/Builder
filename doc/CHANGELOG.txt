@@ -14,6 +14,7 @@ v0.10.0, <RELEASE DATE HERE>:
 		* It's more robust, but also means that builds using MSVC are faster now.
 	* Fixed additional library paths not getting detected properly by MSVC.
 	* Fixed bad option being sent to link.exe when making DLLs.
+	* Fixed bad /std option when setting the language version.
 
 ----------------------------------------------------------------
 

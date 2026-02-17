@@ -563,6 +563,7 @@ static String Clang_GetCompilerVersion( compilerBackend_t* backend ) {
 		versionStart += strlen( clangVersionPrefix );
 
 		const char* versionEnd = NULL;
+		if ( !versionEnd ) versionEnd = strchr( versionStart, ' ' );
 		if ( !versionEnd ) versionEnd = strchr( versionStart, '\r' );
 		if ( !versionEnd ) versionEnd = strchr( versionStart, '\n' );
 		assert( versionEnd );

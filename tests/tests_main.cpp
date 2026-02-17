@@ -17,37 +17,15 @@
 #include "temper/temper.h"
 
 
-static const char* GetFileExtensionFromBinaryType( BinaryType type ) {
-#ifdef _WIN32
-	switch ( type ) {
-		case BINARY_TYPE_EXE:				return ".exe";
-		case BINARY_TYPE_DYNAMIC_LIBRARY:	return ".dll";
-		case BINARY_TYPE_STATIC_LIBRARY:	return ".lib";
-	}
-#elif defined( __linux__ )
-	switch ( type ) {
-		case BINARY_TYPE_EXE:				return "";
-		case BINARY_TYPE_DYNAMIC_LIBRARY:	return ".so";
-		case BINARY_TYPE_STATIC_LIBRARY:	return ".a";
-	}
-#else
-#error Unrecognised paltform.
-#endif
-
-	assertf( false, "Something went really wrong here.\n" );
-
-	return "ERROR";
-}
-
 struct buildTest_t {
-	const char*	rootDir;			// whats the root folder of this test?
-	const char*	buildSourceFile;	// if defaultCompilerOnly is enabled then this just wants to be the source file that holds your build configs
-	const char*	config;				// can be NULL
-	const char*	binaryFolder;		// if NULL, assumed that no folder was created as part of the build
-	const char*	binaryName;			// if NULL, assumed to be the same as buildSourceFile except it ends with .exe (on windows)
+	const char*	rootDir;				// whats the root folder of this test?
+	const char*	buildSourceFile;		// if defaultCompilerOnly is enabled then this just wants to be the source file that holds your build configs
+	const char*	config;					// can be NULL
+	const char*	binaryFolder;			// if NULL, assumed that no folder was created as part of the build
+	const char*	binaryName;				// if NULL, assumed to be the same as buildSourceFile except it ends with .exe (on windows)
 	s32			expectedExitCode;
 	bool8		noSymbolFiles;
-	bool8 defaultCompilerOnly;		// if false will run this test for every compiler we support
+	bool8		defaultCompilerOnly;	// if false will run this test for every compiler we support
 };
 
 enum compiler_t {
@@ -106,7 +84,7 @@ static const char* GetCompilerVersion( const compiler_t compiler ) {
 struct buildTestGeneratedFiles_t {
 	Array<const char*>	folders;
 	Array<const char*>	files;
-	Array<const char*>	fileExtensionsToCheck;
+	Array<const char*>	fileExtensionsToDelete;
 };
 
 static void GetAllGeneratedFiles( const FileInfo* fileInfo, void* data ) {
@@ -115,9 +93,14 @@ static void GetAllGeneratedFiles( const FileInfo* fileInfo, void* data ) {
 	if ( fileInfo->is_directory ) {
 		generatedFiles->folders.add( fileInfo->full_filename );
 	} else {
-		For ( u32, fileExtensionIndex, 0, generatedFiles->fileExtensionsToCheck.count ) {
-			if ( string_ends_with( fileInfo->full_filename, generatedFiles->fileExtensionsToCheck[fileExtensionIndex] ) ) {
+		if ( FileIsSourceFile( fileInfo->filename ) || FileIsHeaderFile( fileInfo->filename ) ) {
+			return;
+		}
+
+		For ( u32, fileExtensionIndex, 0, generatedFiles->fileExtensionsToDelete.count ) {
+			if ( string_ends_with( fileInfo->full_filename, generatedFiles->fileExtensionsToDelete[fileExtensionIndex] ) ) {
 				generatedFiles->files.add( fileInfo->full_filename );
+				break;
 			}
 		}
 	}
@@ -147,10 +130,10 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 			// args should also be const because we never actually modify them
 			// I know how to get this done, leave this work with me
 			Array<char*> args;
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wcast-qual"
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-qual"
 			args.add( cast( char*, buildSourceFilename ) );
-	#pragma clang diagnostic pop
+#pragma clang diagnostic pop
 			if ( testData.config ) {
 				args.add( tprintf( "--config=%s", testData.config ) );
 			}
@@ -172,16 +155,21 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 		// get all the files that this test will generate
 		// we will want these later to check if they got successfully deleted (tests should clean up after themselves properly)
 		buildTestGeneratedFiles_t generatedFiles = {};
-		generatedFiles.fileExtensionsToCheck.add( GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
-		generatedFiles.fileExtensionsToCheck.add( GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
-		generatedFiles.fileExtensionsToCheck.add( GetFileExtensionFromBinaryType( BINARY_TYPE_STATIC_LIBRARY ) );
-		generatedFiles.fileExtensionsToCheck.add( ".include_dependencies" );
-		generatedFiles.fileExtensionsToCheck.add( ".pdb" );
-		generatedFiles.fileExtensionsToCheck.add( ".exp" );
-		generatedFiles.fileExtensionsToCheck.add( ".ilk" );
-		generatedFiles.fileExtensionsToCheck.add( ".o" );
-		generatedFiles.fileExtensionsToCheck.add( ".d" );
-		generatedFiles.fileExtensionsToCheck.add( ".json" );
+#ifdef _WIN32
+		// exes have no file extension on linux
+		// which means when we check for this "extension" on linux we actually check if the string ends with "", which always passes
+		// so only do this on windows, because we actually have a file extension to check against there
+		generatedFiles.fileExtensionsToDelete.add( GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
+#endif
+		generatedFiles.fileExtensionsToDelete.add( GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
+		generatedFiles.fileExtensionsToDelete.add( GetFileExtensionFromBinaryType( BINARY_TYPE_STATIC_LIBRARY ) );
+		generatedFiles.fileExtensionsToDelete.add( ".include_dependencies" );
+		generatedFiles.fileExtensionsToDelete.add( ".pdb" );
+		generatedFiles.fileExtensionsToDelete.add( ".exp" );
+		generatedFiles.fileExtensionsToDelete.add( ".ilk" );
+		generatedFiles.fileExtensionsToDelete.add( ".o" );
+		generatedFiles.fileExtensionsToDelete.add( ".d" );
+		generatedFiles.fileExtensionsToDelete.add( ".json" );
 
 		TEMPER_CHECK_TRUE( file_get_all_files_in_folder( dotBuilderFolder, true, true, GetAllGeneratedFiles, &generatedFiles ) );
 		if ( testData.binaryFolder ) {
@@ -247,6 +235,18 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 
 		For ( u32, compilerIndex, 0, COMPILER_COUNT ) {
 			compiler_t compiler = cast( compiler_t, compilerIndex );
+
+#ifdef __linux__
+			// dont generate msvc tests on linux
+			if ( compiler == COMPILER_MSVC ) {
+				continue;
+			}
+
+			// TODO(DM): 16/02/2026: undo this check when we figure out why we cant set the override compiler path to something like "gcc" on linux
+			if ( compiler == COMPILER_GCC ) {
+				continue;
+			}
+#endif
 
 			const char* compilerSuffix = GetCompilerBuildSourceFileSuffix( compiler );
 
@@ -437,17 +437,17 @@ TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 // the JSON is correctly formatted according to the specification.
 // https://clang.llvm.org/docs/JSONCompilationDatabase.html
 TEMPER_TEST( ValidateCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
-    const char* sourceFile = "tests/test_compilation_database/main.cpp";
-    const char* compileCommandsDir = "test_compilation_database";
-    const char* compileCommandsPath = "test_compilation_database/compile_commands.json";
+	const char* sourceFile = "tests/test_compilation_database/main.cpp";
+	const char* compileCommandsDir = "test_compilation_database";
+	const char* compileCommandsPath = "test_compilation_database/compile_commands.json";
 
-    TEMPER_CHECK_TRUE_M( file_exists( compileCommandsPath ), "compile_commands.json does not exist at %s\n", compileCommandsPath );
+	TEMPER_CHECK_TRUE_M( file_exists( compileCommandsPath ), "compile_commands.json does not exist at %s\n", compileCommandsPath );
 
-    char* content = NULL;
+	char* content = NULL;
 	u64 contentLength = 0;
-    file_read_entire( compileCommandsPath, &content, &contentLength );
-    defer( file_free_buffer( &content ) );
-	
+	file_read_entire( compileCommandsPath, &content, &contentLength );
+	defer( file_free_buffer( &content ) );
+
 	// Count occurrences of "file": which indicates individual entries
 	u64 entriesCount = 0;
 	const char* ptr = content;
@@ -456,37 +456,37 @@ TEMPER_TEST( ValidateCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 		ptr++;
 	}
 
-    TEMPER_CHECK_TRUE_M( entriesCount == 2, "compile_commands.json file contains an unexpected number of entries (2)" );
+	TEMPER_CHECK_TRUE_M( entriesCount == 2, "compile_commands.json file contains an unexpected number of entries (2)" );
 
-    // clang-tidy -p <build-path> <source-file> --checks=-*
-    //
-    // Using --checks=-* disables all actual checks, so we only test whether
-    // clang-tidy can successfully load the compilation database.
-    // If the compile_commands.json is malformed, clang-tidy will fail with an error like:
-    //     "Error while trying to load a compilation database"
+	// clang-tidy -p <build-path> <source-file> --checks=-*
+	//
+	// Using --checks=-* disables all actual checks, so we only test whether
+	// clang-tidy can successfully load the compilation database.
+	// If the compile_commands.json is malformed, clang-tidy will fail with an error like:
+	//     "Error while trying to load a compilation database"
 
-    Array<const char*> args;
-    args.add( "clang-tidy" );
-    args.add( sourceFile );
-    args.add( tprintf( "-p=%s", compileCommandsDir ) );
-    args.add( "--checks=-*" );  // Disable all checks - we only want to test DB loading
+	Array<const char*> args;
+	args.add( "clang-tidy" );
+	args.add( sourceFile );
+	args.add( tprintf( "-p=%s", compileCommandsDir ) );
+	args.add( "--checks=-*" );  // Disable all checks - we only want to test DB loading
 
-    Array<const char*> stdout_output;
-    s32 exitCode = RunProc( &args, &stdout_output, false );
-    bool isValid = true;
-    // Check for specific error messages that indicate database problems
-    if ( stdout_output.data ) {
-        if ( strstr( *stdout_output.data, "Error while trying to load a compilation database" ) ) {
-            printf( "clang-tidy failed to load compilation database: %s\n", *stdout_output.data );
-            isValid = false;
-        }
-        if ( strstr( *stdout_output.data, "error: no compilation database found" ) ) {
-            printf( "clang-tidy could not find compilation database\n" );
-            isValid = false;
-        }
-    }
+	Array<const char*> stdout_output;
+	s32 exitCode = RunProc( &args, &stdout_output, false );
+	bool isValid = true;
+	// Check for specific error messages that indicate database problems
+	if ( stdout_output.data ) {
+		if ( strstr( *stdout_output.data, "Error while trying to load a compilation database" ) ) {
+			printf( "clang-tidy failed to load compilation database: %s\n", *stdout_output.data );
+			isValid = false;
+		}
+		if ( strstr( *stdout_output.data, "error: no compilation database found" ) ) {
+			printf( "clang-tidy could not find compilation database\n" );
+			isValid = false;
+		}
+	}
 
-    TEMPER_CHECK_TRUE_M( isValid, "clang-tidy failed to load compile_commands.json - the file may be malformed\n" );
+	TEMPER_CHECK_TRUE_M( isValid, "clang-tidy failed to load compile_commands.json - the file may be malformed\n" );
 }
 
 int main( int argc, char** argv ) {

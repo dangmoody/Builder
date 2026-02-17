@@ -96,7 +96,7 @@ u64 GetLastFileWriteTime( const char* filename ) {
 	return lastWriteTime;
 }
 
-static const char* GetFileExtensionFromBinaryType( BinaryType type ) {
+const char* GetFileExtensionFromBinaryType( const BinaryType type ) {
 #ifdef _WIN32
 	switch ( type ) {
 		case BINARY_TYPE_EXE:				return ".exe";
@@ -401,7 +401,7 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 
 		return false;
 	};
-	
+
 	// Process only once how the base compilation command should look like, fill up dep/output/source args later for each source file
 	compilationCommandArchetype_t cmdArchetype{};
 	if ( !compilerBackend->GetCompilationCommandArchetype( compilerBackend, config, cmdArchetype ) ) {
@@ -412,7 +412,7 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 	if ( generateCompilationDatabase ) {
 		context->compilationDatabase.reserve( config->source_files.size() );
 	}
-	
+
 	// compile step
 	// make .o files for all compilation units
 	// TODO(DM): 14/06/2025: embarrassingly parallel
@@ -770,11 +770,11 @@ void RecordCompilationDatabaseEntry(
 	buildContext_t* buildContext,
 	const char* sourceFileName,
 	const Array<const char*>& compilationCommandArray ) {
-	
+
 	compilationDatabaseEntry_t entry;
 	entry.directory  = path_absolute_path( buildContext->inputFilePath.data );
 	entry.file       = path_absolute_path( sourceFileName );
-	
+
 	entry.arguments.reserve( compilationCommandArray.count );
 	For( u64, argIndex, 0, compilationCommandArray.count ) {
 		const char* arg = compilationCommandArray[argIndex];
@@ -783,10 +783,10 @@ void RecordCompilationDatabaseEntry(
 		if ( !arg ) {
 			continue;
 		}
-		
+
 		entry.arguments.emplace_back( arg );
 	}
-	
+
 	buildContext->compilationDatabase.emplace_back( entry );
 }
 
@@ -812,7 +812,7 @@ static constexpr flagRule_t flagArgumentRules[] = {
 	{ "/Yc",    JOINED },
 	{ "/Fi",    SEPARATE },
 	{ "@",      JOINED }, // ED: not supported for now
-	
+
 	// Clang/GCC
 	{ "-I",         JOINED | SEPARATE },
 	{ "-isystem",   SEPARATE },
@@ -847,7 +847,7 @@ static void FixCompilatiomDatabasePath( std::string& path  ) {
 // Processes the compilation arguments and sanitizes those that are paths arguments, to follow the json format,
 // but following the possible combinations in which the compile flag can be provided, based on the compiler
 // (see flagRule_t). This was thought as a more optimal way of doing it, instead of checking character by character for each argument.
-// Also, AFAIK paths in compilation databases are expected to be full paths. 
+// Also, AFAIK paths in compilation databases are expected to be full paths.
 static void SanitizeCompilationDatabaseArgs( std::vector<std::string>& args ) {
 
 	For ( size_t, argIndex, 0, args.size() ) {
@@ -856,12 +856,12 @@ static void SanitizeCompilationDatabaseArgs( std::vector<std::string>& args ) {
 		if ( arg.empty() ) {
 			continue;
 		}
-		
+
 		const size_t argLength = arg.size();
 		const char* argPtr = arg.c_str();
-		
+
 		const flagRule_t *rule = IsFlagMatch( arg.c_str() );
-		
+
 		// Paths not related to compiler-specific flags
 		if (!rule) {
 			if ( path_is_absolute( argPtr ) || FileIsSourceFile( argPtr ) || FileIsHeaderFile( argPtr) ) {
@@ -872,11 +872,11 @@ static void SanitizeCompilationDatabaseArgs( std::vector<std::string>& args ) {
 
 			continue;
 		}
- 
+
 		u64 ruleLength = strlen( rule->flag );
 		const argumentForms_t ruleForms = rule->forms;
 		const char* ruleFlag = rule->flag;
-		
+
 		bool handled = false;
 
 		// Joined form
@@ -910,7 +910,7 @@ static void SanitizeCompilationDatabaseArgs( std::vector<std::string>& args ) {
 }
 
 static bool WriteCompilationDatabase( buildContext_t* context ) {
-	
+
 	if ( context->compilationDatabase.empty() ) {
 		return true;
 	}
@@ -923,15 +923,15 @@ static bool WriteCompilationDatabase( buildContext_t* context ) {
 
 	const u64 entriesCount = context->compilationDatabase.size();
 	For ( u64, i, 0, entriesCount ) {
-		
+
 		compilationDatabaseEntry_t& entry = context->compilationDatabase[i];
-		
+
 		FixCompilatiomDatabasePath( entry.directory );
 		FixCompilatiomDatabasePath( entry.file );
-		
+
 		const char* directory = entry.directory.c_str();
-		const char* file = entry.file.c_str();		
-		
+		const char* file = entry.file.c_str();
+
 		string_builder_appendf(
 			&sb,
 			"  {\n"
@@ -943,7 +943,7 @@ static bool WriteCompilationDatabase( buildContext_t* context ) {
 		);
 
 		SanitizeCompilationDatabaseArgs( entry.arguments );
-		
+
 		const u64 argumentsCount = entry.arguments.size();
 		For ( u64, argIndex, 0, argumentsCount ) {
 			string_builder_appendf(
@@ -1582,7 +1582,7 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 		if ( !WriteIncludeDependenciesFile( &context ) ) {
 			QUIT_ERROR();
 		}
-		
+
 		if ( options.generate_compilation_database && !WriteCompilationDatabase( &context ) ){
 			context.compilationDatabase.clear();
 			QUIT_ERROR();

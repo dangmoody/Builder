@@ -100,7 +100,7 @@ struct compilationDatabaseEntry_t {
 	std::vector<std::string> arguments;
 	std::string directory;
 	std::string file;
-	std::string outputFile; 
+	std::string outputFile;
 };
 
 struct buildContext_t {
@@ -131,6 +131,8 @@ const char*	GetNextSlashInPath( const char* path );
 
 bool8		FileIsSourceFile( const char* filename );
 bool8		FileIsHeaderFile( const char* filename );
+
+const char*	GetFileExtensionFromBinaryType( const BinaryType type );
 
 const char*	BuildConfig_GetFullBinaryName( const BuildConfig* config );
 

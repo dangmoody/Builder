@@ -39,10 +39,9 @@ popd
 :: now actually make release package
 set tempFolder=.\\releases\\temp
 
-robocopy    .\\bin   %tempFolder%\\bin   builder_release.exe
-robocopy /e .\\clang %tempFolder%\\clang
-
-ren %tempFolder%\\bin\\builder_release.exe builder.exe
+robocopy    .\\bin        %tempFolder%\\bin   builder.exe
+robocopy    .\\clang\\bin %tempFolder%\\bin   libclang.dll
+robocopy /e .\\clang      %tempFolder%\\clang
 
 .\\tools\\7zip_win64\\7za.exe a -tzip .\\releases\\builder_%version%_win64.zip %tempFolder%\\bin %tempFolder%\\clang include doc README.md LICENSE
 

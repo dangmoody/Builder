@@ -525,7 +525,10 @@ static String Clang_GetCompilerPath( compilerBackend_t* backend ) {
 	return clangState->compilerPath;
 }
 
+#include <clang-c/Index.h>
+
 static String Clang_GetCompilerVersion( compilerBackend_t* backend ) {
+#if 0
 	clangState_t* clangState = cast( clangState_t*, backend->data );
 
 	String compilerVersion;
@@ -579,6 +582,22 @@ static String Clang_GetCompilerVersion( compilerBackend_t* backend ) {
 	process = NULL;
 
 	return compilerVersion;
+#else
+	unused( backend );
+
+	CXString clangVersionString = clang_getClangVersion();
+	const char* clangVersionCStr = clang_getCString( clangVersionString );
+	defer( clang_disposeString( clangVersionString ) );
+
+	String result;
+	string_copy_from_c_string( &result, clangVersionCStr, strlen( clangVersionCStr ) );
+
+	if ( string_starts_with( result.data, "clang version " ) ) {
+		result.data += strlen( "clang version " );
+	}
+
+	return result;
+#endif
 }
 
 static String GCC_GetCompilerVersion( compilerBackend_t* backend ) {

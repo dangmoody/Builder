@@ -62,9 +62,11 @@ if /I [%config%] == [debug] (
 	set defines=!defines! -DNDEBUG -DBUILDER_PROGRAM_NAME=\"!program_name!\"
 )
 
-set includes=-Isrc\\core\\include
+set includes=-Isrc\\core\\include -Iclang\\include
 
-set libraries=-luser32.lib -lShlwapi.lib -lDbgHelp.lib -lOle32.lib -lAdvapi32.lib -lOleAut32.lib
+set lib_paths=-Lclang\\lib
+
+set libraries=-luser32.lib -lShlwapi.lib -lDbgHelp.lib -lOle32.lib -lAdvapi32.lib -lOleAut32.lib -llibclang.lib
 if /I [%config%] == [debug] (
 	set libraries=!libraries! -lmsvcrtd.lib
 ) else (
@@ -73,9 +75,9 @@ if /I [%config%] == [debug] (
 
 set warning_levels=-Werror -Wall -Wextra -Weverything -Wpedantic
 
-set ignore_warnings=-Wno-newline-eof -Wno-format-nonliteral -Wno-gnu-zero-variadic-macro-arguments -Wno-declaration-after-statement -Wno-unsafe-buffer-usage -Wno-zero-as-null-pointer-constant -Wno-c++98-compat-pedantic -Wno-old-style-cast -Wno-missing-field-initializers -Wno-switch-default -Wno-covered-switch-default -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-cast-align -Wno-double-promotion -Wno-nontrivial-memcall
+set ignore_warnings=-Wno-newline-eof -Wno-format-nonliteral -Wno-gnu-zero-variadic-macro-arguments -Wno-declaration-after-statement -Wno-unsafe-buffer-usage -Wno-zero-as-null-pointer-constant -Wno-c++98-compat-pedantic -Wno-old-style-cast -Wno-missing-field-initializers -Wno-switch-default -Wno-covered-switch-default -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-cast-align -Wno-double-promotion -Wno-nontrivial-memcall -Wno-documentation-unknown-command
 
-set args=clang\\bin\\clang -std=c++20 -o %bin_folder%\\%program_name%.exe %symbols% %optimisation% %source_files% !defines! %includes% !libraries! %warning_levels% %ignore_warnings%
+set args=clang\\bin\\clang -std=c++20 -o %bin_folder%\\%program_name%.exe %symbols% %optimisation% %source_files% !defines! %includes% %lib_paths% !libraries! %warning_levels% %ignore_warnings%
 echo %args%
 %args%
 

@@ -27,12 +27,14 @@ if %errorlevel% NEQ 0 (
 )
 
 :: run tests
-call .\\bin\\builder_tests_release.exe
+pushd tests
+call ..\\bin\\builder_tests_release.exe
 
 if %errorlevel% NEQ 0 (
 	echo ERROR: Tests failed to run successfully! A release cannot be made while the tests dont work
 	exit /B %errorlevel%
 )
+popd
 
 :: now actually make release package
 set temp_folder=.\\releases\\temp

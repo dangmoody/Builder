@@ -63,3 +63,4 @@ echo $args
 $args
 
 cp ${clangDir}/lib/libclang.so ${binFolder}
+cp ${clangDir}/lib/libclang.so.20.1 ${binFolder}

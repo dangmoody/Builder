@@ -26,6 +26,8 @@ pushd ${builderDir}
 
 # build builder and tests
 source ${builderDir}/scripts/build.sh release
+echo ""
+
 source ${builderDir}/scripts/build_tests.sh release
 
 # run the tests and make sure they pass

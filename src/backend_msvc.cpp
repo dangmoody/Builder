@@ -153,7 +153,7 @@ static void OnWindowsSDKVersionFound( const FileInfo *fileInfo, void *data ) {
 
 	msvcState_t *msvcState = cast( msvcState_t *, data );
 
-	s32 v0, v1, v2, v3;
+	s32 v0 = 0, v1 = 0, v2 = 0, v3 = 0;
 	sscanf( fileInfo->filename, "%d.%d.%d.%d", &v0, &v1, &v2, &v3 );
 
 	if ( v0 < msvcState->windowsSDKVersion.v0 ) return;
@@ -208,6 +208,8 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const std::string &compilerP
 	msvcState_t *msvcState = cast( msvcState_t *, mem_alloc( sizeof( msvcState_t ) ) );
 	new( msvcState ) msvcState_t;
 
+	msvcState->windowsSDKVersion = {};
+
 	backend->data = msvcState;
 
 	// get the latest version of the windows sdk
@@ -230,11 +232,6 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const std::string &compilerP
 
 		const char *windowsSDKRoot = FindRegistryValueFromKey( key, "KitsRoot10" );
 
-		if ( !windowsSDKRoot ) {
-			error( "Failed to find \"KitsRoot10\" registry key.\n" );
-			return false;
-		}
-
 		assert( windowsSDKRoot );
 
 		// get the latest version of the windows sdk
@@ -245,11 +242,7 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const std::string &compilerP
 			return false;
 		}
 
-		const char* windowsSDKIncludeFolder = tprintf( "%sinclude\\%d.%d.%d.%d\\ucrt", windowsSDKRoot, msvcState->windowsSDKVersion.v0, msvcState->windowsSDKVersion.v1, msvcState->windowsSDKVersion.v2, msvcState->windowsSDKVersion.v3 );
-
-		printf( "Found windows SDK include folder \"%s\".\n", windowsSDKIncludeFolder );
-
-		msvcState->microsoftCoreIncludes.push_back( windowsSDKIncludeFolder );
+		msvcState->microsoftCoreIncludes.push_back( tprintf( "%sinclude\\%d.%d.%d.%d\\ucrt", windowsSDKRoot, msvcState->windowsSDKVersion.v0, msvcState->windowsSDKVersion.v1, msvcState->windowsSDKVersion.v2, msvcState->windowsSDKVersion.v3 ) );
 
 		msvcState->microsoftCoreLibPaths.push_back( tprintf( "%sLib\\%d.%d.%d.%d\\ucrt\\x64", windowsSDKRoot, msvcState->windowsSDKVersion.v0, msvcState->windowsSDKVersion.v1, msvcState->windowsSDKVersion.v2, msvcState->windowsSDKVersion.v3 ) );
 		msvcState->microsoftCoreLibPaths.push_back( tprintf( "%sLib\\%d.%d.%d.%d\\um\\x64", windowsSDKRoot, msvcState->windowsSDKVersion.v0, msvcState->windowsSDKVersion.v1, msvcState->windowsSDKVersion.v2, msvcState->windowsSDKVersion.v3 ) );

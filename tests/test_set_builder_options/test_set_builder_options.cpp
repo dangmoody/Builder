@@ -29,7 +29,7 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 #include <stdio.h>
 
 int main() {
-	int exitCode = 420;
+	int exitCode = 69;
 
 	printf( "This should return %d...\n", exitCode );
 

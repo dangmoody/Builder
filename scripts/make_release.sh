@@ -21,9 +21,11 @@ if [[ -z "$version" ]]; then
 fi
 
 builder_dir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")/..
-releases_folder=${builder_dir}/releases
 
-# build tests (also builds builder)
+pushd ${builder_dir}
+
+# build builder and tests
+source ${builder_dir}/scripts/build.sh release
 source ${builder_dir}/scripts/build_tests.sh release
 
 # run the tests and make sure they pass
@@ -31,8 +33,8 @@ pushd ${builder_dir}/tests
 ../bin/builder_tests_release
 popd
 
-mkdir -p ${releases_folder}
-
-cp ./bin/builder_release ./bin/builder
+mkdir -p releases
 
 tar cvf releases/builder_${version}_linux.tar.xz -I 'xz -9e --lzma2=dict=256M' ./bin/builder clang include doc README.md LICENSE
+
+popd

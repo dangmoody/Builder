@@ -24,9 +24,6 @@
     <ClCompile Include="test_set_builder_options\test_set_builder_options.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="test_multiple_source_files\build.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="test_multiple_source_files\src\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -60,10 +57,7 @@
     <ClCompile Include="test_dynamic_lib\program\program.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="test_dynamic_lib\build.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="test_static_lib\build.cpp">
+    <ClCompile Include="test_dynamic_lib\build_configs.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="test_compiler_path\test_compiler_path.cpp">
@@ -97,6 +91,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="test_override_path_msvc\test_override_path_msvc.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="test_multiple_source_files\build_configs.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="test_static_lib\build_configs.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

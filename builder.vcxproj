@@ -82,7 +82,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <NMakeBuildCommandLine>.\scripts\build.bat $(Configuration)</NMakeBuildCommandLine>
-    <NMakeOutput>bin\\builder_$(Configuration).exe</NMakeOutput>
+    <NMakeOutput>bin\\builder.exe</NMakeOutput>
     <NMakeReBuildCommandLine>.\scripts\build.bat $(Configuration)</NMakeReBuildCommandLine>
     <NMakePreprocessorDefinitions>NDEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
   </PropertyGroup>
@@ -130,6 +130,7 @@
     <ClCompile Include="src\core\src\win64\library.win64.cpp" />
     <ClCompile Include="src\core\src\win64\paths.win64.cpp" />
     <ClCompile Include="src\core\src\win64\timer.win64.cpp" />
+    <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\visual_studio.cpp" />
   </ItemGroup>
   <ItemGroup>

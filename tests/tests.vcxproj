@@ -92,8 +92,10 @@
   <ItemGroup>
     <ClCompile Include="tests_main.cpp" />
     <ClCompile Include="test_basic\test_basic.cpp" />
-    <ClCompile Include="test_compiler_path\test_compiler_path.cpp" />
-    <ClCompile Include="test_dynamic_lib\build.cpp" />
+    <ClCompile Include="test_compilation_database\build_configs.cpp" />
+    <ClCompile Include="test_compilation_database\src\helper.cpp" />
+    <ClCompile Include="test_compilation_database\src\main.cpp" />
+    <ClCompile Include="test_dynamic_lib\build_configs.cpp" />
     <ClCompile Include="test_dynamic_lib\lib\lib.cpp" />
     <ClCompile Include="test_dynamic_lib\program\program.cpp" />
     <ClCompile Include="test_generate_visual_studio_files\generate_solution.cpp" />
@@ -103,7 +105,7 @@
     <ClCompile Include="test_generate_visual_studio_files\src\app\main.cpp" />
     <ClCompile Include="test_generate_visual_studio_files\src\library1\library1.cpp" />
     <ClCompile Include="test_generate_visual_studio_files\src\library2\library2.cpp" />
-    <ClCompile Include="test_multiple_source_files\build.cpp" />
+    <ClCompile Include="test_multiple_source_files\build_configs.cpp" />
     <ClCompile Include="test_multiple_source_files\src\main.cpp" />
     <ClCompile Include="test_multiple_source_files\src\marco.linux.cpp" />
     <ClCompile Include="test_multiple_source_files\src\marco.win64.cpp" />
@@ -113,7 +115,7 @@
     <ClCompile Include="test_override_path_gcc\test_override_path_gcc.cpp" />
     <ClCompile Include="test_override_path_msvc\test_override_path_msvc.cpp" />
     <ClCompile Include="test_set_builder_options\test_set_builder_options.cpp" />
-    <ClCompile Include="test_static_lib\build.cpp" />
+    <ClCompile Include="test_static_lib\build_configs.cpp" />
     <ClCompile Include="test_static_lib\lib\lib.cpp" />
     <ClCompile Include="test_static_lib\program\program.cpp" />
     <ClCompile Include="test_third_party_libraries\build.cpp" />
@@ -132,12 +134,11 @@
     <Content Include="test_static_lib\.builder\build.so" />
     <Content Include="test_static_lib\.builder\intermediate\build.cpp.d" />
     <Content Include="test_static_lib\.builder\intermediate\build.cpp.o" />
-    <Content Include="test_static_lib\bin\intermediate\lib.cpp.d" />
-    <Content Include="test_static_lib\bin\intermediate\lib.cpp.o" />
-    <Content Include="test_static_lib\bin\intermediate\program.cpp.d" />
-    <Content Include="test_static_lib\bin\intermediate\program.cpp.o" />
-    <Content Include="test_static_lib\bin\test_static_lib.a" />
-    <Content Include="test_static_lib\bin\test_static_library_program" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="test_compilation_database\.builder\" />
+    <Folder Include="test_compilation_database\bin\" />
+    <Folder Include="test_static_lib\bin\" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" Condition="'$(OS)' == 'Windows_NT'" />
   <ImportGroup Label="ExtensionTargets">

@@ -54,8 +54,8 @@ CORE_API const char*	path_app_path();
 // Returns the path that your program is currently running from.
 CORE_API const char*	path_current_working_directory();
 
-// Returns the absolute path of 'file'.
-CORE_API const char*	path_absolute_path( const char* file );
+// Returns the absolute path of 'path'.
+CORE_API const char*	path_absolute_path( const char *path );
 
 // Given a file path that also includes a filename, will remove the filename part, leaving just the path.
 CORE_API const char*	path_remove_file_from_path( const char* path );

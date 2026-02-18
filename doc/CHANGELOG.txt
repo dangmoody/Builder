@@ -1,3 +1,28 @@
+v0.10.0, 19/02/2026:
+
+* All snake_case coding conventions have been completely dropped.
+	* Functions are now PascalCase.  For example: set_builder_options is now SetBuilderOptions.
+	* Variables are now camelCase.  For example: generate_solution is now generateSolution.
+	* This change was made because the internal codebase conventions were different from the public API and it was annoying me.
+* Added support for generating compilation database JSON files (thanks @eddyowen!).
+	* You can generate this via BuilderOptions::generateCompilationDatabase.
+	* For editors that support this (CLion, Visual Studio Code, and others), this allows projects using Builder to have syntax highlighting and IntelliSense support without any additional setup.
+* Added BuilderOptions::forceRebuild.
+	* This is really only useful to those who are either using an editor + command line workflow, or just hate incremental builds.
+* Added LANGUAGE_VERSION_C11, LANGUAGE_VERSION_C17, and LANGUAGE_VERSION_C23.
+	* Microsoft's post-C99 support isn't great, so you'll need to take care of that yourself, but Builder at least exposes the options for you now.
+* Better warning message when the version of the override compiler you want to use doesn't match what Builder found.
+* Fixed root-folder source files not getting included in the build when globbing.
+* Fixed crash that could sometimes happen when getting the current directory on Linux.
+* MSVC:
+	* Rewrote how MSVC compiler paths and versions are queried for, as well as Windows SDK and MSVC include/lib paths.
+		* It's more robust, but also means that builds using MSVC are faster now.
+	* Fixed additional library paths not getting detected properly by MSVC.
+	* Fixed bad option being sent to link.exe when making DLLs.
+	* Fixed bad /std flag that got generated when setting the language version.
+
+----------------------------------------------------------------
+
 v0.9.1, 26/12/2025:
 
 * Stopped the program from crashing if the overridden compiler can't be found.  Instead, show an error and exit gracefully.

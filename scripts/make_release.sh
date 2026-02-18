@@ -20,17 +20,24 @@ if [[ -z "$version" ]]; then
 	ShowUsage
 fi
 
-builder_dir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")/..
-releases_folder=${builder_dir}/releases
+builderDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")/..
 
-# build tests (also builds builder)
-source ${builder_dir}/scripts/build_tests.sh release
+pushd ${builderDir}
+
+# build builder and tests
+source ${builderDir}/scripts/build.sh release
+echo ""
+
+source ${builderDir}/scripts/build_tests.sh release
 
 # run the tests and make sure they pass
-${builder_dir}/bin/builder_tests_release
+pushd ${builderDir}/tests
+../bin/builder_tests_release
+popd
 
-mkdir -p ${releases_folder}
+mkdir -p releases
 
-cp ./bin/builder_release ./bin/builder
+echo "Making release archive..."
+tar cvf releases/builder_${version}_linux.tar.xz -I 'xz -9e --lzma2=dict=256M' ./bin/builder ./bin/libclang.so ./bin/libclang.so.20.1 clang include doc README.md LICENSE
 
-tar cvf releases/builder_${version}_linux.tar.xz -I 'xz -9e --lzma2=dict=256M' ./bin/builder clang include doc README.md LICENSE
+popd

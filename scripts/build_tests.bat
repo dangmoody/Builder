@@ -19,52 +19,55 @@ if ["%config%"] NEQ ["debug"] (
 pushd %~dp0
 pushd ..
 
-set bin_folder="bin"
-set intermediate_path=%bin_folder%"\\intermediate"
+set binFolder="bin"
+set intermediatePath=%binFolder%"\\intermediate"
 
-if not exist %bin_folder% (
-	mkdir %bin_folder%
+if not exist %binFolder% (
+	mkdir %binFolder%
 )
 
-if not exist %intermediate_path% (
-	mkdir %intermediate_path%
+if not exist %intermediatePath% (
+	mkdir %intermediatePath%
 )
 
 set symbols="-g"
-:: if /I [%config%]==[debug] (
-:: 	set symbols=
-:: )
 
 set optimisation=""
 if /I [%config%]==[release] (
 	set optimisation=-O3 -ffast-math
 )
 
-set source_files=tests\\tests_main.cpp
+set programName=""
 
-set defines=-D_CRT_SECURE_NO_WARNINGS -DCORE_SUC -DCORE_USE_SUBPROCESS -DHLML_NAMESPACE
+set sourceFiles=tests\\tests_main.cpp src\\builder.cpp src\\visual_studio.cpp src\\backend_clang.cpp src\\backend_msvc.cpp src\\core\\src\\core.suc.cpp
+
+set defines=-D_CRT_SECURE_NO_WARNINGS -DCORE_USE_XXHASH -DCORE_USE_SUBPROCESS -DCORE_SUC -DHASHMAP_HIDE_MISSING_KEY_WARNING -DHLML_NAMESPACE
 if /I [%config%]==[debug] (
-	set defines=!defines! -D_DEBUG
+	set programName=builder_%config%
+	set defines=!defines! -D_DEBUG -DBUILDER_PROGRAM_NAME=\"!programName!\"
+) else if /I [%config%]==[release] (
+	set programName=builder
+	set defines=!defines! -DNDEBUG -DBUILDER_PROGRAM_NAME=\"!programName!\"
 )
 
-if /I [%config%]==[release] (
-	set defines=!defines! -DNDEBUG
-)
+set includes=-Isrc/core/include -Iclang\\include
 
-set includes=-Isrc/core/include
+set libPaths=-Lclang\\lib
 
-set libraries=-luser32.lib -lShlwapi.lib -lDbgHelp.lib
+set libraries=-luser32.lib -lShlwapi.lib -lDbgHelp.lib -lOle32.lib -lAdvapi32.lib -lOleAut32.lib -llibclang.lib
 if /I [%config%]==[debug] (
 	set libraries=!libraries! -lmsvcrtd.lib
 )
 
-set warning_levels=-Werror -Wall -Wextra -Weverything -Wpedantic
+set warningLevels=-Werror -Wall -Wextra -Weverything -Wpedantic
 
-set ignore_warnings=-Wno-newline-eof -Wno-format-nonliteral -Wno-gnu-zero-variadic-macro-arguments -Wno-declaration-after-statement -Wno-unsafe-buffer-usage -Wno-zero-as-null-pointer-constant -Wno-c++98-compat-pedantic -Wno-old-style-cast -Wno-missing-field-initializers -Wno-switch-default -Wno-covered-switch-default -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-double-promotion
+set ignoreWarnings=-Wno-newline-eof -Wno-format-nonliteral -Wno-gnu-zero-variadic-macro-arguments -Wno-declaration-after-statement -Wno-unsafe-buffer-usage -Wno-zero-as-null-pointer-constant -Wno-c++98-compat-pedantic -Wno-old-style-cast -Wno-missing-field-initializers -Wno-switch-default -Wno-covered-switch-default -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-double-promotion -Wno-documentation-unknown-command
 
-set args=clang\\bin\\clang -std=c++20 -o %bin_folder%\\builder_tests_%config%.exe %symbols% %optimisation% %source_files% !defines! %includes% !libraries! %warning_levels% %ignore_warnings%
+set args=clang\\bin\\clang -std=c++20 -o %binFolder%\\builder_tests_%config%.exe %symbols% %optimisation% %sourceFiles% !defines! %includes% %libPaths% !libraries! %warningLevels% %ignoreWarnings%
 echo %args%
 %args%
+
+copy clang\\bin\\libclang.dll bin\\libclang.dll
 
 popd
 popd
@@ -73,6 +76,6 @@ goto :EOF
 
 
 :ShowUsage
-echo Usage: build.bat [debug^|release]
+echo Usage: build_tests.bat [debug^|release]
 
 goto :EOF

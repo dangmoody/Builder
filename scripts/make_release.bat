@@ -27,24 +27,25 @@ if %errorlevel% NEQ 0 (
 )
 
 :: run tests
-call .\\bin\\builder_tests_release.exe
+pushd tests
+call ..\\bin\\builder_tests_release.exe
 
 if %errorlevel% NEQ 0 (
 	echo ERROR: Tests failed to run successfully! A release cannot be made while the tests dont work
 	exit /B %errorlevel%
 )
+popd
 
 :: now actually make release package
-set temp_folder=.\\releases\\temp
+set tempFolder=.\\releases\\temp
 
-robocopy    .\\bin   %temp_folder%\\bin   builder_release.exe
-robocopy /e .\\clang %temp_folder%\\clang
+robocopy    .\\bin        %tempFolder%\\bin   builder.exe
+robocopy    .\\clang\\bin %tempFolder%\\bin   libclang.dll
+robocopy /e .\\clang      %tempFolder%\\clang
 
-ren %temp_folder%\\bin\\builder_release.exe builder.exe
+.\\tools\\7zip_win64\\7za.exe a -tzip .\\releases\\builder_%version%_win64.zip %tempFolder%\\bin %tempFolder%\\clang include doc README.md LICENSE
 
-.\\tools\\7zip_win64\\7za.exe a -tzip .\\releases\\builder_%version%_win64.zip %temp_folder%\\bin %temp_folder%\\clang include doc README.md LICENSE
-
-rd /s /Q %temp_folder%
+rd /s /Q %tempFolder%
 
 popd
 popd

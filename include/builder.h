@@ -38,9 +38,9 @@ SOFTWARE.
 #pragma clang diagnostic ignored "-Wpadded"
 #endif // __linux__
 
-// If you override set_builder_options() you will need preface the function with the BUILDER_CALLBACK #define.
-// This is because when Builder does its user config build stage it will search your code for the function set_builder_options() and BUILDER_DOING_USER_CONFIG_BUILD will be defined.
-// This means that you need to have set_builder_options() exposed so that Builder can find the function and call it, hence it gets exported as a symbol in the binary.
+// If you override SetBuilderOptions() you will need preface the function with the BUILDER_CALLBACK #define.
+// This is because when Builder does its user config build stage it will search your code for the function SetBuilderOptions() and BUILDER_DOING_USER_CONFIG_BUILD will be defined.
+// This means that you need to have SetBuilderOptions() exposed so that Builder can find the function and call it, hence it gets exported as a symbol in the binary.
 // Then Builder will compile your program proper, so that function isn't needed anymore.
 #if defined( _WIN32 )
 	#ifdef BUILDER_DOING_USER_CONFIG_BUILD
@@ -60,6 +60,9 @@ enum LanguageVersion {
 	LANGUAGE_VERSION_UNSET	= 0,
 	LANGUAGE_VERSION_C89,
 	LANGUAGE_VERSION_C99,
+	LANGUAGE_VERSION_C11,
+	LANGUAGE_VERSION_C17,
+	LANGUAGE_VERSION_C23,
 	LANGUAGE_VERSION_CPP11,
 	LANGUAGE_VERSION_CPP14,
 	LANGUAGE_VERSION_CPP17,
@@ -82,48 +85,48 @@ enum OptimizationLevel {
 
 struct BuildConfig {
 	// The other BuildConfigs that this build needs to have happened first.
-	std::vector<BuildConfig>	depends_on;
+	std::vector<BuildConfig>	dependsOn;
 
 	// The source files that you want to build.
 	// Any files/paths you add to this will be made relative to the .cpp file you passed in via the command line.
 	// Also supports wildcards.
-	std::vector<std::string>	source_files;
+	std::vector<std::string>	sourceFiles;
 
 	// Additional #defines to set for Clang.
 	// Example: IS_AWESOME=1.
 	std::vector<std::string>	defines;
 
 	// Additional include paths to set for Clang.
-	std::vector<std::string>	additional_includes;
+	std::vector<std::string>	additionalIncludes;
 
 	// Additional library paths to set for Clang.
-	std::vector<std::string>	additional_lib_paths;
+	std::vector<std::string>	additionalLibPaths;
 
 	// Additional libraries to set for Clang.
-	std::vector<std::string>	additional_libs;
+	std::vector<std::string>	additionalLibs;
 
 	// The warning/diagnostic groups that you want to enable.
 	// Allowed values: -Weverything, -Wall, -Wextra, -Wpedantic.
-	std::vector<std::string>	warning_levels;
+	std::vector<std::string>	warningLevels;
 
 	// Additional warnings to tell the compiler to ignore.
 	// For Clang and GCC this array will be filled with things like "-Wno-newline-eof".
 	// For MSVC you'd use /wd.
-	std::vector<std::string>	ignore_warnings;
+	std::vector<std::string>	ignoreWarnings;
 
 	// Anything else that you want to pass to the compiler that there isn't already an existing option for.
 	// These will get added to the end of all the other compiler arguments.
-	std::vector<std::string>	additional_compiler_arguments;
+	std::vector<std::string>	additionalCompilerArguments;
 
 	// The name that the built binary is going to have.
-	// It's not necessary to include the file extension unless 'remove_file_extension' is false.
-	// This will be placed inside binary_folder, if you set that.
-	std::string					binary_name;
+	// It's not necessary to include the file extension unless 'removeFileExtension' is false.
+	// This will be placed inside binaryFolder, if you set that.
+	std::string					binaryName;
 
 	// The folder you want the binary to be put into.
 	// If the folder does not exist, then Builder will create it for you.
 	// This path is relative to the file you pass into Builder.
-	std::string					binary_folder;
+	std::string					binaryFolder;
 
 	// The name of the config.
 	// If you have multiple BuildConfigs (E.G. one for debug and one for release) you need to set this for each config.
@@ -137,23 +140,23 @@ struct BuildConfig {
 	// What version of C or C++ do you want to build with?
 	// For Clang: This sets the -std argument.
 	// For MSVC: This sets the /std argument.
-	LanguageVersion				language_version;
+	LanguageVersion				languageVersion;
 
 	// What kind of binary do you want to build?
 	// Defaults to EXE.
-	BinaryType					binary_type;
+	BinaryType					binaryType;
 
 	// What level of optimization do you want in your binary?
-	OptimizationLevel			optimization_level;
+	OptimizationLevel			optimizationLevel;
 
 	// Do you want to remove symbols from your binary?
-	bool						remove_symbols;
+	bool						removeSymbols;
 
 	// Do you want to remove the file extension from the name of the binary?
-	bool						remove_file_extension;
+	bool						removeFileExtension;
 
 	// Do you want warnings to count as errors?
-	bool						warnings_as_errors;
+	bool						warningsAsErrors;
 };
 
 struct VisualStudioConfig {
@@ -164,7 +167,7 @@ struct VisualStudioConfig {
 
 	BuildConfig					options;
 
-	std::vector<std::string>	debugger_arguments;
+	std::vector<std::string>	debuggerArguments;
 };
 
 struct VisualStudioProject {
@@ -173,15 +176,15 @@ struct VisualStudioProject {
 	// You must define at least one of these to make Visual Studio happy.
 	std::vector<VisualStudioConfig>	configs;
 
-	// All the files that are in these folders (based on 'file_extensions') will be included in your project.
+	// All the files that are in these folders (based on 'fileExtensions') will be included in your project.
 	// This is a separate list to the build options as you likely want the superset of all files in your Solution, but may conditionally exclude a subset of files based on config/target etc.
 	// The folders you include here are relative to your build script.
 	// This list must NOT contain any search filters.
-	std::vector<std::string>		code_folders;
+	std::vector<std::string>		codeFolders;
 
-	// All files that have any of these extensions (based on 'code_folders') will be included in your project.
+	// All files that have any of these extensions (based on 'codeFolders') will be included in your project.
 	// These must NOT start with a dot.  Only the extension is required (Examples: cpp, h, inl).
-	std::vector<std::string>		file_extensions;
+	std::vector<std::string>		fileExtensions;
 
 	// The name of the project as it shows in Visual Studio.
 	std::string						name;
@@ -206,16 +209,16 @@ struct VisualStudioSolution {
 
 struct BuilderOptions {
 	// The path to the compiler that you want to build with.
-	// If you want to use MSVC then you can just set this to "cl.exe" or "cl" and set 'compiler_version' and Builder will figure it out for you.
+	// If you want to use MSVC then you can just set this to "cl.exe" or "cl" and set 'compilerVersion' and Builder will figure it out for you.
 	// If you leave this unset then Builder will use the portable install of Clang that it came with.
-	std::string					compiler_path;
+	std::string					compilerPath;
 
 	// What version of your compiler are you using?
-	// When the compiler version you specify in set_builder_options() doesn't match the version we get when we run your compiler then this will generate a warning.
+	// When the compiler version you specify in SetBuilderOptions() doesn't match the version we get when we run your compiler then this will generate a warning.
 	// This is useful when working in a team and you want to make sure that people use the same compiler version.
 	// For Clang this would be something like "20.1.5".
 	// For MSVC this would be something like "14.44.35207".
-	std::string					compiler_version;
+	std::string					compilerVersion;
 
 	// All the possible configs that you could build with.
 	// Pass the one you actually want to build with via the --config= command line argument.
@@ -225,20 +228,29 @@ struct BuilderOptions {
 	// If you don't use Visual Studio then ignore this.
 	VisualStudioSolution		solution;
 
+	// Set this to true if you want Builder to force-rebuild your program.
+	// All binaries and intermediate files will get rebuilt.
+	// This is really only useful to those who are either using an editor + command line workflow, or just hate incremental builds.
+	bool						forceRebuild;
+
 	// Do you want to generate a Visual Studio solution?
 	// If this is set to true, then a code build will NOT happen.
 	// If you don't use Visual Studio then ignore this.
-	bool						generate_solution;
+	bool						generateSolution;
+
+	// Do you want to generate a compilation_commands.json for Clang tooling?
+	// If true, the file will be generated IF the build is successful. 
+	bool						generateCompilationDatabase;
 };
 
-static void add_build_config_unique( BuildConfig* config, std::vector<BuildConfig>& out_configs );
+static void AddBuildConfigUnique( BuildConfig *config, std::vector<BuildConfig> &outConfigs );
 
-static void add_build_config( BuilderOptions* options, BuildConfig* config ) {
-	for ( size_t i = 0; i < config->depends_on.size(); i++ ) {
-		add_build_config( options, &config->depends_on[i] );
+static void AddBuildConfig( BuilderOptions *options, BuildConfig *config ) {
+	for ( size_t i = 0; i < config->dependsOn.size(); i++ ) {
+		AddBuildConfig( options, &config->dependsOn[i] );
 	}
 
-	add_build_config_unique( config, options->configs );
+	AddBuildConfigUnique( config, options->configs );
 }
 
 
@@ -247,8 +259,8 @@ static void add_build_config( BuilderOptions* options, BuildConfig* config ) {
 // Don't use or touch any of this unless you're either a Builder developer or you know exactly what you're doing.
 //
 
-static unsigned int builder_hash_sdbm( void* data, const unsigned int seed, const size_t length ) {
-	unsigned char* c = (unsigned char*) data;
+static unsigned int BuilderHashSDBM( void *data, const unsigned int seed, const size_t length ) {
+	unsigned char *c = (unsigned char *) data;
 
 	unsigned int hash = seed;
 
@@ -259,79 +271,80 @@ static unsigned int builder_hash_sdbm( void* data, const unsigned int seed, cons
 	return hash;
 }
 
-static unsigned int builder_hash_c_string( const unsigned int seed, const char* str, const size_t length ) {
-	return builder_hash_sdbm( (void*) str, seed, length );
+static unsigned int BuilderHashCString( const unsigned int seed, const char *str, const size_t length ) {
+	return BuilderHashSDBM( (void *) str, seed, length );
 };
 
-static unsigned int builder_hash_c_string_array( const unsigned int seed, const std::vector<const char*>& strings ) {
+static unsigned int BuilderHashCStringArray( const unsigned int seed, const std::vector<const char *> &strings ) {
 	unsigned int hash = seed;
 
-	for ( size_t i = 0; i < strings.size(); i++ ) {
-		const char* str = strings[i];
+	for ( size_t stringIndex = 0; stringIndex < strings.size(); stringIndex++ ) {
+		const char *str = strings[stringIndex];
 
-		hash = builder_hash_c_string( hash, str, strlen( str ) );
+		hash = BuilderHashCString( hash, str, strlen( str ) );
 	}
 
 	return hash;
 };
 
-static unsigned int builder_hash_string_array( const unsigned int seed, const std::vector<std::string>& strings ) {
+static unsigned int BuilderHashStringArray( const unsigned int seed, const std::vector<std::string> &strings ) {
 	unsigned int hash = seed;
 
-	for ( size_t i = 0; i < strings.size(); i++ ) {
-		const std::string& str = strings[i];
-		hash = builder_hash_c_string( hash, str.c_str(), str.size() );
+	for ( size_t stringIndex = 0; stringIndex < strings.size(); stringIndex++ ) {
+		const std::string &str = strings[stringIndex];
+
+		hash = BuilderHashCString( hash, str.c_str(), str.size() );
 	}
 
 	return hash;
 };
 
-static unsigned int builder_get_config_hash( BuildConfig* config, const unsigned int seed ) {
+static unsigned int BuilderGetConfigHash( BuildConfig *config, const unsigned int seed ) {
 	unsigned int hash = seed;
 
-	for ( size_t dependency_index = 0; dependency_index < config->depends_on.size(); dependency_index++ ) {
-		hash = builder_get_config_hash( &config->depends_on[dependency_index], hash );
+	for ( size_t dependencyIndex = 0; dependencyIndex < config->dependsOn.size(); dependencyIndex++ ) {
+		hash = BuilderGetConfigHash( &config->dependsOn[dependencyIndex], hash );
 	}
 
-	hash = builder_hash_string_array( hash, config->source_files );
-	hash = builder_hash_string_array( hash, config->defines );
-	hash = builder_hash_string_array( hash, config->additional_includes );
-	hash = builder_hash_string_array( hash, config->additional_lib_paths );
-	hash = builder_hash_string_array( hash, config->additional_libs );
-	hash = builder_hash_string_array( hash, config->ignore_warnings );
+	hash = BuilderHashStringArray( hash, config->sourceFiles );
+	hash = BuilderHashStringArray( hash, config->defines );
+	hash = BuilderHashStringArray( hash, config->additionalIncludes );
+	hash = BuilderHashStringArray( hash, config->additionalLibPaths );
+	hash = BuilderHashStringArray( hash, config->additionalLibs );
+	hash = BuilderHashStringArray( hash, config->ignoreWarnings );
 
-	hash = builder_hash_c_string( hash, config->binary_name.c_str(), config->binary_name.length() );
-	hash = builder_hash_c_string( hash, config->binary_folder.c_str(), config->binary_folder.length() );
-	hash = builder_hash_c_string( hash, config->name.c_str(), config->name.length() );
+	hash = BuilderHashCString( hash, config->binaryName.c_str(), config->binaryName.length() );
+	hash = BuilderHashCString( hash, config->binaryFolder.c_str(), config->binaryFolder.length() );
+	hash = BuilderHashCString( hash, config->name.c_str(), config->name.length() );
 
-	hash = builder_hash_sdbm( &config->binary_type, hash, sizeof( BinaryType ) );
-	hash = builder_hash_sdbm( &config->optimization_level, hash, sizeof( OptimizationLevel ) );
+	hash = BuilderHashSDBM( &config->binaryType, hash, sizeof( BinaryType ) );
+	hash = BuilderHashSDBM( &config->optimizationLevel, hash, sizeof( OptimizationLevel ) );
 
-	hash = builder_hash_sdbm( &config->remove_symbols, hash, sizeof( bool ) );
-	hash = builder_hash_sdbm( &config->remove_file_extension, hash, sizeof( bool ) );
-	hash = builder_hash_sdbm( &config->warnings_as_errors, hash, sizeof( bool ) );
+	hash = BuilderHashSDBM( &config->removeSymbols, hash, sizeof( bool ) );
+	hash = BuilderHashSDBM( &config->removeFileExtension, hash, sizeof( bool ) );
+	hash = BuilderHashSDBM( &config->warningsAsErrors, hash, sizeof( bool ) );
 
 	return hash;
 }
 
-static bool config_equals( BuildConfig* configA, BuildConfig* configB ) {
-	unsigned int hashA = builder_get_config_hash( configA, 0 );
-	unsigned int hashB = builder_get_config_hash( configB, 0 );
+static bool BuildConfigEquals( BuildConfig *configA, BuildConfig *configB ) {
+	unsigned int hashA = BuilderGetConfigHash( configA, 0 );
+	unsigned int hashB = BuilderGetConfigHash( configB, 0 );
 
 	return hashA == hashB;
 }
 
-static void add_build_config_unique( BuildConfig* config, std::vector<BuildConfig>& out_configs ) {
+static void AddBuildConfigUnique( BuildConfig *config, std::vector<BuildConfig> &outConfigs ) {
 	bool duplicate = false;
-	for ( size_t i = 0; i < out_configs.size(); i++ ) {
-		if ( config_equals( &out_configs[i], config ) ) {
+	for ( size_t configIndex = 0; configIndex < outConfigs.size(); configIndex++ ) {
+		if ( BuildConfigEquals( &outConfigs[configIndex], config ) ) {
 			duplicate = true;
 			break;
 		}
 	}
 
 	if ( !duplicate ) {
-		out_configs.push_back( *config );
+		outConfigs.push_back( *config );
 	}
 }
 

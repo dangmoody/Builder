@@ -65,11 +65,8 @@ const char* path_app_path() {
 }
 
 const char* path_current_working_directory() {
-	char temp[PATH_MAX];
-
-	const char* cwd = getcwd( temp, sizeof( temp ) );
-
-	if ( !cwd ) {
+	char* cwd = getcwd( NULL, PATH_MAX * sizeof( char ) );
+	if ( cwd == NULL ) {
 		int err = errno;
 		fatal_error( "Failed to get CWD: %s.\n", strerror( err ) );
 	}
@@ -77,12 +74,17 @@ const char* path_current_working_directory() {
 	return cwd;
 }
 
-const char* path_absolute_path( const char* file ) {
-	unused( file );
+const char *path_absolute_path( const char *path ) {
+	assert( path );
 
-	assert( false );
+	const char *abs_path = realpath( path, NULL );
 
-	return NULL;
+	if ( !abs_path ) {
+		int err = errno;
+		return NULL;
+	}
+
+	return abs_path;
 }
 
 bool8 path_is_absolute( const char* path ) {

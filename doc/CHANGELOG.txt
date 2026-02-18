@@ -1,4 +1,4 @@
-v0.10.0, <RELEASE DATE HERE>:
+v0.10.0, 19/02/2026:
 
 * All snake_case coding conventions have been completely dropped.
 	* Functions are now PascalCase.  For example: set_builder_options is now SetBuilderOptions.

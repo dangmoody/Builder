@@ -37,6 +37,7 @@ popd
 
 mkdir -p releases
 
-tar cvf releases/builder_${version}_linux.tar.xz -I 'xz -9e --lzma2=dict=256M' ./bin/builder clang include doc README.md LICENSE
+echo "Making release archive..."
+tar cvf releases/builder_${version}_linux.tar.xz -I 'xz -9e --lzma2=dict=256M' ./bin/builder ./bin/libclang.so ./bin/libclang.so.20.1 clang include doc README.md LICENSE
 
 popd

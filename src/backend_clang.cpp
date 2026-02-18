@@ -28,6 +28,7 @@ SOFTWARE.
 
 #include "builder_local.h"
 
+#include "core/include/core_string.h"
 #include "core/include/debug.h"
 #include "core/include/string_helpers.h"
 #include "core/include/paths.h"
@@ -533,13 +534,19 @@ static String Clang_GetCompilerVersion( compilerBackend_t *backend ) {
 
 	CXString clangVersionString = clang_getClangVersion();
 	const char *clangVersionCStr = clang_getCString( clangVersionString );
+	u64 clangVersionCStrLength = strlen( clangVersionCStr );
 	defer( clang_disposeString( clangVersionString ) );
 
 	String result;
-	string_copy_from_c_string( &result, clangVersionCStr, strlen( clangVersionCStr ) );
+	string_copy_from_c_string( &result, clangVersionCStr, clangVersionCStrLength );
 
 	if ( string_starts_with( result.data, "clang version " ) ) {
 		result.data += strlen( "clang version " );
+	}
+
+	char *firstWhitespace = strchr( result.data, ' ' );
+	if ( firstWhitespace ) {
+		*firstWhitespace = 0;
 	}
 
 	return result;

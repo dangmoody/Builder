@@ -5,8 +5,8 @@
 
 #include "build_configs.cpp"
 
-BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
-	options->compiler_path = "../../clang/bin/clang";
-	options->compiler_version = "20.1.5";
-	get_build_configs( options );
+BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions* options ) {
+	options->compilerPath = "../../clang/bin/clang";
+	options->compilerVersion = "20.1.5";
+	GetBuildConfigs( options );
 }

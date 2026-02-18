@@ -82,7 +82,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <NMakeBuildCommandLine>.\scripts\build.bat $(Configuration)</NMakeBuildCommandLine>
-    <NMakeOutput>bin\\builder_$(Configuration).exe</NMakeOutput>
+    <NMakeOutput>bin\\builder.exe</NMakeOutput>
     <NMakeReBuildCommandLine>.\scripts\build.bat $(Configuration)</NMakeReBuildCommandLine>
     <NMakePreprocessorDefinitions>NDEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
   </PropertyGroup>

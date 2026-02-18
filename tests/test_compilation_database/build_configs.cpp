@@ -5,24 +5,23 @@
 
 #include <builder.h>
 
-static void get_build_configs( BuilderOptions* options ) {
+static void GetBuildConfigs( BuilderOptions *options ) {
+	options->generateCompilationDatabase = true;
 
-    options->generate_compilation_database = true;
-    
-    BuildConfig config = {
-        .binary_name = "test_compilation_database_program",
-        .binary_folder = "bin",
-        .language_version = LANGUAGE_VERSION_CPP17,
-        .optimization_level = OPTIMIZATION_LEVEL_O0,
-        .remove_symbols = false,
-        .defines = { "TEST_DEFINE" },
-        .source_files = {
-            "src/main.cpp",
-            "src/helper.cpp",
-        }
-    };
+	BuildConfig config = {
+		.binaryName = "test_compilation_database_program",
+		.binaryFolder = "bin",
+		.languageVersion = LANGUAGE_VERSION_CPP17,
+		.optimizationLevel = OPTIMIZATION_LEVEL_O0,
+		.removeSymbols = false,
+		.defines = { "TEST_DEFINE" },
+		.sourceFiles = {
+			"src/main.cpp",
+			"src/helper.cpp",
+		}
+	};
 
-    add_build_config( options, &config );
+	AddBuildConfig( options, &config );
 }
 
 #endif // BUILDER_DOING_USER_CONFIG_BUILD

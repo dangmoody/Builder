@@ -17,14 +17,14 @@ if [[ "$config" != "debug" && "$config" != "release" ]]; then
 	ShowUsage
 fi
 
-builder_dir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")/..
-clang_dir="${builder_dir}/clang"
+builderDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")/..
+clangDir="${builderDir}/clang"
 
 echo Building tests config "$config"...
 
-bin_folder="${builder_dir}/bin"
+binFolder="${builderDir}/bin"
 
-mkdir -p $bin_folder
+mkdir -p $binFolder
 
 symbols="-g"
 optimisation=""
@@ -32,17 +32,17 @@ if [[ "$config" != "release" ]]; then
 	optimisation="-O3"
 fi
 
-source_files="tests/tests_main.cpp src/builder.cpp src/visual_studio.cpp src/backend_clang.cpp src/backend_msvc.cpp src/core/src/core.suc.cpp"
+sourceFiles="tests/tests_main.cpp src/builder.cpp src/visual_studio.cpp src/backend_clang.cpp src/backend_msvc.cpp src/core/src/core.suc.cpp"
 
 defines="-DCORE_SUC -DHLML_NAMESPACE -DCORE_USE_SUBPROCESS -DHASHMAP_HIDE_MISSING_KEY_WARNING"
 if [[ "$config" == "debug" ]]; then
-	program_name=\"builder_$config\"
-	defines="$defines -D_DEBUG -DBUILDER_PROGRAM_NAME=$program_name"
+	programName=\"builder_$config\"
+	defines="$defines -D_DEBUG -DBUILDER_PROGRAM_NAME=$programName"
 elif [[ "$config" == "release" ]]; then
-	program_name=\"builder\"
-	defines="$defines -DNDEBUG -DBUILDER_PROGRAM_NAME=$program_name"
+	programName=\"builder\"
+	defines="$defines -DNDEBUG -DBUILDER_PROGRAM_NAME=$programName"
 fi
 
-args="${clang_dir}/bin/clang ${symbols} ${optimization} -lstdc++ -luuid -std=c++20 -fexceptions -ferror-limit=0 -o ${bin_folder}/builder_tests_${config} ${source_files} ${defines} -Isrc/core/include"
+args="${clangDir}/bin/clang ${symbols} ${optimization} -lstdc++ -luuid -std=c++20 -fexceptions -ferror-limit=0 -o ${binFolder}/builder_tests_${config} ${sourceFiles} ${defines} -Isrc/core/include"
 echo ${args}
 ${args}

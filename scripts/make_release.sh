@@ -20,16 +20,16 @@ if [[ -z "$version" ]]; then
 	ShowUsage
 fi
 
-builder_dir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")/..
+builderDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")/..
 
-pushd ${builder_dir}
+pushd ${builderDir}
 
 # build builder and tests
-source ${builder_dir}/scripts/build.sh release
-source ${builder_dir}/scripts/build_tests.sh release
+source ${builderDir}/scripts/build.sh release
+source ${builderDir}/scripts/build_tests.sh release
 
 # run the tests and make sure they pass
-pushd ${builder_dir}/tests
+pushd ${builderDir}/tests
 ../bin/builder_tests_release
 popd
 

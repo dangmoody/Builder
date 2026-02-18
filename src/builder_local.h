@@ -43,15 +43,15 @@ SOFTWARE.
 //#include <string>
 
 // cmd line args
-#define ARG_HELP_SHORT					"-h"
-#define ARG_HELP_LONG					"--help"
-#define ARG_VERBOSE_SHORT				"-v"
-#define ARG_VERBOSE_LONG				"--verbose"
-#define ARG_NUKE						"--nuke"
-#define ARG_CONFIG						"--config="
-#define ARG_VISUAL_STUDIO_BUILD			"--visual-studio-build"
+#define ARG_HELP_SHORT			"-h"
+#define ARG_HELP_LONG			"--help"
+#define ARG_VERBOSE_SHORT		"-v"
+#define ARG_VERBOSE_LONG		"--verbose"
+#define ARG_NUKE				"--nuke"
+#define ARG_CONFIG				"--config="
+#define ARG_VISUAL_STUDIO_BUILD	"--visual-studio-build"
 
-#define INTERMEDIATE_PATH				"intermediate"
+#define INTERMEDIATE_PATH		"intermediate"
 
 #ifdef __linux__
 #pragma clang diagnostic push
@@ -69,27 +69,27 @@ enum procFlagBits_t {
 typedef u32 procFlags_t;
 
 struct compilationCommandArchetype_t {
-	Array<const char*> baseArgs;
-	Array<const char*> dependencyFlags;
-	const char* outputFlag = nullptr;
+	Array<const char *>	baseArgs;
+	Array<const char *>	dependencyFlags;
+	const char			*outputFlag = nullptr;
 };
 
 struct compilerBackend_t {
-	void*	data;
+	void	*data;
 
-	bool8	( *Init )( compilerBackend_t* backend, const std::string &compilerPath, const std::string &compilerVersion );
-	void	( *Shutdown )( compilerBackend_t* backend );
-	bool8	( *CompileSourceFile )( compilerBackend_t* backend, buildContext_t* buildContext, BuildConfig* config, compilationCommandArchetype_t& commandArchetype, const char* sourceFile, bool recordCompilation );
-	bool8	( *LinkIntermediateFiles )( compilerBackend_t* backend, const Array<const char*>& intermediateFiles, BuildConfig* config );
-	bool8	( *GetCompilationCommandArchetype )( const compilerBackend_t* backend, const BuildConfig* config, compilationCommandArchetype_t& outCmdArchetype );
-	void	( *GetIncludeDependenciesFromSourceFileBuild )( compilerBackend_t* backend, std::vector<std::string>& includeDependencies );
+	bool8	( *Init )( compilerBackend_t *backend, const std::string &compilerPath, const std::string &compilerVersion );
+	void	( *Shutdown )( compilerBackend_t *backend );
+	bool8	( *CompileSourceFile )( compilerBackend_t *backend, buildContext_t *buildContext, BuildConfig *config, compilationCommandArchetype_t &commandArchetype, const char *sourceFile, bool recordCompilation );
+	bool8	( *LinkIntermediateFiles )( compilerBackend_t *backend, const Array<const char *> &intermediateFiles, BuildConfig *config );
+	bool8	( *GetCompilationCommandArchetype )( const compilerBackend_t *backend, const BuildConfig *config, compilationCommandArchetype_t &outCmdArchetype );
+	void	( *GetIncludeDependenciesFromSourceFileBuild )( compilerBackend_t *backend, std::vector<std::string> &includeDependencies );
 	String	( *GetCompilerPath )( compilerBackend_t *backend );
-	String	( *GetCompilerVersion )( compilerBackend_t* backend );
+	String	( *GetCompilerVersion )( compilerBackend_t *backend );
 };
 
-void			CreateCompilerBackend_Clang( compilerBackend_t* outBackend );
-void			CreateCompilerBackend_MSVC( compilerBackend_t* outBackend );
-void			CreateCompilerBackend_GCC( compilerBackend_t* outBackend );
+void	CreateCompilerBackend_Clang( compilerBackend_t *outBackend );
+void	CreateCompilerBackend_MSVC( compilerBackend_t *outBackend );
+void	CreateCompilerBackend_GCC( compilerBackend_t *outBackend );
 
 struct includeDependencies_t {
 	std::string					filename;
@@ -97,53 +97,53 @@ struct includeDependencies_t {
 };
 
 struct compilationDatabaseEntry_t {
-	std::vector<std::string> arguments;
-	std::string directory;
-	std::string file;
-	std::string outputFile;
+	std::vector<std::string>	arguments;
+	std::string					directory;
+	std::string					file;
+	std::string					outputFile;
 };
 
 struct buildContext_t {
-	Hashmap*								configIndices;
-	Hashmap*								sourceFileIndices;
+	Hashmap									*configIndices;
+	Hashmap									*sourceFileIndices;
 	std::vector<includeDependencies_t>		sourceFileIncludeDependencies;
 
-	const char*								inputFile;
+	const char								*inputFile;
 	String									inputFilePath;
 	String									dotBuilderFolder;
 
 	bool8									forceRebuild;
 	bool8									verbose;
-	std::vector<compilationDatabaseEntry_t> compilationDatabase;
+	std::vector<compilationDatabaseEntry_t>	compilationDatabase;
 };
 
 // shared entry point
 // used in the actual builder program
 // also used by tests so they dont have to start a separate subprocess to build
 // TODO(DM): 04/02/2026: do args want to be const?
-int			BuilderMain( const int firstArg, int argc, char** argv );
+int			BuilderMain( const int firstArg, int argc, char **argv );
 
-u64			GetLastFileWriteTime( const char* filename );
+u64			GetLastFileWriteTime( const char *filename );
 
-bool8		NukeFolder( const char* folder, const bool8 deleteRootFolder, const bool8 verbose );
+bool8		NukeFolder( const char *folder, const bool8 deleteRootFolder, const bool8 verbose );
 
-const char*	GetNextSlashInPath( const char* path );
+const char	*GetNextSlashInPath( const char *path );
 
-bool8		FileIsSourceFile( const char* filename );
-bool8		FileIsHeaderFile( const char* filename );
+bool8		FileIsSourceFile( const char *filename );
+bool8		FileIsHeaderFile( const char *filename );
 
-const char*	GetFileExtensionFromBinaryType( const BinaryType type );
+const char	*GetFileExtensionFromBinaryType( const BinaryType type );
 
-const char*	BuildConfig_GetFullBinaryName( const BuildConfig* config );
+const char	*BuildConfig_GetFullBinaryName( const BuildConfig *config );
 
 void		RecordCompilationDatabaseEntry(
-			buildContext_t* buildContext,
-			const char* sourceFileName,
-			const Array<const char*>& compilationCommandArray);
+			buildContext_t *buildContext,
+			const char *sourceFileName,
+			const Array<const char *> &compilationCommandArray );
 
-s32			RunProc( Array<const char*>* args, Array<const char*>* environmentVariables, const procFlags_t procFlags = 0, String* outStdout = NULL );
+s32			RunProc( Array<const char *> *args, Array<const char *> *environmentVariables, const procFlags_t procFlags = 0, String *outStdout = NULL );
 
-bool8		GenerateVisualStudioSolution( buildContext_t* context, BuilderOptions* options );
+bool8		GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *options );
 
 inline u64 minull( const u64 x, const u64 y ) {
 	return ( x < y ) ? x : y;

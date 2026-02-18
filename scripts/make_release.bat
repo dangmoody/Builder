@@ -37,16 +37,16 @@ if %errorlevel% NEQ 0 (
 popd
 
 :: now actually make release package
-set temp_folder=.\\releases\\temp
+set tempFolder=.\\releases\\temp
 
-robocopy    .\\bin   %temp_folder%\\bin   builder_release.exe
-robocopy /e .\\clang %temp_folder%\\clang
+robocopy    .\\bin   %tempFolder%\\bin   builder_release.exe
+robocopy /e .\\clang %tempFolder%\\clang
 
-ren %temp_folder%\\bin\\builder_release.exe builder.exe
+ren %tempFolder%\\bin\\builder_release.exe builder.exe
 
-.\\tools\\7zip_win64\\7za.exe a -tzip .\\releases\\builder_%version%_win64.zip %temp_folder%\\bin %temp_folder%\\clang include doc README.md LICENSE
+.\\tools\\7zip_win64\\7za.exe a -tzip .\\releases\\builder_%version%_win64.zip %tempFolder%\\bin %tempFolder%\\clang include doc README.md LICENSE
 
-rd /s /Q %temp_folder%
+rd /s /Q %tempFolder%
 
 popd
 popd

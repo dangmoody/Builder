@@ -1,9 +1,13 @@
 v0.10.0, <RELEASE DATE HERE>:
 
+* All snake_case coding conventions have been completely dropped.
+	* Functions are now PascalCase.  For example: set_builder_options is now SetBuilderOptions.
+	* Variables are now camelCase.  For example: generate_solution is now generateSolution.
+	* This change was made because the internal codebase conventions were different from the public API and it was annoying me.
 * Added support for generating compilation database JSON files (thanks @eddyowen!).
-	* You can generate this via BuilderOptions::generate_compilation_database.
+	* You can generate this via BuilderOptions::generateCompilationDatabase.
 	* For editors that support this (CLion, Visual Studio Code, and others), this allows projects using Builder to have syntax highlighting and IntelliSense support without any additional setup.
-* Added BuilderOptions::force_rebuild.
+* Added BuilderOptions::forceRebuild.
 	* This is really only useful to those who are either using an editor + command line workflow, or just hate incremental builds.
 * Added LANGUAGE_VERSION_C11, LANGUAGE_VERSION_C17, and LANGUAGE_VERSION_C23.
 	* Microsoft's post-C99 support isn't great, so you'll need to take care of that yourself, but Builder at least exposes the options for you now.

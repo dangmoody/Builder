@@ -1,11 +1,11 @@
 #include <builder.h>
 
-static void get_build_configs( BuilderOptions* options ) {
+static void GetBuildConfigs( BuilderOptions *options ) {
 	BuildConfig config = {
-		.binary_folder	= "bin",
-		.binary_name	= "marco_polo",
+		.binaryFolder	= "bin",
+		.binaryName		= "marco_polo",
 
-		.source_files = {
+		.sourceFiles = {
 			// you can add individual files
 			"src/main.cpp",
 
@@ -19,5 +19,5 @@ static void get_build_configs( BuilderOptions* options ) {
 		},
 	};
 
-	add_build_config( options, &config );
+	AddBuildConfig( options, &config );
 }

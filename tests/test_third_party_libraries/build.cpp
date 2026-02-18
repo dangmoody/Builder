@@ -14,51 +14,51 @@
 
 #include <assert.h>
 
-// your own codebase probably has its own copy_file() function
+// your own codebase probably has its own CopyFile() function
 // this one is just for the sake of the demo
 // this implementation is also shit so dont actually use it as reference
-static void copy_file( const char* from, const char* to ) {
-	FILE* file_src = fopen( from, "rb" );
-	FILE* file_dst = fopen( to, "wb" );
+static void CopyFile( const char *from, const char *to ) {
+	FILE* srcFile = fopen( from, "rb" );
+	FILE* dstFile = fopen( to, "wb" );
 
-	assert( file_src );
-	assert( file_dst );
+	assert( srcFile );
+	assert( dstFile );
 
 	int c = -1;
 
-	while ( ( c = fgetc( file_src ) ) != EOF ) {
-		fputc( c, file_dst );
+	while ( ( c = fgetc( srcFile ) ) != EOF ) {
+		fputc( c, dstFile );
 	}
 
-	fclose( file_dst );
-	file_dst = NULL;
+	fclose( dstFile );
+	dstFile = NULL;
 
-	fclose( file_src );
-	file_src = NULL;
+	fclose( srcFile );
+	srcFile = NULL;
 }
 
-BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
+BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options ) {
 	BuildConfig config = {
-		.binary_folder			= "bin",
-		.binary_name			= "sdl_test",
-		.source_files			= { "sdl_test.cpp" },
-		.additional_includes	= { "SDL2/include" },
-		.additional_lib_paths	= { "SDL2/lib" },
+		.binaryFolder		= "bin",
+		.binaryName			= "sdl_test",
+		.sourceFiles		= { "sdl_test.cpp" },
+		.additionalIncludes	= { "SDL2/include" },
+		.additionalLibPaths	= { "SDL2/lib" },
 #if defined( _WIN32 )
-		.additional_libs		= { "SDL2.lib", "SDL2main.lib" },
+		.additionalLibs		= { "SDL2.lib", "SDL2main.lib" },
 #elif defined( __linux__ )
-		.additional_libs		= { "SDL2" },
+		.additionalLibs		= { "SDL2" },
 #endif
 	};
 
-	add_build_config( options, &config );
+	AddBuildConfig( options, &config );
 }
 
 #ifdef _WIN32
-BUILDER_CALLBACK void on_post_build() {
+BUILDER_CALLBACK void OnPostBuild() {
 	std::string src = std::string( "SDL2/lib/libSDL2" ) + DYNAMIC_LIBRARY_FILE_EXTENSION;
 	std::string dst = std::string( "bin/SDL2" ) + DYNAMIC_LIBRARY_FILE_EXTENSION;
 
-	copy_file( src.c_str(), dst.c_str() );
+	CopyFile( src.c_str(), dst.c_str() );
 }
 #endif

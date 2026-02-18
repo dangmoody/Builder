@@ -2,29 +2,29 @@
 
 set -e
 
-builder_dir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")/..
+builderDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")/..
 
 # ----------------------------------------------------------------
 
 # download clang
-clang_version=20.1.5
-clang_dir="${builder_dir}/clang"
+clangVersion=20.1.5
+clangDir="${builderDir}/clang"
 
-if [[ ! -d "${clang_dir}" ]]; then
-	mkdir ${clang_dir}
+if [[ ! -d "${clangDir}" ]]; then
+	mkdir ${clangDir}
 fi
 
 echo "Downloadinging Clang archive..."
-curl -o ${clang_dir}/clang.tar.xz -L "https://github.com/llvm/llvm-project/releases/download/llvmorg-${clang_version}/LLVM-${clang_version}-Linux-X64.tar.xz"
+curl -o ${clangDir}/clang.tar.xz -L "https://github.com/llvm/llvm-project/releases/download/llvmorg-${clangVersion}/LLVM-${clangVersion}-Linux-X64.tar.xz"
 echo "Done."
 echo ""
 
 # unarchive clang
 echo "Extracting Clang archive..."
-tar xf "${clang_dir}/clang.tar.xz" -C "${clang_dir}"
-cp -r "${clang_dir}/LLVM-${clang_version}-Linux-X64/." "${clang_dir}"
-rm -rf "${clang_dir}/LLVM-${clang_version}-Linux-X64"
-rm "${clang_dir}/clang.tar.xz"
+tar xf "${clangDir}/clang.tar.xz" -C "${clangDir}"
+cp -r "${clangDir}/LLVM-${clangVersion}-Linux-X64/." "${clangDir}"
+rm -rf "${clangDir}/LLVM-${clangVersion}-Linux-X64"
+rm "${clangDir}/clang.tar.xz"
 echo "Done."
 echo ""
 
@@ -34,24 +34,24 @@ echo ""
 # so I'm disabling this until I can figure it out
 
 # download gcc
-#gcc_version=15.1.0
-#gcc_dir="${builder_dir}/tools/gcc"
+#gccVersion=15.1.0
+#gccDir="${builderDir}/tools/gcc"
 #
-#if [[ ! -d "${gcc_dir}" ]]; then
-#	mkdir ${gcc_dir}
+#if [[ ! -d "${gccDir}" ]]; then
+#	mkdir ${gccDir}
 #fi
 #
 #echo "Downloadinging GCC archive..."
-#curl -o "${gcc_dir}/gcc.tar.xz" -L "https://mirrorservice.org/sites/sourceware.org/pub/gcc/releases/gcc-${gcc_version}/gcc-${gcc_version}.tar.xz"
+#curl -o "${gccDir}/gcc.tar.xz" -L "https://mirrorservice.org/sites/sourceware.org/pub/gcc/releases/gcc-${gccVersion}/gcc-${gccVersion}.tar.xz"
 #echo "Done."
 #echo ""
 #
 ## unarchive gcc
 #echo "Extracting GCC archive..."
-#tar xf "${gcc_dir}/gcc.tar.xz" -C "${gcc_dir}"
-#cp -r "${gcc_dir}/gcc-${gcc_version}/." "${gcc_dir}"
-#rm -rf "${gcc_dir}/gcc-${gcc_version}"
-#rm "${gcc_dir}/gcc.tar.xz"
+#tar xf "${gccDir}/gcc.tar.xz" -C "${gccDir}"
+#cp -r "${gccDir}/gcc-${gccVersion}/." "${gccDir}"
+#rm -rf "${gccDir}/gcc-${gccVersion}"
+#rm "${gccDir}/gcc.tar.xz"
 #echo "Done."
 #echo ""
 

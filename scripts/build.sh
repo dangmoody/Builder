@@ -19,15 +19,15 @@ fi
 
 echo Building Builder, config "$config"...
 
-builder_dir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")/..
-clang_dir="${builder_dir}/clang"
+builderDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")/..
+clangDir="${builderDir}/clang"
 
-bin_folder="${builder_dir}/bin"
-intermediate_folder="${builder_dir}/intermediate"
-source_folder="${builder_dir}/src"
+binFolder="${builderDir}/bin"
+intermediateFolder="${builderDir}/intermediate"
+sourceFolder="${builderDir}/src"
 
-mkdir -p $bin_folder
-mkdir -p $intermediate_folder
+mkdir -p $binFolder
+mkdir -p $intermediateFolder
 
 symbols=""
 if [[ "$config" == "debug" ]]; then
@@ -39,26 +39,26 @@ if [[ "$config" != "release" ]]; then
 	optimisation="-O3"
 fi
 
-source_files="$source_folder/main.cpp $source_folder/builder.cpp $source_folder/visual_studio.cpp $source_folder/backend_clang.cpp $source_folder/core/src/core.suc.cpp"
+sourceFiles="$sourceFolder/main.cpp $sourceFolder/builder.cpp $sourceFolder/visual_studio.cpp $sourceFolder/backend_clang.cpp $sourceFolder/core/src/core.suc.cpp"
 
 defines="-D_CRT_SECURE_NO_WARNINGS -DCORE_USE_XXHASH -DCORE_SUC -DCORE_USE_SUBPROCESS -DHASHMAP_HIDE_MISSING_KEY_WARNING -DHLML_NAMESPACE"
 if [[ "$config" == "debug" ]]; then
-	program_name=builder_$config
-	defines="$defines -D_DEBUG -DBUILDER_PROGRAM_NAME=\"$program_name\""
+	programName=builder_$config
+	defines="$defines -D_DEBUG -DBUILDER_PROGRAM_NAME=\"$programName\""
 fi
 
 if [[ "$config" == "release" ]]; then
-	program_name=builder
-	defines="$defines -DNDEBUG -DBUILDER_PROGRAM_NAME=\"$program_name\""
+	programName=builder
+	defines="$defines -DNDEBUG -DBUILDER_PROGRAM_NAME=\"$programName\""
 fi
 
-includes="-I${builder_dir}/src/core/include"
+includes="-I${builderDir}/src/core/include"
 
 libraries="-lstdc++ -luuid"
 
-warning_levels="-Werror -Wall -Wextra -Weverything -Wpedantic"
-ignore_warnings="-Wno-newline-eof -Wno-format-nonliteral -Wno-gnu-zero-variadic-macro-arguments -Wno-declaration-after-statement -Wno-unsafe-buffer-usage -Wno-zero-as-null-pointer-constant -Wno-c++98-compat-pedantic -Wno-old-style-cast -Wno-missing-field-initializers -Wno-switch-default -Wno-covered-switch-default -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-cast-align -Wno-double-promotion -Wno-alloca -Wno-padded"
+warningLevels="-Werror -Wall -Wextra -Weverything -Wpedantic"
+ignoreWarnings="-Wno-newline-eof -Wno-format-nonliteral -Wno-gnu-zero-variadic-macro-arguments -Wno-declaration-after-statement -Wno-unsafe-buffer-usage -Wno-zero-as-null-pointer-constant -Wno-c++98-compat-pedantic -Wno-old-style-cast -Wno-missing-field-initializers -Wno-switch-default -Wno-covered-switch-default -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-cast-align -Wno-double-promotion -Wno-alloca -Wno-padded"
 
-args="${clang_dir}/bin/clang -std=c++20 -ferror-limit=0 -o $bin_folder/$program_name $symbols $optimisation $source_files $defines $includes $libraries $warning_levels $ignore_warnings"
+args="${clangDir}/bin/clang -std=c++20 -ferror-limit=0 -o $binFolder/$programName $symbols $optimisation $sourceFiles $defines $includes $libraries $warningLevels $ignoreWarnings"
 echo $args
 $args

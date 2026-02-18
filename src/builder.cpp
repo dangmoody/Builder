@@ -74,9 +74,9 @@ enum buildResult_t {
 	BUILD_RESULT_SKIPPED
 };
 
-#define SET_BUILDER_OPTIONS_FUNC_NAME	"set_builder_options"
-#define PRE_BUILD_FUNC_NAME				"on_pre_build"
-#define POST_BUILD_FUNC_NAME			"on_post_build"
+#define SET_BUILDER_OPTIONS_FUNC_NAME	"SetBuilderOptions"
+#define PRE_BUILD_FUNC_NAME				"OnPreBuild"
+#define POST_BUILD_FUNC_NAME			"OnPostBuild"
 
 #define QUIT_ERROR() \
 	debug_break(); \
@@ -87,7 +87,7 @@ enum buildResult_t {
 #pragma clang diagnostic ignored "-Wpadded"
 #endif
 
-u64 GetLastFileWriteTime( const char* filename ) {
+u64 GetLastFileWriteTime( const char *filename ) {
 	u64 lastWriteTime = 0;
 	if ( !file_get_last_write_time( filename, &lastWriteTime ) ) {
 		assert( false );
@@ -96,7 +96,7 @@ u64 GetLastFileWriteTime( const char* filename ) {
 	return lastWriteTime;
 }
 
-const char* GetFileExtensionFromBinaryType( const BinaryType type ) {
+const char *GetFileExtensionFromBinaryType( const BinaryType type ) {
 #ifdef _WIN32
 	switch ( type ) {
 		case BINARY_TYPE_EXE:				return ".exe";
@@ -118,8 +118,8 @@ const char* GetFileExtensionFromBinaryType( const BinaryType type ) {
 	return "ERROR";
 }
 
-bool8 FileIsSourceFile( const char* filename ) {
-	static const char* fileExtensions[] = {
+bool8 FileIsSourceFile( const char *filename ) {
+	static const char *fileExtensions[] = {
 		".cpp",
 		".cxx",
 		".cc",
@@ -135,8 +135,8 @@ bool8 FileIsSourceFile( const char* filename ) {
 	return false;
 }
 
-bool8 FileIsHeaderFile( const char* filename ) {
-	static const char* fileExtensions[] = {
+bool8 FileIsHeaderFile( const char *filename ) {
+	static const char *fileExtensions[] = {
 		".h",
 		".hpp",
 	};
@@ -150,8 +150,8 @@ bool8 FileIsHeaderFile( const char* filename ) {
 	return false;
 }
 
-static const char* BuildConfig_ToString( const BuildConfig* config ) {
-	auto BinaryTypeToString = []( const BinaryType type ) -> const char* {
+static const char *BuildConfig_ToString( const BuildConfig *config ) {
+	auto BinaryTypeToString = []( const BinaryType type ) -> const char * {
 		switch ( type ) {
 			case BINARY_TYPE_EXE:				return "BINARY_TYPE_EXE";
 			case BINARY_TYPE_DYNAMIC_LIBRARY:	return "BINARY_TYPE_DYNAMIC_LIBRARY";
@@ -159,7 +159,7 @@ static const char* BuildConfig_ToString( const BuildConfig* config ) {
 		}
 	};
 
-	auto OptimizationLevelToString = []( OptimizationLevel level ) -> const char* {
+	auto OptimizationLevelToString = []( OptimizationLevel level ) -> const char * {
 		switch ( level ) {
 			case OPTIMIZATION_LEVEL_O0: return "OPTIMIZATION_LEVEL_00";
 			case OPTIMIZATION_LEVEL_O1: return "OPTIMIZATION_LEVEL_01";
@@ -171,9 +171,9 @@ static const char* BuildConfig_ToString( const BuildConfig* config ) {
 	StringBuilder builder = {};
 	string_builder_reset( &builder );
 
-	auto PrintCStringArray = [&builder]( const char* name, const std::vector<const char*>& array ) {
+	auto PrintCStringArray = [&builder]( const char *name, const std::vector<const char *> &array ) {
 		string_builder_appendf( &builder, "\t%s: { ", name );
-		For( u64, i, 0, array.size() ) {
+		For ( u64, i, 0, array.size() ) {
 			string_builder_appendf( &builder, "%s", array[i] );
 
 			if ( i < array.size() - 1 ) {
@@ -183,9 +183,9 @@ static const char* BuildConfig_ToString( const BuildConfig* config ) {
 		string_builder_appendf( &builder, " }\n" );
 	};
 
-	auto PrintSTDStringArray = [&builder]( const char* name, const std::vector<std::string>& array ) {
+	auto PrintSTDStringArray = [&builder]( const char *name, const std::vector<std::string> &array ) {
 		string_builder_appendf( &builder, "\t%s: { ", name );
-		For( u64, i, 0, array.size() ) {
+		For ( u64, i, 0, array.size() ) {
 			string_builder_appendf( &builder, "%s", array[i].c_str() );
 
 			if ( i < array.size() - 1 ) {
@@ -195,65 +195,65 @@ static const char* BuildConfig_ToString( const BuildConfig* config ) {
 		string_builder_appendf( &builder, " }\n" );
 	};
 
-	auto PrintField = [&builder]( const char* key, const char* value ) {
+	auto PrintField = [&builder]( const char *key, const char *value ) {
 		string_builder_appendf( &builder, "\t%s: %s\n", key, value );
 	};
 
 	string_builder_appendf( &builder, "%s: {\n", config->name.c_str() );
 
-	if ( config->depends_on.size() > 0 ) {
+	if ( config->dependsOn.size() > 0 ) {
 		string_builder_appendf( &builder, "\tdepends_on: { " );
-		For ( u64, dependencyIndex, 0, config->depends_on.size() ) {
-			string_builder_appendf( &builder, "%s", config->depends_on[dependencyIndex].name.c_str() );
+		For ( u64, dependencyIndex, 0, config->dependsOn.size() ) {
+			string_builder_appendf( &builder, "%s", config->dependsOn[dependencyIndex].name.c_str() );
 
-			if ( dependencyIndex < config->depends_on.size() - 1 ) {
+			if ( dependencyIndex < config->dependsOn.size() - 1 ) {
 				string_builder_appendf( &builder, ", " );
 			}
 		}
 		string_builder_appendf( &builder, " }\n" );
 	}
 
-	PrintSTDStringArray( "source_files", config->source_files );
+	PrintSTDStringArray( "sourceFiles", config->sourceFiles );
 	PrintSTDStringArray( "defines", config->defines );
-	PrintSTDStringArray( "additional_includes", config->additional_includes );
-	PrintSTDStringArray( "additional_lib_paths", config->additional_lib_paths );
-	PrintSTDStringArray( "additional_libs", config->additional_libs );
-	PrintSTDStringArray( "ignore_warnings", config->ignore_warnings );
-	PrintSTDStringArray( "additional_compiler_arguments", config->additional_compiler_arguments );
+	PrintSTDStringArray( "additionalIncludes", config->additionalIncludes );
+	PrintSTDStringArray( "additionalLibPaths", config->additionalLibPaths );
+	PrintSTDStringArray( "additionalLibs", config->additionalLibs );
+	PrintSTDStringArray( "ignoreWarnings", config->ignoreWarnings );
+	PrintSTDStringArray( "additionalCompilerArguments", config->additionalCompilerArguments );
 
-	PrintField( "binary_name", config->binary_name.c_str() );
-	PrintField( "binary_folder", config->binary_folder.c_str() );
-	PrintField( "binary_type", BinaryTypeToString( config->binary_type ) );
-	PrintField( "optimization_level", OptimizationLevelToString( config->optimization_level ) );
-	PrintField( "remove_symbols", config->remove_symbols ? "true" : "false" );
-	PrintField( "remove_file_extension", config->remove_file_extension ? "true" : "false" );
-	PrintField( "warnings_as_errors", config->warnings_as_errors ? "true" : "false" );
+	PrintField( "binaryName", config->binaryName.c_str() );
+	PrintField( "binaryFolder", config->binaryFolder.c_str() );
+	PrintField( "binaryType", BinaryTypeToString( config->binaryType ) );
+	PrintField( "optimizationLevel", OptimizationLevelToString( config->optimizationLevel ) );
+	PrintField( "removeSymbols", config->removeSymbols ? "true" : "false" );
+	PrintField( "removeFileExtension", config->removeFileExtension ? "true" : "false" );
+	PrintField( "warningsAsErrors", config->warningsAsErrors ? "true" : "false" );
 
 	string_builder_appendf( &builder, "}\n" );
 
 	return string_builder_to_string( &builder );
 }
 
-const char* BuildConfig_GetFullBinaryName( const BuildConfig* config ) {
-	assert( !config->binary_name.empty() );
+const char *BuildConfig_GetFullBinaryName( const BuildConfig *config ) {
+	assert( !config->binaryName.empty() );
 
 	StringBuilder sb = {};
 	string_builder_reset( &sb );
 
-	if ( !config->binary_folder.empty() ) {
-		string_builder_appendf( &sb, "%s%c", config->binary_folder.c_str(), PATH_SEPARATOR );
+	if ( !config->binaryFolder.empty() ) {
+		string_builder_appendf( &sb, "%s%c", config->binaryFolder.c_str(), PATH_SEPARATOR );
 	}
 
-	string_builder_appendf( &sb, "%s", config->binary_name.c_str() );
+	string_builder_appendf( &sb, "%s", config->binaryName.c_str() );
 
-	if ( !config->remove_file_extension ) {
-		string_builder_appendf( &sb, "%s", GetFileExtensionFromBinaryType( config->binary_type ) );
+	if ( !config->removeFileExtension ) {
+		string_builder_appendf( &sb, "%s", GetFileExtensionFromBinaryType( config->binaryType ) );
 	}
 
 	return string_builder_to_string( &sb );
 }
 
-s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVariables, const procFlags_t procFlags, String* outStdout ) {
+s32 RunProc( Array<const char *> *args, Array<const char *> *environmentVariables, const procFlags_t procFlags, String *outStdout ) {
 	assert( args );
 	assert( args->data );
 	assert( args->count >= 1 );
@@ -265,8 +265,7 @@ s32 RunProc( Array<const char*>* args, Array<const char*>* environmentVariables,
 		printf( "\n" );
 	}
 
-	// DM!!! put the async flag back when done getting this running
-	Process* process = process_create( args, environmentVariables, /*PROCESS_FLAG_ASYNC |*/ PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
+	Process *process = process_create( args, environmentVariables, PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
 
 	if ( !process ) {
 		error(
@@ -335,34 +334,34 @@ static s32 ShowUsage( const s32 exitCode ) {
 		"\n"
 		"    " ARG_VISUAL_STUDIO_BUILD " (optional):\n"
 		"        Specifies that the build is being done from Visual Studio.\n"
-		"        So even if BuilderOptions::generate_solution is set to true in the build settings source file we shouldn't generate Visual Studio project files and instead should just do a build using the specified config.\n"
+		"        So even if BuilderOptions::generateSolution is set to true in the build settings source file we shouldn't generate Visual Studio project files and instead should just do a build using the specified config.\n"
 		"\n"
 	);
 
 	return exitCode;
 }
 
-static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, compilerBackend_t* compilerBackend, bool generateCompilationDatabase ) {
+static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, compilerBackend_t *compilerBackend, bool generateCompilationDatabase ) {
 	// create binary folder
-	if ( !folder_create_if_it_doesnt_exist( config->binary_folder.c_str() ) ) {
+	if ( !folder_create_if_it_doesnt_exist( config->binaryFolder.c_str() ) ) {
 		errorCode_t errorCode = get_last_error_code();
-		fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".  Error code: " ERROR_CODE_FORMAT "", SET_BUILDER_OPTIONS_FUNC_NAME, config->binary_folder.c_str(), errorCode );
+		fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".  Error code: " ERROR_CODE_FORMAT "", SET_BUILDER_OPTIONS_FUNC_NAME, config->binaryFolder.c_str(), errorCode );
 		return BUILD_RESULT_FAILED;
 	}
 
 	// create intermediate folder
-	const char* intermediatePath = tprintf( "%s%c%s", config->binary_folder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
+	const char *intermediatePath = tprintf( "%s%c%s", config->binaryFolder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
 	if ( !folder_create_if_it_doesnt_exist( intermediatePath ) ) {
 		errorCode_t errorCode = get_last_error_code();
 		fatal_error( "Failed to create intermediate binary folder.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
 		return BUILD_RESULT_FAILED;
 	}
 
-	Array<const char*> intermediateFiles;
-	intermediateFiles.reserve( config->source_files.size() );
+	Array<const char *> intermediateFiles;
+	intermediateFiles.reserve( config->sourceFiles.size() );
 
 	// TODO(DM): 03/08/2025: this is kinda ugly
-	auto ShouldRebuildSourceFile = [context]( const char* sourceFile, const char* intermediateFilename, u32 sourceFileHashmapIndex ) -> bool8 {
+	auto ShouldRebuildSourceFile = [context]( const char *sourceFile, const char *intermediateFilename, u32 sourceFileHashmapIndex ) -> bool8 {
 		if ( context->forceRebuild ) {
 			return true;
 		}
@@ -390,7 +389,7 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 		// just because the source file didnt change doesnt mean we dont want to recompile it
 		// what if one of the header files it relies on changed? we still want to recompile that file!
 		{
-			const std::vector<std::string>& includeDependencies = context->sourceFileIncludeDependencies[sourceFileHashmapIndex].includeDependencies;
+			const std::vector<std::string> &includeDependencies = context->sourceFileIncludeDependencies[sourceFileHashmapIndex].includeDependencies;
 
 			For ( u64, dependencyIndex, 0, includeDependencies.size() ) {
 				if ( GetLastFileWriteTime( includeDependencies[dependencyIndex].c_str() ) > intermediateFileLastWriteTime ) {
@@ -403,27 +402,27 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 	};
 
 	// Process only once how the base compilation command should look like, fill up dep/output/source args later for each source file
-	compilationCommandArchetype_t cmdArchetype{};
+	compilationCommandArchetype_t cmdArchetype {};
 	if ( !compilerBackend->GetCompilationCommandArchetype( compilerBackend, config, cmdArchetype ) ) {
 		error( "Failed to generate compilation command.\n" );
 		return BUILD_RESULT_FAILED;
 	}
 
 	if ( generateCompilationDatabase ) {
-		context->compilationDatabase.reserve( config->source_files.size() );
+		context->compilationDatabase.reserve( config->sourceFiles.size() );
 	}
 
 	// compile step
 	// make .o files for all compilation units
 	// TODO(DM): 14/06/2025: embarrassingly parallel
-	For ( u64, sourceFileIndex, 0, config->source_files.size() ) {
-		const char* sourceFile = config->source_files[sourceFileIndex].c_str();
-		const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
+	For ( u64, sourceFileIndex, 0, config->sourceFiles.size() ) {
+		const char *sourceFile = config->sourceFiles[sourceFileIndex].c_str();
+		const char *sourceFileNoPath = path_remove_path_from_file( sourceFile );
 
-		const char* intermediateFilename = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, path_remove_file_extension( sourceFileNoPath ) );
+		const char *intermediateFilename = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, path_remove_file_extension( sourceFileNoPath ) );
 		intermediateFiles.add( intermediateFilename );
 
-		const char* depFilename = tprintf( "%s%c%s.d", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
+		const char *depFilename = tprintf( "%s%c%s.d", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
 
 		u32 sourceFileHashmapIndex = hashmap_get_value( context->sourceFileIndices, hash_string( sourceFile, 0 ) );
 
@@ -453,7 +452,7 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 	{
 		bool8 doLinking = false;
 
-		const char* fullBinaryName = BuildConfig_GetFullBinaryName( config );
+		const char *fullBinaryName = BuildConfig_GetFullBinaryName( config );
 
 		u64 binaryFileLastWriteTime = 0;
 
@@ -484,12 +483,12 @@ static buildResult_t BuildBinary( buildContext_t* context, BuildConfig* config, 
 }
 
 struct nukeContext_t {
-	Array<const char*>	subfolders;
+	Array<const char *>	subfolders;
 	bool8				verbose;
 };
 
-static void Nuke_DeleteAllFilesAndCacheFoldersInternal( const FileInfo* fileInfo, void* user_data ) {
-	nukeContext_t* context = cast( nukeContext_t*, user_data );
+static void Nuke_DeleteAllFilesAndCacheFoldersInternal( const FileInfo *fileInfo, void *user_data ) {
+	nukeContext_t *context = cast( nukeContext_t *, user_data );
 
 	if ( fileInfo->is_directory ) {
 		context->subfolders.add( fileInfo->full_filename );
@@ -504,7 +503,7 @@ static void Nuke_DeleteAllFilesAndCacheFoldersInternal( const FileInfo* fileInfo
 	}
 }
 
-bool8 NukeFolder( const char* folder, const bool8 deleteRootFolder, const bool8 verbose ) {
+bool8 NukeFolder( const char *folder, const bool8 deleteRootFolder, const bool8 verbose ) {
 	nukeContext_t nukeContext = {
 		.verbose = verbose
 	};
@@ -517,7 +516,7 @@ bool8 NukeFolder( const char* folder, const bool8 deleteRootFolder, const bool8 
 	bool8 result = true;
 
 	RFor ( u64, subfolderIndex, 0, nukeContext.subfolders.count ) {
-		const char* subfolder = nukeContext.subfolders[subfolderIndex];
+		const char *subfolder = nukeContext.subfolders[subfolderIndex];
 
 		if ( nukeContext.verbose ) {
 			printf( "Deleting folder \"%s\"\n", subfolder );
@@ -539,10 +538,10 @@ bool8 NukeFolder( const char* folder, const bool8 deleteRootFolder, const bool8 
 	return result;
 }
 
-const char* GetNextSlashInPath( const char* path ) {
-	const char* nextSlash = NULL;
-	const char* nextBackSlash = strrchr( path, '\\' );
-	const char* nextForwardSlash = strrchr( path, '/' );
+const char *GetNextSlashInPath( const char *path ) {
+	const char *nextSlash = NULL;
+	const char *nextBackSlash = strrchr( path, '\\' );
+	const char *nextForwardSlash = strrchr( path, '/' );
 
 	if ( !nextBackSlash && !nextForwardSlash ) {
 		return NULL;
@@ -557,12 +556,12 @@ const char* GetNextSlashInPath( const char* path ) {
 	return nextSlash;
 }
 
-static bool8 FileMatchesFilter( const char* filename, const char* filter ) {
-	const char* filenameCopy = filename;
-	const char* filterCopy = filter;
+static bool8 FileMatchesFilter( const char *filename, const char *filter ) {
+	const char *filenameCopy = filename;
+	const char *filterCopy = filter;
 
-	const char* filenameBackup = NULL;
-	const char* filterBackup = NULL;
+	const char *filenameBackup = NULL;
+	const char *filterBackup = NULL;
 
 	while ( *filenameCopy ) {
 		if ( *filterCopy == '*' ) {
@@ -586,13 +585,13 @@ static bool8 FileMatchesFilter( const char* filename, const char* filter ) {
 
 struct sourceFileFindVisitorData_t {
 	std::vector<std::string>	sourceFiles;
-	const char*					searchFilter;
+	const char					*searchFilter;
 };
 
-static void SourceFileVisitor( const FileInfo* fileInfo, void* userData ) {
-	sourceFileFindVisitorData_t* visitorData2 = cast( sourceFileFindVisitorData_t*, userData );
+static void SourceFileVisitor( const FileInfo *fileInfo, void *userData ) {
+	sourceFileFindVisitorData_t *visitorData2 = cast( sourceFileFindVisitorData_t *, userData );
 
-	const char* checkAgainst = NULL;
+	const char *checkAgainst = NULL;
 
 	if ( string_contains( visitorData2->searchFilter, "/" ) || string_contains( visitorData2->searchFilter, "\\" ) ) {
 		checkAgainst = fileInfo->full_filename;
@@ -605,13 +604,13 @@ static void SourceFileVisitor( const FileInfo* fileInfo, void* userData ) {
 	}
 }
 
-static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContext_t* context, const BuildConfig* config ) {
+static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContext_t *context, const BuildConfig *config ) {
 	sourceFileFindVisitorData_t visitorData = {};
 
-	For ( u64, sourceFileIndex, 0, config->source_files.size() ) {
-		const char* sourceFile = config->source_files[sourceFileIndex].c_str();
+	For ( u64, sourceFileIndex, 0, config->sourceFiles.size() ) {
+		const char *sourceFile = config->sourceFiles[sourceFileIndex].c_str();
 
-		const char* sourceFileNoPath = path_remove_path_from_file( sourceFile );
+		const char *sourceFileNoPath = path_remove_path_from_file( sourceFile );
 
 		bool8 recursive = string_contains( sourceFile, "**" ) || string_contains( sourceFile, "/" );
 
@@ -632,13 +631,13 @@ static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContex
 	return visitorData.sourceFiles;
 }
 
-static void AddBuildConfigAndDependenciesUnique( buildContext_t* context, const BuildConfig* config, std::vector<BuildConfig>& outConfigs ) {
+static void AddBuildConfigAndDependenciesUnique( buildContext_t *context, const BuildConfig *config, std::vector<BuildConfig> &outConfigs ) {
 	u64 configNameHash = hash_string( config->name.c_str(), 0 );
 
 	if ( hashmap_get_value( context->configIndices, configNameHash ) == HASHMAP_INVALID_VALUE ) {
 		// add other configs that this config depends on first
-		For ( size_t, dependencyIndex, 0, config->depends_on.size() ) {
-			AddBuildConfigAndDependenciesUnique( context, &config->depends_on[dependencyIndex], outConfigs );
+		For ( size_t, dependencyIndex, 0, config->dependsOn.size() ) {
+			AddBuildConfigAndDependenciesUnique( context, &config->dependsOn[dependencyIndex], outConfigs );
 		}
 
 		outConfigs.push_back( *config );
@@ -652,30 +651,30 @@ struct byteBuffer_t {
 	u64			readOffset;
 };
 
-static const char* GetIncludeDepsFilename( buildContext_t* context ) {
-	const char* inputFileStripped = path_remove_path_from_file( path_remove_file_extension( context->inputFile ) );
-	const char* includeDepsFilename = tprintf( "%s%c%s.include_dependencies", context->dotBuilderFolder.data, PATH_SEPARATOR, inputFileStripped );
+static const char *GetIncludeDepsFilename( buildContext_t *context ) {
+	const char *inputFileStripped = path_remove_path_from_file( path_remove_file_extension( context->inputFile ) );
+	const char *includeDepsFilename = tprintf( "%s%c%s.include_dependencies", context->dotBuilderFolder.data, PATH_SEPARATOR, inputFileStripped );
 
 	return includeDepsFilename;
 }
 
-static void ReadIncludeDependenciesFile( buildContext_t* context ) {
-	const char* includeDepsFilename = GetIncludeDepsFilename( context );
+static void ReadIncludeDependenciesFile( buildContext_t *context ) {
+	const char *includeDepsFilename = GetIncludeDepsFilename( context );
 
 	byteBuffer_t byteBuffer = {};
 	byteBuffer.data.allocator = mem_get_current_allocator();
 
 	// there wont be an include dependencies file on the first build or if you nuked the binaries folder (for instance)
 	// so this is allowed to fail
-	if ( !file_read_entire( includeDepsFilename, cast( char**, &byteBuffer.data.data ), &byteBuffer.data.count ) ) {
+	if ( !file_read_entire( includeDepsFilename, cast( char **, &byteBuffer.data.data ), &byteBuffer.data.count ) ) {
 		context->sourceFileIndices = hashmap_create( 1, 1.0f );
 		return;
 	}
 
-	auto ByteBuffer_Read_U32 = []( byteBuffer_t* buffer ) -> u32 {
+	auto ByteBuffer_Read_U32 = []( byteBuffer_t *buffer ) -> u32 {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcast-align"
-		u32* result = cast( u32*, &buffer->data[buffer->readOffset] );
+		u32 *result = cast( u32 *, &buffer->data[buffer->readOffset] );
 #pragma clang diagnostic pop
 
 		buffer->readOffset += sizeof( u32 );
@@ -683,10 +682,10 @@ static void ReadIncludeDependenciesFile( buildContext_t* context ) {
 		return *result;
 	};
 
-	auto ByteBuffer_Read_String = [&ByteBuffer_Read_U32]( byteBuffer_t* buffer ) -> std::string {
+	auto ByteBuffer_Read_String = [&ByteBuffer_Read_U32]( byteBuffer_t *buffer ) -> std::string {
 		u32 stringLength = ByteBuffer_Read_U32( buffer );
 
-		std::string result( cast( char*, &buffer->data[buffer->readOffset] ), stringLength );
+		std::string result( cast( char *, &buffer->data[buffer->readOffset] ), stringLength );
 
 		buffer->readOffset += stringLength;
 
@@ -700,7 +699,7 @@ static void ReadIncludeDependenciesFile( buildContext_t* context ) {
 	context->sourceFileIncludeDependencies.resize( numSourceFiles );
 
 	For ( u64, sourceFileIndex, 0, context->sourceFileIncludeDependencies.size() ) {
-		includeDependencies_t* sourceFileIncludeDependencies = &context->sourceFileIncludeDependencies[sourceFileIndex];
+		includeDependencies_t *sourceFileIncludeDependencies = &context->sourceFileIncludeDependencies[sourceFileIndex];
 
 		std::string sourceFilename = ByteBuffer_Read_String( &byteBuffer );
 		u64 sourceFilenameHash = hash_string( sourceFilename.c_str(), 0 );
@@ -718,12 +717,12 @@ static void ReadIncludeDependenciesFile( buildContext_t* context ) {
 	}
 }
 
-static bool8 WriteIncludeDependenciesFile( buildContext_t* context ) {
-	const char* includeDepsFilename = GetIncludeDepsFilename( context );
+static bool8 WriteIncludeDependenciesFile( buildContext_t *context ) {
+	const char *includeDepsFilename = GetIncludeDepsFilename( context );
 
 	byteBuffer_t byteBuffer = {};
 
-	auto ByteBuffer_Write_U32 = []( byteBuffer_t* buffer, const u32 x ) {
+	auto ByteBuffer_Write_U32 = []( byteBuffer_t *buffer, const u32 x ) {
 		buffer->data.reserve( buffer->data.alloced + sizeof( u32 ) );
 
 		buffer->data.add( ( x ) & 0xFF );
@@ -732,25 +731,25 @@ static bool8 WriteIncludeDependenciesFile( buildContext_t* context ) {
 		buffer->data.add( ( x >> 24 ) & 0xFF );
 	};
 
-	auto ByteBuffer_Write_String = [&ByteBuffer_Write_U32]( byteBuffer_t* buffer, const std::string& string ) {
+	auto ByteBuffer_Write_String = [&ByteBuffer_Write_U32]( byteBuffer_t *buffer, const std::string &string ) {
 		u32 stringLength = trunc_cast( u32, string.size() );
 
 		ByteBuffer_Write_U32( buffer, stringLength );
 
-		buffer->data.add_range( cast( const u8*, string.data() ), stringLength );
+		buffer->data.add_range( cast( const u8 *, string.data() ), stringLength );
 	};
 
 	ByteBuffer_Write_U32( &byteBuffer, trunc_cast( u32, context->sourceFileIncludeDependencies.size() ) );
 
 	For ( u64, sourceFileIndex, 0, context->sourceFileIncludeDependencies.size() ) {
-		const includeDependencies_t* sourceFileIncludeDependencies = &context->sourceFileIncludeDependencies[sourceFileIndex];
+		const includeDependencies_t *sourceFileIncludeDependencies = &context->sourceFileIncludeDependencies[sourceFileIndex];
 
 		ByteBuffer_Write_String( &byteBuffer, context->sourceFileIncludeDependencies[sourceFileIndex].filename );
 
 		ByteBuffer_Write_U32( &byteBuffer, trunc_cast( u32, sourceFileIncludeDependencies->includeDependencies.size() ) );
 
 		For ( u64, dependencyIndex, 0, sourceFileIncludeDependencies->includeDependencies.size() ) {
-			const std::string& dependencyFilename = sourceFileIncludeDependencies->includeDependencies[dependencyIndex];
+			const std::string &dependencyFilename = sourceFileIncludeDependencies->includeDependencies[dependencyIndex];
 
 			ByteBuffer_Write_String( &byteBuffer, dependencyFilename );
 		}
@@ -767,17 +766,17 @@ static bool8 WriteIncludeDependenciesFile( buildContext_t* context ) {
 
 
 void RecordCompilationDatabaseEntry(
-	buildContext_t* buildContext,
-	const char* sourceFileName,
-	const Array<const char*>& compilationCommandArray ) {
+	buildContext_t *buildContext,
+	const char *sourceFileName,
+	const Array<const char *> &compilationCommandArray ) {
 
 	compilationDatabaseEntry_t entry;
-	entry.directory  = path_absolute_path( buildContext->inputFilePath.data );
-	entry.file       = path_absolute_path( sourceFileName );
+	entry.directory = path_absolute_path( buildContext->inputFilePath.data );
+	entry.file = path_absolute_path( sourceFileName );
 
 	entry.arguments.reserve( compilationCommandArray.count );
-	For( u64, argIndex, 0, compilationCommandArray.count ) {
-		const char* arg = compilationCommandArray[argIndex];
+	For ( u64, argIndex, 0, compilationCommandArray.count ) {
+		const char *arg = compilationCommandArray[argIndex];
 		// The reason for this is because Core uses a thirdparty library under-the-hood in prcoess_create for subprocesses,
 		// which requires that the args list contains `NULL` at the end of the array, so we just insert one at the end so the user doesn't have to.
 		if ( !arg ) {
@@ -791,15 +790,15 @@ void RecordCompilationDatabaseEntry(
 }
 
 enum flagArgumentFormBits_t {
-	JOINED      = bit( 0 ),
-	SEPARATE    = bit( 1 ),
-	COLON       = bit( 2 )
+	JOINED		= bit( 0 ),
+	SEPARATE	= bit( 1 ),
+	COLON		= bit( 2 )
 };
 typedef u32 argumentForms_t;
 
 struct flagRule_t {
-    const char* flag = nullptr;
-    argumentForms_t forms;
+	const char *flag = nullptr;
+	argumentForms_t forms;
 };
 
 static constexpr flagRule_t flagArgumentRules[] = {
@@ -826,9 +825,9 @@ static constexpr flagRule_t flagArgumentRules[] = {
 	{ "-o",         SEPARATE }
 };
 
-static const flagRule_t* IsFlagMatch( const char* arg ) {
+static const flagRule_t *IsFlagMatch( const char *arg ) {
 	for ( const auto &r : flagArgumentRules ) {
-		if ( string_starts_with(arg, r.flag) ) {
+		if ( string_starts_with( arg, r.flag ) ) {
 			return &r;
 		}
 	}
@@ -836,9 +835,9 @@ static const flagRule_t* IsFlagMatch( const char* arg ) {
 	return nullptr;
 }
 
-static void FixCompilatiomDatabasePath( std::string& path  ) {
-	for ( char& c : path ) {
-		if (c == '\\') {
+static void FixCompilatiomDatabasePath( std::string &path ) {
+	for ( char &c : path ) {
+		if ( c == '\\' ) {
 			c = '/';
 		}
 	}
@@ -848,23 +847,22 @@ static void FixCompilatiomDatabasePath( std::string& path  ) {
 // but following the possible combinations in which the compile flag can be provided, based on the compiler
 // (see flagRule_t). This was thought as a more optimal way of doing it, instead of checking character by character for each argument.
 // Also, AFAIK paths in compilation databases are expected to be full paths.
-static void SanitizeCompilationDatabaseArgs( std::vector<std::string>& args ) {
-
+static void SanitizeCompilationDatabaseArgs( std::vector<std::string> &args ) {
 	For ( size_t, argIndex, 0, args.size() ) {
+		std::string &arg = args[argIndex];
 
-		std::string& arg = args[argIndex];
 		if ( arg.empty() ) {
 			continue;
 		}
 
 		const size_t argLength = arg.size();
-		const char* argPtr = arg.c_str();
+		const char *argPtr = arg.c_str();
 
 		const flagRule_t *rule = IsFlagMatch( arg.c_str() );
 
 		// Paths not related to compiler-specific flags
-		if (!rule) {
-			if ( path_is_absolute( argPtr ) || FileIsSourceFile( argPtr ) || FileIsHeaderFile( argPtr) ) {
+		if ( !rule ) {
+			if ( path_is_absolute( argPtr ) || FileIsSourceFile( argPtr ) || FileIsHeaderFile( argPtr ) ) {
 				std::string path = path_absolute_path( arg.c_str() );
 				FixCompilatiomDatabasePath( path );
 				arg = std::move( path );
@@ -875,7 +873,7 @@ static void SanitizeCompilationDatabaseArgs( std::vector<std::string>& args ) {
 
 		u64 ruleLength = strlen( rule->flag );
 		const argumentForms_t ruleForms = rule->forms;
-		const char* ruleFlag = rule->flag;
+		const char *ruleFlag = rule->flag;
 
 		bool handled = false;
 
@@ -900,7 +898,7 @@ static void SanitizeCompilationDatabaseArgs( std::vector<std::string>& args ) {
 		// Separate form
 		if ( !handled && ( ruleForms & SEPARATE ) ) {
 			if ( argIndex + 1 < args.size() ) {
-				std::string& nextArg = args[++argIndex];
+				std::string &nextArg = args[++argIndex];
 				std::string path = path_absolute_path( nextArg.c_str() );
 				FixCompilatiomDatabasePath( path );
 				nextArg = std::move( path );
@@ -909,8 +907,7 @@ static void SanitizeCompilationDatabaseArgs( std::vector<std::string>& args ) {
 	}
 }
 
-static bool WriteCompilationDatabase( buildContext_t* context ) {
-
+static bool WriteCompilationDatabase( buildContext_t *context ) {
 	if ( context->compilationDatabase.empty() ) {
 		return true;
 	}
@@ -923,14 +920,13 @@ static bool WriteCompilationDatabase( buildContext_t* context ) {
 
 	const u64 entriesCount = context->compilationDatabase.size();
 	For ( u64, i, 0, entriesCount ) {
-
-		compilationDatabaseEntry_t& entry = context->compilationDatabase[i];
+		compilationDatabaseEntry_t &entry = context->compilationDatabase[i];
 
 		FixCompilatiomDatabasePath( entry.directory );
 		FixCompilatiomDatabasePath( entry.file );
 
-		const char* directory = entry.directory.c_str();
-		const char* file = entry.file.c_str();
+		const char *directory = entry.directory.c_str();
+		const char *file = entry.file.c_str();
 
 		string_builder_appendf(
 			&sb,
@@ -964,10 +960,10 @@ static bool WriteCompilationDatabase( buildContext_t* context ) {
 
 	string_builder_appendf( &sb, "]\n" );
 
-	const char* json = string_builder_to_string( &sb );
+	const char *json = string_builder_to_string( &sb );
 	assert( json );
 
-	const char* outputFilename = tprintf( "%s%ccompile_commands.json", context->inputFilePath.data, PATH_SEPARATOR );
+	const char *outputFilename = tprintf( "%s%ccompile_commands.json", context->inputFilePath.data, PATH_SEPARATOR );
 	if ( !file_write_entire( outputFilename, json, strlen( json ) ) ) {
 		errorCode_t errorCode = get_last_error_code();
 		error(
@@ -981,7 +977,7 @@ static bool WriteCompilationDatabase( buildContext_t* context ) {
 	return true;
 }
 
-int BuilderMain( const int firstArg, int argc, char** argv ) {
+int BuilderMain( const int firstArg, int argc, char **argv ) {
 	float64 totalTimeStart = time_ms();
 
 	float64 userConfigBuildTimeMS = -1.0;
@@ -1005,13 +1001,13 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 	};
 
 	// parse command line args
-	const char* inputConfigName = NULL;
+	const char *inputConfigName = NULL;
 	u64 inputConfigNameHash = 0;
 
 	bool8 isVisualStudioBuild = false;
 
 	For ( s32, argIndex, firstArg, argc ) {
-		const char* arg = argv[argIndex];
+		const char *arg = argv[argIndex];
 		const u64 argLen = strlen( arg );
 
 		if ( string_equals( arg, ARG_HELP_SHORT ) || string_equals( arg, ARG_HELP_LONG ) ) {
@@ -1035,7 +1031,7 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 		}
 
 		if ( string_starts_with( arg, ARG_CONFIG ) ) {
-			const char* equals = strchr( arg, '=' );
+			const char *equals = strchr( arg, '=' );
 
 			if ( !equals ) {
 				error( "I detected that you want to set a config, but you never gave me the equals (=) immediately after it.  You need to do that.\n" );
@@ -1043,7 +1039,7 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 				return ShowUsage( 1 );
 			}
 
-			const char* configName = equals + 1;
+			const char *configName = equals + 1;
 
 			if ( strlen( configName ) < 1 ) {
 				error( "You specified the start of the config arg, but you never actually gave me a name for the config.  I need that.\n" );
@@ -1063,7 +1059,7 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 				QUIT_ERROR();
 			}
 
-			const char* folderToNuke = argv[argIndex + 1];
+			const char *folderToNuke = argv[argIndex + 1];
 
 			float64 startTime = time_ms();
 
@@ -1111,43 +1107,43 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 	// the default binary folder is the same folder as the source file
 	// if the file doesnt have a path then assume its in the same path as the current working directory (where we are calling builder from)
 	{
-		const char* inputFilePath = path_remove_file_from_path( context.inputFile );
+		const char *inputFilePath = path_remove_file_from_path( context.inputFile );
 
 		if ( !inputFilePath ) {
 			inputFilePath = path_current_working_directory();
 		}
 
-		const char* inputFileNoPath = path_remove_path_from_file( context.inputFile );
-		const char* inputFileNoPathOrExtension = path_remove_file_extension( inputFileNoPath );
+		const char *inputFileNoPath = path_remove_path_from_file( context.inputFile );
+		const char *inputFileNoPathOrExtension = path_remove_file_extension( inputFileNoPath );
 
 		context.inputFilePath = inputFilePath;
 
 		string_printf( &context.dotBuilderFolder, "%s%c.builder", context.inputFilePath.data, PATH_SEPARATOR );
 	}
 
-	const char* defaultBinaryName = path_remove_file_extension( path_remove_path_from_file( context.inputFile ) );
+	const char *defaultBinaryName = path_remove_file_extension( path_remove_path_from_file( context.inputFile ) );
 
 	ReadIncludeDependenciesFile( &context );
 
 	// init default compiler backend (the version of clang that builder came with)
 	compilerBackend_t compilerBackend = {};
 	CreateCompilerBackend_Clang( &compilerBackend );
-	const char* defaultCompilerPath = tprintf( "%s%c..%cclang%cbin%cclang", path_remove_file_from_path( path_app_path() ), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
+	const char *defaultCompilerPath = tprintf( "%s%c..%cclang%cbin%cclang", path_remove_file_from_path( path_app_path() ), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
 	compilerBackend.Init( &compilerBackend, defaultCompilerPath, std::string() );
 	defer( compilerBackend.Shutdown( &compilerBackend ) );
 
 	// user config build step
-	// see if they have set_builder_options() overridden
+	// see if they have SetBuilderOptions() overridden
 	// if they do, then build a DLL first and call that function to set some more build options
 	buildResult_t userConfigBuildResult = BUILD_RESULT_SKIPPED;
-	const char* userConfigFullBinaryName = NULL;
+	const char *userConfigFullBinaryName = NULL;
 	{
 		float64 userConfigBuildTimeStart = time_ms();
 
 		printf( "Doing user config build:\n" );
 
 		BuildConfig userConfigBuildConfig = {
-			.source_files = {
+			.sourceFiles = {
 				context.inputFile,
 			},
 			.defines = {
@@ -1159,15 +1155,11 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 				"NDEBUG",
 #endif
 			},
-			.additional_includes = {
+			.additionalIncludes = {
 				// add the folder that builder lives in as an additional include path otherwise people have no real way of being able to include it
-//#ifdef BUILDER_RETAIL
 				tprintf( "%s%c..%cinclude", path_remove_file_from_path( path_app_path() ), PATH_SEPARATOR, PATH_SEPARATOR ),
-//#else
-//				tprintf( "%s%c..%c..%c..%cinclude", path_app_path(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR ),
-//#endif
 			},
-			.additional_libs = {
+			.additionalLibs = {
 #if defined( _WIN64 )
 				"user32.lib",
 				// MSVCRT is needed for ABI compatibility between builder and the user config DLL on windows
@@ -1178,24 +1170,24 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 #endif
 #endif
 			},
-			.ignore_warnings = {
-				"-Wno-missing-prototypes",	// otherwise the user has to forward declare functions like set_builder_options and thats annoying
+			.ignoreWarnings = {
+				"-Wno-missing-prototypes",	// otherwise the user has to forward declare functions like SetBuilderOptions and thats annoying
 				"-Wno-reorder-init-list",	// allow users to initialize struct members in whatever order they want
 			},
 #ifdef __linux__
-			.additional_compiler_arguments = {
+			.additionalCompilerArguments = {
 				"-fPIC"
 			},
 #endif
-			.binary_name = defaultBinaryName,
-			.binary_folder = context.dotBuilderFolder.data,
-			.binary_type = BINARY_TYPE_DYNAMIC_LIBRARY,
+			.binaryName = defaultBinaryName,
+			.binaryFolder = context.dotBuilderFolder.data,
+			.binaryType = BINARY_TYPE_DYNAMIC_LIBRARY,
 			// this is needed because this tells the compiler what to set _ITERATOR_DEBUG_LEVEL to
 			// ABI compatibility will be broken if this is not the same between all binaries
 #if defined( _DEBUG )
-			.optimization_level = OPTIMIZATION_LEVEL_O0,
+			.optimizationLevel = OPTIMIZATION_LEVEL_O0,
 #else
-			.optimization_level = OPTIMIZATION_LEVEL_O3,
+			.optimizationLevel = OPTIMIZATION_LEVEL_O3,
 #endif
 		};
 
@@ -1234,7 +1226,7 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 	assertf( library.ptr, "Failed to load the user-config build DLL \"%s\".  This should never happen!\n", userConfigFullBinaryName );
 	defer( library_unload( &library ) );
 
-	typedef void ( *setBuilderOptionsFunc_t )( BuilderOptions* options );
+	typedef void ( *setBuilderOptionsFunc_t )( BuilderOptions *options );
 	typedef void ( *preBuildFunc_t )();
 	typedef void ( *postBuildFunc_t )();
 
@@ -1254,10 +1246,10 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 
 			setBuilderOptionsTimeMS = setBuilderOptionsTimeEnd - setBuilderOptionsTimeStart;
 
-			context.forceRebuild = options.force_rebuild;
+			context.forceRebuild = options.forceRebuild;
 
 			// if the user wants to generate a visual studio solution then do that now
-			if ( options.generate_solution && !isVisualStudioBuild ) {
+			if ( options.generateSolution && !isVisualStudioBuild ) {
 				// you either want to generate a visual studio solution or build this config, but not both
 				if ( inputConfigName ) {
 					error(
@@ -1272,10 +1264,10 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 				// we will need this list later for validation
 				options.configs.clear();
 				For ( u64, projectIndex, 0, options.solution.projects.size() ) {
-					VisualStudioProject* project = &options.solution.projects[projectIndex];
+					VisualStudioProject *project = &options.solution.projects[projectIndex];
 
 					For ( u64, configIndex, 0, project->configs.size() ) {
-						VisualStudioConfig* config = &project->configs[configIndex];
+						VisualStudioConfig *config = &project->configs[configIndex];
 
 						AddBuildConfigAndDependenciesUnique( &context, &config->options, options.configs );
 					}
@@ -1306,24 +1298,24 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 	float64 compilerBackendInitTimeMS = -1.0f;
 	{
 		// if the user never specified a compiler, we can build with the default compiler that we just built the user config DLL with
-		if ( !options.compiler_path.empty() ) {
+		if ( !options.compilerPath.empty() ) {
 			compilerBackend.Shutdown( &compilerBackend );
 
-			if ( string_ends_with( options.compiler_path.c_str(), ".exe" ) ) {
-				options.compiler_path = path_remove_file_extension( options.compiler_path.c_str() );
+			if ( string_ends_with( options.compilerPath.c_str(), ".exe" ) ) {
+				options.compilerPath = path_remove_file_extension( options.compilerPath.c_str() );
 			}
 
-			const char* path = path_remove_file_from_path( options.compiler_path.c_str() );
+			const char *path = path_remove_file_from_path( options.compilerPath.c_str() );
 
 			if ( path && !path_is_absolute( path ) ) {
-				options.compiler_path = context.inputFilePath.data + std::string( "/" ) + options.compiler_path;
+				options.compilerPath = context.inputFilePath.data + std::string( "/" ) + options.compilerPath;
 			}
 
-			if ( string_ends_with( options.compiler_path.c_str(), "clang" ) ) {
+			if ( string_ends_with( options.compilerPath.c_str(), "clang" ) ) {
 				CreateCompilerBackend_Clang( &compilerBackend );
-			} else if ( string_ends_with( options.compiler_path.c_str(), "gcc" ) ) {
+			} else if ( string_ends_with( options.compilerPath.c_str(), "gcc" ) ) {
 				CreateCompilerBackend_GCC( &compilerBackend );
-			} else if ( string_ends_with( options.compiler_path.c_str(), "cl" ) ) {
+			} else if ( string_ends_with( options.compilerPath.c_str(), "cl" ) ) {
 #ifdef _WIN32
 				CreateCompilerBackend_MSVC( &compilerBackend );
 #else
@@ -1339,7 +1331,7 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 					"The compiler you want to build with (\"%s\") is not one that I recognise.\n"
 					"Currently, I only support: Clang, GCC, and MSVC.\n"
 					"So you must use one of those compilers and make the compiler path end with the name of the executable.  Sorry!\n"
-					, options.compiler_path.c_str()
+					, options.compilerPath.c_str()
 				);
 
 				QUIT_ERROR();
@@ -1349,7 +1341,7 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 			{
 				float64 compilerBackendInitStart = time_ms();
 
-				if ( !compilerBackend.Init( &compilerBackend, options.compiler_path.c_str(), options.compiler_version.c_str() ) ) {
+				if ( !compilerBackend.Init( &compilerBackend, options.compilerPath.c_str(), options.compilerVersion.c_str() ) ) {
 					QUIT_ERROR();
 				}
 
@@ -1376,14 +1368,14 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 		}
 
 		// check that version of the compiler the user actually has is what they expect it to be
-		if ( !options.compiler_version.empty() ) {
+		if ( !options.compilerVersion.empty() ) {
 			String compilerVersion = compilerBackend.GetCompilerVersion( &compilerBackend );
 
-			if ( !string_equals( compilerVersion.data, options.compiler_version.c_str() ) ) {
+			if ( !string_equals( compilerVersion.data, options.compilerVersion.c_str() ) ) {
 				warning(
 					"I see that you are using compiler version \"%s\", but compiler version \"%s\" was set in %s.\n"
 					"I will still go ahead with building the program, but things may not work as you expect.\n\n"
-					, compilerVersion.data, options.compiler_version.c_str(), SET_BUILDER_OPTIONS_FUNC_NAME
+					, compilerVersion.data, options.compilerVersion.c_str(), SET_BUILDER_OPTIONS_FUNC_NAME
 				);
 			}
 		}
@@ -1394,8 +1386,8 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 	// if no configs were manually added then assume we are just doing a default build with no user-specified options
 	if ( options.configs.size() == 0 ) {
 		BuildConfig config = {
-			.source_files	= { context.inputFile },
-			.binary_name	= defaultBinaryName
+			.sourceFiles = { context.inputFile },
+			.binaryName = defaultBinaryName
 		};
 
 		options.configs.push_back( config );
@@ -1420,7 +1412,7 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 				error(
 					"You have multiple BuildConfigs in your build source file, but some of them have empty names.\n"
 					"When you have multiple BuildConfigs, ALL of them MUST have non-empty names.\n"
-					"You need to set 'BuildConfig::name' in every BuildConfig that you add via add_build_config() (including dependencies!).\n"
+					"You need to set 'BuildConfig::name' in every BuildConfig that you add via AddBuildConfig() (including dependencies!).\n"
 				);
 
 				QUIT_ERROR();
@@ -1431,7 +1423,7 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 	// none of the configs can have the same name
 	// TODO(DM): 14/11/2024: can we do better than o(n^2) here?
 	For ( size_t, configIndexA, 0, options.configs.size() ) {
-		const char* configNameA = options.configs[configIndexA].name.c_str();
+		const char *configNameA = options.configs[configIndexA].name.c_str();
 		u64 configNameHashA = hash_string( configNameA, 0 );
 
 		For ( size_t, configIndexB, 0, options.configs.size() ) {
@@ -1439,7 +1431,7 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 				continue;
 			}
 
-			const char* configNameB = options.configs[configIndexB].name.c_str();
+			const char *configNameB = options.configs[configIndexB].name.c_str();
 			u64 configNameHashB = hash_string( configNameB, 0 );
 
 			if ( configNameHashA == configNameHashB ) {
@@ -1449,12 +1441,12 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 		}
 	}
 
-	// of all the configs that the user filled out inside set_builder_options
+	// of all the configs that the user filled out inside SetBuilderOptions
 	// find the one the user asked for in the command line
 	if ( inputConfigName ) {
 		bool8 foundConfig = false;
 		For ( u64, configIndex, 0, options.configs.size() ) {
-			const BuildConfig* config = &options.configs[configIndex];
+			const BuildConfig *config = &options.configs[configIndex];
 
 			if ( hash_string( config->name.c_str(), 0 ) == inputConfigNameHash ) {
 				AddBuildConfigAndDependenciesUnique( &context, config, configsToBuild );
@@ -1474,7 +1466,7 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 	if ( preBuildFunc ) {
 		printf( "Running pre-build code...\n" );
 
-		const char* oldCWD = path_current_working_directory();
+		const char *oldCWD = path_current_working_directory();
 		path_set_current_directory( context.inputFilePath.data );
 		defer( path_set_current_directory( oldCWD ) );
 
@@ -1486,17 +1478,17 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 	u32 numSkippedBuilds = 0;
 
 	For ( u64, configToBuildIndex, 0, configsToBuild.size() ) {
-		BuildConfig* config = &configsToBuild[configToBuildIndex];
+		BuildConfig *config = &configsToBuild[configToBuildIndex];
 
 		// make sure that the binary folder and binary name are at least set to defaults
-		if ( !config->binary_folder.empty() ) {
-			config->binary_folder = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, config->binary_folder.c_str() );
+		if ( !config->binaryFolder.empty() ) {
+			config->binaryFolder = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, config->binaryFolder.c_str() );
 		} else {
-			config->binary_folder = context.inputFilePath.data;
+			config->binaryFolder = context.inputFilePath.data;
 		}
 
 		{
-			printf( "Building \"%s\"", config->binary_name.c_str() );
+			printf( "Building \"%s\"", config->binaryName.c_str() );
 
 			if ( !config->name.empty() ) {
 				printf( ", config \"%s\"", config->name.c_str() );
@@ -1506,51 +1498,51 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 		}
 
 		// make all non-absolute additional include paths relative to the build source file
-		For ( u64, includeIndex, 0, config->additional_includes.size() ) {
-			const char* additionalInclude = config->additional_includes[includeIndex].c_str();
+		For ( u64, includeIndex, 0, config->additionalIncludes.size() ) {
+			const char *additionalInclude = config->additionalIncludes[includeIndex].c_str();
 
 			if ( !path_is_absolute( additionalInclude ) ) {
-				config->additional_includes[includeIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalInclude );
+				config->additionalIncludes[includeIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalInclude );
 			}
 		}
 
 		// make all non-absolute additional library paths relative to the build source file
-		For ( u64, libPathIndex, 0, config->additional_lib_paths.size() ) {
-			const char* additionalLibPath = config->additional_lib_paths[libPathIndex].c_str();
+		For ( u64, libPathIndex, 0, config->additionalLibPaths.size() ) {
+			const char *additionalLibPath = config->additionalLibPaths[libPathIndex].c_str();
 
 			if ( !path_is_absolute( additionalLibPath ) ) {
-				config->additional_lib_paths[libPathIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalLibPath );
+				config->additionalLibPaths[libPathIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalLibPath );
 			}
 		}
 
 		// get all the "compilation units" that we are actually going to give to the compiler
-		// if no source files were added in set_builder_options() then assume they only want to build the same file as the one specified via the command line
-		if ( config->source_files.size() == 0 ) {
-			config->source_files.push_back( context.inputFile );
+		// if no source files were added in SetBuilderOptions() then assume they only want to build the same file as the one specified via the command line
+		if ( config->sourceFiles.size() == 0 ) {
+			config->sourceFiles.push_back( context.inputFile );
 		} else {
 			// otherwise the user told us to build other source files, so go find and build those instead
-			// keep this as a std::vector because this gets fed back into BuilderOptions::source_files
+			// keep this as a std::vector because this gets fed back into BuilderOptions::sourceFiles
 			std::vector<std::string> finalSourceFilesToBuild = BuildConfig_GetAllSourceFiles( &context, config );
 
 			// at this point its totally acceptable for finalSourceFilesToBuild to be empty
 			// this is because the compiler should be the one that tells the user they specified no valid source files to build with
 			// the compiler can and will throw an error for that, so let it
 
-			config->source_files = finalSourceFilesToBuild;
+			config->sourceFiles = finalSourceFilesToBuild;
 		}
 
 		// now do the actual build
 		{
 			float64 buildTimeStart = time_ms();
 
-			buildResult_t buildResult = BuildBinary( &context, config, &compilerBackend, options.generate_compilation_database );
+			buildResult_t buildResult = BuildBinary( &context, config, &compilerBackend, options.generateCompilationDatabase );
 
 			float64 buildTimeEnd = time_ms();
 
 			switch ( buildResult ) {
 				case BUILD_RESULT_SUCCESS:
 					numSuccessfulBuilds++;
-					printf( "Finished building \"%s\", %f ms\n\n", config->binary_name.c_str(), buildTimeEnd - buildTimeStart );
+					printf( "Finished building \"%s\", %f ms\n\n", config->binaryName.c_str(), buildTimeEnd - buildTimeStart );
 					break;
 
 				case BUILD_RESULT_FAILED:
@@ -1571,7 +1563,7 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 	if ( postBuildFunc ) {
 		printf( "Running post-build code...\n" );
 
-		const char* oldCWD = path_current_working_directory();
+		const char *oldCWD = path_current_working_directory();
 		path_set_current_directory( context.inputFilePath.data );
 		defer( path_set_current_directory( oldCWD ) );
 
@@ -1583,7 +1575,7 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 			QUIT_ERROR();
 		}
 
-		if ( options.generate_compilation_database && !WriteCompilationDatabase( &context ) ){
+		if ( options.generateCompilationDatabase && !WriteCompilationDatabase( &context ) ) {
 			context.compilationDatabase.clear();
 			QUIT_ERROR();
 		}
@@ -1595,17 +1587,17 @@ int BuilderMain( const int firstArg, int argc, char** argv ) {
 		using namespace hlml;
 
 		printf( "Build finished:\n" );
-		printf( "    User config build:   %f ms%s\n", userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? " (skipped)" : "" );
+		printf( "    User config build:  %f ms%s\n", userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? " (skipped)" : "" );
 		if ( !doubleeq( compilerBackendInitTimeMS, -1.0 ) ) {
-			printf( "    Compiler init time:  %f ms\n", compilerBackendInitTimeMS );
+			printf( "    Compiler init time: %f ms\n", compilerBackendInitTimeMS );
 		}
 		if ( !doubleeq( setBuilderOptionsTimeMS, -1.0 ) ) {
-			printf( "    set_builder_options: %f ms\n", setBuilderOptionsTimeMS );
+			printf( "    SetBuilderOptions:  %f ms\n", setBuilderOptionsTimeMS );
 		}
-		if ( options.generate_solution && !isVisualStudioBuild ) {
-			printf( "    Generate solution:   %f ms\n", visualStudioGenerationTimeMS );
+		if ( options.generateSolution && !isVisualStudioBuild ) {
+			printf( "    Generate solution:  %f ms\n", visualStudioGenerationTimeMS );
 		}
-		printf( "    Total time:          %f ms\n", totalTimeEnd - totalTimeStart );
+		printf( "    Total time:         %f ms\n", totalTimeEnd - totalTimeStart );
 		printf( "\n" );
 	}
 

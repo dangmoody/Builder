@@ -31,15 +31,15 @@ Builds are configured via a source file which you pass as an argument when calli
 #include <builder.h> // Builder will automatically resolve this include for you.
 
 // This is the entry point that Builder searches for.
-BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
+BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options ) {
 	BuildConfig config = {
-		.binary_name = "my-awesome-program",
-		.binary_folder = "bin/win64",
-		.source_files = { "src/**/*.cpp" },
+		.binaryName = "my-awesome-program",
+		.binaryFolder = "bin/win64",
+		.sourceFiles = { "src/**/*.cpp" },
 		.defines = { "IS_AWESOME=1" },
 	};
 
-	add_build_config( options, &config );
+	AddBuildConfig( options, &config );
 }
 ```
 
@@ -51,14 +51,14 @@ builder build.cpp
 
 Builder will now build your program.
 
-If you don't write `set_builder_options` then Builder can still build your program, it will just use the defaults:
+If you don't write `SetBuilderOptions` then Builder can still build your program, it will just use the defaults:
 * Builder will use the portable install of Clang that it comes with as the compiler.
 * The program name will be the name of the source file you specified, except it will end with `.exe` (on Windows) instead of `.cpp`.
 * The program will be put in the same folder as the source file.
 
 Run `builder -h` or `builder --help` for help in the command line.
 
-When Builder is running `set_builder_options()`, Builder also defines `BUILDER_DOING_USER_CONFIG_BUILD`.
+When Builder is running `SetBuilderOptions()`, Builder also defines `BUILDER_DOING_USER_CONFIG_BUILD`.
 
 
 ### Configs
@@ -75,25 +75,25 @@ Example usage:
 ```cpp
 // build.cpp
 
-BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
+BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options ) {
 	BuildConfig debug = {
 		.name = "debug",	// If you wanted to use this config, you'd pass --config=debug in the command line.
-		.binary_name = "kenneth",
-		.binary_folder = "bin/debug",
-		.remove_symbols = false,
-		.optimization_level = OPTIMIZATION_LEVEL_O0,
+		.binaryName = "kenneth",
+		.binaryFolder = "bin/debug",
+		.removeSymbols = false,
+		.optimizationLevel = OPTIMIZATION_LEVEL_O0,
 	};
 
 	BuildConfig release = {
 		.name = "release",	// If you wanted to use this config, you'd pass --config=release in the command line.
-		.binary_name = "kenneth",
-		.binary_folder = "bin/release",
-		.remove_symbols = true,
-		.optimization_level = OPTIMIZATION_LEVEL_O3,
+		.binaryName = "kenneth",
+		.binaryFolder = "bin/release",
+		.removeSymbols = true,
+		.optimizationLevel = OPTIMIZATION_LEVEL_O3,
 	};
 
-	add_build_config( options, &debug );
-	add_build_config( options, &release );
+	AddBuildConfig( options, &debug );
+	AddBuildConfig( options, &release );
 }
 ```
 
@@ -112,24 +112,24 @@ See the `BuildConfig` struct inside `builder.h` for a full list of all the thing
 When the build source file is getting compiled, Builder will a custom `#define` called `BUILDER_DOING_USER_CONFIG_BUILD`.  This can be useful if you need to seperate your `build.cpp` file from the other code files.
 
 Builder also has other entry points:
-* `on_pre_build()` - This gets run just before your program gets compiled.
-* `on_post_build()` - This gets run just after your program gets compiled.
+* `OnPreBuild()` - This gets run just before your program gets compiled.
+* `OnPostBuild()` - This gets run just after your program gets compiled.
 
 
 ### Changing compilers
 
 By default, Builder comes with it's own portable install of Clang and, by default, Builder will use that to compile with (if no compiler is set manually).  However, you absolutely don't have to use this as your compiler if you don't want to.
 
-To override this, and to make Builder use whatever compiler you want (so long as it's either Clang, MSVC, or GCC) then do the following inside `set_builder_options`:
+To override this, and to make Builder use whatever compiler you want (so long as it's either Clang, MSVC, or GCC) then do the following inside `SetBuilderOptions`:
 
 ```cpp
-options->compiler_path = "C:/Program Files/mingw64/bin/gcc";
+options->compilerPath = "C:/Program Files/mingw64/bin/gcc";
 ```
 
 You can also tell Builder that you want to use a specific compiler version like so:
 
 ```cpp
-options->compiler_version = "15.1.0";
+options->compilerVersion = "15.1.0";
 ```
 
 If Builder detects that your compiler version doesn't match the one specified it will throw a warning before trying to build your program.  This can be useful (for example) for teams who need to make sure they're using the same toolchain.
@@ -146,7 +146,7 @@ You don't have to do this, and you can totally use a hard-coded path to `cl` if 
 
 Builder also supports generating Visual Studio Solutions.  You still fill out your `BuildConfig`s like before, but you also need to do two additional things:
 
-1. Set `BuilderOptions::generate_solution` to `true`.
+1. Set `BuilderOptions::generateSolution` to `true`.
 2. Fill out `BuilderOptions::solution`.
 
 Code example:
@@ -156,33 +156,33 @@ Code example:
 
 #include <builder.h>
 
-BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
+BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options ) {
 	BuildConfig debug = {
 		.name = "debug",
-		.source_files = { "src/*.cpp" },
-		.binary_name = "test",
-		.binary_folder = "bin/debug",
-		.optimization_level = OPTIMIZATION_LEVEL_O0,
+		.sourceFiles = { "src/*.cpp" },
+		.binaryName = "test",
+		.binaryFolder = "bin/debug",
+		.optimizationLevel = OPTIMIZATION_LEVEL_O0,
 		.defines = { "_DEBUG" },
 	};
 
 	BuildConfig release = {
 		.name = "release",
-		.source_files = { "src/*.cpp" },
-		.binary_name = "test",
-		.binary_folder = "bin/release",
-		.optimization_level = OPTIMIZATION_LEVEL_O3,
+		.sourceFiles = { "src/*.cpp" },
+		.binaryName = "test",
+		.binaryFolder = "bin/release",
+		.optimizationLevel = OPTIMIZATION_LEVEL_O3,
 		.defines = { "NDEBUG" },
 	};
 
 	// If you know you're only building with Visual Studio, then you could optionally comment out these two lines.
-	add_build_config( options, &debug );
-	add_build_config( options, &release );
+	AddBuildConfig( options, &debug );
+	AddBuildConfig( options, &release );
 
 	// When this bool is true, Builder will always generate a Visual Studio solution, and it won't do a build.
 	// So if, suddenly, you decide you want to do a build without using Visual Studio, just set this to false and then pass this file to Builder.
 	// Alternatively, you could move this code into a separate .cpp file and pass that file to Builder instead when wishing to re-generate your solution.
-	options->generate_solution = true;
+	options->generateSolution = true;
 
 	options->solution.name = "test-sln";
 	options->solution.path = "visual_studio";
@@ -190,8 +190,8 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 	options->solution.projects = {
 		{
 			.name = "test-project",
-			.code_folders = { "src" },
-			.file_extensions = { "cpp", "h", "inl" },
+			.codeFolders = { "src" },
+			.fileExtensions = { "cpp", "h", "inl" },
 			.configs = {
 				{ "debug",   debug,   { /* debugger arguments */ } },
 				{ "release", release, { /* debugger arguments */ } },

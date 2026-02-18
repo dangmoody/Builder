@@ -297,7 +297,7 @@ TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 	.config					= "debug",
 	.binaryFolder			= "bin/debug",
 	.binaryName				= "kenneth",
-	.expectedExitCode		= 420,
+	.expectedExitCode		= 69,
 	.defaultCompilerOnly	= true,
 } );
 
@@ -307,7 +307,7 @@ TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 	.config					= "release",
 	.binaryFolder			= "bin/release",
 	.binaryName				= "kenneth",
-	.expectedExitCode		= 420,
+	.expectedExitCode		= 69,
 	.noSymbolFiles			= true,
 	.defaultCompilerOnly	= true,
 } );

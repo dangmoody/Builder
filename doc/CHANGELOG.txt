@@ -1,3 +1,10 @@
+v0.10.1, <RELEASE DATE HERE>:
+
+* Fixed MSVC compiler path and version not being set if anything other than "cl" was specified.
+* Fixed time taken to do things not showing when Visual Studio solution generation was requested.
+
+----------------------------------------------------------------
+
 v0.10.0, 19/02/2026:
 
 * All snake_case coding conventions have been completely dropped.

@@ -39,8 +39,6 @@ SOFTWARE.
 #include "core/include/file.h"
 #include "core/include/temp_storage.h"
 
-#include <io.h>	// _get_osfhandle()
-
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wnon-virtual-dtor"
@@ -138,11 +136,6 @@ static void OnMSVCVersionFound( const FileInfo *fileInfo, void *userData ) {
 
 	Array<const char *> *msvcVersions = cast( Array<const char *> *, userData );
 
-	/*u32 v0 = 0;
-	u32 v1 = 0;
-	u32 v2 = 0;
-	sscanf( fileInfo->filename, "%u.%u.%u", &v0, &v1, &v2 );*/
-
 	( *msvcVersions ).add( tprintf( fileInfo->filename ) );
 }
 
@@ -209,6 +202,8 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const std::string &compilerP
 	new( msvcState ) msvcState_t;
 
 	msvcState->windowsSDKVersion = {};
+	msvcState->compilerPath = compilerPath.c_str();
+	msvcState->compilerVersion = compilerVersion.c_str();
 
 	backend->data = msvcState;
 
@@ -328,46 +323,6 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const std::string &compilerP
 
 				visualStudioInstallationPath[utf8Length] = 0;
 			}
-
-			//char *msvcVersion = NULL;
-			//{
-			//	// the "default" version of MSVC on your machine is in this file
-			//	// so now we need to read a file in order to get a version number
-			//	const char *toolsFilename = tprintf( "%s\\VC\\Auxiliary\\Build\\Microsoft.VCToolsVersion.default.txt", visualStudioInstallationPath );
-
-			//	// file_read_entire() wont work here because your MSVC installation is probably inside C:/Program Files (even though we cant assume that) so access will get denied when trying to read that file
-			//	// so now we have to basically break into our own filesystem and do a glorified memcpy
-			//	FILE *f = fopen( toolsFilename, "rt" );
-			//	if ( !f ) {
-			//		return false;
-			//	}
-
-			//	defer(
-			//		fclose( f );
-			//		f = NULL;
-			//	);
-
-			//	HANDLE handle = cast( HANDLE, _get_osfhandle( _fileno( f ) ) );
-			//	if ( handle == INVALID_HANDLE_VALUE ) {
-			//		return false;
-			//	}
-
-			//	LARGE_INTEGER fileSize = { { 0 } };
-			//	if ( !GetFileSizeEx( handle, &fileSize ) ) {
-			//		return false;
-			//	}
-
-			//	msvcVersion = cast( char *, mem_temp_alloc( trunc_cast( u64, fileSize.QuadPart ) * sizeof( char ) ) );
-			//	if ( !fgets( msvcVersion, trunc_cast( int, fileSize.QuadPart ), f ) ) {
-			//		return NULL;
-			//	}
-
-			//	// the version file actually ends with a newline (because ofc it does) so get rid of that
-			//	char *newline = strchr( msvcVersion, '\n' );
-			//	if ( newline ) {
-			//		*newline = 0;
-			//	}
-			//}
 
 			msvcRootFolder = tprintf( "%s\\VC\\Tools\\MSVC", visualStudioInstallationPath );
 

@@ -982,9 +982,8 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 
 	float64 userConfigBuildTimeMS = -1.0;
 	float64 setBuilderOptionsTimeMS = -1.0;
+	float64 compilerBackendInitTimeMS = -1.0;
 	float64 visualStudioGenerationTimeMS = -1.0;
-	float64 buildInfoReadTimeMS = -1.0;
-	float64 buildInfoWriteTimeMS = -1.0;
 
 	core_init( MEM_MEGABYTES( 128 ) );	// TODO(DM): 26/03/2025: can we just use defaults for this now?
 	defer( core_shutdown() );
@@ -1196,28 +1195,24 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 		userConfigBuildResult = BuildBinary( &context, &userConfigBuildConfig, &compilerBackend, false );
 
 		switch ( userConfigBuildResult ) {
-			case BUILD_RESULT_SUCCESS:
+			case BUILD_RESULT_SUCCESS: {
 				printf( "\n" );
-				break;
+				// if the user config DLL got rebuilt then compile settings might have changed
+				// force a rebuild of everything
+				context.forceRebuild = true;
+			} break;
 
-			case BUILD_RESULT_FAILED:
+			case BUILD_RESULT_FAILED: {
 				error( "Pre-build failed!\n" );
 				QUIT_ERROR();
+			} //break;
 
-			case BUILD_RESULT_SKIPPED:
+			case BUILD_RESULT_SKIPPED: {
 				printf( "Skipped!\n" );
-				break;
+		 	} break;
 		}
 
-		float64 userConfigBuildTimeEnd = time_ms();
-
-		userConfigBuildTimeMS = userConfigBuildTimeEnd - userConfigBuildTimeStart;
-	}
-
-	// if the user config DLL got rebuilt then compile settings might have changed
-	// force a rebuild of everything
-	if ( userConfigBuildResult == BUILD_RESULT_SUCCESS ) {
-		context.forceRebuild = true;
+		userConfigBuildTimeMS = time_ms() - userConfigBuildTimeStart;
 	}
 
 	BuilderOptions options = {};
@@ -1233,8 +1228,8 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 	preBuildFunc_t preBuildFunc = cast( preBuildFunc_t, library_get_proc_address( library, PRE_BUILD_FUNC_NAME ) );
 	postBuildFunc_t postBuildFunc = cast( postBuildFunc_t, library_get_proc_address( library, POST_BUILD_FUNC_NAME ) );
 
+	// get the user-specified options
 	{
-		// now get the user-specified options
 		setBuilderOptionsFunc_t setBuilderOptionsFunc = cast( setBuilderOptionsFunc_t, library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME ) );
 
 		if ( setBuilderOptionsFunc ) {
@@ -1242,62 +1237,56 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 
 			setBuilderOptionsFunc( &options );
 
-			float64 setBuilderOptionsTimeEnd = time_ms();
-
-			setBuilderOptionsTimeMS = setBuilderOptionsTimeEnd - setBuilderOptionsTimeStart;
-
 			context.forceRebuild = options.forceRebuild;
 
-			// if the user wants to generate a visual studio solution then do that now
-			if ( options.generateSolution && !isVisualStudioBuild ) {
-				// you either want to generate a visual studio solution or build this config, but not both
-				if ( inputConfigName ) {
-					error(
-						"I see you want to generate a Visual Studio Solution, but you've also specified a config that you want to build.\n"
-						"You must do one or the other, you can't do both.\n\n"
-					);
-
-					QUIT_ERROR();
-				}
-
-				// make sure BuilderOptions::configs and configs from visual studio match
-				// we will need this list later for validation
-				options.configs.clear();
-				For ( u64, projectIndex, 0, options.solution.projects.size() ) {
-					VisualStudioProject *project = &options.solution.projects[projectIndex];
-
-					For ( u64, configIndex, 0, project->configs.size() ) {
-						VisualStudioConfig *config = &project->configs[configIndex];
-
-						AddBuildConfigAndDependenciesUnique( &context, &config->options, options.configs );
-					}
-				}
-
-				printf( "Generating Visual Studio files\n" );
-
-				float64 start = time_ms();
-
-				bool8 generated = GenerateVisualStudioSolution( &context, &options );
-
-				float64 end = time_ms();
-
-				visualStudioGenerationTimeMS = end - start;
-
-				if ( !generated ) {
-					error( "Failed to generate Visual Studio solution.\n" );	// TODO(DM): better error message
-					QUIT_ERROR();
-				}
-
-				printf( "Done.\n" );
-
-				return 0;
-			}
+			setBuilderOptionsTimeMS = time_ms() - setBuilderOptionsTimeStart;
 		}
 	}
 
-	float64 compilerBackendInitTimeMS = -1.0f;
-	{
-		// if the user never specified a compiler, we can build with the default compiler that we just built the user config DLL with
+	// if the user wants to generate a visual studio solution then only do that
+	if ( options.generateSolution && !isVisualStudioBuild ) {
+		float64 start = time_ms();
+
+		// you either want to generate a visual studio solution or build this config, but not both
+		if ( inputConfigName ) {
+			error(
+				"I see you want to generate a Visual Studio Solution, but you've also specified a config that you want to build.\n"
+				"You must do one or the other, you can't do both.\n\n"
+			);
+
+			QUIT_ERROR();
+		}
+
+		// make sure BuilderOptions::configs and configs from visual studio match
+		// we will need this list later for validation
+		options.configs.clear();
+		For ( u64, projectIndex, 0, options.solution.projects.size() ) {
+			VisualStudioProject *project = &options.solution.projects[projectIndex];
+
+			For ( u64, configIndex, 0, project->configs.size() ) {
+				VisualStudioConfig *config = &project->configs[configIndex];
+
+				AddBuildConfigAndDependenciesUnique( &context, &config->options, options.configs );
+			}
+		}
+
+		printf( "Generating Visual Studio files\n" );
+
+		bool8 generated = GenerateVisualStudioSolution( &context, &options );
+
+		if ( !generated ) {
+			error( "Failed to generate Visual Studio solution.\n" );	// TODO(DM): better error message
+			QUIT_ERROR();
+		}
+
+		printf( "Done.\n\n" );
+
+		visualStudioGenerationTimeMS = time_ms() - start;
+	} else {
+		// otherwise the user wants to actually build
+
+		// if the user asked for a specific compiler, set that now
+		// if the user never specified a compiler, we can build with the default compiler
 		if ( !options.compilerPath.empty() ) {
 			compilerBackend.Shutdown( &compilerBackend );
 
@@ -1351,6 +1340,7 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 			}
 		}
 
+		// check that the overidden compiler actually exists
 		{
 			String compilerPath = compilerBackend.GetCompilerPath( &compilerBackend );
 			const char *compilerPathPlusExtension = compilerPath.data;
@@ -1379,215 +1369,215 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 				);
 			}
 		}
-	}
 
-	std::vector<BuildConfig> configsToBuild;
+		std::vector<BuildConfig> configsToBuild;
 
-	// if no configs were manually added then assume we are just doing a default build with no user-specified options
-	if ( options.configs.size() == 0 ) {
-		BuildConfig config = {
-			.sourceFiles = { context.inputFile },
-			.binaryName = defaultBinaryName
-		};
+		// if no configs were manually added then assume we are just doing a default build with no user-specified options
+		if ( options.configs.size() == 0 ) {
+			BuildConfig config = {
+				.sourceFiles = { context.inputFile },
+				.binaryName = defaultBinaryName
+			};
 
-		options.configs.push_back( config );
-	}
-
-	// if only one config was added (either by user or as a default build) then we know we just want that one, no config command line arg is needed
-	if ( options.configs.size() == 1 ) {
-		AddBuildConfigAndDependenciesUnique( &context, &options.configs[0], configsToBuild );
-	} else {
-		if ( !inputConfigName ) {
-			error(
-				"This build has multiple configs, but you never specified a config name.\n"
-				"You must pass in a config name via " ARG_CONFIG "\n"
-				"Run builder " ARG_HELP_LONG " if you need help.\n"
-			);
-
-			QUIT_ERROR();
+			options.configs.push_back( config );
 		}
 
-		For ( size_t, configIndex, 0, options.configs.size() ) {
-			if ( options.configs[configIndex].name.empty() ) {
+		// if only one config was added (either by user or as a default build) then we know we just want that one, no config command line arg is needed
+		if ( options.configs.size() == 1 ) {
+			AddBuildConfigAndDependenciesUnique( &context, &options.configs[0], configsToBuild );
+		} else {
+			if ( !inputConfigName ) {
 				error(
-					"You have multiple BuildConfigs in your build source file, but some of them have empty names.\n"
-					"When you have multiple BuildConfigs, ALL of them MUST have non-empty names.\n"
-					"You need to set 'BuildConfig::name' in every BuildConfig that you add via AddBuildConfig() (including dependencies!).\n"
+					"This build has multiple configs, but you never specified a config name.\n"
+					"You must pass in a config name via " ARG_CONFIG "\n"
+					"Run builder " ARG_HELP_LONG " if you need help.\n"
 				);
 
 				QUIT_ERROR();
 			}
+
+			For ( size_t, configIndex, 0, options.configs.size() ) {
+				if ( options.configs[configIndex].name.empty() ) {
+					error(
+						"You have multiple BuildConfigs in your build source file, but some of them have empty names.\n"
+						"When you have multiple BuildConfigs, ALL of them MUST have non-empty names.\n"
+						"You need to set 'BuildConfig::name' in every BuildConfig that you add via AddBuildConfig() (including dependencies!).\n"
+					);
+
+					QUIT_ERROR();
+				}
+			}
 		}
-	}
 
-	// none of the configs can have the same name
-	// TODO(DM): 14/11/2024: can we do better than o(n^2) here?
-	For ( size_t, configIndexA, 0, options.configs.size() ) {
-		const char *configNameA = options.configs[configIndexA].name.c_str();
-		u64 configNameHashA = hash_string( configNameA, 0 );
+		// none of the configs can have the same name
+		// TODO(DM): 14/11/2024: can we do better than o(n^2) here?
+		For ( size_t, configIndexA, 0, options.configs.size() ) {
+			const char *configNameA = options.configs[configIndexA].name.c_str();
+			u64 configNameHashA = hash_string( configNameA, 0 );
 
-		For ( size_t, configIndexB, 0, options.configs.size() ) {
-			if ( configIndexA == configIndexB ) {
-				continue;
+			For ( size_t, configIndexB, 0, options.configs.size() ) {
+				if ( configIndexA == configIndexB ) {
+					continue;
+				}
+
+				const char *configNameB = options.configs[configIndexB].name.c_str();
+				u64 configNameHashB = hash_string( configNameB, 0 );
+
+				if ( configNameHashA == configNameHashB ) {
+					error( "I found multiple configs with the name \"%s\".  All config names MUST be unique, otherwise I don't know which specific config you want me to build.\n", configNameA );
+					QUIT_ERROR();
+				}
+			}
+		}
+
+		// of all the configs that the user filled out inside SetBuilderOptions
+		// find the one the user asked for in the command line
+		if ( inputConfigName ) {
+			bool8 foundConfig = false;
+			For ( u64, configIndex, 0, options.configs.size() ) {
+				const BuildConfig *config = &options.configs[configIndex];
+
+				if ( hash_string( config->name.c_str(), 0 ) == inputConfigNameHash ) {
+					AddBuildConfigAndDependenciesUnique( &context, config, configsToBuild );
+
+					foundConfig = true;
+
+					break;
+				}
 			}
 
-			const char *configNameB = options.configs[configIndexB].name.c_str();
-			u64 configNameHashB = hash_string( configNameB, 0 );
+			if ( !foundConfig ) {
+				error( "You passed the config name \"%s\" via the command line, but I never found a config with that name inside %s.  Make sure they match.\n", inputConfigName, SET_BUILDER_OPTIONS_FUNC_NAME );
+				QUIT_ERROR();
+			}
+		}
 
-			if ( configNameHashA == configNameHashB ) {
-				error( "I found multiple configs with the name \"%s\".  All config names MUST be unique, otherwise I don't know which specific config you want me to build.\n", configNameA );
+		if ( preBuildFunc ) {
+			printf( "Running pre-build code...\n" );
+
+			const char *oldCWD = path_current_working_directory();
+			path_set_current_directory( context.inputFilePath.data );
+			defer( path_set_current_directory( oldCWD ) );
+
+			preBuildFunc();
+		}
+
+		u32 numSuccessfulBuilds = 0;
+		u32 numFailedBuilds = 0;
+		u32 numSkippedBuilds = 0;
+
+		For ( u64, configToBuildIndex, 0, configsToBuild.size() ) {
+			BuildConfig *config = &configsToBuild[configToBuildIndex];
+
+			// make sure that the binary folder and binary name are at least set to defaults
+			if ( !config->binaryFolder.empty() ) {
+				config->binaryFolder = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, config->binaryFolder.c_str() );
+			} else {
+				config->binaryFolder = context.inputFilePath.data;
+			}
+
+			{
+				printf( "Building \"%s\"", config->binaryName.c_str() );
+
+				if ( !config->name.empty() ) {
+					printf( ", config \"%s\"", config->name.c_str() );
+				}
+
+				printf( ":\n" );
+			}
+
+			// make all non-absolute additional include paths relative to the build source file
+			For ( u64, includeIndex, 0, config->additionalIncludes.size() ) {
+				const char *additionalInclude = config->additionalIncludes[includeIndex].c_str();
+
+				if ( !path_is_absolute( additionalInclude ) ) {
+					config->additionalIncludes[includeIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalInclude );
+				}
+			}
+
+			// make all non-absolute additional library paths relative to the build source file
+			For ( u64, libPathIndex, 0, config->additionalLibPaths.size() ) {
+				const char *additionalLibPath = config->additionalLibPaths[libPathIndex].c_str();
+
+				if ( !path_is_absolute( additionalLibPath ) ) {
+					config->additionalLibPaths[libPathIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalLibPath );
+				}
+			}
+
+			// get all the "compilation units" that we are actually going to give to the compiler
+			// if no source files were added in SetBuilderOptions() then assume they only want to build the same file as the one specified via the command line
+			if ( config->sourceFiles.size() == 0 ) {
+				config->sourceFiles.push_back( context.inputFile );
+			} else {
+				// otherwise the user told us to build other source files, so go find and build those instead
+				// keep this as a std::vector because this gets fed back into BuilderOptions::sourceFiles
+				std::vector<std::string> finalSourceFilesToBuild = BuildConfig_GetAllSourceFiles( &context, config );
+
+				// at this point its totally acceptable for finalSourceFilesToBuild to be empty
+				// this is because the compiler should be the one that tells the user they specified no valid source files to build with
+				// the compiler can and will throw an error for that, so let it
+
+				config->sourceFiles = finalSourceFilesToBuild;
+			}
+
+			// now do the actual build
+			{
+				float64 buildTimeStart = time_ms();
+
+				buildResult_t buildResult = BuildBinary( &context, config, &compilerBackend, options.generateCompilationDatabase );
+
+				float64 buildTimeEnd = time_ms();
+
+				switch ( buildResult ) {
+					case BUILD_RESULT_SUCCESS:
+						numSuccessfulBuilds++;
+						printf( "Finished building \"%s\", %f ms\n\n", config->binaryName.c_str(), buildTimeEnd - buildTimeStart );
+						break;
+
+					case BUILD_RESULT_FAILED:
+						numFailedBuilds++;
+						error( "Build failed.\n\n" );
+						QUIT_ERROR();
+
+					case BUILD_RESULT_SKIPPED:
+						numSkippedBuilds++;
+						printf( "Skipped!\n\n" );
+						break;
+				}
+			}
+
+			mem_reset_temp_storage();
+		}
+
+		if ( postBuildFunc ) {
+			printf( "Running post-build code...\n" );
+
+			const char *oldCWD = path_current_working_directory();
+			path_set_current_directory( context.inputFilePath.data );
+			defer( path_set_current_directory( oldCWD ) );
+
+			postBuildFunc();
+		}
+
+		if ( numSuccessfulBuilds > 0 && numFailedBuilds == 0 ) {
+			if ( !WriteIncludeDependenciesFile( &context ) ) {
+				QUIT_ERROR();
+			}
+
+			if ( options.generateCompilationDatabase && !WriteCompilationDatabase( &context ) ) {
+				context.compilationDatabase.clear();
 				QUIT_ERROR();
 			}
 		}
 	}
 
-	// of all the configs that the user filled out inside SetBuilderOptions
-	// find the one the user asked for in the command line
-	if ( inputConfigName ) {
-		bool8 foundConfig = false;
-		For ( u64, configIndex, 0, options.configs.size() ) {
-			const BuildConfig *config = &options.configs[configIndex];
-
-			if ( hash_string( config->name.c_str(), 0 ) == inputConfigNameHash ) {
-				AddBuildConfigAndDependenciesUnique( &context, config, configsToBuild );
-
-				foundConfig = true;
-
-				break;
-			}
-		}
-
-		if ( !foundConfig ) {
-			error( "You passed the config name \"%s\" via the command line, but I never found a config with that name inside %s.  Make sure they match.\n", inputConfigName, SET_BUILDER_OPTIONS_FUNC_NAME );
-			QUIT_ERROR();
-		}
-	}
-
-	if ( preBuildFunc ) {
-		printf( "Running pre-build code...\n" );
-
-		const char *oldCWD = path_current_working_directory();
-		path_set_current_directory( context.inputFilePath.data );
-		defer( path_set_current_directory( oldCWD ) );
-
-		preBuildFunc();
-	}
-
-	u32 numSuccessfulBuilds = 0;
-	u32 numFailedBuilds = 0;
-	u32 numSkippedBuilds = 0;
-
-	For ( u64, configToBuildIndex, 0, configsToBuild.size() ) {
-		BuildConfig *config = &configsToBuild[configToBuildIndex];
-
-		// make sure that the binary folder and binary name are at least set to defaults
-		if ( !config->binaryFolder.empty() ) {
-			config->binaryFolder = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, config->binaryFolder.c_str() );
-		} else {
-			config->binaryFolder = context.inputFilePath.data;
-		}
-
-		{
-			printf( "Building \"%s\"", config->binaryName.c_str() );
-
-			if ( !config->name.empty() ) {
-				printf( ", config \"%s\"", config->name.c_str() );
-			}
-
-			printf( ":\n" );
-		}
-
-		// make all non-absolute additional include paths relative to the build source file
-		For ( u64, includeIndex, 0, config->additionalIncludes.size() ) {
-			const char *additionalInclude = config->additionalIncludes[includeIndex].c_str();
-
-			if ( !path_is_absolute( additionalInclude ) ) {
-				config->additionalIncludes[includeIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalInclude );
-			}
-		}
-
-		// make all non-absolute additional library paths relative to the build source file
-		For ( u64, libPathIndex, 0, config->additionalLibPaths.size() ) {
-			const char *additionalLibPath = config->additionalLibPaths[libPathIndex].c_str();
-
-			if ( !path_is_absolute( additionalLibPath ) ) {
-				config->additionalLibPaths[libPathIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalLibPath );
-			}
-		}
-
-		// get all the "compilation units" that we are actually going to give to the compiler
-		// if no source files were added in SetBuilderOptions() then assume they only want to build the same file as the one specified via the command line
-		if ( config->sourceFiles.size() == 0 ) {
-			config->sourceFiles.push_back( context.inputFile );
-		} else {
-			// otherwise the user told us to build other source files, so go find and build those instead
-			// keep this as a std::vector because this gets fed back into BuilderOptions::sourceFiles
-			std::vector<std::string> finalSourceFilesToBuild = BuildConfig_GetAllSourceFiles( &context, config );
-
-			// at this point its totally acceptable for finalSourceFilesToBuild to be empty
-			// this is because the compiler should be the one that tells the user they specified no valid source files to build with
-			// the compiler can and will throw an error for that, so let it
-
-			config->sourceFiles = finalSourceFilesToBuild;
-		}
-
-		// now do the actual build
-		{
-			float64 buildTimeStart = time_ms();
-
-			buildResult_t buildResult = BuildBinary( &context, config, &compilerBackend, options.generateCompilationDatabase );
-
-			float64 buildTimeEnd = time_ms();
-
-			switch ( buildResult ) {
-				case BUILD_RESULT_SUCCESS:
-					numSuccessfulBuilds++;
-					printf( "Finished building \"%s\", %f ms\n\n", config->binaryName.c_str(), buildTimeEnd - buildTimeStart );
-					break;
-
-				case BUILD_RESULT_FAILED:
-					numFailedBuilds++;
-					error( "Build failed.\n\n" );
-					QUIT_ERROR();
-
-				case BUILD_RESULT_SKIPPED:
-					numSkippedBuilds++;
-					printf( "Skipped!\n\n" );
-					break;
-			}
-		}
-
-		mem_reset_temp_storage();
-	}
-
-	if ( postBuildFunc ) {
-		printf( "Running post-build code...\n" );
-
-		const char *oldCWD = path_current_working_directory();
-		path_set_current_directory( context.inputFilePath.data );
-		defer( path_set_current_directory( oldCWD ) );
-
-		postBuildFunc();
-	}
-
-	if ( numSuccessfulBuilds > 0 && numFailedBuilds == 0 ) {
-		if ( !WriteIncludeDependenciesFile( &context ) ) {
-			QUIT_ERROR();
-		}
-
-		if ( options.generateCompilationDatabase && !WriteCompilationDatabase( &context ) ) {
-			context.compilationDatabase.clear();
-			QUIT_ERROR();
-		}
-	}
-
-	float64 totalTimeEnd = time_ms();
-
 	{
 		using namespace hlml;
 
-		printf( "Build finished:\n" );
-		printf( "    User config build:  %f ms%s\n", userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? " (skipped)" : "" );
+		printf( "Finished:\n" );
+		if ( !doubleeq( userConfigBuildTimeMS, -1.0 ) ) {
+			printf( "    User config build:  %f ms%s\n", userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? " (skipped)" : "" );
+		}
 		if ( !doubleeq( compilerBackendInitTimeMS, -1.0 ) ) {
 			printf( "    Compiler init time: %f ms\n", compilerBackendInitTimeMS );
 		}
@@ -1597,7 +1587,7 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 		if ( options.generateSolution && !isVisualStudioBuild ) {
 			printf( "    Generate solution:  %f ms\n", visualStudioGenerationTimeMS );
 		}
-		printf( "    Total time:         %f ms\n", totalTimeEnd - totalTimeStart );
+		printf( "    Total time:         %f ms\n", time_ms() - totalTimeStart );
 		printf( "\n" );
 	}
 

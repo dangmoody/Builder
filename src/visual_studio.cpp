@@ -575,7 +575,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 					string_builder_appendf( &vcxprojContent, "\t\t<UseDebugLibraries>false</UseDebugLibraries>\n" );
 					string_builder_appendf( &vcxprojContent, "\t\t<PlatformToolset>v143</PlatformToolset>\n" );
 					string_builder_appendf( &vcxprojContent, "\t\t<OutDir>%s</OutDir>\n", pathFromSolutionToBinary );
-					string_builder_appendf( &vcxprojContent, "\t\t<IntDir>%s%cintermediate</IntDir>\n", config->options.binaryFolder.c_str(), PATH_SEPARATOR );
+					string_builder_appendf( &vcxprojContent, "\t\t<IntDir>%s%cintermediate</IntDir>\n", pathFromSolutionToBinary, PATH_SEPARATOR );
 					string_builder_appendf( &vcxprojContent, "\t</PropertyGroup>\n" );
 				}
 			}

@@ -1,4 +1,4 @@
-v0.10.1, 25/02/2026:
+v0.10.1, 27/02/2026:
 
 * Fixed MSVC compiler path and version not being set if anything other than "cl" was specified.
 * Fixed time taken to do things not showing when Visual Studio solution generation was requested.

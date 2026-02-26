@@ -1,7 +1,9 @@
 v0.10.1, 27/02/2026:
 
 * Fixed stdout of subprocesses being mangled.
-* Fixed MSVC compiler path and version not being set if anything other than "cl" was specified.
+* MSVC:
+	* Fixed compiler and linker args not showing.
+	* Fixed compiler path and version not being set if anything other than "cl" was specified.
 * Visual Studio:
 	* Fixed execution time not showing when Visual Studio solution generation was requested.
 	* The intermediate folder is no longer created inside the same folder as your Visual Studio solution and instead now actually goes to the binary folder that the user specifies.

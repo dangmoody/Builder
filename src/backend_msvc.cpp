@@ -398,33 +398,14 @@ static bool8 MSVC_CompileSourceFile(
 	// MSVC doesnt output include dependencies to .d files
 	// it only supports printing them to stdout
 	// so we have to parse the stdout of the process ourselves
-	s32 exitCode = 0;
-	StringBuilder processStdout = {};
-	string_builder_reset( &processStdout );
-	defer( string_builder_destroy( &processStdout ) );
-	{
-		Process *process = process_create( &finalArgs, NULL, /*PROCESS_FLAG_ASYNC |*/ PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
-
-		char buffer[1024] = { 0 };
-		u64 bytesRead = U64_MAX;
-
-		while ( ( bytesRead = process_read_stdout( process, buffer, 1024 ) ) ) {
-			buffer[bytesRead] = 0;
-
-			string_builder_appendf( &processStdout, "%s", buffer );
-		}
-
-		exitCode = process_join( process );
-
-		process_destroy( process );
-		process = NULL;
-	}
+	String processStdout;
+	s32 exitCode = RunProc( &finalArgs, NULL, PROC_FLAG_SHOW_ARGS, &processStdout );
 
 	// now parse the stdout
 	// all include dependencies are on their own line
 	// the line always starts with a specific prefix
 	{
-		const char *buffer = string_builder_to_string( &processStdout );
+		const char *buffer = processStdout.data;
 
 		const char *includeDependencyPrefix = "Note: including file: ";
 		const u64 includeDependencyPrefixLength = strlen( includeDependencyPrefix );

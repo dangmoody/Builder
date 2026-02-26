@@ -289,8 +289,11 @@ s32 RunProc( Array<const char *> *args, Array<const char *> *environmentVariable
 	StringBuilder sb = {};
 	string_builder_reset( &sb );
 
+	u64 bytesRead = 0;
 	char buffer[1024] = {};
-	while ( process_read_stdout( process, buffer, count_of( buffer ) ) ) {
+	while ( ( bytesRead = process_read_stdout( process, buffer, 1024 ) ) ) {
+		buffer[bytesRead] = 0;
+
 		string_builder_appendf( &sb, buffer );
 
 		if ( procFlags & PROC_FLAG_SHOW_STDOUT ) {

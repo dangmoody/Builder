@@ -1,3 +1,12 @@
+v0.10.2, <RELEASE DATE HERE>:
+
+* Visual Studio:
+	* If VisualStudioProject::codeFolders is empty when the solution is being created then Builder will go through each BuildConfig that project knows about and take a superset of all of those folders instead, if it can, instead of erroring.
+	* If VisualStudioProject::fileExtensions is empty when the solution is being created then Builder will use some default file extensions instead of erroring.
+		* Those defaults are currently: c, cpp, cc, cxx, h, hpp, inl
+
+----------------------------------------------------------------
+
 v0.10.1, 27/02/2026:
 
 * Fixed stdout of subprocesses being mangled.

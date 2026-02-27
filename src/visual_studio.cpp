@@ -289,6 +289,10 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 		return true;
 	};
 
+	std::vector<std::string> defaultFileExtensions = {
+		"c", "cpp", "cc", "cxx", "h", "hpp", "inl"
+	};
+
 	// generate each .vcxproj
 	For ( u64, projectIndex, 0, options->solution.projects.size() ) {
 		VisualStudioProject *project = &options->solution.projects[projectIndex];
@@ -307,8 +311,18 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 			}
 
 			if ( project->fileExtensions.size() == 0 ) {
-				error( "No file extensions/file types were provided for project \"%s\".  You need at least one.\n", project->name.c_str() );
-				return false;
+				StringBuilder sb = {};
+				string_builder_reset( &sb );
+				defer( string_builder_destroy( &sb ) );
+				string_builder_appendf( &sb, "No file extensions were provided for project \"%s\".  The following defaults will be used for generation:\n", project->name.c_str() );
+				string_builder_appendf( &sb, "%s", defaultFileExtensions[0].c_str() );
+				For ( u32, fileExtensionIndex, 1, defaultFileExtensions.size() ) {
+					string_builder_appendf( &sb, ", %s", defaultFileExtensions[fileExtensionIndex].c_str() );
+				}
+				string_builder_appendf( &sb, "\nIf you want more or different file types to be present in this project you will need to override this yourself.\n" );
+				printf( "%s", string_builder_to_string( &sb ) );
+
+				project->fileExtensions = defaultFileExtensions;
 			}
 
 			// validate each config

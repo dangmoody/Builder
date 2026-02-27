@@ -184,6 +184,7 @@ struct VisualStudioProject {
 
 	// All files that have any of these extensions (based on 'codeFolders') will be included in your project.
 	// These must NOT start with a dot.  Only the extension is required (Examples: cpp, h, inl).
+	// If you do not fill this in and leave it empty, then the following default file extensions will be used: c, cpp, cc, cxx, h, hpp, inl
 	std::vector<std::string>		fileExtensions;
 
 	// The name of the project as it shows in Visual Studio.
@@ -239,7 +240,7 @@ struct BuilderOptions {
 	bool						generateSolution;
 
 	// Do you want to generate a compilation_commands.json for Clang tooling?
-	// If true, the file will be generated IF the build is successful. 
+	// If true, the file will be generated IF the build is successful.
 	bool						generateCompilationDatabase;
 };
 

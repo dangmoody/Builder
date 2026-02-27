@@ -78,7 +78,6 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options ) {
 		.projects = {
 			{
 				.name = "the-library",
-				.codeFolders = { "src/library1", "src/library2" },
 				.configs = {
 					{ "debug",   libraryDebug,   { /* debugger arguments */ } },
 					{ "release", libraryRelease, { /* debugger arguments */ } },
@@ -87,7 +86,6 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options ) {
 
 			{
 				.name = "app",
-				.codeFolders = { "src/app" },
 				.configs = {
 					{ "debug",   appDebug,   { /* debugger arguments */ } },
 					{ "release", appRelease, { /* debugger arguments */ } },

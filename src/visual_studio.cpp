@@ -305,11 +305,49 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 				return false;
 			}
 
-			if ( project->codeFolders.size() == 0 ) {
-				error( "No code folders were provided for project \"%s\".  You need at least one.\n", project->name.c_str() );
-				return false;
+			// if the user didnt specify any code folders for the project then go through each BuildConfig that this project knows about and use those instead
+			if ( project->codeFolders.empty() ) {
+				For ( u32, configIndex, 0, project->configs.size() ) {
+					VisualStudioConfig *config = &project->configs[configIndex];
+
+					For ( u32, sourceFileIndex, 0, config->options.sourceFiles.size() ) {
+						const char *sourceFile = config->options.sourceFiles[sourceFileIndex].c_str();
+
+						const char *sourceFilePath = path_remove_file_from_path( sourceFile );
+
+						if ( sourceFilePath ) {
+							u64 sourceFilePathHash = hash_string( sourceFilePath, 0 );
+
+							// TODO(DM): 27/02/2026: instead of this stupid duplicate checking we have here, use a hashmap instead
+							bool8 duplicate = false;
+							For ( u32, codeFolderIndex, 0, project->codeFolders.size() ) {
+								const std::string &codeFolder = project->codeFolders[codeFolderIndex];
+
+								u64 codeFolderHash = hash_string( codeFolder.c_str(), 0 );
+
+								if ( codeFolderHash == sourceFilePathHash ) {
+									duplicate = true;
+									break;
+								}
+							}
+
+							if ( !duplicate ) {
+								project->codeFolders.push_back( sourceFilePath );
+							}
+						}
+					}
+				}
+
+				if ( project->codeFolders.empty() ) {
+					warning(
+						"I couldn't find any source files to add to the Visual Studio project \"%s\" when trying to generate it.\n"
+						"I can still generate the rest of the Solution, but this project will be empty.\n"
+						, project->name.c_str()
+					);
+				}
 			}
 
+			// if the user didnt specify any file extensions for their files then use the defaults
 			if ( project->fileExtensions.size() == 0 ) {
 				StringBuilder sb = {};
 				string_builder_reset( &sb );
@@ -320,6 +358,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 					string_builder_appendf( &sb, ", %s", defaultFileExtensions[fileExtensionIndex].c_str() );
 				}
 				string_builder_appendf( &sb, "\nIf you want more or different file types to be present in this project you will need to override this yourself.\n" );
+
 				printf( "%s", string_builder_to_string( &sb ) );
 
 				project->fileExtensions = defaultFileExtensions;

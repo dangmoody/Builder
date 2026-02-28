@@ -235,6 +235,11 @@ struct BuilderOptions {
 	// This is really only useful to those who are either using an editor + command line workflow, or just hate incremental builds.
 	bool						forceRebuild;
 
+	// If this is true then Builder will show all the shared compiler arguments for each source file first, followed by the source file it's building to what intermediate file.
+	// If this is false then Builder will show every compiler argument for every source file (the literal compiler arguments that got generated for each source file).
+	// This can be useful when you are building lots of compilation units.
+	bool						consolidateCompilerArgs;
+
 	// Do you want to generate a Visual Studio solution?
 	// If this is set to true, then a code build will NOT happen.
 	// If you don't use Visual Studio then ignore this.

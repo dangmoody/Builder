@@ -1,5 +1,7 @@
 v0.10.2, <RELEASE DATE HERE>:
 
+* Added BuilderOptions::consolidateCompilerArgs.
+	* When this is enabled it will show all the shared arguments that will be used to compile each source file instead of repeating all the compiler arguments every time for every source file.
 * Visual Studio:
 	* If VisualStudioProject::codeFolders is empty when the solution is being created then Builder will go through each BuildConfig that project knows about and take a superset of all of those folders instead, if it can, instead of erroring.
 	* If VisualStudioProject::fileExtensions is empty when the solution is being created then Builder will use some default file extensions instead of erroring.

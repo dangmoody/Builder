@@ -113,6 +113,7 @@ struct buildContext_t {
 	String									dotBuilderFolder;
 
 	bool8									forceRebuild;
+	bool8									consolidateCompilerArgs;
 	bool8									verbose;
 	std::vector<compilationDatabaseEntry_t>	compilationDatabase;
 };

@@ -257,6 +257,8 @@ static bool8 Clang_CompileSourceFile(
 
 	Array<const char *> finalArgs = cmdArchetype.baseArgs;
 
+	const char *intermediateFile = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, path_remove_file_extension( sourceFileNoPath ) );
+
 	// Fill up remaining arguments
 
 	// Dependency Flags/File
@@ -267,12 +269,19 @@ static bool8 Clang_CompileSourceFile(
 
 	// Output Flag/File
 	finalArgs.add( cmdArchetype.outputFlag );
-	finalArgs.add( tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, path_remove_file_extension( sourceFileNoPath ) ) );
+	finalArgs.add( intermediateFile );
 
 	// Source File
 	finalArgs.add( sourceFile );
 
-	s32 exitCode = RunProc( &finalArgs, NULL, PROC_FLAG_SHOW_ARGS | PROC_FLAG_SHOW_STDOUT );
+	procFlags_t procFlags = PROC_FLAG_SHOW_STDOUT;
+	if ( buildContext->consolidateCompilerArgs ) {
+		printf( "%s -> %s\n", sourceFile, intermediateFile );
+	} else {
+		procFlags |= PROC_FLAG_SHOW_ARGS;
+	}
+
+	s32 exitCode = RunProc( &finalArgs, NULL, procFlags );
 
 	if ( exitCode == 0 ) {
 		ReadDependencyFile( depFilename, clangState->includeDependencies );

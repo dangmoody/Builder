@@ -411,6 +411,14 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 		return BUILD_RESULT_FAILED;
 	}
 
+	if ( context->consolidateCompilerArgs ) {
+		printf( "Building with the following command line options for each source file:\n" );
+		For ( u32, argIndex, 0, cmdArchetype.baseArgs.count ) {
+			printf( "%s ", cmdArchetype.baseArgs[argIndex] );
+		}
+		printf( "\n" );
+	}
+
 	if ( generateCompilationDatabase ) {
 		context->compilationDatabase.reserve( config->sourceFiles.size() );
 	}
@@ -1241,6 +1249,7 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 			setBuilderOptionsFunc( &options );
 
 			context.forceRebuild = options.forceRebuild;
+			context.consolidateCompilerArgs = options.consolidateCompilerArgs;
 
 			setBuilderOptionsTimeMS = time_ms() - setBuilderOptionsTimeStart;
 		}

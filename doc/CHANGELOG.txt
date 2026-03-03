@@ -1,4 +1,4 @@
-v0.10.2, <RELEASE DATE HERE>:
+v0.10.2, 07/03/2026:
 
 * Added BuilderOptions::consolidateCompilerArgs.
 	* When this is enabled it will show all the shared arguments that will be used to compile each source file instead of repeating all the compiler arguments every time for every source file.

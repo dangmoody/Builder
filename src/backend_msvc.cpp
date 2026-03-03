@@ -238,6 +238,8 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const std::string &compilerP
 		}
 
 		msvcState->microsoftCoreIncludes.push_back( tprintf( "%sinclude\\%d.%d.%d.%d\\ucrt", windowsSDKRoot, msvcState->windowsSDKVersion.v0, msvcState->windowsSDKVersion.v1, msvcState->windowsSDKVersion.v2, msvcState->windowsSDKVersion.v3 ) );
+		msvcState->microsoftCoreIncludes.push_back( tprintf( "%sinclude\\%d.%d.%d.%d\\um", windowsSDKRoot, msvcState->windowsSDKVersion.v0, msvcState->windowsSDKVersion.v1, msvcState->windowsSDKVersion.v2, msvcState->windowsSDKVersion.v3 ) );
+		msvcState->microsoftCoreIncludes.push_back( tprintf( "%sinclude\\%d.%d.%d.%d\\shared", windowsSDKRoot, msvcState->windowsSDKVersion.v0, msvcState->windowsSDKVersion.v1, msvcState->windowsSDKVersion.v2, msvcState->windowsSDKVersion.v3 ) );
 
 		msvcState->microsoftCoreLibPaths.push_back( tprintf( "%sLib\\%d.%d.%d.%d\\ucrt\\x64", windowsSDKRoot, msvcState->windowsSDKVersion.v0, msvcState->windowsSDKVersion.v1, msvcState->windowsSDKVersion.v2, msvcState->windowsSDKVersion.v3 ) );
 		msvcState->microsoftCoreLibPaths.push_back( tprintf( "%sLib\\%d.%d.%d.%d\\um\\x64", windowsSDKRoot, msvcState->windowsSDKVersion.v0, msvcState->windowsSDKVersion.v1, msvcState->windowsSDKVersion.v2, msvcState->windowsSDKVersion.v3 ) );

@@ -20,14 +20,12 @@ The naming convention for branches is `lower-case-separated-by-hyphens`.
 
 ## Developer Setup
 
-Run `download_default_compiler 20.1.5` (we have both Batch and Bash variants depending on what platform you're developing on).  Builder also uses this as the "default" compiler when building the user config DLL.  You also can't make release packages without it.
+Run `scripts/download_dependencies` (there are both Batch and Bash variants depending on what platform you're developing on).
 
 
 ### Linux
 
 You'll need `libuuid` (we are working to remove this dependency in future, but for now you will need it).
-
-If you want to use an IDE to open `builder.sln` then you'll also need MSBuild as, somehow, the solution is dependent on it (we are working to remove this dependency but, for now, you will need it).
 
 
 ### Compiling Builder
@@ -39,10 +37,9 @@ For those using Visual Studio:
 Builder can also be compiled without using Visual Studio:
 1. Run `build.bat <config>` where `<config>` is either `debug` or `release`.
 
-To build and run the tests:
-1. If you are using Visual Studio:
-	a. Set the `tests` project as the startup project and run it.
-2. If you are NOT using Visual Studio:
-	a. Run `build_tests.bat <config>` and then run `bin/<platform>/<config>/builder_tests.exe`.
+### Building and runing the tests:
+If you are using Visual Studio, set the `tests` project as the startup project and run it.
 
-This should be all you need to get setup, compiling, and running Builder.
+If you are NOT using Visual Studio, run `build_tests.bat <config>` and then run one of the test binaries inside the `bin` folder.
+
+This should be all you need to setup, compile, run, test, and debug Builder.

@@ -184,19 +184,19 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options ) {
 	// Alternatively, you could move this code into a separate .cpp file and pass that file to Builder instead when wishing to re-generate your solution.
 	options->generateSolution = true;
 
-	options->solution.name = "test-sln";
-	options->solution.path = "visual_studio";
-	options->solution.platforms = { "x64" };
-	options->solution.projects = {
-		{
-			.name = "test-project",
-			.codeFolders = { "src" },
-			.fileExtensions = { "cpp", "h", "inl" },
-			.configs = {
-				{ "debug",   debug,   { /* debugger arguments */ } },
-				{ "release", release, { /* debugger arguments */ } },
-			}
-		}
+	options->solution = {
+		.name = "test-sln",
+		.path = "visual_studio",
+		.platforms = { "x64" },
+		.projects = {
+			{
+				.name = "test-project",
+				.configs = {
+					{ "debug",   debug,   { /* debugger arguments */ } },
+					{ "release", release, { /* debugger arguments */ } },
+				},
+			},
+		},
 	};
 }
 ```

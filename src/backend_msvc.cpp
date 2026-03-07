@@ -238,6 +238,8 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const std::string &compilerP
 		}
 
 		msvcState->microsoftCoreIncludes.push_back( tprintf( "%sinclude\\%d.%d.%d.%d\\ucrt", windowsSDKRoot, msvcState->windowsSDKVersion.v0, msvcState->windowsSDKVersion.v1, msvcState->windowsSDKVersion.v2, msvcState->windowsSDKVersion.v3 ) );
+		msvcState->microsoftCoreIncludes.push_back( tprintf( "%sinclude\\%d.%d.%d.%d\\um", windowsSDKRoot, msvcState->windowsSDKVersion.v0, msvcState->windowsSDKVersion.v1, msvcState->windowsSDKVersion.v2, msvcState->windowsSDKVersion.v3 ) );
+		msvcState->microsoftCoreIncludes.push_back( tprintf( "%sinclude\\%d.%d.%d.%d\\shared", windowsSDKRoot, msvcState->windowsSDKVersion.v0, msvcState->windowsSDKVersion.v1, msvcState->windowsSDKVersion.v2, msvcState->windowsSDKVersion.v3 ) );
 
 		msvcState->microsoftCoreLibPaths.push_back( tprintf( "%sLib\\%d.%d.%d.%d\\ucrt\\x64", windowsSDKRoot, msvcState->windowsSDKVersion.v0, msvcState->windowsSDKVersion.v1, msvcState->windowsSDKVersion.v2, msvcState->windowsSDKVersion.v3 ) );
 		msvcState->microsoftCoreLibPaths.push_back( tprintf( "%sLib\\%d.%d.%d.%d\\um\\x64", windowsSDKRoot, msvcState->windowsSDKVersion.v0, msvcState->windowsSDKVersion.v1, msvcState->windowsSDKVersion.v2, msvcState->windowsSDKVersion.v3 ) );
@@ -387,10 +389,12 @@ static bool8 MSVC_CompileSourceFile(
 
 	Array<const char *> finalArgs = cmdArchetype.baseArgs;
 
+	const char *intermediateFile = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, sourceFileNoExtension );
+
 	// Fill up remaining arguments
 
 	// Output Flag/File
-	finalArgs.add( tprintf( "%s%s%c%s.o", cmdArchetype.outputFlag, intermediatePath, PATH_SEPARATOR, sourceFileNoExtension ) );
+	finalArgs.add( tprintf( "%s%s", cmdArchetype.outputFlag, intermediateFile ) );
 
 	// Source File
 	finalArgs.add( sourceFile );
@@ -398,8 +402,15 @@ static bool8 MSVC_CompileSourceFile(
 	// MSVC doesnt output include dependencies to .d files
 	// it only supports printing them to stdout
 	// so we have to parse the stdout of the process ourselves
+	procFlags_t procFlags = 0;
+	if ( buildContext->consolidateCompilerArgs ) {
+		printf( "%s -> %s\n", sourceFile, intermediateFile );
+	} else {
+		procFlags = PROC_FLAG_SHOW_ARGS;
+	}
+
 	String processStdout;
-	s32 exitCode = RunProc( &finalArgs, NULL, PROC_FLAG_SHOW_ARGS, &processStdout );
+	s32 exitCode = RunProc( &finalArgs, NULL, procFlags, &processStdout );
 
 	// now parse the stdout
 	// all include dependencies are on their own line

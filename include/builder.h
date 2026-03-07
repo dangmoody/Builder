@@ -180,10 +180,12 @@ struct VisualStudioProject {
 	// This is a separate list to the build options as you likely want the superset of all files in your Solution, but may conditionally exclude a subset of files based on config/target etc.
 	// The folders you include here are relative to your build script.
 	// This list must NOT contain any search filters.
+	// If you do not fill this in and leave it empty, then Builder will try to take the code folders inside VisualStudioConfig::options::sourceFiles and use those instead.
 	std::vector<std::string>		codeFolders;
 
 	// All files that have any of these extensions (based on 'codeFolders') will be included in your project.
 	// These must NOT start with a dot.  Only the extension is required (Examples: cpp, h, inl).
+	// If you do not fill this in and leave it empty, then the following default file extensions will be used: c, cpp, cc, cxx, h, hpp, inl
 	std::vector<std::string>		fileExtensions;
 
 	// The name of the project as it shows in Visual Studio.
@@ -233,13 +235,18 @@ struct BuilderOptions {
 	// This is really only useful to those who are either using an editor + command line workflow, or just hate incremental builds.
 	bool						forceRebuild;
 
+	// If this is true then Builder will show all the shared compiler arguments for each source file first, followed by the source file it's building to what intermediate file.
+	// If this is false then Builder will show every compiler argument for every source file (the literal compiler arguments that got generated for each source file).
+	// This can be useful when you are building lots of compilation units.
+	bool						consolidateCompilerArgs;
+
 	// Do you want to generate a Visual Studio solution?
 	// If this is set to true, then a code build will NOT happen.
 	// If you don't use Visual Studio then ignore this.
 	bool						generateSolution;
 
 	// Do you want to generate a compilation_commands.json for Clang tooling?
-	// If true, the file will be generated IF the build is successful. 
+	// If true, the file will be generated IF the build is successful.
 	bool						generateCompilationDatabase;
 };
 

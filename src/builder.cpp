@@ -65,7 +65,7 @@ SOFTWARE.
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
 	BUILDER_VERSION_MINOR	= 10,
-	BUILDER_VERSION_PATCH	= 1,
+	BUILDER_VERSION_PATCH	= 2,
 };
 
 enum buildResult_t {
@@ -409,6 +409,14 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 	if ( !compilerBackend->GetCompilationCommandArchetype( compilerBackend, config, cmdArchetype ) ) {
 		error( "Failed to generate compilation command.\n" );
 		return BUILD_RESULT_FAILED;
+	}
+
+	if ( context->consolidateCompilerArgs ) {
+		printf( "Building with the following command line options for each source file:\n" );
+		For ( u32, argIndex, 0, cmdArchetype.baseArgs.count ) {
+			printf( "%s ", cmdArchetype.baseArgs[argIndex] );
+		}
+		printf( "\n" );
 	}
 
 	if ( generateCompilationDatabase ) {
@@ -1241,6 +1249,7 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 			setBuilderOptionsFunc( &options );
 
 			context.forceRebuild = options.forceRebuild;
+			context.consolidateCompilerArgs = options.consolidateCompilerArgs;
 
 			setBuilderOptionsTimeMS = time_ms() - setBuilderOptionsTimeStart;
 		}

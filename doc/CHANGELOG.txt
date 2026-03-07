@@ -1,3 +1,17 @@
+v0.10.2, 07/03/2026:
+
+* Added BuilderOptions::consolidateCompilerArgs.
+	* When this is enabled it will show all the shared arguments that will be used to compile each source file instead of repeating all the compiler arguments every time for every source file.
+	* It can make the build output easier to read when building lots of source files.
+* MSVC:
+	* Added the "um" and "shared" folders from the Windows SDK to the list of default include folders that the MSVC backend includes when compiling.
+* Visual Studio:
+	* If VisualStudioProject::codeFolders is empty when the solution is being created then Builder will go through each BuildConfig that project knows about and take a superset of all of those folders instead, if it can, instead of erroring.
+	* If VisualStudioProject::fileExtensions is empty when the solution is being created then Builder will use some default file extensions instead of erroring.
+		* Those defaults are currently: c, cpp, cc, cxx, h, hpp, inl
+
+----------------------------------------------------------------
+
 v0.10.1, 27/02/2026:
 
 * Fixed stdout of subprocesses being mangled.

@@ -512,6 +512,10 @@ static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t *backend, const Array
 		args.add( config->additionalLibs[libIndex].c_str() );
 	}
 
+	For ( u32, libIndex, 0, config->additionalLinkerArguments.size() ) {
+		args.add( config->additionalLinkerArguments[libIndex].c_str() );
+	}
+
 	s32 exitCode = RunProc( &args, NULL, PROC_FLAG_SHOW_ARGS | PROC_FLAG_SHOW_STDOUT );
 
 	return exitCode == 0;

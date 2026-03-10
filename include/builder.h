@@ -118,6 +118,10 @@ struct BuildConfig {
 	// These will get added to the end of all the other compiler arguments.
 	std::vector<std::string>	additionalCompilerArguments;
 
+	// Anything else that you want to pass to the linker that there isn't already an existing option for.
+	// These will get added to the end of all the other linker arguments.
+	std::vector<std::string>	additionalLinkerArguments;
+
 	// The name that the built binary is going to have.
 	// It's not necessary to include the file extension unless 'removeFileExtension' is false.
 	// This will be placed inside binaryFolder, if you set that.

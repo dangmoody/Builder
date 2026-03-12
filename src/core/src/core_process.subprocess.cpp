@@ -84,6 +84,10 @@ Process* process_create( Array<const char*>* args, Array<const char*>* environme
 		options |= subprocess_option_inherit_environment;
 	}
 
+	// enabled by default on windows
+	// linux wants the same
+	options |= subprocess_option_search_user_path;
+
 	// subprocess.h requires that if we specified an array of environment variables then the array MUST end with 2 x NULLs
 	if ( environment_variables && environment_variables->count != 0 && ( *environment_variables )[environment_variables->count - 1] != NULL ) {
 		environment_variables->add( NULL );

@@ -1352,23 +1352,6 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 			}
 		}
 
-		// check that the overidden compiler actually exists
-		{
-			String compilerPath = compilerBackend.GetCompilerPath( &compilerBackend );
-			const char *compilerPathPlusExtension = compilerPath.data;
-#ifdef _WIN32
-			// windows also requires the file extension to properly check for if a file exists
-			if ( !string_ends_with( compilerPath.data, ".exe" ) ) {
-				compilerPathPlusExtension = tprintf( "%s.exe", compilerPath.data );
-			}
-#endif
-
-			if ( !file_exists( compilerPathPlusExtension ) ) {
-				error( "Can't find path to overridden compiler \"%s\".  Did you type it correctly?\n", compilerPath.data );
-				QUIT_ERROR();
-			}
-		}
-
 		// check that version of the compiler the user actually has is what they expect it to be
 		if ( !options.compilerVersion.empty() ) {
 			String compilerVersion = compilerBackend.GetCompilerVersion( &compilerBackend );

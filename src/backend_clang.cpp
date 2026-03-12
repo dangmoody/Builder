@@ -228,7 +228,12 @@ static bool8 GCC_Init( compilerBackend_t *backend, const std::string &compilerPa
 	ResolveCompilerAndLinkerPaths( clangState, compilerPath.c_str(), "gcc", "ld" );
 
 	const char *pathToCompiler = path_remove_file_from_path( compilerPath.c_str() );
-	string_printf( &clangState->arPath, "%s%car", pathToCompiler, PATH_SEPARATOR );
+
+	if ( pathToCompiler ) {
+		string_printf( &clangState->arPath, "%s%car", pathToCompiler, PATH_SEPARATOR );
+	} else {
+		string_printf( &clangState->arPath, "ar" );
+	}
 
 	return true;
 }
@@ -405,7 +410,6 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 }
 
 static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t *backend, const BuildConfig *config, compilationCommandArchetype_t &outCmdArchetype ) {
-
 	clangState_t *clangState = cast( clangState_t *, backend->data );
 
 	const char *compilerPath = clangState->compilerPath.data;

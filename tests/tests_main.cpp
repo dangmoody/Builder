@@ -139,11 +139,12 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 			TEMPER_CHECK_TRUE_M( exitCode == 0, "BuilderMain() actually returned %d.\n", exitCode );
 		}
 
+		// linux requires the "./" prefix because without that it tries to run the subprocess from your PATH
 		const char *fullBinaryName = NULL;
 		if ( testData.binaryFolder ) {
-			fullBinaryName = tprintf( "%s%c%s%s", testData.binaryFolder, PATH_SEPARATOR, testData.binaryName, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
+			fullBinaryName = tprintf( "./%s%c%s%s", testData.binaryFolder, PATH_SEPARATOR, testData.binaryName, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
 		} else {
-			fullBinaryName = tprintf( "%s%s", testData.binaryName, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
+			fullBinaryName = tprintf( "./%s%s", testData.binaryName, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
 		}
 
 		const char *dotBuilderFolder = ".builder";
@@ -237,11 +238,6 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 			if ( compiler == COMPILER_MSVC ) {
 				continue;
 			}
-
-			// TODO(DM): 16/02/2026: undo this check when we figure out why we cant set the override compiler path to something like "gcc" on linux
-			if ( compiler == COMPILER_GCC ) {
-				continue;
-			}
 #endif
 
 			const char *compilerSuffix = GetCompilerBuildSourceFileSuffix( compiler );
@@ -264,7 +260,17 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 			string_builder_appendf( &sb, "\n" );
 			string_builder_appendf( &sb, "BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions* options ) {\n" );
 			if ( compilerPath ) {
-				string_builder_appendf( &sb, "\toptions->compilerPath = \"%s\";\n", compilerPath );
+				if ( compiler == COMPILER_GCC ) {
+					string_builder_appendf( &sb, "#if defined( _WIN32 )\n" );
+					string_builder_appendf( &sb, "\toptions->compilerPath = \"%s\";\n", compilerPath );
+					string_builder_appendf( &sb, "#elif defined( __linux__ )\n" );
+					string_builder_appendf( &sb, "\toptions->compilerPath = \"gcc\";\n" );
+					string_builder_appendf( &sb, "#else\n" );
+					string_builder_appendf( &sb, "#error Unrecognised platform.\n" );
+					string_builder_appendf( &sb, "#endif\n" );
+				} else {
+					string_builder_appendf( &sb, "\toptions->compilerPath = \"%s\";\n", compilerPath );
+				}
 			}
 			if ( compilerVersion ) {
 				string_builder_appendf( &sb, "\toptions->compilerVersion = \"%s\";\n", compilerVersion );

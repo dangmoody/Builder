@@ -1,6 +1,7 @@
 v0.10.3, 13/03/2026:
 
 * Added BuildConfig::additionalLinkerArguments.
+* Fixed overridden compiler paths that were reliant on the PATH environment variable being set not working on Linux.
 
 ----------------------------------------------------------------
 

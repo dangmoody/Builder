@@ -25,14 +25,16 @@ static void GetBuildConfigs( BuilderOptions *options ) {
 		.sourceFiles		= { "program/*.cpp" },
 		.additionalIncludes	= { "lib" },
 		.additionalLibPaths	= { "bin" },
-		// TODO(DM): 07/10/2025: does this mean we want build scripts to ignore file extensions?
-#if defined( _WIN32 )
-		.additionalLibs		= { "test_dynamic_lib.lib" },
-#elif defined( __linux__ )
-		.additionalLibs		= { "test_dynamic_lib" },
+#ifdef __linux__
 		.ignoreWarnings		= { "-fPIC" },
 #endif
 	};
+
+	if ( options->compilerPath == "cl" ) {
+		program.additionalLibs = { "test_dynamic_lib.lib" };
+	} else {
+		program.additionalLibs = { "test_dynamic_lib" };
+	}
 
 	// only need to add program config
 	// program depends on library, so library will get added automatically when adding program

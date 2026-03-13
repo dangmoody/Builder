@@ -29,7 +29,7 @@ static void GetBuildConfigs( BuilderOptions *options ) {
 #if defined( _WIN32 )
 		.additionalLibs		= { "test_dynamic_lib.lib" },
 #elif defined( __linux__ )
-		.additionalLibs		= { "libtest_dynamic_lib" },
+		.additionalLibs		= { "test_dynamic_lib" },
 		.ignoreWarnings		= { "-fPIC" },
 #endif
 	};

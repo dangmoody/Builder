@@ -1,5 +1,13 @@
 v0.10.3, 13/03/2026:
 
+* On Linux, additional library linking syntax is now fully explicit.
+	* Builder will now just take whatever you put in your additional library and pass that to the linker as is.
+	* Previously if your additional library entry began with a "lib" prefix, then Builder would remove that prefix for you before passing the argument to the linker.  If it didn't, then it would automatically prepend with a colon.
+	* This can be confusing and can also not be exactly what the user asked Builder to do, so now Builder will not do any modification of the additional library that you specify.
+	* So now:
+		* If you are linking to a library that starts with "lib" you do not need to specify that yourself anymore.  Follow the original rules of the linker.
+		* If you want Builder to make a -l: argument, you must specify the colon yourself.
+	* This can always be revisited at a later date if we find that some other way is preferred.
 * Added BuildConfig::additionalLinkerArguments.
 * Fixed overridden compiler paths that were reliant on the PATH environment variable being set not working on Linux.
 

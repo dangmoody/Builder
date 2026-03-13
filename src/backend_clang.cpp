@@ -364,27 +364,8 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 			args.add( tprintf( "-L%s", config->additionalLibPaths[libPathIndex].c_str() ) );
 		}
 
-		// TODO(DM): 11/02/2026: does just mean we dont care about file extensions when linking to static libraries?
-		// this is turning into a mess
-		if ( isGCC ) {
-			For ( u32, libIndex, 0, config->additionalLibs.size() ) {
-				args.add( tprintf( "-l%s", path_remove_file_extension( config->additionalLibs[libIndex].c_str() ) ) );
-			}
-		} else {
-			For ( u32, libIndex, 0, config->additionalLibs.size() ) {
-				std::string &staticLib = config->additionalLibs[libIndex];
-
-#if defined( _WIN32 )
-				args.add( tprintf( "-l%s", staticLib.c_str() ) );
-#elif defined( __linux__ )
-				if ( string_starts_with( staticLib.c_str(), "lib" ) ) {
-					staticLib.erase( 0, strlen( "lib" ) );
-					args.add( tprintf( "-l%s", staticLib.c_str() ) );
-				} else {
-					args.add( tprintf( "-l:%s", staticLib.c_str() ) );
-				}
-#endif
-			}
+		For ( u32, libIndex, 0, config->additionalLibs.size() ) {
+			args.add( tprintf( "-l%s", config->additionalLibs[libIndex].c_str() ) );
 		}
 
 		For ( u32, libIndex, 0, config->additionalLinkerArguments.size() ) {

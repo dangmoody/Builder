@@ -21,7 +21,7 @@ static void GetBuildConfigs( BuilderOptions* options ) {
 #ifdef _WIN32
 		.additionalLibs		= { "test_static_lib.lib" },
 #else
-		.additionalLibs		= { "test_static_lib.a" },
+		.additionalLibs		= { ":test_static_lib.a" },
 #endif
 	};
 

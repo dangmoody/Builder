@@ -224,6 +224,7 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 	defer( TEMPER_CHECK_TRUE_M( path_set_current_directory( oldCWD ), "Failed to cd back out of the test folder.\n" ) );
 
 	if ( test.defaultCompilerOnly ) {
+		TEMPER_CHECK_TRUE( test.buildSourceFile != NULL );
 		TEMPER_CHECK_TRUE( file_exists( test.buildSourceFile ) );
 
 		DoBuildTest( test, test.buildSourceFile );
@@ -334,6 +335,12 @@ TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 	.binaryName		= "test_dynamic_library_program",
 } );
 
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
+	.rootDir		= "test_compilation_database",
+	.binaryFolder	= "bin",
+	.binaryName		= "test_compilation_database_program"
+} );
+
 TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 	s32 exitCode = -1;
 
@@ -427,12 +434,6 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 	}
 #endif // _WIN32
 }
-
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
-	.rootDir		= "test_compilation_database",
-	.binaryFolder	= "bin",
-	.binaryName		= "test_compilation_database_program"
-} );
 
 // Validates the generated compile_commands.json by feeding it to clang-tidy.
 // If clang-tidy can successfully load the compilation database, it proves

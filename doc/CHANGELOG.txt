@@ -1,3 +1,13 @@
+v0.10.4, <RELEASE DATE HERE>:
+
+* Added BuildConfig::OnPreBuild and BuildConfig::OnPostBuild.
+	* People wanted things to happen before/after a specific config had been built, so here you go.
+* Added BuildConfig::intermediateFolder.
+	* This is relative to BuildConfig::binaryFolder.
+	* If this is unset, Builder will put intermediate files in the same folder as BuildConfig::binaryFolder.
+
+----------------------------------------------------------------
+
 v0.10.3, 13/03/2026:
 
 * On Linux, additional library linking syntax is now fully explicit.

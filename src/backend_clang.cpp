@@ -257,12 +257,11 @@ static bool8 Clang_CompileSourceFile(
 	clangState_t *clangState = cast( clangState_t *, backend->data );
 
 	const char *sourceFileNoPath = path_remove_path_from_file( sourceFile );
-	const char *intermediatePath = tprintf( "%s%c%s", config->binaryFolder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
-	const char *depFilename = tprintf( "%s%c%s.d", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
+	const char *depFilename = tprintf( "%s%c%s.d", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPath );
 
 	Array<const char *> finalArgs = cmdArchetype.baseArgs;
 
-	const char *intermediateFile = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, path_remove_file_extension( sourceFileNoPath ) );
+	const char *intermediateFile = tprintf( "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, path_remove_file_extension( sourceFileNoPath ) );
 
 	// Fill up remaining arguments
 
@@ -270,7 +269,7 @@ static bool8 Clang_CompileSourceFile(
 	For ( u64, flagIndex, 0, cmdArchetype.dependencyFlags.count ) {
 		finalArgs.add( cmdArchetype.dependencyFlags[flagIndex] );
 	}
-	finalArgs.add( tprintf( "%s%c%s.d", intermediatePath, PATH_SEPARATOR, sourceFileNoPath ) );
+	finalArgs.add( tprintf( "%s%c%s.d", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPath ) );
 
 	// Output Flag/File
 	finalArgs.add( cmdArchetype.outputFlag );

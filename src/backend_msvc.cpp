@@ -379,7 +379,6 @@ static bool8 MSVC_CompileSourceFile(
 
 	const char *sourceFileNoPath = path_remove_path_from_file( sourceFile );
 	const char *sourceFileNoExtension = path_remove_file_extension( sourceFileNoPath );
-	const char *intermediatePath = tprintf( "%s%c%s", config->binaryFolder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
 
 	config->additionalIncludes.emplace_back( "." );
 
@@ -389,7 +388,7 @@ static bool8 MSVC_CompileSourceFile(
 
 	Array<const char *> finalArgs = cmdArchetype.baseArgs;
 
-	const char *intermediateFile = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, sourceFileNoExtension );
+	const char *intermediateFile = tprintf( "%s%c%s.o", config->intermediatePath.c_str(), PATH_SEPARATOR, sourceFileNoExtension );
 
 	// Fill up remaining arguments
 

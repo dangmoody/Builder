@@ -65,7 +65,7 @@ SOFTWARE.
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
 	BUILDER_VERSION_MINOR	= 10,
-	BUILDER_VERSION_PATCH	= 3,
+	BUILDER_VERSION_PATCH	= 4,
 };
 
 enum buildResult_t {
@@ -353,11 +353,14 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 	}
 
 	// create intermediate folder
-	const char *intermediatePath = tprintf( "%s%c%s", config->binaryFolder.c_str(), PATH_SEPARATOR, INTERMEDIATE_PATH );
-	if ( !folder_create_if_it_doesnt_exist( intermediatePath ) ) {
+	if ( !folder_create_if_it_doesnt_exist( config->intermediateFolder.c_str() ) ) {
 		errorCode_t errorCode = get_last_error_code();
 		fatal_error( "Failed to create intermediate binary folder.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
 		return BUILD_RESULT_FAILED;
+	}
+
+	if ( config->OnPreBuild ) {
+		config->OnPreBuild();
 	}
 
 	Array<const char *> intermediateFiles;
@@ -430,10 +433,10 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 		const char *sourceFile = config->sourceFiles[sourceFileIndex].c_str();
 		const char *sourceFileNoPath = path_remove_path_from_file( sourceFile );
 
-		const char *intermediateFilename = tprintf( "%s%c%s.o", intermediatePath, PATH_SEPARATOR, path_remove_file_extension( sourceFileNoPath ) );
+		const char *intermediateFilename = tprintf( "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, path_remove_file_extension( sourceFileNoPath ) );
 		intermediateFiles.add( intermediateFilename );
 
-		const char *depFilename = tprintf( "%s%c%s.d", intermediatePath, PATH_SEPARATOR, sourceFileNoPath );
+		const char *depFilename = tprintf( "%s%c%s.d", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPath );
 
 		u32 sourceFileHashmapIndex = hashmap_get_value( context->sourceFileIndices, hash_string( sourceFile, 0 ) );
 
@@ -488,6 +491,10 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 			error( "Linking failed.\n" );
 			return BUILD_RESULT_FAILED;
 		}
+	}
+
+	if ( config->OnPostBuild ) {
+		config->OnPostBuild();
 	}
 
 	return BUILD_RESULT_SUCCESS;
@@ -1191,6 +1198,7 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 #endif
 			.binaryName = defaultBinaryName,
 			.binaryFolder = context.dotBuilderFolder.data,
+			.intermediateFolder = context.dotBuilderFolder.data,
 			.binaryType = BINARY_TYPE_DYNAMIC_LIBRARY,
 			// this is needed because this tells the compiler what to set _ITERATOR_DEBUG_LEVEL to
 			// ABI compatibility will be broken if this is not the same between all binaries
@@ -1371,7 +1379,7 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 		if ( options.configs.size() == 0 ) {
 			BuildConfig config = {
 				.sourceFiles = { context.inputFile },
-				.binaryName = defaultBinaryName
+				// .binaryName = defaultBinaryName
 			};
 
 			options.configs.push_back( config );
@@ -1469,6 +1477,17 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 				config->binaryFolder = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, config->binaryFolder.c_str() );
 			} else {
 				config->binaryFolder = context.inputFilePath.data;
+			}
+
+			// make sure intermediate folder is set relative to the binary folder
+			if ( config->intermediateFolder.empty() ) {
+				config->intermediateFolder = tprintf( "%s%c%s", config->binaryFolder.c_str(), PATH_SEPARATOR, config->intermediateFolder.c_str() );
+			} else {
+				config->intermediateFolder = config->binaryFolder;
+			}
+
+			if ( config->binaryName.empty() ) {
+				config->binaryName = defaultBinaryName;
 			}
 
 			{

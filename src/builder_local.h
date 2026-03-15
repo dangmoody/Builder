@@ -51,8 +51,6 @@ SOFTWARE.
 #define ARG_CONFIG				"--config="
 #define ARG_VISUAL_STUDIO_BUILD	"--visual-studio-build"
 
-#define INTERMEDIATE_PATH		"intermediate"
-
 #ifdef __linux__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wpadded"

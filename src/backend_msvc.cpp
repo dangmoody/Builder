@@ -388,7 +388,7 @@ static bool8 MSVC_CompileSourceFile(
 
 	Array<const char *> finalArgs = cmdArchetype.baseArgs;
 
-	const char *intermediateFile = tprintf( "%s%c%s.o", config->intermediatePath.c_str(), PATH_SEPARATOR, sourceFileNoExtension );
+	const char *intermediateFile = tprintf( "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoExtension );
 
 	// Fill up remaining arguments
 

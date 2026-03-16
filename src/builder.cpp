@@ -1006,7 +1006,7 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 	core_init( MEM_MEGABYTES( 128 ) );	// TODO(DM): 26/03/2025: can we just use defaults for this now?
 	defer( core_shutdown() );
 
-	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+	printf( "Builder v%d.%d.%d RC1\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {
 		.configIndices	= hashmap_create( 1 ),	// TODO(DM): 30/03/2025: whats a reasonable default here?
@@ -1022,6 +1022,10 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 	u64 inputConfigNameHash = 0;
 
 	bool8 isVisualStudioBuild = false;
+
+	CommandLineArgs args;
+	args.argc = argc;
+	args.argv = argv;
 
 	For ( s32, argIndex, firstArg, argc ) {
 		const char *arg = argv[argIndex];
@@ -1105,9 +1109,10 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 			continue;
 		}
 
+		// DM: given users can potentially now have their own arguments we probably dont want this anymore?
 		// unrecognised arg, show error
-		error( "Unrecognised argument \"%s\".\n", arg );
-		QUIT_ERROR();
+		//error( "Unrecognised argument \"%s\".\n", arg );
+		//QUIT_ERROR();
 	}
 
 	// we need a source file specified at the command line
@@ -1240,6 +1245,7 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 	assertf( library.ptr, "Failed to load the user-config build DLL \"%s\".  This should never happen!\n", userConfigFullBinaryName );
 	defer( library_unload( &library ) );
 
+	typedef void ( *setBuilderOptionsFuncNew_t )( BuilderOptions *options, CommandLineArgs *args );
 	typedef void ( *setBuilderOptionsFunc_t )( BuilderOptions *options );
 	typedef void ( *preBuildFunc_t )();
 	typedef void ( *postBuildFunc_t )();
@@ -1249,18 +1255,23 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 
 	// get the user-specified options
 	{
+		setBuilderOptionsFuncNew_t setBuilderOptionsFuncNew = cast( setBuilderOptionsFuncNew_t, library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME ) );
 		setBuilderOptionsFunc_t setBuilderOptionsFunc = cast( setBuilderOptionsFunc_t, library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME ) );
 
-		if ( setBuilderOptionsFunc ) {
-			float64 setBuilderOptionsTimeStart = time_ms();
+		float64 setBuilderOptionsTimeStart = time_ms();
 
+		// testing a new SetBuilderOptions function
+		// if that one exists, run that instead
+		if ( setBuilderOptionsFuncNew ) {
+			setBuilderOptionsFuncNew( &options, &args );
+		} else {
 			setBuilderOptionsFunc( &options );
-
-			context.forceRebuild = options.forceRebuild;
-			context.consolidateCompilerArgs = options.consolidateCompilerArgs;
-
-			setBuilderOptionsTimeMS = time_ms() - setBuilderOptionsTimeStart;
 		}
+
+		context.forceRebuild = options.forceRebuild;
+		context.consolidateCompilerArgs = options.consolidateCompilerArgs;
+
+		setBuilderOptionsTimeMS = time_ms() - setBuilderOptionsTimeStart;
 	}
 
 	// if the user wants to generate a visual studio solution then only do that

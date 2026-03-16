@@ -265,6 +265,11 @@ struct BuilderOptions {
 	bool						generateCompilationDatabase;
 };
 
+struct CommandLineArgs {
+	char	**argv;
+	int		argc;
+};
+
 static void AddBuildConfigUnique( BuildConfig *config, std::vector<BuildConfig> &outConfigs );
 
 static void AddBuildConfig( BuilderOptions *options, BuildConfig *config ) {

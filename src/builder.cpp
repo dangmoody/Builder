@@ -1264,7 +1264,7 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 		// if that one exists, run that instead
 		if ( setBuilderOptionsFuncNew ) {
 			setBuilderOptionsFuncNew( &options, &args );
-		} else {
+		} else if ( setBuilderOptionsFunc ) {
 			setBuilderOptionsFunc( &options );
 		}
 

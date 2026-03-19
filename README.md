@@ -13,6 +13,8 @@ Builder supports Clang, MSVC, and GCC.
 
 You can also generate Visual Studio solutions using Builder (see below).
 
+## WARNING: This project is in heavy, active development.  We are still figuring things out.  Things like the user API are still subject to change.
+
 
 ## Installation
 

@@ -180,8 +180,17 @@ struct VisualStudioConfig {
 	// You can have lots of VisualStudioConfigs with a name of "Debug", for instance.
 	std::string					name;
 
+	// When you build this Visual Studio config, what BuildConfig do you want to build?
 	BuildConfig					options;
 
+	// By default Builder will generate the following for the Visual Studio NMakeBuildCommandLine
+	//
+	//	builder <your_source_file> --config=<your_config>
+	//
+	// Use this if you want any other command line arguments to be added to the end.
+	std::vector<std::string>	additionalBuildArgs;
+
+	// Default debugger command line arguments.
 	std::vector<std::string>	debuggerArguments;
 };
 

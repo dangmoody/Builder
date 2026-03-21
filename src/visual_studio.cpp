@@ -709,8 +709,21 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 					const char *appPath = path_remove_file_from_path( path_app_path() );
 
-					string_builder_appendf( &vcxprojContent, "\t\t<NMakeBuildCommandLine>\"%s%c%s\" %s %s%s %s</NMakeBuildCommandLine>\n", appPath, PATH_SEPARATOR, BUILDER_PROGRAM_NAME, inputFileRelative, ARG_CONFIG, fullConfigName, ARG_VISUAL_STUDIO_BUILD );
-					string_builder_appendf( &vcxprojContent, "\t\t<NMakeReBuildCommandLine>\"%s%c%s\" %s %s%s %s</NMakeReBuildCommandLine>\n", appPath, PATH_SEPARATOR, BUILDER_PROGRAM_NAME, inputFileRelative, ARG_CONFIG, fullConfigName, ARG_VISUAL_STUDIO_BUILD );
+					// build command
+					string_builder_appendf( &vcxprojContent, "\t\t<NMakeBuildCommandLine>\"%s%c%s\" %s %s%s %s", appPath, PATH_SEPARATOR, BUILDER_PROGRAM_NAME, inputFileRelative, ARG_CONFIG, fullConfigName, ARG_VISUAL_STUDIO_BUILD );
+					For ( u32, argIndex, 0, config->additionalBuildArgs.size() ) {
+						string_builder_appendf( &vcxprojContent, "%s ", config->additionalBuildArgs[argIndex].c_str() );
+					}
+					string_builder_appendf( &vcxprojContent, "</NMakeBuildCommandLine>\n" );
+
+					// rebuild command
+					string_builder_appendf( &vcxprojContent, "\t\t<NMakeReBuildCommandLine>\"%s%c%s\" %s %s%s %s", appPath, PATH_SEPARATOR, BUILDER_PROGRAM_NAME, inputFileRelative, ARG_CONFIG, fullConfigName, ARG_VISUAL_STUDIO_BUILD );
+					For ( u32, argIndex, 0, config->additionalBuildArgs.size() ) {
+						string_builder_appendf( &vcxprojContent, "%s ", config->additionalBuildArgs[argIndex].c_str() );
+					}
+					string_builder_appendf( &vcxprojContent, "</NMakeReBuildCommandLine>\n" );
+
+					// clean comand
 					string_builder_appendf( &vcxprojContent, "\t\t<NMakeCleanCommandLine>\"%s%c%s\" %s %s</NMakeCleanCommandLine>\n", appPath, PATH_SEPARATOR, BUILDER_PROGRAM_NAME, ARG_NUKE, config->options.binaryFolder.c_str() );
 
 					// preprocessor definitions

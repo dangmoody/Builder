@@ -1491,7 +1491,7 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 			}
 
 			// make sure intermediate folder is set relative to the binary folder
-			if ( config->intermediateFolder.empty() ) {
+			if ( !config->intermediateFolder.empty() ) {
 				config->intermediateFolder = tprintf( "%s%c%s", config->binaryFolder.c_str(), PATH_SEPARATOR, config->intermediateFolder.c_str() );
 			} else {
 				config->intermediateFolder = config->binaryFolder;

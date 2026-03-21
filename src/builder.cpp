@@ -487,6 +487,8 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 			return BUILD_RESULT_SKIPPED;
 		}
 
+		printf( "\n" );
+
 		if ( !compilerBackend->LinkIntermediateFiles( compilerBackend, intermediateFiles, config ) ) {
 			error( "Linking failed.\n" );
 			return BUILD_RESULT_FAILED;

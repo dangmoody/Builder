@@ -1257,6 +1257,8 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 
 	// get the user-specified options
 	{
+		// DEPRECATED: we are moving away from SetBuilderOptions( BuilderOptions * ) to SetBuilderOptions( BuilderOptions *, CommandLineArgs * )
+		// it will get removed at a later date
 		setBuilderOptionsFuncNew_t setBuilderOptionsFuncNew = cast( setBuilderOptionsFuncNew_t, library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME ) );
 		setBuilderOptionsFunc_t setBuilderOptionsFunc = cast( setBuilderOptionsFunc_t, library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME ) );
 
@@ -1267,6 +1269,11 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 		if ( setBuilderOptionsFuncNew ) {
 			setBuilderOptionsFuncNew( &options, &args );
 		} else if ( setBuilderOptionsFunc ) {
+			warning(
+				"%s( BuilderOptions * ) is deprecated.\n"
+				"Change this function to %s( BuilderOptions *options, CommandLineArgs *args ) before this function is removed.\n"
+				, SET_BUILDER_OPTIONS_FUNC_NAME, SET_BUILDER_OPTIONS_FUNC_NAME
+			);
 			setBuilderOptionsFunc( &options );
 		}
 

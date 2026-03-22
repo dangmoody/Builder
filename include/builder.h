@@ -279,6 +279,16 @@ struct CommandLineArgs {
 	int		argc;
 };
 
+static bool HasCommandLineArg( CommandLineArgs *args, const char *arg ) {
+	for ( int argIndex = 0; argIndex < args->argc; argIndex++ ) {
+		if ( strcmp( args->argv[argIndex], arg ) == 0 ) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 static void AddBuildConfigUnique( BuildConfig *config, std::vector<BuildConfig> &outConfigs );
 
 static void AddBuildConfig( BuilderOptions *options, BuildConfig *config ) {

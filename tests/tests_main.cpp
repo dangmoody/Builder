@@ -16,9 +16,9 @@
 struct buildTest_t {
 	const char	*rootDir;				// whats the root folder of this test?
 	const char	*buildSourceFile;		// if defaultCompilerOnly is enabled then this just wants to be the source file that holds your build configs
-	const char	*config;					// can be NULL
+	const char	*config;				// can be NULL
 	const char	*binaryFolder;			// if NULL, assumed that no folder was created as part of the build
-	const char	*binaryName;				// if NULL, assumed to be the same as buildSourceFile except it ends with .exe (on windows)
+	const char	*binaryName;			// if NULL, assumed to be the same as buildSourceFile except it ends with .exe (on windows)
 	s32			expectedExitCode;
 	bool8		noSymbolFiles;
 	bool8		defaultCompilerOnly;	// if false will run this test for every compiler we support

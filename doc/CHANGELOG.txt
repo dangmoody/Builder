@@ -1,4 +1,4 @@
-v0.10.4, <RELEASE DATE HERE>:
+v0.11.0, <RELEASE DATE HERE>:
 
 * Added support for user-defined command line arguments.
 	* You can now pass your own custom arguments to Builder on the command line and check for them inside your build scripts.
@@ -11,6 +11,7 @@ v0.10.4, <RELEASE DATE HERE>:
 * Added BuildConfig::intermediateFolder.
 	* This is relative to BuildConfig::binaryFolder.
 	* If this is unset, Builder will put intermediate files in the same folder as BuildConfig::binaryFolder.
+* The build times for all BuildConfigs now also get shown in the build summary when the build finishes.
 
 ----------------------------------------------------------------
 

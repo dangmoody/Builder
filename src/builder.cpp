@@ -64,8 +64,8 @@ SOFTWARE.
 
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
-	BUILDER_VERSION_MINOR	= 10,
-	BUILDER_VERSION_PATCH	= 4,
+	BUILDER_VERSION_MINOR	= 11,
+	BUILDER_VERSION_PATCH	= 0,
 };
 
 enum buildResult_t {
@@ -1008,7 +1008,7 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 	core_init( MEM_MEGABYTES( 128 ) );	// TODO(DM): 26/03/2025: can we just use defaults for this now?
 	defer( core_shutdown() );
 
-	printf( "Builder v%d.%d.%d RC3\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+	printf( "Builder v%d.%d.%d RC0\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {
 		.configIndices	= hashmap_create( 1 ),	// TODO(DM): 30/03/2025: whats a reasonable default here?
@@ -1283,6 +1283,10 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 		setBuilderOptionsTimeMS = time_ms() - setBuilderOptionsTimeStart;
 	}
 
+	std::vector<BuildConfig> configsToBuild;
+
+	Array<float64> configBuildTimes;
+
 	// if the user wants to generate a visual studio solution then only do that
 	if ( options.generateSolution && !isVisualStudioBuild ) {
 		float64 start = time_ms();
@@ -1393,8 +1397,6 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 			}
 		}
 
-		std::vector<BuildConfig> configsToBuild;
-
 		// if no configs were manually added then assume we are just doing a default build with no user-specified options
 		if ( options.configs.size() == 0 ) {
 			BuildConfig config = {
@@ -1474,6 +1476,8 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 				QUIT_ERROR();
 			}
 		}
+
+		configBuildTimes.resize( configsToBuild.size() );
 
 		if ( preBuildFunc ) {
 			printf( "Running pre-build code...\n" );
@@ -1558,12 +1562,12 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 
 				buildResult_t buildResult = BuildBinary( &context, config, &compilerBackend, options.generateCompilationDatabase );
 
-				float64 buildTimeEnd = time_ms();
+				configBuildTimes[configToBuildIndex] = time_ms() - buildTimeStart;
 
 				switch ( buildResult ) {
 					case BUILD_RESULT_SUCCESS:
 						numSuccessfulBuilds++;
-						printf( "Finished building \"%s\", %f ms\n\n", config->binaryName.c_str(), buildTimeEnd - buildTimeStart );
+						printf( "Finished building \"%s\", %f ms\n\n", config->binaryName.c_str(), configBuildTimes[configToBuildIndex] );
 						break;
 
 					case BUILD_RESULT_FAILED:
@@ -1618,6 +1622,9 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 		}
 		if ( options.generateSolution && !isVisualStudioBuild ) {
 			printf( "    Generate solution:  %f ms\n", visualStudioGenerationTimeMS );
+		}
+		For ( u32, configIndex, 0, configsToBuild.size() ) {
+			printf( "    Build \"%s\": %f ms\n", configsToBuild[configIndex].name.c_str(), configBuildTimes[configIndex] );
 		}
 		printf( "    Total time:         %f ms\n", time_ms() - totalTimeStart );
 		printf( "\n" );

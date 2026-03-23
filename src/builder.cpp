@@ -1008,7 +1008,7 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 	core_init( MEM_MEGABYTES( 128 ) );	// TODO(DM): 26/03/2025: can we just use defaults for this now?
 	defer( core_shutdown() );
 
-	printf( "Builder v%d.%d.%d RC2\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+	printf( "Builder v%d.%d.%d RC3\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {
 		.configIndices	= hashmap_create( 1 ),	// TODO(DM): 30/03/2025: whats a reasonable default here?
@@ -1545,13 +1545,11 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 			} else {
 				// otherwise the user told us to build other source files, so go find and build those instead
 				// keep this as a std::vector because this gets fed back into BuilderOptions::sourceFiles
-				std::vector<std::string> finalSourceFilesToBuild = BuildConfig_GetAllSourceFiles( &context, config );
+				config->sourceFiles = BuildConfig_GetAllSourceFiles( &context, config );
 
 				// at this point its totally acceptable for finalSourceFilesToBuild to be empty
 				// this is because the compiler should be the one that tells the user they specified no valid source files to build with
 				// the compiler can and will throw an error for that, so let it
-
-				config->sourceFiles = finalSourceFilesToBuild;
 			}
 
 			// now do the actual build

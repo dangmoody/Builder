@@ -30,6 +30,7 @@ SOFTWARE.
 
 #include "core/include/allocation_context.h"
 #include "core/include/array.inl"
+#include "core/include/core_types.h"
 #include "core/include/string_helpers.h"
 #include "core/include/string_builder.h"
 #include "core/include/paths.h"
@@ -1286,6 +1287,7 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 	std::vector<BuildConfig> configsToBuild;
 
 	Array<float64> configBuildTimes;
+	Array<buildResult_t> configBuildResults;
 
 	// if the user wants to generate a visual studio solution then only do that
 	if ( options.generateSolution && !isVisualStudioBuild ) {
@@ -1478,6 +1480,7 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 		}
 
 		configBuildTimes.resize( configsToBuild.size() );
+		configBuildResults.resize( configsToBuild.size() );
 
 		if ( preBuildFunc ) {
 			printf( "Running pre-build code...\n" );
@@ -1515,13 +1518,11 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 			}
 
 			{
-				printf( "Building \"%s\"", config->binaryName.c_str() );
-
 				if ( !config->name.empty() ) {
-					printf( ", config \"%s\"", config->name.c_str() );
+					printf( "Building config \"%s\":\n", config->name.c_str() );
+				} else {
+					printf( "Building config:\n" );
 				}
-
-				printf( ":\n" );
 			}
 
 			// make all non-absolute additional include paths relative to the build source file
@@ -1560,11 +1561,11 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 			{
 				float64 buildTimeStart = time_ms();
 
-				buildResult_t buildResult = BuildBinary( &context, config, &compilerBackend, options.generateCompilationDatabase );
+				configBuildResults[configToBuildIndex] = BuildBinary( &context, config, &compilerBackend, options.generateCompilationDatabase );
 
 				configBuildTimes[configToBuildIndex] = time_ms() - buildTimeStart;
 
-				switch ( buildResult ) {
+				switch ( configBuildResults[configToBuildIndex] ) {
 					case BUILD_RESULT_SUCCESS:
 						numSuccessfulBuilds++;
 						printf( "Finished building \"%s\", %f ms\n\n", config->binaryName.c_str(), configBuildTimes[configToBuildIndex] );
@@ -1607,26 +1608,41 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 		}
 	}
 
+	// build summary
 	{
 		using namespace hlml;
 
-		printf( "Finished:\n" );
-		if ( !doubleeq( userConfigBuildTimeMS, -1.0 ) ) {
-			printf( "    User config build:  %f ms%s\n", userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? " (skipped)" : "" );
-		}
-		if ( !doubleeq( compilerBackendInitTimeMS, -1.0 ) ) {
-			printf( "    Compiler init time: %f ms\n", compilerBackendInitTimeMS );
-		}
-		if ( !doubleeq( setBuilderOptionsTimeMS, -1.0 ) ) {
-			printf( "    SetBuilderOptions:  %f ms\n", setBuilderOptionsTimeMS );
-		}
+		struct buildSummaryLine_t {
+			const char		*description;
+			const float64	timeMS;
+			const char		*suffix;	// can be NULL
+		};
+
+		Array<buildSummaryLine_t> buildSummaryLines;
+		buildSummaryLines.add( { "User config build",  userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? "(skipped)" : "" } );
+		buildSummaryLines.add( { "Compiler init time", compilerBackendInitTimeMS } );
+		buildSummaryLines.add( { "SetBuilderOptions",  setBuilderOptionsTimeMS } );
 		if ( options.generateSolution && !isVisualStudioBuild ) {
-			printf( "    Generate solution:  %f ms\n", visualStudioGenerationTimeMS );
+			buildSummaryLines.add( { "Generate solution", visualStudioGenerationTimeMS } );
 		}
 		For ( u32, configIndex, 0, configsToBuild.size() ) {
-			printf( "    Build \"%s\": %f ms\n", configsToBuild[configIndex].name.c_str(), configBuildTimes[configIndex] );
+			buildSummaryLines.add( { tprintf( "Build \"%s\"", configsToBuild[configIndex].name.c_str() ), configBuildTimes[configIndex], ( configBuildResults[configIndex] == BUILD_RESULT_SKIPPED ) ? "(skipped)" : "" } );
 		}
-		printf( "    Total time:         %f ms\n", time_ms() - totalTimeStart );
+
+		u32 lineLength = 0;
+		For ( u32, i, 0, buildSummaryLines.count ) {
+			lineLength = max( lineLength, cast( u32, strlen( buildSummaryLines[i].description ) ) );
+		}
+
+		printf( "Finished:\n" );
+		For ( u32, lineIndex, 0, buildSummaryLines.count ) {
+			buildSummaryLine_t *line = &buildSummaryLines[lineIndex];
+
+			if ( !doubleeq( line->timeMS, -1.0 ) ) {
+				printf( "    %-*s: %f ms %s\n", lineLength, line->description, line->timeMS, line->suffix ? line->suffix : "" );
+			}
+		}
+		printf( "    %-*s: %f ms\n", lineLength, "Total time", time_ms() - totalTimeStart );
 		printf( "\n" );
 	}
 

@@ -21,7 +21,7 @@ echo ""
 
 # unarchive clang
 echo "Extracting Clang archive..."
-tar xf "${clangDir}/clang.tar.xz" -C "${clangDir}"
+sudo tar xf "${clangDir}/clang.tar.xz" -C "${clangDir}"
 cp -r "${clangDir}/LLVM-${clangVersion}-Linux-X64/." "${clangDir}"
 rm -rf "${clangDir}/LLVM-${clangVersion}-Linux-X64"
 rm "${clangDir}/clang.tar.xz"

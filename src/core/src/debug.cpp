@@ -47,11 +47,11 @@ static void log( LogVerbosity required_verbosity, ConsoleTextColor prefix_color,
 	set_console_text_color( prefix_color );
 
 #ifdef LOG_SHOW_FUNCTIONS
-	printf( "%s(%s):  ", prefix, function );
+	printf( "%s(%s): ", prefix, function );
 #else
 	unused( function );
 
-	printf( "%s:  ", prefix );
+	printf( "%s: ", prefix );
 #endif
 
 	set_console_text_color( message_color );

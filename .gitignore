@@ -9,6 +9,7 @@ bug_reports
 *.o
 intermediate
 compile_commands.json
+*.cpp.d
 
 # ignore tools folder, but dont ignore 7zip
 tools/*

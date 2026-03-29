@@ -1,6 +1,6 @@
 #include <builder.h>
 
-static void GetBuildConfigs( BuilderOptions *options ) {
+BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArgs *args ) {
 	BuildConfig staticLib = {
 		.name			= "library",
 		.binaryFolder	= "bin",
@@ -20,7 +20,7 @@ static void GetBuildConfigs( BuilderOptions *options ) {
 	};
 
 	// TODO(DM): 07/10/2025: does this mean we want build scripts to ignore file extensions?
-	if ( options->compilerPath == "cl" ) {
+	if ( HasCommandLineArg( args, "--cl" ) ) {
 		program.additionalLibs = { "test_static_lib.lib" };
 	} else {
 #ifdef _WIN32

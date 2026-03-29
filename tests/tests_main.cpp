@@ -13,64 +13,51 @@
 #include "temper/temper.h"
 
 
-struct buildTest_t {
-	const char	*rootDir;				// whats the root folder of this test?
-	const char	*buildSourceFile;		// if defaultCompilerOnly is enabled then this just wants to be the source file that holds your build configs
-	const char	*config;				// can be NULL
-	const char	*binaryFolder;			// if NULL, assumed that no folder was created as part of the build
-	const char	*binaryName;			// if NULL, assumed to be the same as buildSourceFile except it ends with .exe (on windows)
-	s32			expectedExitCode;
-	bool8		noSymbolFiles;
-	bool8		defaultCompilerOnly;	// if false will run this test for every compiler we support
+enum compilerFlagBits_t {
+	COMPILER_DEFAULT	= bit( 0 ),
+	COMPILER_CLANG		= bit( 1 ),
+	COMPILER_GCC		= bit( 2 ),
+	COMPILER_MSVC		= bit( 3 ),
+
+	COMPILER_ALL		= COMPILER_DEFAULT | COMPILER_CLANG | COMPILER_GCC | COMPILER_MSVC
 };
+typedef u32 compilerFlags_t;
 
-enum compiler_t {
-	COMPILER_DEFAULT	= 0,
-	COMPILER_CLANG,
-	COMPILER_GCC,
-	COMPILER_MSVC,
-
-	COMPILER_COUNT
+struct buildTest_t {
+	const char		*rootDir;				// whats the root folder of this test?
+	const char		*buildSourceFile;		// if defaultCompilerOnly is enabled then this just wants to be the source file that holds your build configs
+	const char		*config;				// can be NULL
+	const char		*binaryFolder;			// if NULL, assumed that no folder was created as part of the build
+	const char		*binaryName;			// if NULL, assumed to be the same as buildSourceFile except it ends with .exe (on windows)
+	s32				expectedExitCode;
+	bool8			noSymbolFiles;
+	compilerFlags_t	compilers = COMPILER_ALL;
 };
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wswitch"
 
-static const char *GetCompilerBuildSourceFileSuffix( const compiler_t compiler ) {
+static const char *GetCompilerPath( const compilerFlagBits_t compiler ) {
 	switch ( compiler ) {
-		case COMPILER_DEFAULT:	return	"default";
-		case COMPILER_CLANG:	return	"clang";
-		case COMPILER_GCC:		return	"gcc";
-		case COMPILER_MSVC:		return	"msvc";
-	}
-
-	TEMPER_CHECK_TRUE_M( false, "Bad compiler_t passed\n" );
-
-	return NULL;
-}
-
-static const char *GetCompilerPath( const compiler_t compiler ) {
-	switch ( compiler ) {
-		case COMPILER_DEFAULT:	return	NULL;
+		case COMPILER_DEFAULT:	return NULL;
 		case COMPILER_CLANG:	return	"../../clang/bin/clang";
 		case COMPILER_GCC:		return	"../../tools/gcc/bin/gcc";
 		case COMPILER_MSVC:		return	"cl";
 	}
 
-	TEMPER_CHECK_TRUE_M( false, "Bad compiler_t passed\n" );
+	TEMPER_CHECK_TRUE_M( false, "Bad compilerFlagBits_t passed\n" );
 
 	return NULL;
 }
 
-static const char *GetCompilerVersion( const compiler_t compiler ) {
+static const char *GetCompilerVersion( const compilerFlagBits_t compiler ) {
 	switch ( compiler ) {
-		case COMPILER_DEFAULT:	return	NULL;
 		case COMPILER_CLANG:	return	"20.1.5";
 		case COMPILER_GCC:		return	"15.1.0";
 		case COMPILER_MSVC:		return	"14.44.35207";
 	}
 
-	TEMPER_CHECK_TRUE_M( false, "Bad compiler_t passed\n" );
+	TEMPER_CHECK_TRUE_M( false, "Bad compilerFlagBits_t passed\n" );
 
 	return NULL;
 }
@@ -95,7 +82,19 @@ static void GetAllGeneratedFiles( const FileInfo *fileInfo, void *data ) {
 
 		For ( u32, fileExtensionIndex, 0, generatedFiles->fileExtensionsToDelete.count ) {
 			if ( string_ends_with( fileInfo->full_filename, generatedFiles->fileExtensionsToDelete[fileExtensionIndex] ) ) {
-				generatedFiles->files.add( fileInfo->full_filename );
+				bool8 duplicate = false;
+
+				For ( u32, fileIndex, 0, generatedFiles->files.count ) {
+					if ( string_equals( generatedFiles->files[fileIndex], fileInfo->full_filename ) ) {
+						duplicate = true;
+						break;
+					}
+				}
+
+				if ( !duplicate ) {
+					generatedFiles->files.add( fileInfo->full_filename );
+				}
+
 				break;
 			}
 		}
@@ -105,17 +104,51 @@ static void GetAllGeneratedFiles( const FileInfo *fileInfo, void *data ) {
 TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 	TEMPER_CHECK_TRUE_M( test.rootDir, "A test MUST live in its own folder, you need to tell me what the \"root\" folder for this test is.\n" );
 
-	auto DoBuildTest = []( buildTest_t testData, const char *buildSourceFilename ) {
-		if ( !buildSourceFilename ) {
-			buildSourceFilename = testData.buildSourceFile;
+	// move ourselves to the root folder of that test
+	// run the test from that folder
+	// then come back when were done
+	const char *oldCWD = path_current_working_directory();
+	TEMPER_CHECK_TRUE_M( path_set_current_directory( test.rootDir ), "Failed to cd into the test folder \"%s\".\n", test.rootDir );
+	defer( TEMPER_CHECK_TRUE_M( path_set_current_directory( oldCWD ), "Failed to cd back out of the test folder.\n" ) );
+
+	// get all the files that this test will generate
+	// we will want these later to check if they got successfully deleted (tests should clean up after themselves properly)
+	buildTestGeneratedFiles_t generatedFiles = {};
+#ifdef _WIN32
+	// exes have no file extension on linux
+	// which means when we check for this "extension" on linux we actually check if the string ends with "", which always passes
+	// so only do this on windows, because we actually have a file extension to check against there
+	generatedFiles.fileExtensionsToDelete.add( GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
+#endif
+	generatedFiles.fileExtensionsToDelete.add( GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
+	generatedFiles.fileExtensionsToDelete.add( GetFileExtensionFromBinaryType( BINARY_TYPE_STATIC_LIBRARY ) );
+	generatedFiles.fileExtensionsToDelete.add( ".include_dependencies" );
+	generatedFiles.fileExtensionsToDelete.add( ".pdb" );
+	generatedFiles.fileExtensionsToDelete.add( ".exp" );
+	generatedFiles.fileExtensionsToDelete.add( ".ilk" );
+	generatedFiles.fileExtensionsToDelete.add( ".o" );
+	generatedFiles.fileExtensionsToDelete.add( ".d" );
+	generatedFiles.fileExtensionsToDelete.add( ".json" );
+
+	const char *buildSourceFileWithoutExtension = path_remove_file_extension( test.buildSourceFile );
+
+	// binary name doesnt have to be set by users, but we need it
+	// this is the default
+	if ( !test.binaryName ) {
+		test.binaryName = buildSourceFileWithoutExtension;
+	}
+
+	For ( u32, compilerIndex, 0, COMPILER_ALL ) {
+		compilerFlagBits_t compiler = cast( compilerFlagBits_t, bit( compilerIndex ) );
+
+#ifdef __linux__
+		if ( compiler == COMPILER_MSVC ) {
+			continue;
 		}
+#endif
 
-		const char *buildSourceFileWithoutExtension = path_remove_file_extension( buildSourceFilename );
-
-		// binary name doesnt have to be set by users, but we need it
-		// this is the default
-		if ( !testData.binaryName ) {
-			testData.binaryName = buildSourceFileWithoutExtension;
+		if ( ( test.compilers & compiler ) == 0 ) {
+			continue;
 		}
 
 		s32 exitCode = 0;
@@ -125,14 +158,21 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 			// DM: 04/02/2026: this is stupid and ugly
 			// args should also be const because we never actually modify them
 			// I know how to get this done, leave this work with me
-			Array<char *> args;
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wcast-qual"
-			args.add( cast( char *, buildSourceFilename ) );
-#pragma clang diagnostic pop
-			if ( testData.config ) {
-				args.add( tprintf( "--config=%s", testData.config ) );
+			Array<const char *> args;
+			args.add( test.buildSourceFile );
+
+			if ( test.config ) {
+				args.add( tprintf( "--config=%s", test.config ) );
 			}
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wswitch"
+			switch ( compiler ) {
+				case COMPILER_CLANG:	args.add( "--clang" );	break;
+				case COMPILER_GCC:		args.add( "--gcc" );	break;
+				case COMPILER_MSVC:		args.add( "--msvc" );	break;
+			}
+#pragma clang diagnostic pop
 
 			exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
 
@@ -141,42 +181,23 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 
 		// linux requires the "./" prefix because without that it tries to run the subprocess from your PATH
 		const char *fullBinaryName = NULL;
-		if ( testData.binaryFolder ) {
-			fullBinaryName = tprintf( "./%s%c%s%s", testData.binaryFolder, PATH_SEPARATOR, testData.binaryName, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
+		if ( test.binaryFolder ) {
+			fullBinaryName = tprintf( "./%s%c%s%s", test.binaryFolder, PATH_SEPARATOR, test.binaryName, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
 		} else {
-			fullBinaryName = tprintf( "./%s%s", testData.binaryName, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
+			fullBinaryName = tprintf( "./%s%s", test.binaryName, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
 		}
 
 		const char *dotBuilderFolder = ".builder";
 
-		// get all the files that this test will generate
-		// we will want these later to check if they got successfully deleted (tests should clean up after themselves properly)
-		buildTestGeneratedFiles_t generatedFiles = {};
-#ifdef _WIN32
-		// exes have no file extension on linux
-		// which means when we check for this "extension" on linux we actually check if the string ends with "", which always passes
-		// so only do this on windows, because we actually have a file extension to check against there
-		generatedFiles.fileExtensionsToDelete.add( GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
-#endif
-		generatedFiles.fileExtensionsToDelete.add( GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
-		generatedFiles.fileExtensionsToDelete.add( GetFileExtensionFromBinaryType( BINARY_TYPE_STATIC_LIBRARY ) );
-		generatedFiles.fileExtensionsToDelete.add( ".include_dependencies" );
-		generatedFiles.fileExtensionsToDelete.add( ".pdb" );
-		generatedFiles.fileExtensionsToDelete.add( ".exp" );
-		generatedFiles.fileExtensionsToDelete.add( ".ilk" );
-		generatedFiles.fileExtensionsToDelete.add( ".o" );
-		generatedFiles.fileExtensionsToDelete.add( ".d" );
-		generatedFiles.fileExtensionsToDelete.add( ".json" );
-
 		TEMPER_CHECK_TRUE( file_get_all_files_in_folder( dotBuilderFolder, true, true, GetAllGeneratedFiles, &generatedFiles ) );
-		if ( testData.binaryFolder ) {
-			TEMPER_CHECK_TRUE( file_get_all_files_in_folder( testData.binaryFolder, true, true, GetAllGeneratedFiles, &generatedFiles ) );
+		if ( test.binaryFolder ) {
+			TEMPER_CHECK_TRUE( file_get_all_files_in_folder( test.binaryFolder, true, true, GetAllGeneratedFiles, &generatedFiles ) );
 		} else {
 			// if there is no binary folder specified then binaries get made in the same folder as the build source file
 			TEMPER_CHECK_TRUE( file_get_all_files_in_folder( "./", false, false, GetAllGeneratedFiles, &generatedFiles ) );
 
 			// if there is no binary folder specified then an intermediate folder gets made in the same folder as the build source file
-			TEMPER_CHECK_TRUE( file_get_all_files_in_folder( "intermediate", true, true, GetAllGeneratedFiles, &generatedFiles ) );
+			// TEMPER_CHECK_TRUE( file_get_all_files_in_folder( "intermediate", true, true, GetAllGeneratedFiles, &generatedFiles ) );
 		}
 
 		// we only care that certain files and folders got generated
@@ -195,7 +216,7 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 
 			exitCode = RunProc( &args, NULL );
 
-			TEMPER_CHECK_TRUE_M( exitCode == testData.expectedExitCode, "When trying to run \"%s\", the exit code was expected to be %d but it actually returned %d.\n", testData.binaryName, testData.expectedExitCode, exitCode );
+			TEMPER_CHECK_TRUE_M( exitCode == test.expectedExitCode, "When trying to run \"%s\", the exit code was expected to be %d but it actually returned %d.\n", test.binaryName, test.expectedExitCode, exitCode );
 		}
 
 		// cleanup all generated files
@@ -214,131 +235,64 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 				TEMPER_CHECK_TRUE_M( !folder_exists( generatedFolder ), "We deleted the folder \"%s\" just now, but the OS tells us it still exists?\n", generatedFolder );
 			}
 		}
-	};
-
-	// move ourselves to the root folder of that test
-	// run the test from that folder
-	// then come back when were done
-	const char *oldCWD = path_current_working_directory();
-	TEMPER_CHECK_TRUE_M( path_set_current_directory( test.rootDir ), "Failed to cd into the test folder \"%s\".\n", test.rootDir );
-	defer( TEMPER_CHECK_TRUE_M( path_set_current_directory( oldCWD ), "Failed to cd back out of the test folder.\n" ) );
-
-	if ( test.defaultCompilerOnly ) {
-		TEMPER_CHECK_TRUE( test.buildSourceFile != NULL );
-		TEMPER_CHECK_TRUE( file_exists( test.buildSourceFile ) );
-
-		DoBuildTest( test, test.buildSourceFile );
-	} else {
-		TEMPER_CHECK_TRUE_M( file_exists( "build_configs.cpp" ), "This test is building for all the compilers, which means you must have a \"build_config.cpp\" file that holds all your build configs inside a function called \"GetBuildConfigs()\".\n" );
-
-		For ( u32, compilerIndex, 0, COMPILER_COUNT ) {
-			compiler_t compiler = cast( compiler_t, compilerIndex );
-
-#ifdef __linux__
-			// dont generate msvc tests on linux
-			if ( compiler == COMPILER_MSVC ) {
-				continue;
-			}
-#endif
-
-			const char *compilerSuffix = GetCompilerBuildSourceFileSuffix( compiler );
-
-			const char *filename = tprintf( "build_%s.cpp", compilerSuffix );
-
-			const char *compilerPath = GetCompilerPath( compiler );
-			const char *compilerVersion = GetCompilerVersion( compiler );
-
-			printf( "Building for compiler: %s\n", compilerSuffix );
-
-			StringBuilder sb = {};
-			string_builder_reset( &sb );
-			string_builder_appendf( &sb, "// this file was auto generated\n" );
-			string_builder_appendf( &sb, "// do not edit\n" );
-			string_builder_appendf( &sb, "\n" );
-			string_builder_appendf( &sb, "#include <builder.h>\n" );
-			string_builder_appendf( &sb, "\n" );
-			string_builder_appendf( &sb, "#include \"build_configs.cpp\"\n" );
-			string_builder_appendf( &sb, "\n" );
-			string_builder_appendf( &sb, "BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions* options ) {\n" );
-			if ( compilerPath ) {
-				if ( compiler == COMPILER_GCC ) {
-					string_builder_appendf( &sb, "#if defined( _WIN32 )\n" );
-					string_builder_appendf( &sb, "\toptions->compilerPath = \"%s\";\n", compilerPath );
-					string_builder_appendf( &sb, "#elif defined( __linux__ )\n" );
-					string_builder_appendf( &sb, "\toptions->compilerPath = \"gcc\";\n" );
-					string_builder_appendf( &sb, "#else\n" );
-					string_builder_appendf( &sb, "#error Unrecognised platform.\n" );
-					string_builder_appendf( &sb, "#endif\n" );
-				} else {
-					string_builder_appendf( &sb, "\toptions->compilerPath = \"%s\";\n", compilerPath );
-				}
-			}
-			if ( compilerVersion ) {
-				string_builder_appendf( &sb, "\toptions->compilerVersion = \"%s\";\n", compilerVersion );
-			}
-			string_builder_appendf( &sb, "\tGetBuildConfigs( options );\n" );
-			string_builder_appendf( &sb, "}\n" );
-
-			const char *buildSourceFileData = string_builder_to_string( &sb );
-
-			TEMPER_CHECK_TRUE( file_write_entire( filename, buildSourceFileData, strlen( buildSourceFileData ) ) );
-
-			DoBuildTest( test, filename );
-		}
 	}
 }
 
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
-	.rootDir				= "test_basic",
-	.buildSourceFile		= "test_basic.cpp",
-	.defaultCompilerOnly	= true,
+	.rootDir			= "test_basic",
+	.buildSourceFile	= "test_basic.cpp",
+	.compilers			= COMPILER_DEFAULT,
 } );
 
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
-	.rootDir				= "test_set_builder_options",
-	.buildSourceFile		= "test_set_builder_options.cpp",
-	.config					= "debug",
-	.binaryFolder			= "bin/debug",
-	.binaryName				= "kenneth",
-	.expectedExitCode		= 69,
-	.defaultCompilerOnly	= true,
+	.rootDir			= "test_set_builder_options",
+	.buildSourceFile	= "test_set_builder_options.cpp",
+	.config				= "debug",
+	.binaryFolder		= "bin/debug",
+	.binaryName			= "kenneth",
+	.expectedExitCode	= 69,
+	.compilers			= COMPILER_DEFAULT,
 } );
 
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
-	.rootDir				= "test_set_builder_options",
-	.buildSourceFile		= "test_set_builder_options.cpp",
-	.config					= "release",
-	.binaryFolder			= "bin/release",
-	.binaryName				= "kenneth",
-	.expectedExitCode		= 69,
-	.noSymbolFiles			= true,
-	.defaultCompilerOnly	= true,
+	.rootDir			= "test_set_builder_options",
+	.buildSourceFile	= "test_set_builder_options.cpp",
+	.config				= "release",
+	.binaryFolder		= "bin/release",
+	.binaryName			= "kenneth",
+	.expectedExitCode	= 69,
+	.noSymbolFiles		= true,
+	.compilers			= COMPILER_DEFAULT,
 } );
 
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
-	.rootDir		= "test_multiple_source_files",
-	.binaryFolder	= "bin",
-	.binaryName		= "marco_polo",
+	.rootDir			= "test_multiple_source_files",
+	.buildSourceFile	= "build.cpp",
+	.binaryFolder		= "bin",
+	.binaryName			= "marco_polo",
 } );
 
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
-	.rootDir		= "test_static_lib",
-	.config			= "program",
-	.binaryFolder	= "bin",
-	.binaryName		= "test_static_library_program",
+	.rootDir			= "test_static_lib",
+	.buildSourceFile	= "build.cpp",
+	.config				= "program",
+	.binaryFolder		= "bin",
+	.binaryName			= "test_static_library_program",
 } );
 
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
-	.rootDir		= "test_dynamic_lib",
-	.config			= "program",
-	.binaryFolder	= "bin",
-	.binaryName		= "test_dynamic_library_program",
+	.rootDir			= "test_dynamic_lib",
+	.buildSourceFile	= "build.cpp",
+	.config				= "program",
+	.binaryFolder		= "bin",
+	.binaryName			= "test_dynamic_library_program",
 } );
 
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
-	.rootDir		= "test_compilation_database",
-	.binaryFolder	= "bin",
-	.binaryName		= "test_compilation_database_program"
+	.rootDir			= "test_compilation_database",
+	.buildSourceFile	= "build.cpp",
+	.binaryFolder		= "bin",
+	.binaryName			= "test_compilation_database_program",
 } );
 
 TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {

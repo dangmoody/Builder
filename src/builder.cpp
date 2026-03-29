@@ -998,7 +998,7 @@ static bool WriteCompilationDatabase( buildContext_t *context ) {
 	return true;
 }
 
-int BuilderMain( const int firstArg, int argc, char **argv ) {
+int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	float64 totalTimeStart = time_ms();
 
 	float64 userConfigBuildTimeMS = -1.0;
@@ -1009,7 +1009,7 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 	core_init( MEM_MEGABYTES( 128 ) );	// TODO(DM): 26/03/2025: can we just use defaults for this now?
 	defer( core_shutdown() );
 
-	printf( "Builder v%d.%d.%d RC0\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {
 		.configIndices	= hashmap_create( 1 ),	// TODO(DM): 30/03/2025: whats a reasonable default here?
@@ -1026,9 +1026,22 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 
 	bool8 isVisualStudioBuild = false;
 
-	CommandLineArgs args;
-	args.argc = argc;
-	args.argv = argv;
+	CommandLineArgs args = {
+		.argc = argc,
+		// .argv = argv,
+	};
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-qual"
+	args.argv = cast( char **, mem_alloc( cast( u32, argc ) * sizeof( const char * ) ) );
+	For ( s32, argIndex, 0, argc ) {
+		args.argv[argIndex] = cast( char *, argv[argIndex] );
+	}
+#pragma clang diagnostic pop
+	defer(
+		mem_free( args.argv );
+		args.argv = NULL;
+	);
 
 	For ( s32, argIndex, firstArg, argc ) {
 		const char *arg = argv[argIndex];
@@ -1248,8 +1261,7 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 	assertf( library.ptr, "Failed to load the user-config build DLL \"%s\".  This should never happen!\n", userConfigFullBinaryName );
 	defer( library_unload( &library ) );
 
-	typedef void ( *setBuilderOptionsFuncNew_t )( BuilderOptions *options, CommandLineArgs *args );
-	typedef void ( *setBuilderOptionsFunc_t )( BuilderOptions *options );
+	typedef void ( *setBuilderOptionsFunc_t )( BuilderOptions *options, CommandLineArgs *args );
 	typedef void ( *preBuildFunc_t )();
 	typedef void ( *postBuildFunc_t )();
 
@@ -1258,24 +1270,12 @@ int BuilderMain( const int firstArg, int argc, char **argv ) {
 
 	// get the user-specified options
 	{
-		// DEPRECATED: we are moving away from SetBuilderOptions( BuilderOptions * ) to SetBuilderOptions( BuilderOptions *, CommandLineArgs * )
-		// it will get removed at a later date
-		setBuilderOptionsFuncNew_t setBuilderOptionsFuncNew = cast( setBuilderOptionsFuncNew_t, library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME ) );
 		setBuilderOptionsFunc_t setBuilderOptionsFunc = cast( setBuilderOptionsFunc_t, library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME ) );
 
 		float64 setBuilderOptionsTimeStart = time_ms();
 
-		// testing a new SetBuilderOptions function
-		// if that one exists, run that instead
-		if ( setBuilderOptionsFuncNew ) {
-			setBuilderOptionsFuncNew( &options, &args );
-		} else if ( setBuilderOptionsFunc ) {
-			warning(
-				"%s( BuilderOptions * ) is deprecated.\n"
-				"Change this function to %s( BuilderOptions *options, CommandLineArgs *args ) before this function is removed.\n"
-				, SET_BUILDER_OPTIONS_FUNC_NAME, SET_BUILDER_OPTIONS_FUNC_NAME
-			);
-			setBuilderOptionsFunc( &options );
+		if ( setBuilderOptionsFunc ) {
+			setBuilderOptionsFunc( &options, &args );
 		}
 
 		context.forceRebuild = options.forceRebuild;

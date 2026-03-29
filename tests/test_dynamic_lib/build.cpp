@@ -1,6 +1,6 @@
 #include <builder.h>
 
-static void GetBuildConfigs( BuilderOptions *options ) {
+BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArgs *args ) {
 	BuildConfig library = {
 		.name			= "library",
 		.binaryFolder	= "bin",
@@ -30,7 +30,7 @@ static void GetBuildConfigs( BuilderOptions *options ) {
 #endif
 	};
 
-	if ( options->compilerPath == "cl" ) {
+	if ( HasCommandLineArg( args, "cl" ) ) {
 		program.additionalLibs = { "test_dynamic_lib.lib" };
 	} else {
 		program.additionalLibs = { "test_dynamic_lib" };

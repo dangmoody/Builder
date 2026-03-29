@@ -120,7 +120,7 @@ struct buildContext_t {
 // used in the actual builder program
 // also used by tests so they dont have to start a separate subprocess to build
 // TODO(DM): 04/02/2026: do args want to be const?
-int			BuilderMain( const int firstArg, int argc, char **argv );
+int			BuilderMain( const int firstArg, int argc, const char * const * argv );
 
 u64			GetLastFileWriteTime( const char *filename );
 

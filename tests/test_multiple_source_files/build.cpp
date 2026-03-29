@@ -1,6 +1,6 @@
 #include <builder.h>
 
-static void GetBuildConfigs( BuilderOptions *options ) {
+BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArgs *args ) {
 	BuildConfig config = {
 		.binaryFolder	= "bin",
 		.binaryName		= "marco_polo",

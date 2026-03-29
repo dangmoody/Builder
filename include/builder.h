@@ -275,8 +275,8 @@ struct BuilderOptions {
 };
 
 struct CommandLineArgs {
-	char	**argv;
 	int		argc;
+	char	**argv;
 };
 
 static bool HasCommandLineArg( CommandLineArgs *args, const char *arg ) {

@@ -5,7 +5,7 @@
 
 #include <builder.h>
 
-static void GetBuildConfigs( BuilderOptions *options ) {
+BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArgs *args ) {
 	options->generateCompilationDatabase = true;
 
 	BuildConfig config = {

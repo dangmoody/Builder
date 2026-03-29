@@ -33,12 +33,12 @@ Builds are configured via a source file which you pass as an argument when calli
 #include <builder.h> // Builder will automatically resolve this include for you.
 
 // This is the entry point that Builder searches for.
-BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options ) {
+BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArgs *args ) {
 	BuildConfig config = {
-		.binaryName = "my-awesome-program",
-		.binaryFolder = "bin/win64",
-		.sourceFiles = { "src/**/*.cpp" },
-		.defines = { "IS_AWESOME=1" },
+		.binaryName		= "my-awesome-program",
+		.binaryFolder	= "bin/win64",
+		.sourceFiles	= { "src/**/*.cpp" },
+		.defines		= { "IS_AWESOME=1" },
 	};
 
 	AddBuildConfig( options, &config );
@@ -63,47 +63,78 @@ Run `builder -h` or `builder --help` for help in the command line.
 When Builder is running `SetBuilderOptions()`, Builder also defines `BUILDER_DOING_USER_CONFIG_BUILD`.
 
 
+### Command Line Arguments
+
+Builder allows you to pass through your own command line arguments that you set yourself.  You can then check for these inside your build source file.
+
+Say, for example, you wanted a `BuildConfig` to have different settings if building for debug vs. release.  With Builder you could do that like so:
+
+```cpp
+// build.cpp
+
+BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArgs *args ) {
+	BuildConfig config = {
+		.binaryName	= "my-awesome-game",
+	};
+
+	if ( HasCommandLineArg( args, "--release" ) ) {
+		config.optimizationLevel = OPTIMIZATION_LEVEL_O3;
+		config.binaryFolder = "bin/release";
+	} else {
+		config.optimizationLevel = OPTIMIZATION_LEVEL_O0;
+		config.binaryFolder = "bin/debug";
+	}
+
+	AddBuildConfig( options, &config );
+}
+```
+
+And then at the command line add the `--release` arg:
+
+```
+builder build.cpp --release
+```
+
+
 ### Configs
 
-Builder supports building different "configs" in the way you may know them from Visual Studio.  A config is name that's applied to a series of build settings.
+You can have multiple `BuildConfig`s.
 
-To specify a config in Builder you have to do two things:
-
+When you have multiple `BuildConfig`s in a build source file, you must do two things:
 1. When writing your `BuildConfig`, set the `name` member to the name of your config.
 2. When you run Builder, pass in the command line argument `--config=<config name here>`.
 
 Example usage:
 
 ```cpp
-// build.cpp
-
-BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options ) {
-	BuildConfig debug = {
-		.name = "debug",	// If you wanted to use this config, you'd pass --config=debug in the command line.
-		.binaryName = "kenneth",
-		.binaryFolder = "bin/debug",
-		.removeSymbols = false,
-		.optimizationLevel = OPTIMIZATION_LEVEL_O0,
+BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArgs *args ) {
+	BuildConfig library = {
+		.name = "my-library",
+		.sourceFiles	= { "src/library/**/*.cpp" },
+		// other settings etc.
 	};
 
-	BuildConfig release = {
-		.name = "release",	// If you wanted to use this config, you'd pass --config=release in the command line.
-		.binaryName = "kenneth",
-		.binaryFolder = "bin/release",
-		.removeSymbols = true,
-		.optimizationLevel = OPTIMIZATION_LEVEL_O3,
+	AddBuildConfig( options, &library );
+
+	BuildConfig program = {
+		.name = "my-program",
+		.sourceFiles	= { "src/program/**/*.cpp" },
+		// other settings etc.
 	};
 
-	AddBuildConfig( options, &debug );
-	AddBuildConfig( options, &release );
+	AddBuildConfig( options, &program );
 }
 ```
 
-And then at the command line add the `--config=` arg:
+Either of these configs can then be built:
 
-```
-builder build.cpp --config=debug
-```
+`builder build.cpp --config=my-library`
+
+Or:
+
+`builder build.cpp --config=my-program`
+
+If two `BuildConfig`s have the same name, Builder will fail to do the build.  All `BuildConfig`s MUST have unique names.
 
 The name of your config in code and the name of the config you pass via the command line MUST match exactly (case sensitive).
 
@@ -128,7 +159,7 @@ To override this, and to make Builder use whatever compiler you want (so long as
 options->compilerPath = "C:/Program Files/mingw64/bin/gcc";
 ```
 
-You can also tell Builder that you want to use a specific compiler version like so:
+You can also tell Builder that you want to use a specific compiler version, like so:
 
 ```cpp
 options->compilerVersion = "15.1.0";
@@ -159,31 +190,31 @@ Code example:
 #include <builder.h>
 
 BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options ) {
-	BuildConfig debug = {
-		.name = "debug",
-		.sourceFiles = { "src/*.cpp" },
-		.binaryName = "test",
-		.binaryFolder = "bin/debug",
-		.optimizationLevel = OPTIMIZATION_LEVEL_O0,
-		.defines = { "_DEBUG" },
+	BuildConfig config = {
+		.sourceFiles		= { "src/*.cpp" },
+		.binaryName			= "my-awesome-game",
+		.binaryFolder		= "bin/debug",
+		.optimizationLevel	= OPTIMIZATION_LEVEL_O0,
 	};
-
-	BuildConfig release = {
-		.name = "release",
-		.sourceFiles = { "src/*.cpp" },
-		.binaryName = "test",
-		.binaryFolder = "bin/release",
-		.optimizationLevel = OPTIMIZATION_LEVEL_O3,
-		.defines = { "NDEBUG" },
-	};
+	
+	if ( HasCommandLineArg( "--release" ) ) {
+		config.defines = { "NDEBUG" };
+	} else {
+		config.defines = { "_DEBUG" };
+	}
 
 	// If you know you're only building with Visual Studio, then you could optionally comment out these two lines.
-	AddBuildConfig( options, &debug );
-	AddBuildConfig( options, &release );
+	AddBuildConfig( options, &config );
 
 	// When this bool is true, Builder will always generate a Visual Studio solution, and it won't do a build.
-	// So if, suddenly, you decide you want to do a build without using Visual Studio, just set this to false and then pass this file to Builder.
-	// Alternatively, you could move this code into a separate .cpp file and pass that file to Builder instead when wishing to re-generate your solution.
+	// So if you decide you want to do a build without using Visual Studio, just set this to false and then pass this file to Builder.
+	// Alternatively, you could use a command line arg to specify that you wanted to generate a SLN, like so:
+	//
+	//	if ( HasCommandLineArg( args, "--sln" ) ) {
+	//		options->generateSolution = true;
+	//	}
+	//
+	// It works all the same.
 	options->generateSolution = true;
 
 	options->solution = {
@@ -194,8 +225,8 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options ) {
 			{
 				.name = "test-project",
 				.configs = {
-					{ "debug",   debug,   { /* debugger arguments */ } },
-					{ "release", release, { /* debugger arguments */ } },
+					{ "debug",   config, {             }, { /* debugger arguments */ } },
+					{ "release", config, { "--release" }, { /* debugger arguments */ } },
 				},
 			},
 		},

@@ -29,6 +29,7 @@ SOFTWARE.
 #ifdef _WIN32
 
 #include "builder_local.h"
+#include "win_sdk.h"
 
 #include "core/include/debug.h"
 #include "core/include/string_helpers.h"
@@ -73,10 +74,6 @@ struct msvcVersion_t {
 	s32	v0, v1, v2;
 };
 
-struct windowsSDKVersion_t {
-	s32	v0, v1, v2, v3;
-};
-
 struct msvcState_t {
 	String						compilerPath;
 	String						compilerVersion;
@@ -90,7 +87,7 @@ struct msvcState_t {
 
 	std::vector<std::string>	includeDependencies;
 
-	windowsSDKVersion_t			windowsSDKVersion;
+	windowsSDK_t				windowsSDK;
 };
 
 //================================================================
@@ -139,58 +136,6 @@ static void OnMSVCVersionFound( const FileInfo *fileInfo, void *userData ) {
 	( *msvcVersions ).add( tprintf( fileInfo->filename ) );
 }
 
-static void OnWindowsSDKVersionFound( const FileInfo *fileInfo, void *data ) {
-	if ( !fileInfo->is_directory ) {
-		return;
-	}
-
-	msvcState_t *msvcState = cast( msvcState_t *, data );
-
-	s32 v0 = 0, v1 = 0, v2 = 0, v3 = 0;
-	sscanf( fileInfo->filename, "%d.%d.%d.%d", &v0, &v1, &v2, &v3 );
-
-	if ( v0 < msvcState->windowsSDKVersion.v0 ) return;
-	if ( v1 < msvcState->windowsSDKVersion.v1 ) return;
-	if ( v2 < msvcState->windowsSDKVersion.v2 ) return;
-	if ( v3 < msvcState->windowsSDKVersion.v3 ) return;
-
-	msvcState->windowsSDKVersion.v0 = v0;
-	msvcState->windowsSDKVersion.v1 = v1;
-	msvcState->windowsSDKVersion.v2 = v2;
-	msvcState->windowsSDKVersion.v3 = v3;
-}
-
-static const char *FindRegistryValueFromKey( const HKEY key, const char *valueName ) {
-	DWORD valueStrLength = 0;
-
-	LSTATUS status = RegQueryValueExA( key, valueName, NULL, NULL, NULL, &valueStrLength );
-
-	if ( status != ERROR_SUCCESS ) {
-		return NULL;
-	}
-
-	char *valueStr = cast( char *, mem_temp_alloc( ( valueStrLength + 1 ) * sizeof( char ) ) );
-
-	//while ( 1 )
-	{
-		DWORD type;
-		status = RegQueryValueExA( key, valueName, NULL, &type, cast( LPBYTE, valueStr ), &valueStrLength );
-
-		if ( type != REG_SZ ) {
-			return NULL;
-		}
-
-		if ( status == ERROR_SUCCESS ) {
-			valueStr[valueStrLength] = 0;
-			return valueStr;
-		} else if ( status == ERROR_MORE_DATA ) {
-			assert( false );	// should never get here
-		}
-	}
-
-	return NULL;
-}
-
 //================================================================
 
 // Querying for Windows SDK and MSVC is based off code from https://gist.github.com/andrewrk/ffb272748448174e6cdb4958dae9f3d8
@@ -201,49 +146,24 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const std::string &compilerP
 	msvcState_t *msvcState = cast( msvcState_t *, mem_alloc( sizeof( msvcState_t ) ) );
 	new( msvcState ) msvcState_t;
 
-	msvcState->windowsSDKVersion = {};
+	msvcState->windowsSDK = {};
+
 	msvcState->compilerPath = compilerPath.c_str();
 	msvcState->compilerVersion = compilerVersion.c_str();
 
 	backend->data = msvcState;
 
-	// get the latest version of the windows sdk
-	// DM: you think this is bad? you aint seen nothing yet! see the next code block down!
-	{
-		HKEY key;
-
-		LSTATUS status = RegOpenKeyExA( HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows Kits\\Installed Roots", 0, KEY_QUERY_VALUE | KEY_WOW64_32KEY | KEY_ENUMERATE_SUB_KEYS, &key );
-
-		if ( status != ERROR_SUCCESS ) {
-			error(
-				"Failed to get Windows SDK installation directory from your Windows registry.  This likely means you don't have the Windows SDK installed on your machine.\n"
-				"In order to build using MSVC (which you asked me to do) then you will need to install a version of the Windows SDK on your PC.\n"
-			);
-
-			return false;
-		}
-
-		defer( RegCloseKey( key ) );
-
-		const char *windowsSDKRoot = FindRegistryValueFromKey( key, "KitsRoot10" );
-
-		assert( windowsSDKRoot );
-
-		// get the latest version of the windows sdk
-		const char *windowsSDKFolder = tprintf( "%sLib", windowsSDKRoot );
-
-		if ( !file_get_all_files_in_folder( windowsSDKFolder, false, true, OnWindowsSDKVersionFound, msvcState ) ) {
-			error( "Failed to query your Windows SDK root folder for the version of the Windows SDK that you asked for.  Do you definitely have it installed?\n" );
-			return false;
-		}
-
-		msvcState->microsoftCoreIncludes.push_back( tprintf( "%sinclude\\%d.%d.%d.%d\\ucrt", windowsSDKRoot, msvcState->windowsSDKVersion.v0, msvcState->windowsSDKVersion.v1, msvcState->windowsSDKVersion.v2, msvcState->windowsSDKVersion.v3 ) );
-		msvcState->microsoftCoreIncludes.push_back( tprintf( "%sinclude\\%d.%d.%d.%d\\um", windowsSDKRoot, msvcState->windowsSDKVersion.v0, msvcState->windowsSDKVersion.v1, msvcState->windowsSDKVersion.v2, msvcState->windowsSDKVersion.v3 ) );
-		msvcState->microsoftCoreIncludes.push_back( tprintf( "%sinclude\\%d.%d.%d.%d\\shared", windowsSDKRoot, msvcState->windowsSDKVersion.v0, msvcState->windowsSDKVersion.v1, msvcState->windowsSDKVersion.v2, msvcState->windowsSDKVersion.v3 ) );
-
-		msvcState->microsoftCoreLibPaths.push_back( tprintf( "%sLib\\%d.%d.%d.%d\\ucrt\\x64", windowsSDKRoot, msvcState->windowsSDKVersion.v0, msvcState->windowsSDKVersion.v1, msvcState->windowsSDKVersion.v2, msvcState->windowsSDKVersion.v3 ) );
-		msvcState->microsoftCoreLibPaths.push_back( tprintf( "%sLib\\%d.%d.%d.%d\\um\\x64", windowsSDKRoot, msvcState->windowsSDKVersion.v0, msvcState->windowsSDKVersion.v1, msvcState->windowsSDKVersion.v2, msvcState->windowsSDKVersion.v3 ) );
+	if ( !Win_GetSDK( &msvcState->windowsSDK ) ) {
+		error( "Failed to find a valid installation of the Windows SDK on your machine.  You need to either install one through the Visual Studio Installer, or via the separate Build Tools installer from Microsoft.\n" );
+		return false;
 	}
+
+	msvcState->microsoftCoreIncludes.push_back( msvcState->windowsSDK.ucrtInclude.data );
+	msvcState->microsoftCoreIncludes.push_back( msvcState->windowsSDK.umInclude.data );
+	msvcState->microsoftCoreIncludes.push_back( msvcState->windowsSDK.sharedInclude.data );
+
+	msvcState->microsoftCoreLibPaths.push_back( msvcState->windowsSDK.ucrtLibPath.data );
+	msvcState->microsoftCoreLibPaths.push_back( msvcState->windowsSDK.umLibPath.data );
 
 	// get all versions of MSVC
 	// thanks to Microsoft we will be doing that in the most retarded way possible

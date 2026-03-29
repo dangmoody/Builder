@@ -132,6 +132,7 @@
     <ClCompile Include="src\core\src\win64\timer.win64.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\visual_studio.cpp" />
+    <ClCompile Include="src\win_sdk.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\builder.h" />
@@ -168,6 +169,7 @@
     <ClInclude Include="src\core\src\3rdparty\xxhash\xxhash.h" />
     <ClInclude Include="src\core\src\core_local.h" />
     <ClInclude Include="src\core\src\file_local.h" />
+    <ClInclude Include="src\win_sdk.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".gitignore" />

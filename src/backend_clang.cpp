@@ -467,9 +467,9 @@ static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t *back
 
 #ifdef _WIN32
 	// windows SDK includes
-	baseArgs.add( tprintf( "-I%s", clangState->windowsSDK.ucrtInclude.data ) );
-	baseArgs.add( tprintf( "-I%s", clangState->windowsSDK.umInclude.data ) );
-	baseArgs.add( tprintf( "-I%s", clangState->windowsSDK.sharedInclude.data ) );
+	baseArgs.add( tprintf( "-isystem%s", clangState->windowsSDK.ucrtInclude.data ) );
+	baseArgs.add( tprintf( "-isystem%s", clangState->windowsSDK.umInclude.data ) );
+	baseArgs.add( tprintf( "-isystem%s", clangState->windowsSDK.sharedInclude.data ) );
 #endif
 
 	// Additional Includes

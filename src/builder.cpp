@@ -1146,11 +1146,6 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 			continue;
 		}
-
-		// DM: given users can potentially now have their own arguments we probably dont want this anymore?
-		// unrecognised arg, show error
-		//error( "Unrecognised argument \"%s\".\n", arg );
-		//QUIT_ERROR();
 	}
 
 	// we need a source file specified at the command line

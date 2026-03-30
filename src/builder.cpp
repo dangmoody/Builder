@@ -631,8 +631,6 @@ static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContex
 	For ( u64, sourceFileIndex, 0, config->sourceFiles.size() ) {
 		const char *sourceFile = config->sourceFiles[sourceFileIndex].c_str();
 
-		const char *sourceFileNoPath = path_remove_path_from_file( sourceFile );
-
 		bool8 recursive = string_contains( sourceFile, "**" ) || string_contains( sourceFile, "/" );
 
 		// TODO(DM): 02/10/2025: needing this is (probably) a hack

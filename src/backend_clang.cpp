@@ -28,6 +28,10 @@ SOFTWARE.
 
 #include "builder_local.h"
 
+#ifdef _WIN32
+#include "win_sdk.h"
+#endif
+
 #include "core/include/core_string.h"
 #include "core/include/debug.h"
 #include "core/include/string_helpers.h"
@@ -49,6 +53,10 @@ struct clangState_t {
 	String						compilerVersion;
 	String						linkerPath;
 	String						arPath;	// static library linker for gcc (on windows and linux) and clang (linux)
+
+#ifdef _WIN32
+	windowsSDK_t				windowsSDK;
+#endif
 };
 
 // TODO(DM): 20/07/2025: do we want to ignore this warning via the build script?
@@ -214,6 +222,12 @@ static bool8 Clang_Init( compilerBackend_t *backend, const std::string &compiler
 	string_printf( &clangState->arPath, "%s%c%s", pathToCompiler, PATH_SEPARATOR, linkerExe );
 #endif
 
+#ifdef _WIN32
+	if ( !Win_GetSDK( &clangState->windowsSDK ) ) {
+		return false;
+	}
+#endif
+
 	return true;
 }
 
@@ -363,6 +377,11 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 			args.add( tprintf( "-L%s", config->additionalLibPaths[libPathIndex].c_str() ) );
 		}
 
+#ifdef _WIN32
+		args.add( tprintf( "-L%s", clangState->windowsSDK.ucrtLibPath.data ) );
+		args.add( tprintf( "-L%s", clangState->windowsSDK.umLibPath.data ) );
+#endif
+
 		For ( u32, libIndex, 0, config->additionalLibs.size() ) {
 			args.add( tprintf( "-l%s", config->additionalLibs[libIndex].c_str() ) );
 		}
@@ -445,6 +464,13 @@ static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t *back
 	For ( u32, defineIndex, 0, definesCount ) {
 		baseArgs.add( tprintf( "-D%s", config->defines[defineIndex].c_str() ) );
 	}
+
+#ifdef _WIN32
+	// windows SDK includes
+	baseArgs.add( tprintf( "-I%s", clangState->windowsSDK.ucrtInclude.data ) );
+	baseArgs.add( tprintf( "-I%s", clangState->windowsSDK.umInclude.data ) );
+	baseArgs.add( tprintf( "-I%s", clangState->windowsSDK.sharedInclude.data ) );
+#endif
 
 	// Additional Includes
 	For ( u32, includeIndex, 0, additionalIncludesCount ) {

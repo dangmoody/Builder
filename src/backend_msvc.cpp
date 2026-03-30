@@ -154,7 +154,6 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const std::string &compilerP
 	backend->data = msvcState;
 
 	if ( !Win_GetSDK( &msvcState->windowsSDK ) ) {
-		error( "Failed to find a valid installation of the Windows SDK on your machine.  You need to either install one through the Visual Studio Installer, or via the separate Build Tools installer from Microsoft.\n" );
 		return false;
 	}
 

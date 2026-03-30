@@ -8,6 +8,8 @@ struct windowsSDKVersion_t {
 };
 
 struct windowsSDK_t {
+	String				rootFolder;
+
 	String				ucrtInclude;
 	String				umInclude;
 	String				sharedInclude;

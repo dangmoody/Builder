@@ -1,6 +1,10 @@
 #include <builder.h>
 
+#include "../test_compiler_override.h"
+
 BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArgs *args ) {
+	ApplyCompilerOverride( options, args );
+
 	BuildConfig library = {
 		.name			= "library",
 		.binaryFolder	= "bin",
@@ -30,7 +34,7 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArg
 #endif
 	};
 
-	if ( HasCommandLineArg( args, "cl" ) ) {
+	if ( HasCommandLineArg( args, "--msvc" ) ) {
 		program.additionalLibs = { "test_dynamic_lib.lib" };
 	} else {
 		program.additionalLibs = { "test_dynamic_lib" };

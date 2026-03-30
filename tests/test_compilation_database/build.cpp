@@ -5,7 +5,11 @@
 
 #include <builder.h>
 
-BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArgs *args ) {
+#include "../test_compiler_override.h"
+
+BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions* options, CommandLineArgs* args ) {
+	ApplyCompilerOverride( options, args );
+
 	options->generateCompilationDatabase = true;
 
 	BuildConfig config = {

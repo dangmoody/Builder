@@ -1,4 +1,4 @@
-v0.11.0, 29/03/2026:
+v0.11.0, 30/03/2026:
 
 * Added support for user-defined command line arguments.
 	* You can now pass your own custom arguments to Builder on the command line and check for them inside your build scripts.

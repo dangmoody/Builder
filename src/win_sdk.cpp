@@ -58,10 +58,11 @@ static int CompareVersions( const void *a, const void *b ) {
 	const windowsSDKVersion_t *av = cast( const windowsSDKVersion_t *, a );
 	const windowsSDKVersion_t *bv = cast( const windowsSDKVersion_t *, b );
 
-	return ( av->v0 > bv->v0 )
-		&& ( av->v1 > bv->v1 )
-		&& ( av->v2 > bv->v2 )
-		&& ( av->v3 > bv->v3 );
+	if ( av->v0 != bv->v0 ) return bv->v0 - av->v0;
+	if ( av->v1 != bv->v1 ) return bv->v1 - av->v1;
+	if ( av->v2 != bv->v2 ) return bv->v2 - av->v2;
+
+	return bv->v3 - av->v3;
 }
 
 bool8 Win_GetSDK( windowsSDK_t *outSDK ) {

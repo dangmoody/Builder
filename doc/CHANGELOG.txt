@@ -5,6 +5,11 @@ v0.11.0, 29/03/2026:
 	* This command line arg is optional.  You can still use SetBuilderOptions( BuilderOptions * ) if you like.  You don't have to add the "CommandLineArgs *" parameter.
 	* The function HasCommandLineArg( CommandLineArgs *, const char * ) has also been added.
 * Added BuildConfig::OnPreBuild and BuildConfig::OnPostBuild.
+* Fixed a bug where Builder would silently fail if your Windows SDK installation was malformed.
+	* Apparently, Clang doesn't come with some of its own CRT headers and relies on the Windows SDK for this.
+	* So now Builder does the following for a Clang or MSVC build on Windows:
+		* Finds the latest available Windows SDK installation, and throws an error if one can't be found.
+		* Includes the ucrt, um, and shared include and lib folders for a build on Windows.
 * Added BuildConfig::intermediateFolder.
 	* This is relative to BuildConfig::binaryFolder.
 	* If this is unset, Builder will put intermediate files in the same folder as BuildConfig::binaryFolder.

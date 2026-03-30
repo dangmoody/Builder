@@ -152,6 +152,22 @@ bool8 FileIsHeaderFile( const char *filename ) {
 }
 
 static const char *BuildConfig_ToString( const BuildConfig *config ) {
+	auto LanguageVersionToString = []( const LanguageVersion version ) -> const char * {
+		switch ( version ) {
+			case LANGUAGE_VERSION_UNSET: return	"LANGUAGE_VERSION_UNSET";
+			case LANGUAGE_VERSION_C89: return	"LANGUAGE_VERSION_C89";
+			case LANGUAGE_VERSION_C99: return	"LANGUAGE_VERSION_C99";
+			case LANGUAGE_VERSION_C11: return	"LANGUAGE_VERSION_C11";
+			case LANGUAGE_VERSION_C17: return	"LANGUAGE_VERSION_C17";
+			case LANGUAGE_VERSION_C23: return	"LANGUAGE_VERSION_C23";
+			case LANGUAGE_VERSION_CPP11: return	"LANGUAGE_VERSION_CPP11";
+			case LANGUAGE_VERSION_CPP14: return	"LANGUAGE_VERSION_CPP14";
+			case LANGUAGE_VERSION_CPP17: return	"LANGUAGE_VERSION_CPP17";
+			case LANGUAGE_VERSION_CPP20: return	"LANGUAGE_VERSION_CPP20";
+			case LANGUAGE_VERSION_CPP23: return	"LANGUAGE_VERSION_CPP23";
+		}
+	};
+
 	auto BinaryTypeToString = []( const BinaryType type ) -> const char * {
 		switch ( type ) {
 			case BINARY_TYPE_EXE:				return "BINARY_TYPE_EXE";
@@ -219,16 +235,22 @@ static const char *BuildConfig_ToString( const BuildConfig *config ) {
 	PrintSTDStringArray( "additionalIncludes", config->additionalIncludes );
 	PrintSTDStringArray( "additionalLibPaths", config->additionalLibPaths );
 	PrintSTDStringArray( "additionalLibs", config->additionalLibs );
+	PrintSTDStringArray( "warningLevels", config->warningLevels );
 	PrintSTDStringArray( "ignoreWarnings", config->ignoreWarnings );
 	PrintSTDStringArray( "additionalCompilerArguments", config->additionalCompilerArguments );
+	PrintSTDStringArray( "additionalLinkerArguments", config->additionalLinkerArguments );
 
 	PrintField( "binaryName", config->binaryName.c_str() );
 	PrintField( "binaryFolder", config->binaryFolder.c_str() );
+	PrintField( "intermediateFolder", config->intermediateFolder.c_str() );
+	PrintField( "languageVersion", LanguageVersionToString( config->languageVersion ) );
 	PrintField( "binaryType", BinaryTypeToString( config->binaryType ) );
 	PrintField( "optimizationLevel", OptimizationLevelToString( config->optimizationLevel ) );
 	PrintField( "removeSymbols", config->removeSymbols ? "true" : "false" );
 	PrintField( "removeFileExtension", config->removeFileExtension ? "true" : "false" );
 	PrintField( "warningsAsErrors", config->warningsAsErrors ? "true" : "false" );
+
+	// TODO(DM): 30/03/2026: how do we log OnPreBuild()/OnPostBuild() func ptrs?
 
 	string_builder_appendf( &builder, "}\n" );
 
@@ -316,14 +338,14 @@ static s32 ShowUsage( const s32 exitCode ) {
 		"Builder.exe\n"
 		"\n"
 		"USAGE:\n"
-		"    Builder.exe <file> [arguments]\n"
+		"    Builder.exe <file> [arguments] [custom arguments]\n"
 		"\n"
 		"Arguments:\n"
 		"    " ARG_HELP_SHORT "|" ARG_HELP_LONG " (optional):\n"
 		"        Shows this help and then exits.\n"
 		"\n"
 		"    " ARG_VERBOSE_SHORT "|" ARG_VERBOSE_LONG " (optional):\n"
-		"        Enables verbose logging, so more detailed information gets output when doing a build.\n"
+		"        Enables verbose logging, so more information gets output.\n"
 		"\n"
 		"    <file> (required):\n"
 		"        The file you want to build with.  There can only be one.\n"

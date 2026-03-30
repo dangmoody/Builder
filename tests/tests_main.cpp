@@ -92,6 +92,8 @@ static void GetAllGeneratedFiles( const FileInfo *fileInfo, void *data ) {
 				}
 
 				if ( !duplicate ) {
+					printf( "Found generated file %s\n", fileInfo->full_filename );
+
 					generatedFiles->files.add( fileInfo->full_filename );
 				}
 
@@ -189,6 +191,8 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 
 		const char *dotBuilderFolder = ".builder";
 
+		generatedFiles.files.reset();
+
 		TEMPER_CHECK_TRUE( file_get_all_files_in_folder( dotBuilderFolder, true, true, GetAllGeneratedFiles, &generatedFiles ) );
 		if ( test.binaryFolder ) {
 			TEMPER_CHECK_TRUE( file_get_all_files_in_folder( test.binaryFolder, true, true, GetAllGeneratedFiles, &generatedFiles ) );
@@ -224,8 +228,12 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 			For ( u32, fileIndex, 0, generatedFiles.files.count ) {
 				const char *generatedFile = generatedFiles.files[fileIndex];
 
+				printf( "Deleting file %s ... ", generatedFile );
+
 				TEMPER_CHECK_TRUE_M( file_delete( generatedFile ), "Couldn't delete file \"%s\".\n", generatedFile );
 				TEMPER_CHECK_TRUE_M( !file_exists( generatedFile ), "We deleted the file \"%s\" just now, but the OS tells us it still exists?\n", generatedFile );
+
+				printf( "Done\n" );
 			}
 
 			For ( u32, folderIndex, 0, generatedFiles.folders.count ) {
@@ -347,11 +355,8 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 
 	// generate the solution
 	if ( exitCode == 0 ) {
-		Array<char *> args;
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wcast-qual"
-		args.add( cast( char *, "test_generate_visual_studio_files/generate_solution.cpp" ) );
-#pragma clang diagnostic pop
+		Array<const char *> args;
+		args.add( "test_generate_visual_studio_files/generate_solution.cpp" );
 
 		exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
 

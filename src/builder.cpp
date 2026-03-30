@@ -416,11 +416,13 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 	}
 
 	if ( context->consolidateCompilerArgs ) {
-		printf( "Building with the following command line options for each source file:\n" );
+		printf( "Compiling with the following command line options for each source file:\n" );
 		For ( u32, argIndex, 0, cmdArchetype.baseArgs.count ) {
 			printf( "%s ", cmdArchetype.baseArgs[argIndex] );
 		}
 		printf( "\n" );
+	} else {
+		printf( "Compiling:\n" );
 	}
 
 	if ( generateCompilationDatabase ) {
@@ -488,7 +490,7 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 			return BUILD_RESULT_SKIPPED;
 		}
 
-		printf( "\n" );
+		printf( "\nLinking:\n" );
 
 		if ( !compilerBackend->LinkIntermediateFiles( compilerBackend, intermediateFiles, config ) ) {
 			error( "Linking failed.\n" );

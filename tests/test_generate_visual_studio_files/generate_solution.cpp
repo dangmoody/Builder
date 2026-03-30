@@ -1,44 +1,35 @@
 #include <builder.h>
 
-BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options ) {
-	BuildConfig libraryDebug = {
-		.name				= "library-debug",
-		.sourceFiles		= { "src/library1/*.cpp", "src/library2/*.cpp" },
-#if defined( _WIN32 )
-		.binaryName			= "the-library",
-#else
-		.binaryName			= "libthe-library",
-#endif
-		.binaryFolder		= "bin/debug",
-		.binaryType			= BINARY_TYPE_DYNAMIC_LIBRARY,
-		.optimizationLevel	= OPTIMIZATION_LEVEL_O0,
-		.defines			= { "LIBRARY_EXPORTS", "_DEBUG" },
+BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArgs *args ) {
+	BuildConfig library = {
+		.name			= "library",
+		.sourceFiles	= { "src/library1/*.cpp", "src/library2/*.cpp" },
+		.binaryType		= BINARY_TYPE_DYNAMIC_LIBRARY,
+		.defines		= { "LIBRARY_EXPORTS" },
 	};
 
-	BuildConfig libraryRelease = {
-		.name				= "library-release",
-		.sourceFiles		= { "src/library1/*.cpp", "src/library2/*.cpp" },
 #if defined( _WIN32 )
-		.binaryName			= "the-library",
+	library.binaryName = "the-library";
 #else
-		.binaryName			= "libthe-library",
+	library.binaryName = "libthe-library";
 #endif
-		.binaryFolder		= "bin/release",
-		.binaryType			= BINARY_TYPE_DYNAMIC_LIBRARY,
-		.optimizationLevel	= OPTIMIZATION_LEVEL_O3,
-		.defines			= { "LIBRARY_EXPORTS", "NDEBUG" },
-	};
 
-	BuildConfig appDebug = {
-		.dependsOn			= { libraryDebug },
-		.name				= "app-debug",
+	if ( HasCommandLineArg( args, "--release" ) ) {
+		library.optimizationLevel = OPTIMIZATION_LEVEL_O3;
+		library.binaryFolder = "bin/release";
+		library.defines.push_back( "NDEBUG" );
+	} else {
+		library.optimizationLevel = OPTIMIZATION_LEVEL_O0;
+		library.binaryFolder = "bin/debug";
+		library.defines.push_back( "_DEBUG" );
+	}
+
+	BuildConfig app = {
+		.dependsOn			= { library },
+		.name				= "app",
 		.sourceFiles		= { "src/app/main.cpp" },
 		.binaryName			= "the-app",
-		.binaryFolder		= "bin/debug",
-		.optimizationLevel	= OPTIMIZATION_LEVEL_O0,
-		.defines			= { "_DEBUG" },
 		.additionalIncludes	= { "src" },
-		.additionalLibPaths	= { "bin/debug" },
 #if defined( _WIN32 )
 		.additionalLibs		= { "the-library.lib" },
 #else
@@ -46,27 +37,21 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options ) {
 #endif
 	};
 
-	BuildConfig appRelease = {
-		.dependsOn			= { libraryRelease },
-		.name				= "app-release",
-		.sourceFiles		= { "src/app/main.cpp" },
-		.binaryName			= "the-app",
-		.binaryFolder		= "bin/release",
-		.optimizationLevel	= OPTIMIZATION_LEVEL_O3,
-		.defines			= { "NDEBUG" },
-		.additionalIncludes	= { "src" },
-		.additionalLibPaths	= { "bin/release" },
-#if defined( _WIN32 )
-		.additionalLibs		= { "the-library.lib" },
-#else
-		.additionalLibs		= { "libthe-library" },
-#endif
-	};
+	if ( HasCommandLineArg( args, "--release" ) ) {
+		app.optimizationLevel = OPTIMIZATION_LEVEL_O3;
+		app.binaryFolder = "bin/release";
+		app.defines.push_back( "NDEBUG" );
+		app.additionalLibPaths.push_back( "bin/release" );
+	} else {
+		app.optimizationLevel = OPTIMIZATION_LEVEL_O0;
+		app.binaryFolder = "bin/debug";
+		app.defines.push_back( "_DEBUG" );
+		app.additionalLibPaths.push_back( "bin/debug" );
+	}
 
 	// if you know that you only want to build with visual studio then you dont need to add the build configs like this
 	// it will happen for you automatically
-	AddBuildConfig( options, &appDebug );
-	AddBuildConfig( options, &appRelease );
+	AddBuildConfig( options, &app );
 
 	// if you know you dont wanna build with visual studio then either set the bool to false or just dont write this part
 	options->generateSolution = true;
@@ -79,16 +64,16 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options ) {
 			{
 				.name = "the-library",
 				.configs = {
-					{ "debug",   libraryDebug,   { /* debugger arguments */ } },
-					{ "release", libraryRelease, { /* debugger arguments */ } },
+					{ "debug",   library, {             }, { /* debugger arguments */ } },
+					{ "release", library, { "--release" }, { /* debugger arguments */ } },
 				}
 			},
 
 			{
 				.name = "app",
 				.configs = {
-					{ "debug",   appDebug,   { /* debugger arguments */ } },
-					{ "release", appRelease, { /* debugger arguments */ } },
+					{ "debug",   app, {             }, { /* debugger arguments */ } },
+					{ "release", app, { "--release" }, { /* debugger arguments */ } },
 				}
 			}
 		},

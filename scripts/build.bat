@@ -81,7 +81,7 @@ set args=clang\\bin\\clang -std=c++20 -o %binFolder%\\%programName%.exe %symbols
 echo %args%
 %args%
 
-copy /y clang\\bin\\libclang.dll bin\\libclang.dll
+copy /y clang\\bin\\libclang.dll %binFolder%\\libclang.dll
 
 if %errorlevel% NEQ 0 (
 	echo ERROR: Build failed

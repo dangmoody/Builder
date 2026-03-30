@@ -24,7 +24,7 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions* options, CommandLineArg
 	};
 
 	// TODO(DM): 07/10/2025: does this mean we want build scripts to ignore file extensions?
-	if ( HasCommandLineArg( args, "--cl" ) ) {
+	if ( HasCommandLineArg( args, "--msvc" ) ) {
 		program.additionalLibs = { "test_static_lib.lib" };
 	} else {
 #ifdef _WIN32

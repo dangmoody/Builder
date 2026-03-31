@@ -115,7 +115,6 @@ static const char *CreateVisualStudioGuid() {
 struct visualStudioNukeContext_t {
 	Array<const char *>	fileExtensionsToCheck;
 	String				dotVSFolder;
-	bool8				verbose;
 };
 
 static void VS_DeleteOldProjectFilesCallback( const FileInfo *fileInfo, void *userData ) {
@@ -127,9 +126,7 @@ static void VS_DeleteOldProjectFilesCallback( const FileInfo *fileInfo, void *us
 
 	For ( u32, fileExtensionIndex, 0, nukeContext->fileExtensionsToCheck.count ) {
 		if ( string_ends_with( fileInfo->full_filename, nukeContext->fileExtensionsToCheck[fileExtensionIndex] ) ) {
-			if ( nukeContext->verbose ) {
-				printf( "Deleting file \"%s\"\n", fileInfo->full_filename );
-			}
+			LogVerbose( "Deleting file \"%s\"\n", fileInfo->full_filename );
 
 			if ( file_delete( fileInfo->full_filename ) ) {
 				break;
@@ -247,7 +244,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 		file_get_all_files_in_folder( visualStudioProjectFilesPath, false, true, VS_DeleteOldProjectFilesCallback, &nukeContext );
 
 		if ( nukeContext.dotVSFolder.data ) {
-			NukeFolder( nukeContext.dotVSFolder.data, true, context->verbose );
+			NukeFolder( nukeContext.dotVSFolder.data, true, g_verbose );
 		}
 	}
 
@@ -427,9 +424,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 						guidIndex = trunc_cast( u32, projectGuids.count - 1 );
 
-						if ( context->verbose ) {
-							printf( "%u = %s (parent = %u)\n", guidIndex, folderName, guidParentIndex );
-						}
+						LogVerbose( "%u = %s (parent = %u)\n", guidIndex, folderName, guidParentIndex );
 
 						hashmap_set_value( projectFolderIndices, folderNameHash, guidIndex );
 

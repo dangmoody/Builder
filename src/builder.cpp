@@ -276,6 +276,22 @@ const char *BuildConfig_GetFullBinaryName( const BuildConfig *config ) {
 	return string_builder_to_string( &sb );
 }
 
+// TODO(DM): 31/03/2026: does this mean we want a verbose logging mode in Core?
+bool8 g_verbose = false;
+
+void LogVerbose( const char *fmt, ... ) {
+	if ( !g_verbose ) {
+		return;
+	}
+
+	printf( "VERBOSE: " );
+
+	va_list args;
+	va_start( args, fmt );
+	vprintf( fmt, args );
+	va_end( args );
+}
+
 s32 RunProc( Array<const char *> *args, Array<const char *> *environmentVariables, const procFlags_t procFlags, String *outStdout ) {
 	assert( args );
 	assert( args->data );
@@ -345,7 +361,7 @@ static s32 ShowUsage( const s32 exitCode ) {
 		"        Shows this help and then exits.\n"
 		"\n"
 		"    " ARG_VERBOSE_SHORT "|" ARG_VERBOSE_LONG " (optional):\n"
-		"        Enables verbose logging, so more information gets output.\n"
+		"        Enables verbose logging, so a lot more information gets output.\n"
 		"\n"
 		"    <file> (required):\n"
 		"        The file you want to build with.  There can only be one.\n"
@@ -383,6 +399,7 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 	}
 
 	if ( config->OnPreBuild ) {
+		LogVerbose( "Found a OnPreBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name.c_str() );
 		config->OnPreBuild();
 	}
 
@@ -521,6 +538,7 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 	}
 
 	if ( config->OnPostBuild ) {
+		LogVerbose( "Found a OnPostBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name.c_str() );
 		config->OnPostBuild();
 	}
 
@@ -529,7 +547,7 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 
 struct nukeContext_t {
 	Array<const char *>	subfolders;
-	bool8				verbose;
+	bool8				printDeletions;
 };
 
 static void Nuke_DeleteAllFilesAndCacheFoldersInternal( const FileInfo *fileInfo, void *user_data ) {
@@ -538,9 +556,7 @@ static void Nuke_DeleteAllFilesAndCacheFoldersInternal( const FileInfo *fileInfo
 	if ( fileInfo->is_directory ) {
 		context->subfolders.add( fileInfo->full_filename );
 	} else {
-		if ( context->verbose ) {
-			printf( "Deleting file \"%s\"\n", fileInfo->full_filename );
-		}
+		LogVerbose( "Deleting file \"%s\"\n", fileInfo->full_filename );
 
 		if ( !file_delete( fileInfo->full_filename ) ) {
 			error( "Nuke failed to delete file \"%s\".\n", fileInfo->full_filename );
@@ -548,9 +564,9 @@ static void Nuke_DeleteAllFilesAndCacheFoldersInternal( const FileInfo *fileInfo
 	}
 }
 
-bool8 NukeFolder( const char *folder, const bool8 deleteRootFolder, const bool8 verbose ) {
+bool8 NukeFolder( const char *folder, const bool8 deleteRootFolder, const bool8 printDeletions ) {
 	nukeContext_t nukeContext = {
-		.verbose = verbose
+		.printDeletions = printDeletions,
 	};
 
 	if ( !file_get_all_files_in_folder( folder, true, true, Nuke_DeleteAllFilesAndCacheFoldersInternal, &nukeContext ) ) {
@@ -563,7 +579,7 @@ bool8 NukeFolder( const char *folder, const bool8 deleteRootFolder, const bool8 
 	RFor ( u64, subfolderIndex, 0, nukeContext.subfolders.count ) {
 		const char *subfolder = nukeContext.subfolders[subfolderIndex];
 
-		if ( nukeContext.verbose ) {
+		if ( printDeletions ) {
 			printf( "Deleting folder \"%s\"\n", subfolder );
 		}
 
@@ -1035,12 +1051,13 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 	buildContext_t context = {
 		.configIndices	= hashmap_create( 1 ),	// TODO(DM): 30/03/2025: whats a reasonable default here?
-#ifdef _DEBUG
-		.verbose		= true,
-#else
-		.verbose		= false,
-#endif
 	};
+
+#ifdef _DEBUG
+	g_verbose = true;
+#else
+	g_verbose = false;
+#endif
 
 	// parse command line args
 	const char *inputConfigName = NULL;
@@ -1074,7 +1091,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		}
 
 		if ( string_equals( arg, ARG_VERBOSE_SHORT ) || string_equals( arg, ARG_HELP_LONG ) ) {
-			context.verbose = true;
+			g_verbose = true;
 			continue;
 		}
 
@@ -1351,6 +1368,8 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		// if the user asked for a specific compiler, set that now
 		// if the user never specified a compiler, we can build with the default compiler
 		if ( !options.compilerPath.empty() ) {
+			LogVerbose( "Found override compiler backend from %s: \"%s\".\n", options.compilerPath.c_str() );
+
 			compilerBackend.Shutdown( &compilerBackend );
 
 			if ( string_ends_with( options.compilerPath.c_str(), ".exe" ) ) {
@@ -1418,6 +1437,8 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 		// if no configs were manually added then assume we are just doing a default build with no user-specified options
 		if ( options.configs.size() == 0 ) {
+			LogVerbose( "No BuildConfigs were found (either none were specified inside \"%s\" or that function was never defined), so Builder will now treat the input file specified at the command line as the source file you want to build.\n", SET_BUILDER_OPTIONS_FUNC_NAME );
+
 			BuildConfig config = {
 				.sourceFiles = { context.inputFile },
 				// .binaryName = defaultBinaryName
@@ -1563,6 +1584,8 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 			// get all the "compilation units" that we are actually going to give to the compiler
 			// if no source files were added in SetBuilderOptions() then assume they only want to build the same file as the one specified via the command line
 			if ( config->sourceFiles.size() == 0 ) {
+				LogVerbose( "No source files were detected in BuildConfig \"%s\".  Builder will assume that the source file you specified at the command line (\"%s\") is what you want to build with.\n", config->name.c_str(), context.inputFile );
+
 				config->sourceFiles.push_back( context.inputFile );
 			} else {
 				// otherwise the user told us to build other source files, so go find and build those instead

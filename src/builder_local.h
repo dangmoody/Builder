@@ -112,9 +112,10 @@ struct buildContext_t {
 
 	bool8									forceRebuild;
 	bool8									consolidateCompilerArgs;
-	bool8									verbose;
 	std::vector<compilationDatabaseEntry_t>	compilationDatabase;
 };
+
+extern bool8	g_verbose;
 
 // shared entry point
 // used in the actual builder program
@@ -122,9 +123,11 @@ struct buildContext_t {
 // TODO(DM): 04/02/2026: do args want to be const?
 int			BuilderMain( const int firstArg, int argc, const char * const * argv );
 
+void		LogVerbose( const char *fmt, ... );
+
 u64			GetLastFileWriteTime( const char *filename );
 
-bool8		NukeFolder( const char *folder, const bool8 deleteRootFolder, const bool8 verbose );
+bool8		NukeFolder( const char *folder, const bool8 deleteRootFolder, const bool8 printDeletions );
 
 const char	*GetNextSlashInPath( const char *path );
 
@@ -135,10 +138,7 @@ const char	*GetFileExtensionFromBinaryType( const BinaryType type );
 
 const char	*BuildConfig_GetFullBinaryName( const BuildConfig *config );
 
-void		RecordCompilationDatabaseEntry(
-			buildContext_t *buildContext,
-			const char *sourceFileName,
-			const Array<const char *> &compilationCommandArray );
+void		RecordCompilationDatabaseEntry( buildContext_t *buildContext, const char *sourceFileName, const Array<const char *> &compilationCommandArray );
 
 s32			RunProc( Array<const char *> *args, Array<const char *> *environmentVariables, const procFlags_t procFlags = 0, String *outStdout = NULL );
 

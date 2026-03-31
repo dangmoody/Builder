@@ -1,6 +1,7 @@
 #ifdef _WIN32
 
 #include "win_sdk.h"
+#include "builder_local.h"
 
 #include "core/include/typecast.inl"
 #include "core/include/file.h"
@@ -138,6 +139,8 @@ bool8 Win_GetSDK( windowsSDK_t *outSDK ) {
 
 	string_printf( &outSDK->ucrtLibPath, "%sLib\\%s\\ucrt\\x64", windowsSDKRoot, versionStr );
 	string_printf( &outSDK->umLibPath,   "%sLib\\%s\\um\\x64",   windowsSDKRoot, versionStr );
+
+	printf( "Using latest valid Windows SDK version that was found, which was: %s.\n\n", versionStr );
 
 	return true;
 }

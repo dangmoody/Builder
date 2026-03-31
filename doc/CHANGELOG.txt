@@ -1,3 +1,13 @@
+v0.11.1, <RELEASE DATE HERE>:
+
+* Builder now logs what version of the Windows SDK it's using.
+* Put a bunch more information into verbose logging (-v, --verbose):
+	* User feedback highlighted that this had gone ignored for a while.
+	* From now on, we verbose mode will start to log everything and the kitchen sink.
+	* This version is simply a first pass, more stuff will get logged in future.
+
+----------------------------------------------------------------
+
 v0.11.0, 30/03/2026:
 
 * Added support for user-defined command line arguments.

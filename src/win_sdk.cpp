@@ -88,8 +88,6 @@ bool8 Win_GetSDK( windowsSDK_t *outSDK ) {
 
 	assert( windowsSDKRoot );
 
-	LogVerbose( "Windows SDK root folder (as taken from the registry): \"%s\"\n", windowsSDKRoot );
-
 	outSDK->rootFolder = windowsSDKRoot;
 
 	// get the latest version of the windows sdk
@@ -143,6 +141,23 @@ bool8 Win_GetSDK( windowsSDK_t *outSDK ) {
 	string_printf( &outSDK->umLibPath,   "%sLib\\%s\\um\\x64",   windowsSDKRoot, versionStr );
 
 	printf( "Using latest valid Windows SDK version that was found, which was: %s.\n\n", versionStr );
+
+	LogVerbose(
+		"Using Windows SDK with the following paths:\n"
+		" - Root folder (as taken from your registry): \"%s\"\n"
+		" - UCRT include folder:   \"%s\"\n"
+		" - UM include folder:     \"%s\"\n"
+		" - Shared include folder: \"%s\"\n"
+		" - UCRT lib path:         \"%s\"\n"
+		" - UM lib path:           \"%s\"\n"
+		"\n"
+		, outSDK->rootFolder.data
+		, outSDK->ucrtInclude.data
+		, outSDK->umInclude.data
+		, outSDK->sharedInclude.data
+		, outSDK->ucrtLibPath.data
+		, outSDK->umLibPath.data
+	);
 
 	return true;
 }

@@ -1309,7 +1309,11 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		float64 setBuilderOptionsTimeStart = time_ms();
 
 		if ( setBuilderOptionsFunc ) {
+			LogVerbose( "%s override function found.  Running...\n", SET_BUILDER_OPTIONS_FUNC_NAME );
+
 			setBuilderOptionsFunc( &options, &args );
+		} else {
+			LogVerbose( "No %s override function was found.\n", SET_BUILDER_OPTIONS_FUNC_NAME );
 		}
 
 		context.forceRebuild = options.forceRebuild;

@@ -2,15 +2,16 @@
 
 #include <builder.h>
 
-BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
-	const std::string sdl_binary_name = "SDL";
-	const std::string sdl_binary_folder = "bin/demos/SDL3";
+BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArgs *args ) {
+	const std::string sdlBinaryName = "SDL";
+	const std::string sdlBinaryFolder = "bin/demos/SDL3";
 
-	BuildConfig config_sdl_common = {
-		.binary_name	= sdl_binary_name,
-		.binary_folder	= sdl_binary_folder,
-		.binary_type	= BINARY_TYPE_DYNAMIC_LIBRARY,
-		.source_files = {
+	BuildConfig sdl = {
+		.name			= "sdl",
+		.binaryName		= sdlBinaryName,
+		.binaryFolder	= sdlBinaryFolder,
+		.binaryType		= BINARY_TYPE_DYNAMIC_LIBRARY,
+		.sourceFiles = {
 			"src/*.c",
 			"src/atomic/*.c",
 			"src/audio/*.c",
@@ -57,21 +58,20 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 		.defines = {
 			"DLL_EXPORT",
 		},
-		.additional_includes = {
+		.additionalIncludes = {
 			"src",	// this feels dirty, are we sure we want to do this?
 			"include",
 			"include/build_config",
 		},
 	};
 
+#ifdef _WIN32
 	// windows
 	// TODO(DM): 14/06/2025: the ONLY reason we cant just do "src/**/windows/*.c" here is because "hidapi/windows/hid.c" includes "hidapi_descriptor_reconstruct.c"
 	// so we have to include every windows subfolder manually whilst making sure to exclude only that one file
 	// also we apparently only want two source files from "src/thread/generic" so we cant glob that either
 	// very annoying!
-	BuildConfig config_sdl_windows = config_sdl_common;
-	config_sdl_windows.name = "sdl-windows";
-	config_sdl_windows.source_files.insert( config_sdl_windows.source_files.end(), {
+	sdl.sourceFiles.insert( sdl.sourceFiles.end(), {
 		"src/audio/directsound/*.c",
 		"src/audio/wasapi/*.c",
 		"src/core/windows/*.c",
@@ -106,11 +106,11 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 		"src/tray/windows/*.c",
 		"src/video/windows/*.c"
 	} );
-	config_sdl_windows.defines.insert( config_sdl_windows.defines.end(), {
+	sdl.defines.insert( sdl.defines.end(), {
 		"SDL_PLATFORM_WIN32",
 		"HAVE_MODF"
 	} );
-	config_sdl_windows.additional_libs.insert( config_sdl_windows.additional_libs.end(), {
+	sdl.additionalLibs.insert( sdl.additionalLibs.end(), {
 		"Ole32.lib",
 		"OleAut32.lib",
 		"Winmm.lib",
@@ -122,21 +122,23 @@ BUILDER_CALLBACK void set_builder_options( BuilderOptions* options ) {
 		"SetupAPI.lib",
 		"Version.lib"
 	} );
-	add_build_config( options, &config_sdl_windows );
+#endif
 
-	BuildConfig config_demo_windows = {
-		.name					= "sdl-demo-windows",
-		.depends_on				= { config_sdl_windows },
-		.binary_name			= "sdl-demo-app",
-		.binary_folder			= sdl_binary_folder,
-		.source_files			= { "demo-app/*.cpp" },
-		.additional_includes	= { "include" },
-		.additional_lib_paths	= { sdl_binary_folder },
-		.additional_libs		= { sdl_binary_name },
-		.warnings_as_errors		= true,
+	AddBuildConfig( options, &sdl );
+
+	BuildConfig demo = {
+		.name				= "demo",
+		.dependsOn			= { sdl },
+		.binaryName			= "sdl-demo-app",
+		.binaryFolder		= sdlBinaryFolder,
+		.sourceFiles		= { "demo-app/*.cpp" },
+		.additionalIncludes	= { "include" },
+		.additionalLibPaths	= { sdlBinaryFolder },
+		.additionalLibs		= { sdlBinaryName },
+		.warningsAsErrors	= true,
 	};
 
-	add_build_config( options, &config_demo_windows );
+	AddBuildConfig( options, &demo );
 }
 
 #endif // BUILDER_DOING_USER_CONFIG_BUILD

@@ -88,6 +88,8 @@ bool8 Win_GetSDK( windowsSDK_t *outSDK ) {
 
 	assert( windowsSDKRoot );
 
+	LogVerbose( "Windows SDK root folder (as taken from the registry): \"%s\"\n", windowsSDKRoot );
+
 	outSDK->rootFolder = windowsSDKRoot;
 
 	// get the latest version of the windows sdk

@@ -60,9 +60,6 @@
     <ClCompile Include="test_dynamic_lib\build_configs.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="test_compiler_path\test_compiler_path.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="test_generate_visual_studio_files\generate_solution.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -99,6 +96,15 @@
     <ClCompile Include="test_static_lib\build_configs.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="test_compilation_database\build_configs.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="test_compilation_database\src\helper.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="test_compilation_database\src\main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="test_multiple_source_files\src\marco_polo.h">
@@ -114,6 +120,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="test_generate_visual_studio_files\src\library.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="test_compiler_override.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

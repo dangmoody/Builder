@@ -133,6 +133,7 @@
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\visual_studio.cpp" />
     <ClCompile Include="src\win_sdk.cpp" />
+    <ClCompile Include="src\win_support.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\builder.h" />
@@ -170,6 +171,7 @@
     <ClInclude Include="src\core\src\core_local.h" />
     <ClInclude Include="src\core\src\file_local.h" />
     <ClInclude Include="src\win_sdk.h" />
+    <ClInclude Include="src\win_support.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".gitignore" />

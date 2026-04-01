@@ -29,7 +29,7 @@ SOFTWARE.
 #include "builder_local.h"
 
 #ifdef _WIN32
-#include "win_sdk.h"
+#include "win_support.h"
 #endif
 
 #include "core/include/core_string.h"
@@ -55,7 +55,8 @@ struct clangState_t {
 	String						arPath;	// static library linker for gcc (on windows and linux) and clang (linux)
 
 #ifdef _WIN32
-	windowsSDK_t				windowsSDK;
+	windowsSDK_t				winSDK;
+	msvcInstall_t				msvcInstall;
 #endif
 };
 
@@ -195,7 +196,7 @@ static void ResolveCompilerAndLinkerPaths( clangState_t *clangState, const char 
 
 //================================================================
 
-static bool8 Clang_Init( compilerBackend_t *backend, const std::string &compilerPath, const std::string &compilerVersion ) {
+static bool8 Clang_Init( compilerBackend_t *backend, const buildContext_t *context, const std::string &compilerPath, const std::string &compilerVersion ) {
 	backend->data = cast( clangState_t *, mem_alloc( sizeof( clangState_t ) ) );
 	new( backend->data ) clangState_t;
 
@@ -223,15 +224,18 @@ static bool8 Clang_Init( compilerBackend_t *backend, const std::string &compiler
 #endif
 
 #ifdef _WIN32
-	if ( !Win_GetSDK( &clangState->windowsSDK ) ) {
-		return false;
-	}
+	clangState->winSDK = context->winSDK;
+	clangState->msvcInstall = context->msvcInstall;
 #endif
 
 	return true;
 }
 
-static bool8 GCC_Init( compilerBackend_t *backend, const std::string &compilerPath, const std::string &compilerVersion ) {
+static bool8 GCC_Init( compilerBackend_t *backend, const buildContext_t *context, const std::string &compilerPath, const std::string &compilerVersion ) {
+	// TODO(DM): 01/04/2026: clang and msvc need this for windows SDK includes, but gcc never will
+	// can we do better here?
+	unused( context );
+
 	backend->data = cast( clangState_t *, mem_alloc( sizeof( clangState_t ) ) );
 	new( backend->data ) clangState_t;
 
@@ -327,6 +331,7 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 	Array<const char *> &args = clangState->args;
 	args.reserve(
 		1 + // lld-link
+		1 + // verbose flag
 		1 + // /lib or -shared
 		1 + // -g
 		1 + // -o
@@ -359,6 +364,10 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		args.add( fullBinaryName );
 #endif
 
+		if ( g_verbose ) {
+			args.add( "-v" );
+		}
+
 		args.add_range( &intermediateFiles );
 	} else {
 		args.add( clangState->compilerPath.data );
@@ -371,6 +380,10 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 			args.add( "-g" );
 		}
 
+		if ( g_verbose ) {
+			args.add( "-v" );
+		}
+
 		args.add_range( &intermediateFiles );
 
 		For ( u32, libPathIndex, 0, config->additionalLibPaths.size() ) {
@@ -378,8 +391,8 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		}
 
 #ifdef _WIN32
-		args.add( tprintf( "-L%s", clangState->windowsSDK.ucrtLibPath.data ) );
-		args.add( tprintf( "-L%s", clangState->windowsSDK.umLibPath.data ) );
+		args.add( tprintf( "-L%s", clangState->winSDK.ucrtLibPath.data ) );
+		args.add( tprintf( "-L%s", clangState->winSDK.umLibPath.data ) );
 #endif
 
 		For ( u32, libIndex, 0, config->additionalLibs.size() ) {
@@ -428,6 +441,7 @@ static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t *back
 	Array<const char *> &baseArgs = outCmdArchetype.baseArgs;
 	baseArgs.reserve(
 		1 +	// compiler path
+		1 +	// verbose flag
 		1 +	// compile flag
 		1 +	// lang version flag
 		1 +	// symbols flag
@@ -443,6 +457,10 @@ static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t *back
 
 	// Compiler Path
 	baseArgs.add( compilerPath );
+
+	if ( g_verbose ) {
+		baseArgs.add( "-v" );
+	}
 
 	// Compile Flag
 	baseArgs.add( "-c" );
@@ -467,9 +485,9 @@ static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t *back
 
 #ifdef _WIN32
 	// windows SDK includes
-	baseArgs.add( tprintf( "-isystem%s", clangState->windowsSDK.ucrtInclude.data ) );
-	baseArgs.add( tprintf( "-isystem%s", clangState->windowsSDK.umInclude.data ) );
-	baseArgs.add( tprintf( "-isystem%s", clangState->windowsSDK.sharedInclude.data ) );
+	baseArgs.add( tprintf( "-isystem%s", clangState->winSDK.ucrtInclude.data ) );
+	baseArgs.add( tprintf( "-isystem%s", clangState->winSDK.umInclude.data ) );
+	baseArgs.add( tprintf( "-isystem%s", clangState->winSDK.sharedInclude.data ) );
 #endif
 
 	// Additional Includes

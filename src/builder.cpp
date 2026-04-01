@@ -44,6 +44,7 @@ SOFTWARE.
 #include "core/include/core_string.h"
 #include "core/include/hashmap.h"
 #include "core/include/file.h"
+#include "win_support.h"
 
 #ifdef _WIN64
 #include <Shlwapi.h>
@@ -82,6 +83,13 @@ enum buildResult_t {
 #define QUIT_ERROR() \
 	debug_break(); \
 	return 1
+
+// TODO(DM): 31/03/2026: does this mean we want a verbose logging mode in Core?
+#ifdef _DEBUG
+bool8 g_verbose = true;
+#else
+bool8 g_verbose = false;
+#endif
 
 #ifdef __linux__
 #pragma clang diagnostic push
@@ -275,9 +283,6 @@ const char *BuildConfig_GetFullBinaryName( const BuildConfig *config ) {
 
 	return string_builder_to_string( &sb );
 }
-
-// TODO(DM): 31/03/2026: does this mean we want a verbose logging mode in Core?
-bool8 g_verbose = false;
 
 void LogVerbose( const char *fmt, ... ) {
 	if ( !g_verbose ) {
@@ -1047,16 +1052,20 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	core_init( MEM_MEGABYTES( 128 ) );	// TODO(DM): 26/03/2025: can we just use defaults for this now?
 	defer( core_shutdown() );
 
-	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+	printf( "Builder v%d.%d.%d RC0\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {
 		.configIndices	= hashmap_create( 1 ),	// TODO(DM): 30/03/2025: whats a reasonable default here?
 	};
 
-#ifdef _DEBUG
-	g_verbose = true;
-#else
-	g_verbose = false;
+#ifdef _WIN32
+	if ( !Win_GetWindowsSDK( &context.winSDK ) ) {
+		QUIT_ERROR();
+	}
+
+	if ( !Win_GetMSVCInstall( &context.msvcInstall ) ) {
+		QUIT_ERROR();
+	}
 #endif
 
 	// parse command line args
@@ -1201,7 +1210,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	compilerBackend_t compilerBackend = {};
 	CreateCompilerBackend_Clang( &compilerBackend );
 	const char *defaultCompilerPath = tprintf( "%s%c..%cclang%cbin%cclang", path_remove_file_from_path( path_app_path() ), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
-	compilerBackend.Init( &compilerBackend, defaultCompilerPath, std::string() );
+	compilerBackend.Init( &compilerBackend, &context, defaultCompilerPath, std::string() );
 	defer( compilerBackend.Shutdown( &compilerBackend ) );
 
 	// user config build step
@@ -1274,6 +1283,8 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 				// if the user config DLL got rebuilt then compile settings might have changed
 				// force a rebuild of everything
 				context.forceRebuild = true;
+
+				LogVerbose( "User config build was successful.  All of the BuildConfigs we build from now on will be fully rebuilt...\n\n" );
 			} break;
 
 			case BUILD_RESULT_FAILED: {
@@ -1372,7 +1383,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		// if the user asked for a specific compiler, set that now
 		// if the user never specified a compiler, we can build with the default compiler
 		if ( !options.compilerPath.empty() ) {
-			LogVerbose( "Found override compiler backend from %s: \"%s\".\n", options.compilerPath.c_str() );
+			LogVerbose( "Found override compiler backend \"%s\" from %s.\n", options.compilerPath.c_str(), SET_BUILDER_OPTIONS_FUNC_NAME );
 
 			compilerBackend.Shutdown( &compilerBackend );
 
@@ -1416,7 +1427,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 			{
 				float64 compilerBackendInitStart = time_ms();
 
-				if ( !compilerBackend.Init( &compilerBackend, options.compilerPath.c_str(), options.compilerVersion.c_str() ) ) {
+				if ( !compilerBackend.Init( &compilerBackend, &context, options.compilerPath.c_str(), options.compilerVersion.c_str() ) ) {
 					QUIT_ERROR();
 				}
 

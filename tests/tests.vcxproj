@@ -123,6 +123,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="temper\temper.h" />
+    <ClInclude Include="test_compiler_override.h" />
     <ClInclude Include="test_dynamic_lib\lib\lib.h" />
     <ClInclude Include="test_generate_visual_studio_files\src\library.h" />
     <ClInclude Include="test_multiple_source_files\src\marco_polo.h" />

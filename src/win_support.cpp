@@ -170,7 +170,7 @@ bool8 Win_GetWindowsSDK( windowsSDK_t *outSDK ) {
 	string_printf( &outSDK->ucrtLibPath, "%sLib\\%s\\ucrt\\x64", windowsSDKRoot, versionStr );
 	string_printf( &outSDK->umLibPath,   "%sLib\\%s\\um\\x64",   windowsSDKRoot, versionStr );
 
-	printf( "Using latest valid Windows SDK version that was found, which was: %s.\n\n", versionStr );
+	printf( "Using latest valid Windows SDK version that was found, which was: %s.\n", versionStr );
 
 	LogVerbose(
 		"Using Windows SDK with the following paths:\n"

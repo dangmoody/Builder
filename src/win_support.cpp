@@ -219,6 +219,11 @@ static int CompareMSVCVersions( const void *a, const void *b ) {
 	return bv->v2 - av->v2;
 }
 
+static bool8 MSVCNotInstalled() {
+	error( "No valid MSVC installation found on your PC.  You need to install one through either the Visual Studio Installer or through the MS Build Tools.\n" );
+	return false;
+}
+
 // get all versions of MSVC
 // thanks to Microsoft we will be doing that in the most retarded way possible
 bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
@@ -231,7 +236,7 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 	hr = CoInitializeEx( NULL, COINIT_MULTITHREADED );
 
 	if ( FAILED( hr ) ) {
-		error( "CoInitializeEx() call failed: %d\n", hr );
+		error( "CoInitializeEx() call failed: 0x%X\n", hr );
 		return false;
 	}
 
@@ -243,8 +248,12 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 	ISetupConfiguration *setupConfig = NULL;
 	hr = CoCreateInstance( CLSID_SetupConfiguration, NULL, CLSCTX_INPROC_SERVER, myUID, cast( void **, &setupConfig ) );
 
+	if ( hr == REGDB_E_CLASSNOTREG ) {
+		return MSVCNotInstalled();
+	}
+
 	if ( FAILED( hr ) ) {
-		error( "CoCreateInstance() call failed: %d\n", hr );
+		error( "CoCreateInstance() call failed: 0x%X\n", hr );
 		return false;
 	}
 
@@ -254,7 +263,7 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 	hr = setupConfig->EnumInstances( &instances );
 
 	if ( FAILED( hr ) ) {
-		error( "setupConfig->EnumInstances() called failed: %d\n", hr );
+		error( "setupConfig->EnumInstances() called failed: 0x%X\n", hr );
 		return false;
 	}
 
@@ -265,7 +274,6 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 
 	defer( instances->Release() );
 
-	//Array<const char *> msvcRootFolders;
 	const char *msvcRootFolder;
 	Array<msvcVersion_t> foundMSVCVersions;
 
@@ -280,7 +288,7 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 		hr = instance->GetInstallationPath( &visualStudioInstallationPathWide );
 
 		if ( FAILED( hr ) ) {
-			error( "instance->GetInstallationPath() call failed: %d\n", hr );
+			error( "instance->GetInstallationPath() call failed: 0x%X\n", hr );
 			return false;
 		}
 
@@ -342,15 +350,8 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 	}
 
 	if ( !found ) {
-		error( "No valid MSVC installation found on your PC.  You need to install one through either the Visual Studio Installer or through the MS Build Tools.\n" );
-		return false;
+		return MSVCNotInstalled();
 	}
-
-	// outInstall->compilerVersion = foundMSVCVersions[useVersionIndex];
-
-	// DM!!! move this into backend_msvc.cpp
-	// string_printf( &outInstall->compilerPath, "%s\\%s\\bin\\Hostx64\\x64\\cl", msvcRootFolder, msvcState->compilerVersion.data );
-	// string_printf( &outInstall->linkerPath, "%s\\%s\\bin\\Hostx64\\x64\\link", msvcRootFolder, msvcState->compilerVersion.data );
 
 	outInstall->version = foundMSVCVersions[useVersionIndex];
 

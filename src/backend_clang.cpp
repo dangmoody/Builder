@@ -322,10 +322,6 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 
 	clangState_t *clangState = cast( clangState_t *, backend->data );
 
-	// TODO(DM): 11/02/2026: remove this when eds command archetype changes get merged in
-	bool8 isClang = string_ends_with( clangState->compilerPath.data, "clang" ) || string_ends_with( clangState->compilerPath.data, "clang++" );
-	bool8 isGCC = string_ends_with( clangState->compilerPath.data, "gcc" ) || string_ends_with( clangState->compilerPath.data, "g++" );
-
 	const char *fullBinaryName = BuildConfig_GetFullBinaryName( config );
 
 	Array<const char *> &args = clangState->args;
@@ -338,31 +334,58 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		1 + // binary name
 		intermediateFiles.count +
 		config->additionalLibPaths.size() +
-		config->additionalLibs.size()
+		config->additionalLibs.size() +
+		config->additionalLinkerArguments.size()
 	);
 
 	args.reset();
 
+#ifdef _WIN32
+	args.add( clangState->linkerPath.data );
+
+	if ( g_verbose ) {
+		args.add( "/verbose" );
+	}
+
+	if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
+		args.add( "/lib" );
+	} else if ( config->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
+		args.add( "/DLL" );
+	}
+
+	if ( !config->removeSymbols ) {
+		args.add( "/DEBUG" );
+	}
+
+	args.add( tprintf( "/OUT:%s", fullBinaryName ) );
+
+	args.add_range( &intermediateFiles );
+
+	args.add( tprintf( "/LIBPATH:%s", clangState->winSDK.ucrtLibPath.data ) );
+	args.add( tprintf( "/LIBPATH:%s", clangState->winSDK.umLibPath.data ) );
+	args.add( tprintf( "/LIBPATH:%s", clangState->msvcInstall.libPath.data ) );
+
+	For ( u32, libPathIndex, 0, config->additionalLibPaths.size() ) {
+		args.add( tprintf( "/LIBPATH:%s", config->additionalLibPaths[libPathIndex].c_str() ) );
+	}
+
+	args.add( "libcmt.lib" );
+
+	For ( u32, libIndex, 0, config->additionalLibs.size() ) {
+		args.add( config->additionalLibs[libIndex].c_str() );
+	}
+
+	For ( u32, libIndex, 0, config->additionalLinkerArguments.size() ) {
+		args.add( config->additionalLinkerArguments[libIndex].c_str() );
+	}
+#else
 	// clang and gcc treat static libraries as just an archive of .o files
 	// so there is no real "link" step in this case, the .o files are just "archived" together
 	// for dynamic libraries and executables clang and gcc recommend you call the compiler again and just pass in all the intermediate files
 	if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
-#if defined( _WIN32 )
-		// TODO(DM): 11/02/2026: remove this when eds command archetype changes get merged in
-		if ( isGCC ) {
-			args.add( clangState->arPath.data );
-			args.add( "rc" );
-			args.add( fullBinaryName );
-		} else {
-			args.add( clangState->linkerPath.data );
-			args.add( "/lib" );
-			args.add( tprintf( "/OUT:%s", fullBinaryName ) );
-		}
-#elif defined( __linux__ )
 		args.add( clangState->arPath.data );
 		args.add( "rc" );
 		args.add( fullBinaryName );
-#endif
 
 		if ( g_verbose ) {
 			args.add( "-v" );
@@ -415,6 +438,7 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		args.add( "-o" );
 		args.add( fullBinaryName );
 	}
+#endif
 
 	s32 exitCode = RunProc( &args, NULL, PROC_FLAG_SHOW_ARGS | PROC_FLAG_SHOW_STDOUT );
 

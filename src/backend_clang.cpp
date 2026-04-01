@@ -197,6 +197,10 @@ static void ResolveCompilerAndLinkerPaths( clangState_t *clangState, const char 
 //================================================================
 
 static bool8 Clang_Init( compilerBackend_t *backend, const buildContext_t *context, const std::string &compilerPath, const std::string &compilerVersion ) {
+#ifdef __linux__
+	unused( context );
+#endif
+
 	backend->data = cast( clangState_t *, mem_alloc( sizeof( clangState_t ) ) );
 	new( backend->data ) clangState_t;
 

@@ -326,12 +326,15 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 
 	Array<const char *> &args = clangState->args;
 	args.reserve(
-		1 + // lld-link
+		1 + // lib.exe or link.exe
 		1 + // verbose flag
-		1 + // /lib or -shared
-		1 + // -g
-		1 + // -o
-		1 + // binary name
+		1 + // /DLL
+		1 + // /NODEFAULTLIB
+		1 + // /DEBUG
+		1 + // /OUT:
+		1 + // kernel32.lib
+		3 + // CRT libs (msvcrt, vcruntime, ucrt)
+		3 + // /LIBPATH: ucrt, um, msvc
 		intermediateFiles.count +
 		config->additionalLibPaths.size() +
 		config->additionalLibs.size() +
@@ -346,6 +349,8 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		args.add( tprintf( "%s\\bin\\Hostx64\\x64\\lib", clangState->msvcInstall.rootFolder.data ) );
 	} else {
 		args.add( tprintf( "%s\\bin\\Hostx64\\x64\\link", clangState->msvcInstall.rootFolder.data ) );
+
+		args.add( "/NODEFAULTLIB" );
 	}
 
 	if ( g_verbose ) {
@@ -372,13 +377,17 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		args.add( tprintf( "/LIBPATH:%s", config->additionalLibPaths[libPathIndex].c_str() ) );
 	}
 
+	args.add( "kernel32.lib" );
+
 #if defined( _DEBUG )
 	args.add( "msvcrtd.lib" );
+	args.add( "vcruntimed.lib" );
+	args.add( "ucrtd.lib" );
 #else
 	args.add( "msvcrt.lib" );
+	args.add( "vcruntime.lib" );
+	args.add( "ucrt.lib" );
 #endif
-
-	args.add( "ucrtd.lib" );
 
 	For ( u32, libIndex, 0, config->additionalLibs.size() ) {
 		args.add( config->additionalLibs[libIndex].c_str() );

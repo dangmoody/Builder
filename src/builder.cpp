@@ -1048,7 +1048,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	core_init( MEM_MEGABYTES( 128 ) );	// TODO(DM): 26/03/2025: can we just use defaults for this now?
 	defer( core_shutdown() );
 
-	printf( "Builder v%d.%d.%d RC4\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+	printf( "Builder v%d.%d.%d RC5\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {
 		.configIndices	= hashmap_create( 1 ),	// TODO(DM): 30/03/2025: whats a reasonable default here?
@@ -1242,11 +1242,11 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 #if defined( _WIN64 )
 				"user32.lib",
 				// MSVCRT is needed for ABI compatibility between builder and the user config DLL on windows
-//#if defined( _DEBUG )
-//				"msvcrtd.lib",
-//#else
-//				"msvcrt.lib",
-//#endif
+#if defined( _DEBUG )
+				"msvcprtd.lib",
+#else
+				"msvcprt.lib",
+#endif
 #endif
 			},
 			.ignoreWarnings = {

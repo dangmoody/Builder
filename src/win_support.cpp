@@ -224,11 +224,14 @@ static int CompareMSVCVersions( const void *a, const void *b ) {
 bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 	assert( outInstall );
 
+	LogVerbose( "Querying for MSVC installations...\n" );
+
 	HRESULT hr = S_OK;
 
 	hr = CoInitializeEx( NULL, COINIT_MULTITHREADED );
 
 	if ( FAILED( hr ) ) {
+		LogVerbose( "CoInitializeEx() call failed: %d\n", hr );
 		return false;
 	}
 
@@ -241,6 +244,7 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 	hr = CoCreateInstance( CLSID_SetupConfiguration, NULL, CLSCTX_INPROC_SERVER, myUID, cast( void **, &setupConfig ) );
 
 	if ( FAILED( hr ) ) {
+		LogVerbose( "CoCreateInstance() call failed: %d\n", hr );
 		return false;
 	}
 
@@ -250,10 +254,12 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 	hr = setupConfig->EnumInstances( &instances );
 
 	if ( FAILED( hr ) ) {
+		LogVerbose( "setupConfig->EnumInstances() called failed: %d\n", hr );
 		return false;
 	}
 
 	if ( !instances ) {
+		LogVerbose( "setupConfig->EnumInstances() returned no instances.  Bailing...\n" );
 		return false;
 	}
 
@@ -274,6 +280,7 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 		hr = instance->GetInstallationPath( &visualStudioInstallationPathWide );
 
 		if ( FAILED( hr ) ) {
+			LogVerbose( "instance->GetInstallationPath() call failed: %d\n", hr );
 			return false;
 		}
 
@@ -286,7 +293,8 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 
 			int utf8Length = WideCharToMultiByte( CP_UTF8, 0, visualStudioInstallationPathWide, trunc_cast( int, wideLength ), NULL, 0, NULL, NULL );
 
-			if ( utf8Length < 0 ) {
+			if ( utf8Length <= 0 ) {
+				LogVerbose( "First WideCharToMultiByte() call failed: WinAPI error code 0x%X\n", GetLastError() );
 				return false;
 			}
 
@@ -295,6 +303,7 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 			int converted = WideCharToMultiByte( CP_UTF8, 0, visualStudioInstallationPathWide, trunc_cast( int, wideLength ), visualStudioInstallationPath, utf8Length, NULL, NULL );
 
 			if ( !converted ) {
+				LogVerbose( "Second WideCharToMultiByte() call failed: WinAPI error code 0x%X\n", GetLastError() );
 				return false;
 			}
 
@@ -304,6 +313,7 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 		msvcRootFolder = tprintf( "%s\\VC\\Tools\\MSVC", visualStudioInstallationPath );
 
 		if ( !file_get_all_files_in_folder( msvcRootFolder, false, true, OnMSVCVersionFound, &foundMSVCVersions ) ) {
+			error( "Failed to query for all MSVC installation folders.  Error code: " ERROR_CODE_FORMAT "\n", get_last_error_code() );
 			return false;
 		}
 

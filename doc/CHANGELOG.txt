@@ -1,9 +1,13 @@
 v0.11.1, <RELEASE DATE HERE>:
 
-* Builder now logs what version of the Windows SDK it's using.
+* Windows:
+	* Builder now includes Windows SDK include paths by default in Clang builds on Windows.
+	* If a valid Windows SDK or MSVC installation can't be found, Builder will log an error saying this and the build will fail.
+		* This is necessary, because Clang actually relies on the Windows SDK and MSVC when compiling on Windows (yeah, I know...).
+	* Builder now logs what version of the Windows SDK it's using.
 * Put a bunch more information into verbose logging (-v, --verbose):
 	* User feedback highlighted that this had gone ignored for a while.
-	* From now on, we verbose mode will start to log everything and the kitchen sink.
+	* From now on, verbose mode will start to log everything and the kitchen sink.
 	* This version is simply a first pass, more stuff will get logged in future.
 
 ----------------------------------------------------------------

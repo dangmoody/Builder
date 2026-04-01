@@ -231,7 +231,7 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 	hr = CoInitializeEx( NULL, COINIT_MULTITHREADED );
 
 	if ( FAILED( hr ) ) {
-		LogVerbose( "CoInitializeEx() call failed: %d\n", hr );
+		error( "CoInitializeEx() call failed: %d\n", hr );
 		return false;
 	}
 
@@ -244,7 +244,7 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 	hr = CoCreateInstance( CLSID_SetupConfiguration, NULL, CLSCTX_INPROC_SERVER, myUID, cast( void **, &setupConfig ) );
 
 	if ( FAILED( hr ) ) {
-		LogVerbose( "CoCreateInstance() call failed: %d\n", hr );
+		error( "CoCreateInstance() call failed: %d\n", hr );
 		return false;
 	}
 
@@ -254,12 +254,12 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 	hr = setupConfig->EnumInstances( &instances );
 
 	if ( FAILED( hr ) ) {
-		LogVerbose( "setupConfig->EnumInstances() called failed: %d\n", hr );
+		error( "setupConfig->EnumInstances() called failed: %d\n", hr );
 		return false;
 	}
 
 	if ( !instances ) {
-		LogVerbose( "setupConfig->EnumInstances() returned no instances.  Bailing...\n" );
+		error( "setupConfig->EnumInstances() returned no instances.  Bailing...\n" );
 		return false;
 	}
 
@@ -280,7 +280,7 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 		hr = instance->GetInstallationPath( &visualStudioInstallationPathWide );
 
 		if ( FAILED( hr ) ) {
-			LogVerbose( "instance->GetInstallationPath() call failed: %d\n", hr );
+			error( "instance->GetInstallationPath() call failed: %d\n", hr );
 			return false;
 		}
 
@@ -294,16 +294,16 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 			int utf8Length = WideCharToMultiByte( CP_UTF8, 0, visualStudioInstallationPathWide, trunc_cast( int, wideLength ), NULL, 0, NULL, NULL );
 
 			if ( utf8Length <= 0 ) {
-				LogVerbose( "First WideCharToMultiByte() call failed: WinAPI error code 0x%X\n", GetLastError() );
+				error( "First WideCharToMultiByte() call failed: WinAPI error code 0x%X\n", GetLastError() );
 				return false;
 			}
 
-			visualStudioInstallationPath = cast( char *, mem_temp_alloc( trunc_cast( u64, utf8Length + 1 ) * sizeof( char ) ) );
+			visualStudioInstallationPath = cast( char*, mem_temp_alloc( trunc_cast( u64, utf8Length + 1 ) * sizeof( char ) ) );
 
 			int converted = WideCharToMultiByte( CP_UTF8, 0, visualStudioInstallationPathWide, trunc_cast( int, wideLength ), visualStudioInstallationPath, utf8Length, NULL, NULL );
 
 			if ( !converted ) {
-				LogVerbose( "Second WideCharToMultiByte() call failed: WinAPI error code 0x%X\n", GetLastError() );
+				error( "Second WideCharToMultiByte() call failed: WinAPI error code 0x%X\n", GetLastError() );
 				return false;
 			}
 

@@ -1058,16 +1058,6 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		.configIndices	= hashmap_create( 1 ),	// TODO(DM): 30/03/2025: whats a reasonable default here?
 	};
 
-#ifdef _WIN32
-	if ( !Win_GetWindowsSDK( &context.winSDK ) ) {
-		QUIT_ERROR();
-	}
-
-	if ( !Win_GetMSVCInstall( &context.msvcInstall ) ) {
-		QUIT_ERROR();
-	}
-#endif
-
 	// parse command line args
 	const char *inputConfigName = NULL;
 	u64 inputConfigNameHash = 0;
@@ -1173,6 +1163,16 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 			continue;
 		}
 	}
+
+#ifdef _WIN32
+	if ( !Win_GetWindowsSDK( &context.winSDK ) ) {
+		QUIT_ERROR();
+	}
+
+	if ( !Win_GetMSVCInstall( &context.msvcInstall ) ) {
+		QUIT_ERROR();
+	}
+#endif
 
 	// we need a source file specified at the command line
 	// otherwise we dont know what to build!

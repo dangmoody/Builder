@@ -34,10 +34,10 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArg
 #endif
 	};
 
-	if ( HasCommandLineArg( args, "--msvc" ) ) {
-		program.additionalLibs = { "test_dynamic_lib.lib" };
-	} else {
+	if ( HasCommandLineArg( args, "--gcc" ) ) {
 		program.additionalLibs = { "test_dynamic_lib" };
+	} else {
+		program.additionalLibs = { "test_dynamic_lib.lib" };
 	}
 
 	// only need to add program config

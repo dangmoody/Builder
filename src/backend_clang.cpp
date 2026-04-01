@@ -341,19 +341,22 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 	args.reset();
 
 #ifdef _WIN32
-	args.add( clangState->linkerPath.data );
+	//args.add( clangState->linkerPath.data );
+	if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
+		args.add( tprintf( "%s\\bin\\Hostx64\\x64\\lib", clangState->msvcInstall.rootFolder.data ) );
+	} else {
+		args.add( tprintf( "%s\\bin\\Hostx64\\x64\\link", clangState->msvcInstall.rootFolder.data ) );
+	}
 
 	if ( g_verbose ) {
 		args.add( "/verbose" );
 	}
 
-	if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
-		args.add( "/lib" );
-	} else if ( config->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
+	if ( config->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
 		args.add( "/DLL" );
 	}
 
-	if ( !config->removeSymbols ) {
+	if ( config->binaryType != BINARY_TYPE_STATIC_LIBRARY && !config->removeSymbols ) {
 		args.add( "/DEBUG" );
 	}
 
@@ -369,7 +372,13 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		args.add( tprintf( "/LIBPATH:%s", config->additionalLibPaths[libPathIndex].c_str() ) );
 	}
 
-	args.add( "libcmt.lib" );
+#if defined( _DEBUG )
+	args.add( "msvcrtd.lib" );
+#else
+	args.add( "msvcrt.lib" );
+#endif
+
+	args.add( "ucrtd.lib" );
 
 	For ( u32, libIndex, 0, config->additionalLibs.size() ) {
 		args.add( config->additionalLibs[libIndex].c_str() );
@@ -445,6 +454,95 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 	return exitCode == 0;
 }
 
+static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const Array<const char *> &intermediateFiles, BuildConfig *config ) {
+	assert( backend );
+	assert( config );
+
+	clangState_t *clangState = cast( clangState_t *, backend->data );
+
+	const char *fullBinaryName = BuildConfig_GetFullBinaryName( config );
+
+	Array<const char *> &args = clangState->args;
+	args.reserve(
+		1 + // lld-link
+		1 + // verbose flag
+		1 + // /lib or -shared
+		1 + // -g
+		1 + // -o
+		1 + // binary name
+		intermediateFiles.count +
+		config->additionalLibPaths.size() +
+		config->additionalLibs.size() +
+		config->additionalLinkerArguments.size()
+	);
+
+	args.reset();
+
+	// clang and gcc treat static libraries as just an archive of .o files
+	// so there is no real "link" step in this case, the .o files are just "archived" together
+	// for dynamic libraries and executables clang and gcc recommend you call the compiler again and just pass in all the intermediate files
+	if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
+		args.add( clangState->arPath.data );
+		args.add( "rc" );
+		args.add( fullBinaryName );
+
+		if ( g_verbose ) {
+			args.add( "-v" );
+		}
+
+		args.add_range( &intermediateFiles );
+	} else {
+		args.add( clangState->compilerPath.data );
+
+		if ( config->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
+			args.add( "-shared" );
+		}
+
+		if ( !config->removeSymbols ) {
+			args.add( "-g" );
+		}
+
+		if ( g_verbose ) {
+			args.add( "-v" );
+		}
+
+		args.add_range( &intermediateFiles );
+
+		For ( u32, libPathIndex, 0, config->additionalLibPaths.size() ) {
+			args.add( tprintf( "-L%s", config->additionalLibPaths[libPathIndex].c_str() ) );
+		}
+
+// #ifdef _WIN32
+// 		args.add( tprintf( "-L%s", clangState->winSDK.ucrtLibPath.data ) );
+// 		args.add( tprintf( "-L%s", clangState->winSDK.umLibPath.data ) );
+// #endif
+
+		For ( u32, libIndex, 0, config->additionalLibs.size() ) {
+			args.add( tprintf( "-l%s", config->additionalLibs[libIndex].c_str() ) );
+		}
+
+		For ( u32, libIndex, 0, config->additionalLinkerArguments.size() ) {
+			args.add( config->additionalLinkerArguments[libIndex].c_str() );
+		}
+
+		// TODO(DM): 09/10/2025: this works fine but do we want to expose this to the user?
+		// or do we want to just do this by default on linux because its a really common thing that people do?
+#ifdef __linux__
+		if ( config->binaryType == BINARY_TYPE_EXE ) {
+			const char *fullBinaryPath = path_remove_file_from_path( fullBinaryName );
+			args.add( tprintf( "-Wl,-rpath=%s", fullBinaryPath ) );
+		}
+#endif
+
+		args.add( "-o" );
+		args.add( fullBinaryName );
+	}
+
+	s32 exitCode = RunProc( &args, NULL, PROC_FLAG_SHOW_ARGS | PROC_FLAG_SHOW_STDOUT );
+
+	return exitCode == 0;
+}
+
 static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t *backend, const BuildConfig *config, compilationCommandArchetype_t &outCmdArchetype ) {
 	clangState_t *clangState = cast( clangState_t *, backend->data );
 
@@ -507,12 +605,12 @@ static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t *back
 		baseArgs.add( tprintf( "-D%s", config->defines[defineIndex].c_str() ) );
 	}
 
-#ifdef _WIN32
-	// windows SDK includes
-	baseArgs.add( tprintf( "-isystem%s", clangState->winSDK.ucrtInclude.data ) );
-	baseArgs.add( tprintf( "-isystem%s", clangState->winSDK.umInclude.data ) );
-	baseArgs.add( tprintf( "-isystem%s", clangState->winSDK.sharedInclude.data ) );
-#endif
+// #ifdef _WIN32
+// 	// windows SDK includes
+// 	baseArgs.add( tprintf( "-isystem%s", clangState->winSDK.ucrtInclude.data ) );
+// 	baseArgs.add( tprintf( "-isystem%s", clangState->winSDK.umInclude.data ) );
+// 	baseArgs.add( tprintf( "-isystem%s", clangState->winSDK.sharedInclude.data ) );
+// #endif
 
 	// Additional Includes
 	For ( u32, includeIndex, 0, additionalIncludesCount ) {
@@ -690,7 +788,7 @@ void CreateCompilerBackend_GCC( compilerBackend_t *outBackend ) {
 		.Init										= GCC_Init,
 		.Shutdown									= Clang_Shutdown,
 		.CompileSourceFile							= Clang_CompileSourceFile,
-		.LinkIntermediateFiles						= Clang_LinkIntermediateFiles,
+		.LinkIntermediateFiles						= GCC_LinkIntermediateFiles,
 		.GetCompilationCommandArchetype				= Clang_GetCompilationCommandArchetype,
 		.GetIncludeDependenciesFromSourceFileBuild	= Clang_GetIncludeDependenciesFromSourceFileBuild,
 		.GetCompilerPath							= Clang_GetCompilerPath,

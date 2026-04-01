@@ -84,12 +84,7 @@ enum buildResult_t {
 	debug_break(); \
 	return 1
 
-// TODO(DM): 31/03/2026: does this mean we want a verbose logging mode in Core?
-#ifdef _DEBUG
-bool8 g_verbose = true;
-#else
 bool8 g_verbose = false;
-#endif
 
 #ifdef __linux__
 #pragma clang diagnostic push
@@ -284,6 +279,7 @@ const char *BuildConfig_GetFullBinaryName( const BuildConfig *config ) {
 	return string_builder_to_string( &sb );
 }
 
+// TODO(DM): 31/03/2026: does this mean we want a verbose logging mode in Core?
 void LogVerbose( const char *fmt, ... ) {
 	if ( !g_verbose ) {
 		return;
@@ -1172,6 +1168,8 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	if ( !Win_GetMSVCInstall( &context.msvcInstall ) ) {
 		QUIT_ERROR();
 	}
+
+	printf( "\n" );
 #endif
 
 	// we need a source file specified at the command line
@@ -1244,11 +1242,11 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 #if defined( _WIN64 )
 				"user32.lib",
 				// MSVCRT is needed for ABI compatibility between builder and the user config DLL on windows
-#if defined( _DEBUG )
-				"msvcrtd.lib",
-#else
-				"msvcrt.lib",
-#endif
+//#if defined( _DEBUG )
+//				"msvcrtd.lib",
+//#else
+//				"msvcrt.lib",
+//#endif
 #endif
 			},
 			.ignoreWarnings = {

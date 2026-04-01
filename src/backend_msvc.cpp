@@ -56,13 +56,7 @@ struct msvcState_t {
 
 //================================================================
 
-// TODO(DM): 20/07/2025: do we want to ignore this warning via the build script?
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wswitch"
-
 static const char *LanguageVersionToCompilerArg( const LanguageVersion languageVersion ) {
-	assert( languageVersion != LANGUAGE_VERSION_UNSET );
-
 	switch ( languageVersion ) {
 		case LANGUAGE_VERSION_C89:		return "/std:c89";
 		case LANGUAGE_VERSION_C99:		return "/std:c99";
@@ -76,10 +70,10 @@ static const char *LanguageVersionToCompilerArg( const LanguageVersion languageV
 		case LANGUAGE_VERSION_CPP23:	return "/std:c++23";
 	}
 
+	assert( false && "Bad LanguageVersion passed.\n" );
+
 	return NULL;
 }
-
-#pragma clang diagnostic pop
 
 static const char *OptimizationLevelToCompilerArg( const OptimizationLevel level ) {
 	switch ( level ) {
@@ -88,6 +82,10 @@ static const char *OptimizationLevelToCompilerArg( const OptimizationLevel level
 		case OPTIMIZATION_LEVEL_O2:	return "/O2";
 		case OPTIMIZATION_LEVEL_O3:	return "/O2";	// DM!!! 22/07/2025: whats the real answer here?
 	}
+
+	assert( false && "Bad OptimizationLevel passed.\n" );
+
+	return NULL;
 }
 
 //================================================================

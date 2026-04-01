@@ -30,7 +30,7 @@ SOFTWARE.
 
 #include "../include/builder.h"
 
-// TODO(DM): 01/04/2026: we only need this because buildContext_t needs windowsSDK_t and msvcInstall_t
+// TODO(DM): 01/04/2026: we only need this is because buildContext_t needs windowsSDK_t and msvcInstall_t
 // can we keep those there without needing this include to do it? header files shouldn't include other header files (unless it's core_types.h or something like that)!
 #include "win_support.h"
 
@@ -129,7 +129,6 @@ extern bool8	g_verbose;
 // shared entry point
 // used in the actual builder program
 // also used by tests so they dont have to start a separate subprocess to build
-// TODO(DM): 04/02/2026: do args want to be const?
 int			BuilderMain( const int firstArg, int argc, const char * const * argv );
 
 void		LogVerbose( const char *fmt, ... );

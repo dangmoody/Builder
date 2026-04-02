@@ -31,7 +31,11 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions* options, CommandLineArg
 		program.additionalLibs = { ":test_static_lib.a" };
 #endif
 	} else {
-		program.additionalLibs = { "test_static_lib.lib" };
+#ifdef _WIN32
+		program.additionalLibs = { "test_static_lib" };
+#else
+		program.additionalLibs = { ":test_static_lib.a" };
+#endif
 	}
 
 	// only need to add program config

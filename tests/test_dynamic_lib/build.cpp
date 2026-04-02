@@ -37,7 +37,11 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArg
 	if ( HasCommandLineArg( args, "--gcc" ) ) {
 		program.additionalLibs = { "test_dynamic_lib" };
 	} else {
+#ifdef _WIN32
 		program.additionalLibs = { "test_dynamic_lib.lib" };
+#else
+		program.additionalLibs = { "test_dynamic_lib" };
+#endif
 	}
 
 	// only need to add program config

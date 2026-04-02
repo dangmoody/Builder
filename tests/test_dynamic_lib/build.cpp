@@ -29,7 +29,11 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArg
 		.sourceFiles		= { "program/*.cpp" },
 		.additionalIncludes	= { "lib" },
 		.additionalLibPaths	= { "bin" },
+#ifdef _WIN32
 		.additionalLibs		= { "test_dynamic_lib" },
+#else
+		.additionalLibs		= { ":test_dynamic_lib" },
+#endif
 #ifdef __linux__
 		.ignoreWarnings		= { "-fPIC" },
 #endif

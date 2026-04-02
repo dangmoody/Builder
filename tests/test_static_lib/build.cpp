@@ -21,7 +21,11 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions* options, CommandLineArg
 		.sourceFiles		= { "program/program.cpp" },
 		.additionalIncludes	= { "lib" },
 		.additionalLibPaths	= { "bin" },
+#ifdef _WIN32
 		.additionalLibs		= { "test_static_lib" },
+#else
+		.additionalLibs		= { ":test_static_lib" },
+#endif
 	};
 
 	// only need to add program config

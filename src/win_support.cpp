@@ -86,14 +86,14 @@ static const char *FindRegistryValueFromKey( const HKEY key, const char *valueNa
 }
 
 static int CompareWindowsSDKVersions( const void *a, const void *b ) {
-	const windowsSDKVersion_t *av = cast( const windowsSDKVersion_t *, a );
-	const windowsSDKVersion_t *bv = cast( const windowsSDKVersion_t *, b );
+	const windowsSDKVersion_t *versionA = cast( const windowsSDKVersion_t *, a );
+	const windowsSDKVersion_t *versionB = cast( const windowsSDKVersion_t *, b );
 
-	if ( av->v0 != bv->v0 ) return bv->v0 - av->v0;
-	if ( av->v1 != bv->v1 ) return bv->v1 - av->v1;
-	if ( av->v2 != bv->v2 ) return bv->v2 - av->v2;
+	if ( versionA->v0 != versionB->v0 ) return versionB->v0 - versionA->v0;
+	if ( versionA->v1 != versionB->v1 ) return versionB->v1 - versionA->v1;
+	if ( versionA->v2 != versionB->v2 ) return versionB->v2 - versionA->v2;
 
-	return bv->v3 - av->v3;
+	return versionB->v3 - versionA->v3;
 }
 
 bool8 Win_GetWindowsSDK( windowsSDK_t *outSDK ) {
@@ -195,28 +195,41 @@ bool8 Win_GetWindowsSDK( windowsSDK_t *outSDK ) {
 
 //================================================================
 
+struct foundMSVCInstallData_t {
+	const char					*rootFolder;
+	std::vector<msvcInstall_t>	*installs;
+};
 
-static void OnMSVCVersionFound( const FileInfo *fileInfo, void *userData ) {
+static void OnMSVCInstallFound( const FileInfo *fileInfo, void *userData ) {
 	if ( !fileInfo->is_directory ) {
 		return;
 	}
 
-	Array<msvcVersion_t> *msvcVersions = cast( Array<msvcVersion_t> *, userData );
+	foundMSVCInstallData_t *data = cast( foundMSVCInstallData_t *, userData );
 
-	msvcVersion_t version = {};
-	sscanf( fileInfo->filename, "%d.%d.%d", &version.v0, &version.v1, &version.v2 );
+	msvcInstall_t install = {};
+	sscanf( fileInfo->filename, "%d.%d.%d", &install.version.v0, &install.version.v1, &install.version.v2 );
 
-	msvcVersions->add( version );
+	string_printf( &install.rootFolder,  "%s\\%s", data->rootFolder, fileInfo->filename );
+	string_printf( &install.includePath, "%s\\include", install.rootFolder.data );
+	string_printf( &install.libPath,     "%s\\lib\\x64", install.rootFolder.data );
+
+	LogVerbose( "Found MSVC installation located at: \"%s\"\n", install.rootFolder.data );
+
+	data->installs->push_back( install );
 }
 
-static int CompareMSVCVersions( const void *a, const void *b ) {
-	const msvcVersion_t *av = cast( const msvcVersion_t *, a );
-	const msvcVersion_t *bv = cast( const msvcVersion_t *, b );
+static int CompareMSVCInstallVersions( const void *a, const void *b ) {
+	const msvcInstall_t *installA = cast( const msvcInstall_t*, a );
+	const msvcInstall_t *installB = cast( const msvcInstall_t*, b );
 
-	if ( av->v0 != bv->v0 ) return bv->v0 - av->v0;
-	if ( av->v1 != bv->v1 ) return bv->v1 - av->v1;
+	const msvcVersion_t *versionA = &installA->version;
+	const msvcVersion_t *versionB = &installB->version;
 
-	return bv->v2 - av->v2;
+	if ( versionA->v0 != versionB->v0 ) return versionB->v0 - versionA->v0;
+	if ( versionA->v1 != versionB->v1 ) return versionB->v1 - versionA->v1;
+
+	return versionB->v2 - versionA->v2;
 }
 
 static bool8 MSVCNotInstalled() {
@@ -275,7 +288,7 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 	defer( instances->Release() );
 
 	const char *msvcRootFolder;
-	Array<msvcVersion_t> foundMSVCVersions;
+	std::vector<msvcInstall_t> foundMSVCInstalls;
 
 	ULONG foundInstance = 0;
 	ISetupInstance *instance = NULL;
@@ -320,7 +333,12 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 
 		msvcRootFolder = tprintf( "%s\\VC\\Tools\\MSVC", visualStudioInstallationPath );
 
-		if ( !file_get_all_files_in_folder( msvcRootFolder, false, true, OnMSVCVersionFound, &foundMSVCVersions ) ) {
+		foundMSVCInstallData_t data = {
+			.rootFolder	= msvcRootFolder,
+			.installs	= &foundMSVCInstalls
+		};
+
+		if ( !file_get_all_files_in_folder( msvcRootFolder, false, true, OnMSVCInstallFound, &data ) ) {
 			error( "Failed to query for all MSVC installation folders.  Error code: " ERROR_CODE_FORMAT "\n", get_last_error_code() );
 			return false;
 		}
@@ -331,17 +349,17 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 	}
 
 	// newest version first
-	qsort( foundMSVCVersions.data, foundMSVCVersions.count, sizeof( msvcVersion_t ), CompareMSVCVersions );
+	qsort( foundMSVCInstalls.data(), foundMSVCInstalls.size(), sizeof( msvcInstall_t ), CompareMSVCInstallVersions );
 
 	// if no matching version is found then just use the newest version
 	u32 useVersionIndex = 0;
 	bool8 found = false;
 
-	For ( u32, versionIndex, 0, foundMSVCVersions.count ) {
-		msvcVersion_t *version = &foundMSVCVersions[versionIndex];
+	For ( u32, versionIndex, 0, foundMSVCInstalls.size() ) {
+		msvcInstall_t *install = &foundMSVCInstalls[versionIndex];
 
-		if ( !folder_exists( tprintf( "%s\\%d.%d.%d\\include", msvcRootFolder, version->v0, version->v1, version->v2 ) ) ) continue;
-		if ( !folder_exists( tprintf( "%s\\%d.%d.%d\\lib\\x64", msvcRootFolder, version->v0, version->v1, version->v2 ) ) ) continue;
+		if ( !folder_exists( install->includePath.data ) ) continue;
+		if ( !folder_exists( install->libPath.data ) ) continue;
 
 		useVersionIndex = versionIndex;
 		found = true;
@@ -353,15 +371,9 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 		return MSVCNotInstalled();
 	}
 
-	outInstall->version = foundMSVCVersions[useVersionIndex];
+	*outInstall = foundMSVCInstalls[useVersionIndex];
 
-	const char *versionStr = tprintf( "%d.%d.%d", outInstall->version.v0, outInstall->version.v1, outInstall->version.v2 );
-
-	string_printf( &outInstall->rootFolder, "%s\\%s", msvcRootFolder, versionStr );
-	string_printf( &outInstall->includePath, "%s\\include", outInstall->rootFolder.data );
-	string_printf( &outInstall->libPath, "%s\\lib\\x64", outInstall->rootFolder.data );
-
-	printf( "Using latest valid MSVC version that was found, which was: %s\n", versionStr );
+	printf( "Using latest valid MSVC version that was found, which was: %d.%d.%d\n", outInstall->version.v0, outInstall->version.v1, outInstall->version.v2 );
 
 	LogVerbose(
 		"Using MSVC with the following paths:\n"

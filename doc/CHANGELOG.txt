@@ -1,3 +1,12 @@
+v0.11.2, 03/04/2026:
+
+* Windows:
+	* Fixed Builder selecting an older MSVC installation over a newer one when multiple Visual Studio installations are present.
+		* When enumerating installations, Builder was validating each version's include and lib paths against whichever installation happened to be enumerated last, rather than the one the version actually belonged to.
+		* This caused newer versions (e.g. from VS 2022) to be skipped and an older one (e.g. VS 2019 Build Tools) to be used instead.
+
+----------------------------------------------------------------
+
 v0.11.1, 02/04/2026:
 
 * Windows:

@@ -394,7 +394,7 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 #endif
 
 	For ( u32, libIndex, 0, config->additionalLibs.size() ) {
-		args.add( config->additionalLibs[libIndex].c_str() );
+		args.add( tprintf( "%s%s", config->additionalLibs[libIndex].c_str(), GetFileExtensionFromBinaryType( BINARY_TYPE_STATIC_LIBRARY ) ) );
 	}
 
 	For ( u32, libIndex, 0, config->additionalLinkerArguments.size() ) {
@@ -441,7 +441,7 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 #endif
 
 		For ( u32, libIndex, 0, config->additionalLibs.size() ) {
-			args.add( tprintf( "-l%s", config->additionalLibs[libIndex].c_str() ) );
+			args.add( tprintf( "-l%s%s", config->additionalLibs[libIndex].c_str(), GetFileExtensionFromBinaryType( BINARY_TYPE_STATIC_LIBRARY ) ) );
 		}
 
 		For ( u32, libIndex, 0, config->additionalLinkerArguments.size() ) {

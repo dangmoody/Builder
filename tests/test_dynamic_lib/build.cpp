@@ -29,20 +29,11 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArg
 		.sourceFiles		= { "program/*.cpp" },
 		.additionalIncludes	= { "lib" },
 		.additionalLibPaths	= { "bin" },
+		.additionalLibs		= { "test_dynamic_lib" },
 #ifdef __linux__
 		.ignoreWarnings		= { "-fPIC" },
 #endif
 	};
-
-	if ( HasCommandLineArg( args, "--gcc" ) ) {
-		program.additionalLibs = { "test_dynamic_lib" };
-	} else {
-#ifdef _WIN32
-		program.additionalLibs = { "test_dynamic_lib.lib" };
-#else
-		program.additionalLibs = { "test_dynamic_lib" };
-#endif
-	}
 
 	// only need to add program config
 	// program depends on library, so library will get added automatically when adding program

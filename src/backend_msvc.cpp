@@ -269,7 +269,7 @@ static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t *backend, const Array
 	}
 
 	For ( u32, libIndex, 0, config->additionalLibs.size() ) {
-		args.add( config->additionalLibs[libIndex].c_str() );
+		args.add( tprintf( "%s%s", config->additionalLibs[libIndex].c_str(), GetFileExtensionFromBinaryType( BINARY_TYPE_STATIC_LIBRARY ) ) );
 	}
 
 	For ( u32, libIndex, 0, config->additionalLinkerArguments.size() ) {

@@ -21,22 +21,8 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions* options, CommandLineArg
 		.sourceFiles		= { "program/program.cpp" },
 		.additionalIncludes	= { "lib" },
 		.additionalLibPaths	= { "bin" },
+		.additionalLibs		= { "test_static_lib" },
 	};
-
-	// TODO(DM): 07/10/2025: does this mean we want build scripts to ignore file extensions?
-	if ( HasCommandLineArg( args, "--gcc" ) ) {
-#ifdef _WIN32
-		program.additionalLibs = { "test_static_lib" };
-#else
-		program.additionalLibs = { ":test_static_lib.a" };
-#endif
-	} else {
-#ifdef _WIN32
-		program.additionalLibs = { "test_static_lib.lib" };
-#else
-		program.additionalLibs = { ":test_static_lib.a" };
-#endif
-	}
 
 	// only need to add program config
 	// program depends on library, so library will get added automatically when adding program

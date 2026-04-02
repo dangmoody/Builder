@@ -1240,12 +1240,11 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 			},
 			.additionalLibs = {
 #if defined( _WIN64 )
-				"user32.lib",
-				// MSVCRT is needed for ABI compatibility between builder and the user config DLL on windows
+				"user32",
 #if defined( _DEBUG )
-				"msvcprtd.lib",
+				"msvcprtd",
 #else
-				"msvcprt.lib",
+				"msvcprt",
 #endif
 #endif
 			},

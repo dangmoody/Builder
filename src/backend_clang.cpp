@@ -531,7 +531,7 @@ static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const Array<
 // #endif
 
 		For ( u32, libIndex, 0, config->additionalLibs.size() ) {
-			args.add( tprintf( "-l%s", config->additionalLibs[libIndex].c_str() ) );
+			args.add( tprintf( "-l%s%s", config->additionalLibs[libIndex].c_str(), GetFileExtensionFromBinaryType( BINARY_TYPE_STATIC_LIBRARY ) ) );
 		}
 
 		For ( u32, libIndex, 0, config->additionalLinkerArguments.size() ) {

@@ -8,11 +8,7 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArg
 	BuildConfig library = {
 		.name			= "library",
 		.binaryFolder	= "bin",
-#if defined( _WIN32 )
 		.binaryName		= "test_dynamic_lib",
-#elif defined( __linux__ )
-		.binaryName		= "libtest_dynamic_lib",
-#endif
 		.binaryType		= BINARY_TYPE_DYNAMIC_LIBRARY,
 		.sourceFiles	= { "lib/*.cpp" },
 		.defines		= { "DYNAMIC_LIBRARY_EXPORTS" },
@@ -32,7 +28,7 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArg
 #ifdef _WIN32
 		.additionalLibs		= { "test_dynamic_lib" },
 #else
-		.additionalLibs		= { ":test_dynamic_lib" },
+		.additionalLibs		= { ":test_dynamic_lib.so" },
 #endif
 #ifdef __linux__
 		.ignoreWarnings		= { "-fPIC" },

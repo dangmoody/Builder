@@ -24,7 +24,7 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions* options, CommandLineArg
 #ifdef _WIN32
 		.additionalLibs		= { "test_static_lib" },
 #else
-		.additionalLibs		= { ":test_static_lib" },
+		.additionalLibs		= { ":test_static_lib.a" },
 #endif
 	};
 

@@ -320,6 +320,19 @@ static bool8 Clang_CompileSourceFile(
 	return exitCode == 0;
 }
 
+static void Clang_GCC_AddAdditionalLibraries( Array<const char *> &args, BuildConfig *config ) {
+	// on windows we already know the extension is going to be .lib, so we can add that ourselves
+	// on linux the file extension could be either .a or .so depending on whether the library we are linking to is a static or dynamic library, respectively
+	// so on linux make the user specify the file extension themselves
+	For ( u32, libIndex, 0, config->additionalLibs.size() ) {
+#ifdef _WIN32
+		args.add( tprintf( "-l%s%s", config->additionalLibs[libIndex].c_str(), GetFileExtensionFromBinaryType( BINARY_TYPE_STATIC_LIBRARY ) ) );
+#else
+		args.add( tprintf( "-l%s", config->additionalLibs[libIndex].c_str() ) );
+#endif
+	}
+}
+
 static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Array<const char *> &intermediateFiles, BuildConfig *config ) {
 	assert( backend );
 	assert( config );
@@ -440,9 +453,7 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		args.add( tprintf( "-L%s", clangState->winSDK.umLibPath.data ) );
 #endif
 
-		For ( u32, libIndex, 0, config->additionalLibs.size() ) {
-			args.add( tprintf( "-l%s%s", config->additionalLibs[libIndex].c_str(), GetFileExtensionFromBinaryType( BINARY_TYPE_STATIC_LIBRARY ) ) );
-		}
+		Clang_GCC_AddAdditionalLibraries( args, config );
 
 		For ( u32, libIndex, 0, config->additionalLinkerArguments.size() ) {
 			args.add( config->additionalLinkerArguments[libIndex].c_str() );
@@ -530,9 +541,7 @@ static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const Array<
 // 		args.add( tprintf( "-L%s", clangState->winSDK.umLibPath.data ) );
 // #endif
 
-		For ( u32, libIndex, 0, config->additionalLibs.size() ) {
-			args.add( tprintf( "-l%s%s", config->additionalLibs[libIndex].c_str(), GetFileExtensionFromBinaryType( BINARY_TYPE_STATIC_LIBRARY ) ) );
-		}
+		Clang_GCC_AddAdditionalLibraries( args, config );
 
 		For ( u32, libIndex, 0, config->additionalLinkerArguments.size() ) {
 			args.add( config->additionalLinkerArguments[libIndex].c_str() );

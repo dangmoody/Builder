@@ -92,17 +92,22 @@ struct BuildConfig {
 	// Also supports wildcards.
 	std::vector<std::string>	sourceFiles;
 
-	// Additional #defines to set for Clang.
+	// Additional #defines to set for compilation.
+	// The "-D" part isn't needed.  Builder will append that for you.
 	// Example: IS_AWESOME=1.
 	std::vector<std::string>	defines;
 
-	// Additional include paths to set for Clang.
+	// Additional include paths.
 	std::vector<std::string>	additionalIncludes;
 
-	// Additional library paths to set for Clang.
+	// Additional library paths.
+	// On Clang and GCC, Builder will make a "-L" argument for each entry.
+	// On MSVC, Builder will make a "/LIBPATH:" argument for each entry.
 	std::vector<std::string>	additionalLibPaths;
 
-	// Additional libraries to set for Clang.
+	// Additional libraries to link against.
+	// On Clang and GCC, Builder will make a "-l" argument for each entry.
+	// On Windows, the file extension isn't needed.
 	std::vector<std::string>	additionalLibs;
 
 	// The warning/diagnostic groups that you want to enable.

@@ -4,9 +4,9 @@ v0.11.2, 03/04/2026:
 	* Fixed Builder selecting an older MSVC installation over a newer one when multiple Visual Studio installations are present.
 		* When enumerating installations, Builder was validating each version's include and lib paths against whichever installation happened to be enumerated last, rather than the one the version actually belonged to.
 		* This caused newer versions (e.g. from VS 2022) to be skipped and an older one (e.g. VS 2019 Build Tools) to be used instead.
-* BuildConfig::additionalLibs no longer requires file extensions.
-	* Builder now automatically appends the correct file extension for the current platform (.lib on Windows, .a on Linux).
-	* NOTE: If you were already specifying extensions in additionalLibs (e.g. "mylib.lib"), you must remove them or your build will break.
+* BuildConfig::additionalLibs no longer requires file extensions on Windows.
+	* Builder now automatically appends .lib to all entries in additionalLibs when building on Windows.
+	* NOTE: If you were already specifying .lib extensions in additionalLibs, you must remove them or your build will break.
 
 ----------------------------------------------------------------
 

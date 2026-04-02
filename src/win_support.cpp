@@ -363,8 +363,15 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 
 	printf( "Using latest valid MSVC version that was found, which was: %s\n", versionStr );
 
-	LogVerbose( "Using MSVC include path: %s\n", outInstall->includePath.data );
-	LogVerbose( "Using MSVC lib path: %s\n", outInstall->libPath.data );
+	LogVerbose(
+		"Using MSVC with the following paths:\n"
+		" - Root folder : \"%s\"\n"
+		" - Include path: \"%s\"\n"
+		" - Lib path    : \"%s\"\n"
+		, outInstall->rootFolder.data
+		, outInstall->includePath.data
+		, outInstall->libPath.data
+	);
 
 	return true;
 }

@@ -67,7 +67,7 @@ SOFTWARE.
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
 	BUILDER_VERSION_MINOR	= 11,
-	BUILDER_VERSION_PATCH	= 1,
+	BUILDER_VERSION_PATCH	= 2,
 };
 
 enum buildResult_t {
@@ -1318,9 +1318,11 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		float64 setBuilderOptionsTimeStart = time_ms();
 
 		if ( setBuilderOptionsFunc ) {
-			LogVerbose( "%s override function found.  Running...\n", SET_BUILDER_OPTIONS_FUNC_NAME );
+			printf( "%s override function found.  Running...\n", SET_BUILDER_OPTIONS_FUNC_NAME );
 
 			setBuilderOptionsFunc( &options, &args );
+
+			printf( "%s override function Finished.\n", SET_BUILDER_OPTIONS_FUNC_NAME );
 		} else {
 			LogVerbose( "No %s override function was found.\n", SET_BUILDER_OPTIONS_FUNC_NAME );
 		}

@@ -1,10 +1,13 @@
-v0.11.1, <RELEASE DATE HERE>:
+v0.11.1, 02/04/2026:
 
 * Windows:
-	* Builder now includes Windows SDK include paths by default in Clang builds on Windows.
-	* If a valid Windows SDK or MSVC installation can't be found, Builder will log an error saying this and the build will fail.
-		* This is necessary, because Clang actually relies on the Windows SDK and MSVC when compiling on Windows (yeah, I know...).
-	* Builder now logs what version of the Windows SDK it's using.
+	* Fixed a crash that could happen if you had multiple Visual Studio installations.
+		* When using Builder's Clang backend, Clang was being called as the linker driver, which caused it to auto-detect your Visual Studio installations and try to invoke their link.exe.
+		* If that link.exe wasn't on your PATH, the build would fail with a cryptic "program not executable" error.
+		* Builder now calls link.exe directly itself, so it is no longer affected by whatever Clang decides to detect on your machine.
+	* If MSVC isn't installed on your machine, Builder now shows a clear error telling you to install it via the Visual Studio Installer or the MS Build Tools, rather than showing a raw error code and moving on.
+		* HRESULT codes from Windows COM calls are now also shown in hex, as God intended.
+	* Windows SDK and MSVC installation queries are now deferred until after command line arguments are parsed, so -v/--verbose is correctly respected during those steps.
 * Put a bunch more information into verbose logging (-v, --verbose):
 	* User feedback highlighted that this had gone ignored for a while.
 	* From now on, verbose mode will start to log everything and the kitchen sink.

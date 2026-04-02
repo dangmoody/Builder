@@ -32,7 +32,7 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions* options, CommandLineArg
 #endif
 	} else {
 #ifdef _WIN32
-		program.additionalLibs = { "test_static_lib" };
+		program.additionalLibs = { "test_static_lib.lib" };
 #else
 		program.additionalLibs = { ":test_static_lib.a" };
 #endif

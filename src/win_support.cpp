@@ -352,7 +352,6 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 	// newest version first
 	qsort( foundMSVCInstalls.data(), foundMSVCInstalls.size(), sizeof( msvcInstall_t ), CompareMSVCInstallVersions );
 
-	// if no matching version is found then just use the newest version
 	u32 useVersionIndex = 0;
 	bool8 found = false;
 

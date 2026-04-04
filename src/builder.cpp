@@ -67,7 +67,7 @@ SOFTWARE.
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
 	BUILDER_VERSION_MINOR	= 11,
-	BUILDER_VERSION_PATCH	= 2,
+	BUILDER_VERSION_PATCH	= 3,
 };
 
 enum buildResult_t {
@@ -1326,7 +1326,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 			LogVerbose( "No %s override function was found.\n\n", SET_BUILDER_OPTIONS_FUNC_NAME );
 		}
 
-		context.forceRebuild = options.forceRebuild;
+		context.forceRebuild |= options.forceRebuild;
 		context.consolidateCompilerArgs = options.consolidateCompilerArgs;
 
 		setBuilderOptionsTimeMS = time_ms() - setBuilderOptionsTimeStart;

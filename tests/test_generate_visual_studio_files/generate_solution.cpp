@@ -31,7 +31,7 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArg
 		.binaryName			= "the-app",
 		.additionalIncludes	= { "src" },
 #if defined( _WIN32 )
-		.additionalLibs		= { "the-library.lib" },
+		.additionalLibs		= { "the-library" },
 #else
 		.additionalLibs		= { "libthe-library" },
 #endif

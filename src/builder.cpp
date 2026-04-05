@@ -1294,7 +1294,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 			} //break;
 
 			case BUILD_RESULT_SKIPPED: {
-				printf( "Skipped!\n" );
+				printf( "Skipped!\n\n" );
 		 	} break;
 		}
 

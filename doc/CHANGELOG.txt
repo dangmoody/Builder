@@ -1,6 +1,8 @@
 v0.11.3, <RELEASE DATE HERE>:
 
 * Fixed a bug where modifying your build source file would not trigger a full rebuild of the config (and its dependencies).
+* Fixed a bug where the --verbose command line argument was not working.
+* ShowUsage() now mentions custom command line arguments and how to use them.
 
 ----------------------------------------------------------------
 

@@ -379,6 +379,10 @@ static s32 ShowUsage( const s32 exitCode ) {
 		"        Specifies that the build is being done from Visual Studio.\n"
 		"        So even if BuilderOptions::generateSolution is set to true in the build settings source file we shouldn't generate Visual Studio project files and instead should just do a build using the specified config.\n"
 		"\n"
+		"    [custom arguments] (optional):\n"
+		"        Any arguments not listed here are treated as custom arguments and passed through to your build source file via the CommandLineArgs parameter in " SET_BUILDER_OPTIONS_FUNC_NAME ".\n"
+		"        Use HasCommandLineArg( CommandLineArgs *, const char * ) to query for them.\n"
+		"\n"
 	);
 
 	return exitCode;
@@ -1085,7 +1089,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 			return ShowUsage( 0 );
 		}
 
-		if ( string_equals( arg, ARG_VERBOSE_SHORT ) || string_equals( arg, ARG_HELP_LONG ) ) {
+		if ( string_equals( arg, ARG_VERBOSE_SHORT ) || string_equals( arg, ARG_VERBOSE_LONG ) ) {
 			g_verbose = true;
 			continue;
 		}

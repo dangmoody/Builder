@@ -1,4 +1,4 @@
-v0.11.3, 11/04/2026:
+v0.11.3, 12/04/2026:
 
 * Fixed a bug where modifying your build source file would not trigger a full rebuild of the config (and its dependencies).
 * Fixed a bug where the --verbose command line argument was not working.

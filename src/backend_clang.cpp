@@ -337,7 +337,7 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		1 + // /DEBUG
 		1 + // /OUT:
 		1 + // kernel32.lib
-		3 + // CRT libs (msvcrt, vcruntime, ucrt)
+		4 + // CRT libs (e.g. msvcrt, msvcprt, vcruntime, ucrt when -D_DLL and NOT -D_DEBUG) 
 		3 + // /LIBPATH: ucrt, um, msvc
 		intermediateFiles.count +
 		config->additionalLibPaths.size() +
@@ -383,15 +383,66 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 
 	args.add( "kernel32.lib" );
 
-#if defined( _DEBUG )
-	args.add( "msvcrtd.lib" );
-	args.add( "vcruntimed.lib" );
-	args.add( "ucrtd.lib" );
-#else
-	args.add( "msvcrt.lib" );
-	args.add( "vcruntime.lib" );
-	args.add( "ucrt.lib" );
-#endif
+	bool8 isUserConfigBuild = false;
+	bool8 debugBuild = false;
+	bool8 hasDllRuntime = false;
+	For ( u32, i, 0, config->defines.size() ) {
+		if ( config->defines[i] == "BUILDER_DOING_USER_CONFIG_BUILD" ) {
+			isUserConfigBuild = true;
+		}
+		if ( config->defines[i] == "_DEBUG" ) {
+			 debugBuild = config->binaryType != BINARY_TYPE_STATIC_LIBRARY; 
+		}
+		if ( config->defines[i] == "_DLL" ) {
+			hasDllRuntime = true;
+		}
+	}
+
+	if ( !isUserConfigBuild ) {
+
+		if( debugBuild ) {
+			if ( hasDllRuntime ) {
+			args.add( "msvcrtd.lib" );
+			args.add( "msvcprtd.lib" );
+			args.add( "vcruntimed.lib" );
+			args.add( "ucrtd.lib" );
+			}
+			else {
+				args.add( "libcmtd.lib" );
+				args.add( "libcpmtd.lib" );
+				args.add( "libvcruntimed.lib" );
+				args.add( "libucrtd.lib" );
+			}
+		} else {
+			if ( hasDllRuntime ) {
+				args.add( "msvcrt.lib" );
+				args.add( "msvcprt.lib" );
+				args.add( "vcruntime.lib" );
+				args.add( "ucrt.lib" );
+			}
+			else {
+				args.add( "libcmt.lib" );
+				args.add( "libcpmt.lib" );
+				args.add( "libvcruntime.lib" );
+				args.add( "libucrt.lib" );
+			}
+		}
+	}
+	else
+	{
+		// libraries for user config
+		#if defined( _DEBUG )
+			args.add( "msvcrtd.lib" );
+			args.add( "msvcprtd.lib" );
+			args.add( "vcruntimed.lib" );
+			args.add( "ucrtd.lib" );
+		#else
+			args.add( "msvcrt.lib" );
+			args.add( "msvcprt.lib" );
+			args.add( "vcruntime.lib" );
+			args.add( "ucrt.lib" );
+		#endif
+	}
 
 	For ( u32, libIndex, 0, config->additionalLibs.size() ) {
 		args.add( tprintf( "%s%s", config->additionalLibs[libIndex].c_str(), GetFileExtensionFromBinaryType( BINARY_TYPE_STATIC_LIBRARY ) ) );

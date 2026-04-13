@@ -66,18 +66,18 @@ set includes=-Isrc\\core\\include -Iclang\\include
 
 set libPaths=-Lclang\\lib
 
-set libraries=-luser32.lib -lShlwapi.lib -lDbgHelp.lib -lOle32.lib -lAdvapi32.lib -lOleAut32.lib -llibclang.lib
+set libraries=-luser32.lib -lShlwapi.lib -lDbgHelp.lib -lOle32.lib -lAdvapi32.lib -lOleAut32.lib -llibclang.lib -lkernel32.lib
 if /I [%config%] == [debug] (
-	set libraries=!libraries! -lmsvcrtd.lib
+	set libraries=!libraries! -lmsvcrtd.lib -lmsvcprtd.lib -lvcruntimed.lib -lucrtd.lib
 ) else (
-	set libraries=!libraries! -lmsvcrt.lib
+	set libraries=!libraries! -lmsvcrt.lib -lmsvcprt.lib -lvcruntime.lib -lucrt.lib
 )
 
 set warningLevels=-Werror -Wall -Wextra -Weverything -Wpedantic
 
 set ignoreWarnings=-Wno-newline-eof -Wno-format-nonliteral -Wno-gnu-zero-variadic-macro-arguments -Wno-declaration-after-statement -Wno-unsafe-buffer-usage -Wno-zero-as-null-pointer-constant -Wno-c++98-compat-pedantic -Wno-old-style-cast -Wno-missing-field-initializers -Wno-switch-default -Wno-covered-switch-default -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-cast-align -Wno-double-promotion -Wno-nontrivial-memcall -Wno-documentation-unknown-command -Wno-switch
 
-set args=clang\\bin\\clang -std=c++20 -o %binFolder%\\%programName%.exe %symbols% %optimisation% %sourceFiles% !defines! %includes% %libPaths% !libraries! %warningLevels% %ignoreWarnings%
+set args=clang\\bin\\clang -Xlinker /NODEFAULTLIB -std=c++20 -o %binFolder%\\%programName%.exe %symbols% %optimisation% %sourceFiles% !defines! %includes% %libPaths% !libraries! %warningLevels% %ignoreWarnings%
 echo %args%
 %args%
 

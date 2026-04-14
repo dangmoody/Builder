@@ -86,10 +86,6 @@ enum buildResult_t {
 
 bool8 g_verbose = false;
 
-#ifdef __linux__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wpadded"
-#endif
 
 u64 GetLastFileWriteTime( const char *filename ) {
 	u64 lastWriteTime = 0;
@@ -1707,6 +1703,3 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	return 0;
 }
 
-#ifdef __linux__
-#pragma clang diagnostic pop
-#endif //__linux__

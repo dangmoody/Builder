@@ -1,0 +1,24 @@
+// Project tasks configuration. See https://zed.dev/docs/tasks for documentation.
+//
+// Example:
+[
+	{
+		"label": "Build debug",
+		"command": "./scripts/build.sh debug",
+	},
+
+	{
+		"label": "Build release",
+		"command": "./scripts/build.sh release",
+	},
+
+	{
+		"label": "Build tests debug",
+		"command": "./scripts/build_tests.sh debug",
+	},
+
+	{
+		"label": "Build tests release",
+		"command": "./scripts/build_tests.sh release",
+	},
+]

@@ -1,0 +1,82 @@
+// Project-local debug tasks
+//
+// For more documentation on how to configure debug tasks,
+// see: https://zed.dev/docs/debugger
+[
+	{
+		"label": "Builder Tests - Debug",
+		"program": "${ZED_WORKTREE_ROOT}/bin/builder_tests_debug",
+		"cwd": "${ZED_WORKTREE_ROOT}/tests",
+		"request": "launch",
+		"adapter": "CodeLLDB",
+	},
+
+	{
+		"label": "Builder - Debug - test_basic",
+		"program": "${ZED_WORKTREE_ROOT}/bin/builder_debug",
+		"args": ["tests/test_basic/test_basic.cpp"],
+		"request": "launch",
+		"adapter": "CodeLLDB",
+	},
+
+	{
+		"label": "Builder - Debug - test_set_builder_options",
+		"program": "${ZED_WORKTREE_ROOT}/bin/builder_debug",
+		"args": [
+			"tests/test_set_builder_options/test_set_builder_options.cpp",
+			"--config=debug",
+		],
+		"request": "launch",
+		"adapter": "CodeLLDB",
+	},
+
+	{
+		"label": "Builder - Debug - test_multiple_source_files (Clang)",
+		"program": "${ZED_WORKTREE_ROOT}/bin/builder_debug",
+		"args": ["tests/test_multiple_source_files/build_clang.cpp"],
+		"request": "launch",
+		"adapter": "CodeLLDB",
+	},
+
+	{
+		"label": "Builder - Debug - test_multiple_source_files (MSVC)",
+		"program": "${ZED_WORKTREE_ROOT}/bin/builder_debug",
+		"args": ["tests/test_multiple_source_files/build_msvc.cpp"],
+		"request": "launch",
+		"adapter": "CodeLLDB",
+	},
+
+	{
+		"label": "Builder - Debug - test_static_lib (GCC)",
+		"program": "${ZED_WORKTREE_ROOT}/bin/builder_debug",
+		"args": ["tests/test_static_lib/build_gcc.cpp", "--config=program"],
+		"request": "launch",
+		"adapter": "CodeLLDB",
+	},
+
+	{
+		"label": "Builder - Debug - test_dynamic_lib (Clang)",
+		"program": "${ZED_WORKTREE_ROOT}/bin/builder_debug",
+		"args": ["tests/test_dynamic_lib/build_clang.cpp", "--config=program"],
+		"request": "launch",
+		"adapter": "CodeLLDB",
+	},
+
+	{
+		"label": "Builder - Debug - test_build_config_pre_post_build",
+		"program": "${ZED_WORKTREE_ROOT}/bin/builder_debug",
+		"args": [
+			"tests/test_build_config_pre_post_build/test_build_config_pre_post_build.cpp",
+		],
+		"request": "launch",
+		"adapter": "CodeLLDB",
+	},
+
+	{
+		"label": "Builder - Debug - test_generate_visual_studio_files",
+		"program": "${ZED_WORKTREE_ROOT}/bin/builder_debug",
+		"args": ["tests/test_generate_visual_studio_files/generate_solution.cpp"],
+		"request": "launch",
+		"adapter": "CodeLLDB",
+	},
+]

@@ -68,9 +68,9 @@ set libPaths=-Lclang\\lib
 
 set libraries=-luser32.lib -lShlwapi.lib -lDbgHelp.lib -lOle32.lib -lAdvapi32.lib -lOleAut32.lib -llibclang.lib -lkernel32.lib
 if /I [%config%] == [debug] (
-	set libraries=!libraries! -lmsvcrtd.lib -lmsvcprtd.lib -lvcruntimed.lib -lucrtd.lib
+	set libraries=!libraries! -llibcmtd.lib -llibcpmtd.lib -llibvcruntimed.lib -llibucrtd.lib
 ) else (
-	set libraries=!libraries! -lmsvcrt.lib -lmsvcprt.lib -lvcruntime.lib -lucrt.lib
+	set libraries=!libraries! -llibcmt.lib -llibcpmt.lib -llibvcruntime.lib -llibucrt.lib
 )
 
 set warningLevels=-Werror -Wall -Wextra -Weverything -Wpedantic

@@ -1237,6 +1237,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 #else
 				"NDEBUG",
 #endif
+				"_DLL"
 			},
 			.additionalIncludes = {
 				// add the folder that builder lives in as an additional include path otherwise people have no real way of being able to include it

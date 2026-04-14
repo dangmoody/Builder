@@ -383,13 +383,10 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 
 	args.add( "kernel32.lib" );
 
-	bool8 isUserConfigBuild = false;
+	// these defines are what drive the choice of lib windows std compiles against
 	bool8 debugBuild = false;
 	bool8 hasDllRuntime = false;
 	For ( u32, i, 0, config->defines.size() ) {
-		if ( config->defines[i] == "BUILDER_DOING_USER_CONFIG_BUILD" ) {
-			isUserConfigBuild = true;
-		}
 		if ( config->defines[i] == "_DEBUG" ) {
 			 debugBuild = true; 
 		}
@@ -398,7 +395,8 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		}
 	}
 
-	if ( !isUserConfigBuild && config->binaryType != BINARY_TYPE_STATIC_LIBRARY ) {
+	// static library doesn't pass /NODEFAULTLIB so we don't need to supply it ourselves
+	if ( config->binaryType != BINARY_TYPE_STATIC_LIBRARY ) {
 		if( debugBuild ) {
 			if ( hasDllRuntime ) {
 			args.add( "msvcrtd.lib" );
@@ -426,21 +424,6 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 				args.add( "libucrt.lib" );
 			}
 		}
-	}
-	else if ( config->binaryType != BINARY_TYPE_STATIC_LIBRARY )
-	{
-		// libraries for user config
-		#if defined( _DEBUG )
-			args.add( "msvcrtd.lib" );
-			args.add( "msvcprtd.lib" );
-			args.add( "vcruntimed.lib" );
-			args.add( "ucrtd.lib" );
-		#else
-			args.add( "msvcrt.lib" );
-			args.add( "msvcprt.lib" );
-			args.add( "vcruntime.lib" );
-			args.add( "ucrt.lib" );
-		#endif
 	}
 
 	For ( u32, libIndex, 0, config->additionalLibs.size() ) {

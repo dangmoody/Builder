@@ -253,6 +253,18 @@ TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 } );
 
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
+	.rootDir			= "test_basic_stdlib",
+	.buildSourceFile	= "test_basic_stdlib.cpp",
+	.compilers			= COMPILER_DEFAULT,
+} );
+
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
+	.rootDir			= "test_dynamic_runtime_linking",
+	.buildSourceFile	= "test_dynamic_runtime_linking.cpp",
+	.compilers			= COMPILER_DEFAULT,
+} );
+
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 	.rootDir			= "test_set_builder_options",
 	.buildSourceFile	= "test_set_builder_options.cpp",
 	.config				= "debug",

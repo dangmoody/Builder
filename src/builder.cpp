@@ -388,7 +388,7 @@ static s32 ShowUsage( const s32 exitCode ) {
 	return exitCode;
 }
 
-static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, compilerBackend_t *compilerBackend, bool generateCompilationDatabase ) {
+static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, compilerBackend_t *compilerBackend, const BuilderOptions *options ) {
 	// create binary folder
 	if ( !folder_create_if_it_doesnt_exist( config->binaryFolder.c_str() ) ) {
 		errorCode_t errorCode = get_last_error_code();
@@ -469,6 +469,7 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 		printf( "Compiling:\n" );
 	}
 
+	bool8 generateCompilationDatabase = options && options->generateCompilationDatabase;
 	if ( generateCompilationDatabase ) {
 		context->compilationDatabase.reserve( config->sourceFiles.size() );
 	}
@@ -536,7 +537,7 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 
 		printf( "\nLinking:\n" );
 
-		if ( !compilerBackend->LinkIntermediateFiles( compilerBackend, intermediateFiles, config ) ) {
+		if ( !compilerBackend->LinkIntermediateFiles( compilerBackend, intermediateFiles, config, options ) ) {
 			error( "Linking failed.\n" );
 			return BUILD_RESULT_FAILED;
 		}
@@ -1276,7 +1277,9 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 		userConfigFullBinaryName = BuildConfig_GetFullBinaryName( &userConfigBuildConfig );
 
-		userConfigBuildResult = BuildBinary( &context, &userConfigBuildConfig, &compilerBackend, false );
+		// Within build binary and check against the options checks for its existance, defaulting to false which is what the user config build wants for each option
+		// So just pass through nullptr when calling BuildBinary for the options build and it will work as expected
+		userConfigBuildResult = BuildBinary( &context, &userConfigBuildConfig, &compilerBackend, nullptr );
 
 		switch ( userConfigBuildResult ) {
 			case BUILD_RESULT_SUCCESS: {
@@ -1623,7 +1626,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 			{
 				float64 buildTimeStart = time_ms();
 
-				configBuildResults[configToBuildIndex] = BuildBinary( &context, config, &compilerBackend, options.generateCompilationDatabase );
+				configBuildResults[configToBuildIndex] = BuildBinary( &context, config, &compilerBackend, &options );
 
 				configBuildTimes[configToBuildIndex] = time_ms() - buildTimeStart;
 

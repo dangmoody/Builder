@@ -320,7 +320,7 @@ static bool8 Clang_CompileSourceFile(
 	return exitCode == 0;
 }
 
-static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Array<const char *> &intermediateFiles, BuildConfig *config ) {
+static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Array<const char *> &intermediateFiles, BuildConfig *config, const BuilderOptions *options ) {
 	assert( backend );
 	assert( config );
 
@@ -381,47 +381,49 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		args.add( tprintf( "/LIBPATH:%s", config->additionalLibPaths[libPathIndex].c_str() ) );
 	}
 
-	args.add( "kernel32.lib" );
+	if ( !options || !options->noDefaultLibs ) {
+		args.add( "kernel32.lib" );
 
-	// these defines are what drive the choice of lib windows std compiles against
-	bool8 debugBuild = false;
-	bool8 hasDllRuntime = false;
-	For ( u32, i, 0, config->defines.size() ) {
-		if ( config->defines[i] == "_DEBUG" ) {
-			 debugBuild = true; 
+		// these defines are what drive the choice of lib windows std compiles against
+		bool8 debugBuild = false;
+		bool8 hasDllRuntime = false;
+		For ( u32, i, 0, config->defines.size() ) {
+			if ( config->defines[i] == "_DEBUG" ) {
+				debugBuild = true; 
+			}
+			if ( config->defines[i] == "_DLL" ) {
+				hasDllRuntime = true;
+			}
 		}
-		if ( config->defines[i] == "_DLL" ) {
-			hasDllRuntime = true;
-		}
-	}
 
-	// static library doesn't pass /NODEFAULTLIB so we don't need to supply it ourselves
-	if ( config->binaryType != BINARY_TYPE_STATIC_LIBRARY ) {
-		if( debugBuild ) {
-			if ( hasDllRuntime ) {
-			args.add( "msvcrtd.lib" );
-			args.add( "msvcprtd.lib" );
-			args.add( "vcruntimed.lib" );
-			args.add( "ucrtd.lib" );
-			}
-			else {
-				args.add( "libcmtd.lib" );
-				args.add( "libcpmtd.lib" );
-				args.add( "libvcruntimed.lib" );
-				args.add( "libucrtd.lib" );
-			}
-		} else {
-			if ( hasDllRuntime ) {
-				args.add( "msvcrt.lib" );
-				args.add( "msvcprt.lib" );
-				args.add( "vcruntime.lib" );
-				args.add( "ucrt.lib" );
-			}
-			else {
-				args.add( "libcmt.lib" );
-				args.add( "libcpmt.lib" );
-				args.add( "libvcruntime.lib" );
-				args.add( "libucrt.lib" );
+		// static library doesn't pass /NODEFAULTLIB so we don't need to supply it ourselves
+		if ( config->binaryType != BINARY_TYPE_STATIC_LIBRARY ) {
+			if( debugBuild ) {
+				if ( hasDllRuntime ) {
+				args.add( "msvcrtd.lib" );
+				args.add( "msvcprtd.lib" );
+				args.add( "vcruntimed.lib" );
+				args.add( "ucrtd.lib" );
+				}
+				else {
+					args.add( "libcmtd.lib" );
+					args.add( "libcpmtd.lib" );
+					args.add( "libvcruntimed.lib" );
+					args.add( "libucrtd.lib" );
+				}
+			} else {
+				if ( hasDllRuntime ) {
+					args.add( "msvcrt.lib" );
+					args.add( "msvcprt.lib" );
+					args.add( "vcruntime.lib" );
+					args.add( "ucrt.lib" );
+				}
+				else {
+					args.add( "libcmt.lib" );
+					args.add( "libcpmt.lib" );
+					args.add( "libvcruntime.lib" );
+					args.add( "libucrt.lib" );
+				}
 			}
 		}
 	}
@@ -507,7 +509,7 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 	return exitCode == 0;
 }
 
-static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const Array<const char *> &intermediateFiles, BuildConfig *config ) {
+static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const Array<const char *> &intermediateFiles, BuildConfig *config, const BuilderOptions *options ) {
 	assert( backend );
 	assert( config );
 
@@ -520,6 +522,7 @@ static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const Array<
 		1 + // lld-link
 		1 + // verbose flag
 		1 + // /lib or -shared
+		1 + // -nodefaultlibs
 		1 + // -g
 		1 + // -o
 		1 + // binary name
@@ -553,6 +556,10 @@ static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const Array<
 
 		if ( !config->removeSymbols ) {
 			args.add( "-g" );
+		}
+
+		if ( options && options->noDefaultLibs ) {
+			args.add( "-nodefaultlibs" );
 		}
 
 		if ( g_verbose ) {

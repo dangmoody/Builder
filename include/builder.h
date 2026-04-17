@@ -238,6 +238,32 @@ struct VisualStudioSolution {
 	std::string							path;
 };
 
+struct VSCodeTaskConfig {
+	// The config you want Builder to build through VS Code.
+	BuildConfig					config;
+
+	// Any additional args you want to send to Builder when building this config.
+	std::vector<std::string>	args;
+};
+
+struct VSCodeLaunchConfig {
+	// The config you want to run when you select this launch config in VS Code.
+	BuildConfig					config;
+
+	// When you run this config, what command line arguments do you want to be passed through?
+	std::vector<std::string>	args;
+
+	// You'd never guess, but this sets the "cwd" field in a VS Code launch config.
+	// This defaults to '${workspaceFolder}'
+	std::string					cwd;
+};
+
+struct VSCodeJSONOptions {
+	std::vector<VSCodeTaskConfig>	taskConfigs;
+
+	std::vector<VSCodeLaunchConfig>	launchConfigs;
+};
+
 struct BuilderOptions {
 	// The path to the compiler that you want to build with.
 	// If you want to use MSVC then you can just set this to "cl.exe" or "cl" and set 'compilerVersion' and Builder will figure it out for you.
@@ -259,6 +285,9 @@ struct BuilderOptions {
 	// If you don't use Visual Studio then ignore this.
 	VisualStudioSolution		solution;
 
+	// If 'generateVSCodeJSONFiles' is enabled, Builder will use these settings when filling them in.
+	VSCodeJSONOptions			vsCodeJSONOptions;
+
 	// Set this to true if you want Builder to force-rebuild your program.
 	// All binaries and intermediate files will get rebuilt.
 	// This is really only useful to those who are either using an editor + command line workflow, or just hate incremental builds.
@@ -273,6 +302,9 @@ struct BuilderOptions {
 	// If this is set to true, then a code build will NOT happen.
 	// If you don't use Visual Studio then ignore this.
 	bool						generateSolution;
+
+	// Are you using VS Code and do you want Builder to generate the tasks.json and launch.json files based off your BuildConfigs?
+	bool						generateVSCodeJSONFiles;
 
 	// Do you want to generate a compilation_commands.json for Clang tooling?
 	// If true, the file will be generated IF the build is successful.

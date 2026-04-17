@@ -59,6 +59,7 @@ SOFTWARE.
 struct buildContext_t;
 
 struct Hashmap;
+struct StringBuilder;
 
 enum procFlagBits_t {
 	PROC_FLAG_SHOW_ARGS		= bit( 0 ),
@@ -146,7 +147,11 @@ void		RecordCompilationDatabaseEntry( buildContext_t *buildContext, const char *
 
 s32			RunProc( Array<const char *> *args, Array<const char *> *environmentVariables, const procFlags_t procFlags = 0, String *outStdout = NULL );
 
+bool8		WriteStringBuilderToFile( StringBuilder *stringBuilder, const char *filename );
+
 bool8		GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *options );
+
+bool8		GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options );
 
 inline u64 minull( const u64 x, const u64 y ) {
 	return ( x < y ) ? x : y;

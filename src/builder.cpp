@@ -346,6 +346,21 @@ s32 RunProc( Array<const char *> *args, Array<const char *> *environmentVariable
 	return exitCode;
 }
 
+bool8 WriteStringBuilderToFile( StringBuilder *stringBuilder, const char *filename ) {
+	const char *msg = string_builder_to_string( stringBuilder );
+	const u64 msgLength = strlen( msg );
+	bool8 written = file_write_entire( filename, msg, msgLength );
+
+	if ( !written ) {
+		errorCode_t errorCode = get_last_error_code();
+		error( "Failed to write \"%s\": " ERROR_CODE_FORMAT ".\n", filename, errorCode );
+
+		return false;
+	}
+
+	return true;
+};
+
 static s32 ShowUsage( const s32 exitCode ) {
 	printf(
 		"Builder.exe\n"
@@ -1044,6 +1059,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	float64 setBuilderOptionsTimeMS = -1.0;
 	float64 compilerBackendInitTimeMS = -1.0;
 	float64 visualStudioGenerationTimeMS = -1.0;
+	float64 vsCodeJSONGenerationTimeMS = -1.0;
 
 	core_init( MEM_MEGABYTES( 128 ) );	// TODO(DM): 26/03/2025: can we just use defaults for this now?
 	defer( core_shutdown() );
@@ -1376,6 +1392,15 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		printf( "Done.\n\n" );
 
 		visualStudioGenerationTimeMS = time_ms() - start;
+	} else if ( options.generateVSCodeJSONFiles ) {
+		float64 start = time_ms();
+
+		if ( !GenerateVSCodeJSONFiles( &context, &options ) ) {
+			error( "Failed to generate VS Code JSON files.\n" );
+			QUIT_ERROR();
+		}
+
+		vsCodeJSONGenerationTimeMS = time_ms() - start;
 	} else {
 		// otherwise the user wants to actually build
 

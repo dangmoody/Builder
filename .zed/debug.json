@@ -9,6 +9,7 @@
 		"cwd": "${ZED_WORKTREE_ROOT}/tests",
 		"request": "launch",
 		"adapter": "CodeLLDB",
+		"build": "Build tests debug",
 	},
 
 	{
@@ -17,6 +18,7 @@
 		"args": ["tests/test_basic/test_basic.cpp"],
 		"request": "launch",
 		"adapter": "CodeLLDB",
+		"build": "Build debug",
 	},
 
 	{
@@ -28,6 +30,7 @@
 		],
 		"request": "launch",
 		"adapter": "CodeLLDB",
+		"build": "Build debug",
 	},
 
 	{
@@ -36,6 +39,7 @@
 		"args": ["tests/test_multiple_source_files/build_clang.cpp"],
 		"request": "launch",
 		"adapter": "CodeLLDB",
+		"build": "Build debug",
 	},
 
 	{
@@ -44,6 +48,7 @@
 		"args": ["tests/test_multiple_source_files/build_msvc.cpp"],
 		"request": "launch",
 		"adapter": "CodeLLDB",
+		"build": "Build debug",
 	},
 
 	{
@@ -52,6 +57,7 @@
 		"args": ["tests/test_static_lib/build_gcc.cpp", "--config=program"],
 		"request": "launch",
 		"adapter": "CodeLLDB",
+		"build": "Build debug",
 	},
 
 	{
@@ -60,6 +66,7 @@
 		"args": ["tests/test_dynamic_lib/build_clang.cpp", "--config=program"],
 		"request": "launch",
 		"adapter": "CodeLLDB",
+		"build": "Build debug",
 	},
 
 	{
@@ -70,6 +77,7 @@
 		],
 		"request": "launch",
 		"adapter": "CodeLLDB",
+		"build": "Build debug",
 	},
 
 	{
@@ -78,5 +86,6 @@
 		"args": ["tests/test_generate_visual_studio_files/generate_solution.cpp"],
 		"request": "launch",
 		"adapter": "CodeLLDB",
+		"build": "Build debug",
 	},
 ]

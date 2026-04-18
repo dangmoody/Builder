@@ -464,18 +464,25 @@ static unsigned int BuilderGetConfigHash( BuildConfig *config, const unsigned in
 	hash = BuilderHashStringArray( hash, config->additionalIncludes );
 	hash = BuilderHashStringArray( hash, config->additionalLibPaths );
 	hash = BuilderHashStringArray( hash, config->additionalLibs );
+	hash = BuilderHashStringArray( hash, config->warningLevels );
 	hash = BuilderHashStringArray( hash, config->ignoreWarnings );
+	hash = BuilderHashStringArray( hash, config->additionalCompilerArguments );
+	hash = BuilderHashStringArray( hash, config->additionalLinkerArguments );
 
 	hash = BuilderHashCString( hash, config->binaryName.c_str(), config->binaryName.length() );
 	hash = BuilderHashCString( hash, config->binaryFolder.c_str(), config->binaryFolder.length() );
+	hash = BuilderHashCString( hash, config->intermediateFolder.c_str(), config->intermediateFolder.length() );
 	hash = BuilderHashCString( hash, config->name.c_str(), config->name.length() );
 
+	hash = BuilderHashSDBM( &config->languageVersion, hash, sizeof( LanguageVersion ) );
 	hash = BuilderHashSDBM( &config->binaryType, hash, sizeof( BinaryType ) );
 	hash = BuilderHashSDBM( &config->optimizationLevel, hash, sizeof( OptimizationLevel ) );
 
 	hash = BuilderHashSDBM( &config->removeSymbols, hash, sizeof( bool ) );
 	hash = BuilderHashSDBM( &config->removeFileExtension, hash, sizeof( bool ) );
 	hash = BuilderHashSDBM( &config->warningsAsErrors, hash, sizeof( bool ) );
+
+	// TODO(DM): do we hash OnPreBuild() and OnPostBuild() too?
 
 	return hash;
 }

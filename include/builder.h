@@ -315,6 +315,17 @@ struct BuilderOptions {
 	// Do you want to generate a compilation_commands.json for Clang tooling?
 	// If true, the file will be generated IF the build is successful.
 	bool						generateCompilationDatabase;
+
+	// For windows target platform: Do you want to link against the Windows dynamic runtime (DLL) instead of the static runtime (LIB)?
+	// This is because on Windows the C and C++ runtimes come in both static and dynamic versions, and you have to choose which one you want to compile with and link against.
+	// All this does is set the _DLL preprocessor definition for you, which changes linking behavior to use the dynamic runtime.
+	bool						linkAgainstWindowsDynamicRuntime;
+
+	// Tell Builder to ignore the default libraries that the compiler would normally link against.
+	// Specifically, if you don't want to link against the standard library, this is useful.
+	// Does not do anything for static library builds
+	// Note: This also does not guarantee linking of kernel32 or libgcc
+	bool 						noDefaultLibs;
 };
 
 struct CommandLineArgs {

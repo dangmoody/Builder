@@ -223,7 +223,7 @@ static bool8 MSVC_CompileSourceFile(
 	return exitCode == 0;
 }
 
-static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t *backend, const Array<const char *> &intermediateFiles, BuildConfig *config ) {
+static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t *backend, const Array<const char *> &intermediateFiles, BuildConfig *config, const BuilderOptions *options ) {
 	assert( backend );
 	assert( config );
 
@@ -235,6 +235,7 @@ static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t *backend, const Array
 		1 +	// link
 		1 +	// /lib or /shared
 		1 +	// /DEBUG
+		1 + // /NODEFAULTLIB
 		1 +	// /OUT:<name>
 		intermediateFiles.count +
 		msvcState->microsoftCoreLibPaths.size() +
@@ -254,6 +255,10 @@ static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t *backend, const Array
 
 	if ( !config->removeSymbols ) {
 		args.add( "/DEBUG" );
+	}
+
+	if ( options && options->noDefaultLibs && config->binaryType != BINARY_TYPE_STATIC_LIBRARY ) {
+		args.add( "/NODEFAULTLIB" );
 	}
 
 	args.add( tprintf( "/OUT:%s", fullBinaryName ) );

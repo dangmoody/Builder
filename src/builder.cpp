@@ -608,7 +608,7 @@ bool8 NukeFolder( const char *folder, const bool8 deleteRootFolder, const bool8 
 
 	if ( deleteRootFolder ) {
 		if ( !folder_delete( folder ) ) {
-			error( "Failed to nuke root folder \"%s\" after deleting all the files and folders inside it.  You'll need to do this manually.  Sorry.\n" );
+			error( "Failed to nuke root folder \"%s\" after deleting all the files and folders inside it.  You'll need to do this manually.  Sorry.\n", folder );
 			result = false;
 		}
 	}

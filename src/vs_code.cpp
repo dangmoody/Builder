@@ -35,11 +35,11 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 
 			BuildConfig *config = &taskConfig->config;
 
-			string_builder_appendf( &tasksJSONContent,          "\t\t{\n" );
-			string_builder_appendf( &tasksJSONContent, tprintf( "\t\t\t\"label\": \"Build %s\",\n", taskConfig->config.name.c_str() ) );
-			string_builder_appendf( &tasksJSONContent,          "\t\t\t\"type\": \"shell\",\n" );
-			string_builder_appendf( &tasksJSONContent,          "\t\t\t\"command\": \"%s\",\n", builderPath );
-			string_builder_appendf( &tasksJSONContent,          "\t\t\t\"args\": [\n" );
+			string_builder_appendf( &tasksJSONContent, "\t\t{\n" );
+			string_builder_appendf( &tasksJSONContent, "\t\t\t\"label\": \"Build %s\",\n", taskConfig->config.name.c_str() );
+			string_builder_appendf( &tasksJSONContent, "\t\t\t\"type\": \"shell\",\n" );
+			string_builder_appendf( &tasksJSONContent, "\t\t\t\"command\": \"%s\",\n", builderPath );
+			string_builder_appendf( &tasksJSONContent, "\t\t\t\"args\": [\n" );
 			{
 				string_builder_appendf( &tasksJSONContent, "\t\t\t\t\"%s\",\n", context->inputFile );
 				string_builder_appendf( &tasksJSONContent, "\t\t\t\t\"%s%s\"", ARG_CONFIG, config->name.c_str() );
@@ -114,13 +114,13 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 						break;
 				}
 			}
-			string_builder_appendf( &launchJSONContent,          "\t\t\t\"request\": \"launch\",\n" );
-			string_builder_appendf( &launchJSONContent, tprintf( "\t\t\t\"program\": \"%s\",\n", launchConfig->binaryName.c_str() ) );
+			string_builder_appendf( &launchJSONContent, "\t\t\t\"request\": \"launch\",\n" );
+			string_builder_appendf( &launchJSONContent, "\t\t\t\"program\": \"%s\",\n", launchConfig->binaryName.c_str() );
 			if ( !launchConfig->args.empty() ) {
-				string_builder_appendf( &launchJSONContent,      "\t\t\t\"args\": [\n" );
+				string_builder_appendf( &launchJSONContent, "\t\t\t\"args\": [\n" );
 
 				For ( u32, argIndex, 0, launchConfig->args.size() ) {
-					string_builder_appendf( &launchJSONContent, tprintf( "\t\t\t\t\"%s\"", launchConfig->args[argIndex].c_str() ) );
+					string_builder_appendf( &launchJSONContent, "\t\t\t\t\"%s\"", launchConfig->args[argIndex].c_str() );
 
 					if ( argIndex < launchConfig->args.size() - 1 ) {
 						string_builder_appendf( &launchJSONContent, ",\n" );
@@ -133,7 +133,7 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 			}
 			{
 				const char *cwd = launchConfig->cwd.empty() ? "${workspaceFolder}" : launchConfig->cwd.c_str();
-				string_builder_appendf( &launchJSONContent, tprintf( "\t\t\t\"cwd\": \"%s\",\n", cwd ) );	// TODO(DM): 16/04/2026: do we want to expose this to VSCodeJSONOptions?
+				string_builder_appendf( &launchJSONContent, "\t\t\t\"cwd\": \"%s\",\n", cwd );	// TODO(DM): 16/04/2026: do we want to expose this to VSCodeJSONOptions?
 			}
 			string_builder_appendf( &launchJSONContent, "\t\t},\n" );
 		}

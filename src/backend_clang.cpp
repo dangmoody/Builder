@@ -323,6 +323,7 @@ static bool8 Clang_CompileSourceFile(
 static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Array<const char *> &intermediateFiles, BuildConfig *config, const BuilderOptions *options ) {
 	assert( backend );
 	assert( config );
+	assert( options );
 
 	clangState_t *clangState = cast( clangState_t *, backend->data );
 
@@ -337,7 +338,7 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		1 + // /DEBUG
 		1 + // /OUT:
 		1 + // kernel32.lib
-		4 + // CRT libs (e.g. msvcrt, msvcprt, vcruntime, ucrt when -D_DLL and NOT -D_DEBUG) 
+		4 + // CRT libs (e.g. msvcrt, msvcprt, vcruntime, ucrt when -D_DLL and NOT -D_DEBUG)
 		3 + // /LIBPATH: ucrt, um, msvc
 		intermediateFiles.count +
 		config->additionalLibPaths.size() +
@@ -381,7 +382,7 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		args.add( tprintf( "/LIBPATH:%s", config->additionalLibPaths[libPathIndex].c_str() ) );
 	}
 
-	if ( !options || !options->noDefaultLibs ) {
+	if ( !options->noDefaultLibs ) {
 		args.add( "kernel32.lib" );
 
 		// these defines are what drive the choice of lib windows std compiles against
@@ -389,7 +390,7 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		bool8 hasDllRuntime = false;
 		For ( u32, i, 0, config->defines.size() ) {
 			if ( config->defines[i] == "_DEBUG" ) {
-				debugBuild = true; 
+				debugBuild = true;
 			}
 			if ( config->defines[i] == "_DLL" ) {
 				hasDllRuntime = true;
@@ -436,6 +437,8 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		args.add( config->additionalLinkerArguments[libIndex].c_str() );
 	}
 #else
+	unused( options );
+
 	// clang and gcc treat static libraries as just an archive of .o files
 	// so there is no real "link" step in this case, the .o files are just "archived" together
 	// for dynamic libraries and executables clang and gcc recommend you call the compiler again and just pass in all the intermediate files

@@ -4,21 +4,25 @@
 [
 	{
 		"label": "Build debug",
-		"command": "./scripts/build.sh debug",
+		"command": "./scripts/build.sh",
+		"args": ["debug"],
 	},
 
 	{
 		"label": "Build release",
-		"command": "./scripts/build.sh release",
+		"command": "./scripts/build.sh",
+		"args": ["release"],
 	},
 
 	{
 		"label": "Build tests debug",
 		"command": "./scripts/build_tests.sh debug",
+		"args": ["debug"],
 	},
 
 	{
 		"label": "Build tests release",
-		"command": "./scripts/build_tests.sh release",
+		"command": "./scripts/build_tests.sh",
+		"args": ["release"],
 	},
 ]

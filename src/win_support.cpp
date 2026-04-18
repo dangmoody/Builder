@@ -142,7 +142,6 @@ bool8 Win_GetWindowsSDK( windowsSDK_t *outSDK ) {
 		if ( !folder_exists( tprintf( "%sinclude\\%d.%d.%d.%d\\ucrt",   outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 ) ) ) continue;
 		if ( !folder_exists( tprintf( "%sinclude\\%d.%d.%d.%d\\um",     outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 ) ) ) continue;
 		if ( !folder_exists( tprintf( "%sinclude\\%d.%d.%d.%d\\shared", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 ) ) ) continue;
-		if ( !folder_exists( tprintf( "%sinclude\\%d.%d.%d.%d\\ucrt",   outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 ) ) ) continue;
 
 		if ( !folder_exists( tprintf( "%sLib\\%d.%d.%d.%d\\ucrt\\x64", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 ) ) ) continue;
 		if ( !folder_exists( tprintf( "%sLib\\%d.%d.%d.%d\\um\\x64",   outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 ) ) ) continue;

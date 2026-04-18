@@ -10,6 +10,7 @@ bug_reports
 intermediate
 compile_commands.json
 *.cpp.d
+doc/notes/
 
 # ignore tools folder, but dont ignore 7zip
 tools/*

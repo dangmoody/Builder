@@ -92,13 +92,28 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 
 			string_builder_appendf( &launchJSONContent,          "\t\t{\n" );
 			string_builder_appendf( &launchJSONContent, tprintf( "\t\t\t\"name\": \"%s\",\n", launchConfig->binaryName.c_str() ) );
-			// TODO(DM): 17/04/2026: do we want to expose this to VSCodeJSONOptions?
-#ifdef _WIN32
-			string_builder_appendf( &launchJSONContent,          "\t\t\t\"type\": \"cppvsdbg\",\n" );
-#else
-			string_builder_appendf( &launchJSONContent,          "\t\t\t\"type\": \"cppdbg\",\n" );
-			string_builder_appendf( &launchJSONContent,          "\t\t\t\"MIMode\": \"gdb\",\n" );
-#endif
+			{
+				VSCodeDebuggerType debuggerType = ( launchConfig->debuggerType == VSCODE_DEBUGGER_TYPE_UNSET ) ? VSCODE_DEBUGGER_TYPE_CPPDBG_GDB : launchConfig->debuggerType;
+
+				switch ( debuggerType ) {
+					case VSCODE_DEBUGGER_TYPE_CPPDBG_GDB:
+						string_builder_appendf( &launchJSONContent, "\t\t\t\"type\": \"cppdbg\",\n" );
+						string_builder_appendf( &launchJSONContent, "\t\t\t\"MIMode\": \"gdb\",\n" );
+						break;
+
+					case VSCODE_DEBUGGER_TYPE_CPPDBG_LLDB:
+						string_builder_appendf( &launchJSONContent, "\t\t\t\"type\": \"cppdbg\",\n" );
+						string_builder_appendf( &launchJSONContent, "\t\t\t\"MIMode\": \"lldb\",\n" );
+						break;
+
+					case VSCODE_DEBUGGER_TYPE_CPPVSDBG:
+						string_builder_appendf( &launchJSONContent, "\t\t\t\"type\": \"cppvsdbg\",\n" );
+						break;
+
+					case VSCODE_DEBUGGER_TYPE_UNSET:
+						break;
+				}
+			}
 			string_builder_appendf( &launchJSONContent,          "\t\t\t\"request\": \"launch\",\n" );
 			string_builder_appendf( &launchJSONContent, tprintf( "\t\t\t\"program\": \"%s\",\n", launchConfig->binaryName.c_str() ) );
 			if ( !launchConfig->args.empty() ) {

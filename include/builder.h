@@ -246,6 +246,13 @@ struct VSCodeTaskConfig {
 	std::vector<std::string>	additionalBuildArgs;
 };
 
+enum VSCodeDebuggerType {
+	VSCODE_DEBUGGER_TYPE_UNSET		= 0,
+	VSCODE_DEBUGGER_TYPE_CPPDBG_GDB,	// Linux/Mac: cppdbg with MIMode gdb
+	VSCODE_DEBUGGER_TYPE_CPPDBG_LLDB,	// Linux/Mac: cppdbg with MIMode lldb
+	VSCODE_DEBUGGER_TYPE_CPPVSDBG,		// Windows: cppvsdbg (MSVC debugger)
+};
+
 struct VSCodeLaunchConfig {
 	// The config you want to run when you select this launch config in VS Code.
 	std::string					binaryName;
@@ -256,6 +263,10 @@ struct VSCodeLaunchConfig {
 	// You'd never guess, but this sets the "cwd" field in a VS Code launch config.
 	// This defaults to '${workspaceFolder}'
 	std::string					cwd;
+
+	// Which VS Code debugger to use for this launch config.
+	// Defaults to VSCODE_DEBUGGER_TYPE_CPPDBG_GDB if unset.
+	VSCodeDebuggerType			debuggerType;
 };
 
 struct VSCodeJSONOptions {

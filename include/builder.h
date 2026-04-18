@@ -243,12 +243,12 @@ struct VSCodeTaskConfig {
 	BuildConfig					config;
 
 	// Any additional args you want to send to Builder when building this config.
-	std::vector<std::string>	args;
+	std::vector<std::string>	additionalBuildArgs;
 };
 
 struct VSCodeLaunchConfig {
 	// The config you want to run when you select this launch config in VS Code.
-	BuildConfig					config;
+	std::string					binaryName;
 
 	// When you run this config, what command line arguments do you want to be passed through?
 	std::vector<std::string>	args;
@@ -259,6 +259,12 @@ struct VSCodeLaunchConfig {
 };
 
 struct VSCodeJSONOptions {
+	// The path to the Builder executable that VS Code will invoke when running a task.
+	// If left empty, defaults to "builder", which assumes Builder is on your PATH.
+	// If your team doesn't put Builder on PATH, set this to wherever it lives
+	// (e.g. "${workspaceFolder}/tools/builder").
+	std::string						builderPath;
+
 	std::vector<VSCodeTaskConfig>	taskConfigs;
 
 	std::vector<VSCodeLaunchConfig>	launchConfigs;

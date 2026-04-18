@@ -14,7 +14,7 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 		return false;
 	}
 
-	const char *appPath = path_remove_file_extension( path_app_path() );
+	const char *builderPath = options->vsCodeJSONOptions.builderPath.empty() ? BUILDER_PROGRAM_NAME : options->vsCodeJSONOptions.builderPath.c_str();
 
 	// tasks.json
 	{
@@ -27,33 +27,41 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 
 		string_builder_appendf( &tasksJSONContent, "{\n" );
 		string_builder_appendf( &tasksJSONContent, "\t// See https://go.microsoft.com/fwlink/?LinkId=733558\n" );
-		string_builder_appendf( &tasksJSONContent, "// for the documentation about the tasks.json format\n" );
-		string_builder_appendf( &tasksJSONContent, "\version\": \"2.0.0\",\n" );
+		string_builder_appendf( &tasksJSONContent, "\t// for the documentation about the tasks.json format\n" );
+		string_builder_appendf( &tasksJSONContent, "\t\"version\": \"2.0.0\",\n" );	// TODO(DM): 17/04/2026: do we need to expose the version to VSCodeJSONOptions?
 		string_builder_appendf( &tasksJSONContent, "\t\"tasks\": [\n" );
-		For ( u64, configIndex, 0, options->configs.size() ) {
-			BuildConfig *config = &options->configs[configIndex];
+		For ( u64, configIndex, 0, options->vsCodeJSONOptions.taskConfigs.size() ) {
+			VSCodeTaskConfig *taskConfig = &options->vsCodeJSONOptions.taskConfigs[configIndex];
+
+			BuildConfig *config = &taskConfig->config;
 
 			string_builder_appendf( &tasksJSONContent,          "\t\t{\n" );
-			string_builder_appendf( &tasksJSONContent, tprintf( "\t\t\t\"label\": \"Build %s\"\n", config->name.c_str() ) );
-			string_builder_appendf( &tasksJSONContent,          "\t\t\t\"type\": \"shell\"\n" );
-			string_builder_appendf( &tasksJSONContent, tprintf( "\t\t\t\"command\": \"%s%c%s\"\n", appPath, PATH_SEPARATOR, BUILDER_PROGRAM_NAME ) );
-			string_builder_appendf( &tasksJSONContent,          "\t\t\t\"args\": [ " );
+			string_builder_appendf( &tasksJSONContent, tprintf( "\t\t\t\"label\": \"Build %s\",\n", taskConfig->config.name.c_str() ) );
+			string_builder_appendf( &tasksJSONContent,          "\t\t\t\"type\": \"shell\",\n" );
+			string_builder_appendf( &tasksJSONContent,          "\t\t\t\"command\": \"%s\",\n", builderPath );
+			string_builder_appendf( &tasksJSONContent,          "\t\t\t\"args\": [\n" );
 			{
-				string_builder_appendf( &tasksJSONContent, "%s", context->inputFile );
-				string_builder_appendf( &tasksJSONContent, "%s%s", ARG_CONFIG, config->name.c_str() );
-				// TODO: DM: 15/04/2026: add BuiderOptions::VSCodeJSONOptions
-				/*if ( options.vsCodeJSONOptions ) {
-					For ( u32, argIndex, 0, numArgs ) {
-						string_builder_appendf( &tasksJSONContent, "\"%s\"" );
+				string_builder_appendf( &tasksJSONContent, "\t\t\t\t\"%s\",\n", context->inputFile );
+				string_builder_appendf( &tasksJSONContent, "\t\t\t\t\"%s%s\"", ARG_CONFIG, config->name.c_str() );
 
-						if ( argIndex < numArgs - 1 ) {
-							string_builder_appendf( &tasksJSONContent, ", " );
+				if ( taskConfig->additionalBuildArgs.size() ) {
+					string_builder_appendf( &tasksJSONContent, ",\n" );
+
+					For ( u32, argIndex, 0, taskConfig->additionalBuildArgs.size() ) {
+						string_builder_appendf( &tasksJSONContent, "\t\t\t\t\"%s\"", taskConfig->additionalBuildArgs[argIndex].c_str() );
+
+						if ( argIndex < taskConfig->additionalBuildArgs.size() - 1 ) {
+							string_builder_appendf( &tasksJSONContent, ",\n" );
+						} else {
+							string_builder_appendf( &tasksJSONContent, "\n" );
 						}
 					}
-				}*/
+				} else {
+					string_builder_appendf( &tasksJSONContent, "\n" );
+				}
 			}
-			string_builder_appendf( &tasksJSONContent, " ]\n" );
-			string_builder_appendf( &tasksJSONContent, "\t\t}\n" );
+			string_builder_appendf( &tasksJSONContent, "\t\t\t],\n" );
+			string_builder_appendf( &tasksJSONContent, "\t\t},\n" );
 		}
 		string_builder_appendf( &tasksJSONContent, "\t]\n" );
 		string_builder_appendf( &tasksJSONContent, "}\n" );
@@ -74,39 +82,30 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 		string_builder_reset( &launchJSONContent );
 
 		string_builder_appendf( &launchJSONContent, "{\n" );
-		string_builder_appendf( &launchJSONContent, "// Use IntelliSense to learn about possible attributes.\n" );
-		string_builder_appendf( &launchJSONContent, "// Hover to view descriptions of existing attributes.\n" );
-		string_builder_appendf( &launchJSONContent, "// For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387\n" );
-		string_builder_appendf( &launchJSONContent, "\"version\": \"0.2.0\",\n" );
+		string_builder_appendf( &launchJSONContent, "\t// Use IntelliSense to learn about possible attributes.\n" );
+		string_builder_appendf( &launchJSONContent, "\t// Hover to view descriptions of existing attributes.\n" );
+		string_builder_appendf( &launchJSONContent, "\t// For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387\n" );
+		string_builder_appendf( &launchJSONContent, "\t\"version\": \"0.2.0\",\n" );	// TODO(DM): 17/04/2026: do we need to expose the version to VSCodeJSONOptions?
 		string_builder_appendf( &launchJSONContent, "\t\"configurations\": [\n" );
 		For ( u32, configIndex, 0, options->vsCodeJSONOptions.launchConfigs.size() ) {
 			VSCodeLaunchConfig *launchConfig = &options->vsCodeJSONOptions.launchConfigs[configIndex];
 
-			if ( launchConfig->config.binaryType != BINARY_TYPE_EXE ) {
-				warning(
-					"You have asked me to generate a VS Code launch config (in launch.json) for your BuildConfig \"%s\".\n"
-					"That config produces a %s file, and I can only generate launch configs for EXEs.  Skipping this one...\n"
-					, launchConfig->config.name.c_str()
-					, GetFileExtensionFromBinaryType( launchConfig->config.binaryType )
-				);
-				continue;
-			}
-
-			const char *fullBinaryName = BuildConfig_GetFullBinaryName( &launchConfig->config );
-
 			string_builder_appendf( &launchJSONContent,          "\t\t{\n" );
-			string_builder_appendf( &launchJSONContent, tprintf( "\t\t\t\"name\": \"%s\"\n", launchConfig->config.name.c_str() ) );
+			string_builder_appendf( &launchJSONContent, tprintf( "\t\t\t\"name\": \"%s\",\n", launchConfig->binaryName.c_str() ) );
+			// TODO(DM): 17/04/2026: do we want to expose this to VSCodeJSONOptions?
 #ifdef _WIN32
-			string_builder_appendf( &launchJSONContent, "\t\t\t\"type\": \"cppvsdbg\"\n" );
+			string_builder_appendf( &launchJSONContent,          "\t\t\t\"type\": \"cppvsdbg\",\n" );
 #else
-			string_builder_appendf( &launchJSONContent, "\t\t\t\"type\": \"gdb\"\n" );
+			string_builder_appendf( &launchJSONContent,          "\t\t\t\"type\": \"cppdbg\",\n" );
+			string_builder_appendf( &launchJSONContent,          "\t\t\t\"MIMode\": \"gdb\",\n" );
 #endif
-			string_builder_appendf( &launchJSONContent, tprintf( "\t\t\t\"program\": \"%s\"\n", fullBinaryName ) );
-			{
-				string_builder_appendf( &launchJSONContent, tprintf( "\t\t\t\"args\": [\n" ) );
+			string_builder_appendf( &launchJSONContent,          "\t\t\t\"request\": \"launch\",\n" );
+			string_builder_appendf( &launchJSONContent, tprintf( "\t\t\t\"program\": \"%s\",\n", launchConfig->binaryName.c_str() ) );
+			if ( !launchConfig->args.empty() ) {
+				string_builder_appendf( &launchJSONContent,      "\t\t\t\"args\": [\n" );
 
 				For ( u32, argIndex, 0, launchConfig->args.size() ) {
-					string_builder_appendf( &launchJSONContent, tprintf( "\"%s\"", launchConfig->args[argIndex].c_str() ) );
+					string_builder_appendf( &launchJSONContent, tprintf( "\t\t\t\t\"%s\"", launchConfig->args[argIndex].c_str() ) );
 
 					if ( argIndex < launchConfig->args.size() - 1 ) {
 						string_builder_appendf( &launchJSONContent, ",\n" );
@@ -115,10 +114,13 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 					}
 				}
 
-				string_builder_appendf( &launchJSONContent, tprintf( "]\n" ) );
+				string_builder_appendf( &launchJSONContent, "\t\t\t],\n" );
 			}
-			string_builder_appendf( &launchJSONContent, tprintf( "\t\t\t\"cwd\": \"%s\"\n", launchConfig->cwd.c_str() ) );	// TODO: DM: 16/04/2026: do we want to expose this to the user?
-			string_builder_appendf( &launchJSONContent,          "\t\t}\n" );
+			{
+				const char *cwd = launchConfig->cwd.empty() ? "${workspaceFolder}" : launchConfig->cwd.c_str();
+				string_builder_appendf( &launchJSONContent, tprintf( "\t\t\t\"cwd\": \"%s\",\n", cwd ) );	// TODO(DM): 16/04/2026: do we want to expose this to VSCodeJSONOptions?
+			}
+			string_builder_appendf( &launchJSONContent, "\t\t},\n" );
 		}
 		string_builder_appendf( &launchJSONContent, "\t]\n" );
 		string_builder_appendf( &launchJSONContent, "}\n" );

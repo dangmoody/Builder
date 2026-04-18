@@ -394,6 +394,93 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 #endif // _WIN32
 }
 
+TEMPER_TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
+	const char *buildFile        = "test_generate_vscode_json_files/generate_vscode_json.cpp";
+	const char *dotBuilderFolder = "test_generate_vscode_json_files/.builder";
+	const char *vsCodeFolder     = "test_generate_vscode_json_files/.vscode";
+	const char *tasksJSONPath    = "test_generate_vscode_json_files/.vscode/tasks.json";
+	const char *launchJSONPath   = "test_generate_vscode_json_files/.vscode/launch.json";
+
+	// generate the VS Code JSON files
+	{
+		Array<const char *> args;
+		args.add( buildFile );
+
+		s32 exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
+		TEMPER_CHECK_TRUE_M( exitCode == 0, "BuilderMain() returned %d.\n", exitCode );
+	}
+
+	// tasks.json
+	{
+		TEMPER_CHECK_TRUE_M( file_exists( tasksJSONPath ), "tasks.json was not generated at \"%s\".\n", tasksJSONPath );
+
+		char *content = NULL;
+		u64 contentLength = 0;
+		file_read_entire( tasksJSONPath, &content, &contentLength );
+		defer( file_free_buffer( &content ) );
+
+		TEMPER_CHECK_TRUE_M( strstr( content, "\"version\"" ) != NULL,              "tasks.json is missing \"version\".\n" );
+		TEMPER_CHECK_TRUE_M( strstr( content, "\"tasks\"" ) != NULL,                "tasks.json is missing \"tasks\" array.\n" );
+		TEMPER_CHECK_TRUE_M( strstr( content, "\"Build config\"" ) != NULL,         "tasks.json is missing \"Build config\" task.\n" );
+		TEMPER_CHECK_TRUE_M( strstr( content, "\"--config=config\"" ) != NULL,      "tasks.json is missing --config=config arg.\n" );
+		TEMPER_CHECK_TRUE_M( strstr( content, "\"--release\"" ) != NULL,            "tasks.json is missing --release arg for second task.\n" );
+		TEMPER_CHECK_TRUE_M( strstr( content, "generate_vscode_json.cpp" ) != NULL, "tasks.json is missing the build file arg.\n" );
+	}
+
+	// launch.json
+	{
+		TEMPER_CHECK_TRUE_M( file_exists( launchJSONPath ), "launch.json was not generated at \"%s\".\n", launchJSONPath );
+
+		char *content = NULL;
+		u64 contentLength = 0;
+		file_read_entire( launchJSONPath, &content, &contentLength );
+		defer( file_free_buffer( &content ) );
+
+		TEMPER_CHECK_TRUE_M( strstr( content, "\"version\"" ) != NULL,                  "launch.json is missing \"version\".\n" );
+		TEMPER_CHECK_TRUE_M( strstr( content, "\"configurations\"" ) != NULL,          "launch.json is missing \"configurations\" array.\n" );
+		TEMPER_CHECK_TRUE_M( strstr( content, "bin/debug/test_app" ) != NULL,          "launch.json is missing debug binary path.\n" );
+		TEMPER_CHECK_TRUE_M( strstr( content, "bin/release/test_app" ) != NULL,        "launch.json is missing release binary path.\n" );
+		TEMPER_CHECK_TRUE_M( strstr( content, "\"request\": \"launch\"" ) != NULL,     "launch.json is missing \"request\": \"launch\".\n" );
+		TEMPER_CHECK_TRUE_M( strstr( content, "\"cwd\": \"${workspaceFolder}\"" ) != NULL, "launch.json is missing default cwd.\n" );
+#ifdef _WIN32
+		TEMPER_CHECK_TRUE_M( strstr( content, "\"type\": \"cppvsdbg\"" ) != NULL,      "launch.json is missing \"type\": \"cppvsdbg\" on Windows.\n" );
+#else
+		TEMPER_CHECK_TRUE_M( strstr( content, "\"type\": \"cppdbg\"" ) != NULL,        "launch.json is missing \"type\": \"cppdbg\" on Linux.\n" );
+		TEMPER_CHECK_TRUE_M( strstr( content, "\"MIMode\": \"gdb\"" ) != NULL,         "launch.json is missing \"MIMode\": \"gdb\" on Linux.\n" );
+#endif
+	}
+
+	// cleanup
+	{
+		// delete all files in .builder before removing the folder
+		// (rmdir requires an empty directory)
+		{
+			buildTestGeneratedFiles_t generatedFiles = {};
+			generatedFiles.fileExtensionsToDelete.add( GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
+			generatedFiles.fileExtensionsToDelete.add( ".d" );
+			generatedFiles.fileExtensionsToDelete.add( ".o" );
+			generatedFiles.fileExtensionsToDelete.add( ".include_dependencies" );
+
+			TEMPER_CHECK_TRUE( file_get_all_files_in_folder( dotBuilderFolder, true, true, GetAllGeneratedFiles, &generatedFiles ) );
+
+			For ( u32, fileIndex, 0, generatedFiles.files.count ) {
+				TEMPER_CHECK_TRUE_M( file_delete( generatedFiles.files[fileIndex] ), "Failed to delete \"%s\".\n", generatedFiles.files[fileIndex] );
+			}
+
+			TEMPER_CHECK_TRUE_M( folder_delete( dotBuilderFolder ), "Failed to delete \"%s\".\n", dotBuilderFolder );
+		}
+
+		// delete .vscode contents then the folder
+		if ( file_exists( tasksJSONPath ) ) {
+			TEMPER_CHECK_TRUE_M( file_delete( tasksJSONPath ),  "Failed to delete tasks.json.\n" );
+		}
+		if ( file_exists( launchJSONPath ) ) {
+			TEMPER_CHECK_TRUE_M( file_delete( launchJSONPath ), "Failed to delete launch.json.\n" );
+		}
+		TEMPER_CHECK_TRUE_M( folder_delete( vsCodeFolder ), "Failed to delete .vscode folder.\n" );
+	}
+}
+
 // Validates the generated compile_commands.json by feeding it to clang-tidy.
 // If clang-tidy can successfully load the compilation database, it proves
 // the JSON is correctly formatted according to the specification.

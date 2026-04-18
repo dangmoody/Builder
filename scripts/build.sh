@@ -39,7 +39,7 @@ if [[ "$config" != "release" ]]; then
 	optimisation="-O3"
 fi
 
-sourceFiles="$sourceFolder/main.cpp $sourceFolder/builder.cpp $sourceFolder/visual_studio.cpp $sourceFolder/backend_clang.cpp $sourceFolder/core/src/core.suc.cpp"
+sourceFiles="$sourceFolder/main.cpp $sourceFolder/builder.cpp $sourceFolder/visual_studio.cpp $sourceFolder/backend_clang.cpp $sourceFolder/core/src/core.suc.cpp $sourceFolder/vs_code.cpp"
 
 defines="-D_CRT_SECURE_NO_WARNINGS -DCORE_USE_XXHASH -DCORE_SUC -DCORE_USE_SUBPROCESS -DHASHMAP_HIDE_MISSING_KEY_WARNING -DHLML_NAMESPACE"
 if [[ "$config" == "debug" ]]; then

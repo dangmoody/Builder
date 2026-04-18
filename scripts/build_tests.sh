@@ -32,7 +32,7 @@ if [[ "$config" != "release" ]]; then
 	optimisation="-O3"
 fi
 
-sourceFiles="tests/tests_main.cpp src/builder.cpp src/visual_studio.cpp src/backend_clang.cpp src/backend_msvc.cpp src/core/src/core.suc.cpp"
+sourceFiles="tests/tests_main.cpp src/builder.cpp src/visual_studio.cpp src/vs_code.cpp src/backend_clang.cpp src/backend_msvc.cpp src/core/src/core.suc.cpp"
 
 defines="-DCORE_SUC -DHLML_NAMESPACE -DCORE_USE_SUBPROCESS -DHASHMAP_HIDE_MISSING_KEY_WARNING"
 if [[ "$config" == "debug" ]]; then

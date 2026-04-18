@@ -153,6 +153,8 @@ bool8		GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *op
 
 bool8		GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options );
 
+bool8		GenerateZedJSONFiles( buildContext_t *context, BuilderOptions *options );
+
 inline u64 minull( const u64 x, const u64 y ) {
 	return ( x < y ) ? x : y;
 }

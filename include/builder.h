@@ -247,7 +247,7 @@ struct VSCodeTaskConfig {
 };
 
 enum VSCodeDebuggerType {
-	VSCODE_DEBUGGER_TYPE_UNSET		= 0,
+	VSCODE_DEBUGGER_TYPE_UNSET			= 0,
 	VSCODE_DEBUGGER_TYPE_CPPDBG_GDB,	// Linux/Mac: cppdbg with MIMode gdb
 	VSCODE_DEBUGGER_TYPE_CPPDBG_LLDB,	// Linux/Mac: cppdbg with MIMode lldb
 	VSCODE_DEBUGGER_TYPE_CPPVSDBG,		// Windows: cppvsdbg (MSVC debugger)
@@ -261,7 +261,7 @@ struct VSCodeLaunchConfig {
 	std::vector<std::string>	args;
 
 	// You'd never guess, but this sets the "cwd" field in a VS Code launch config.
-	// This defaults to '${workspaceFolder}'
+	// This defaults to '${workspaceFolder}'.
 	std::string					cwd;
 
 	// Which VS Code debugger to use for this launch config.
@@ -272,13 +272,48 @@ struct VSCodeLaunchConfig {
 struct VSCodeJSONOptions {
 	// The path to the Builder executable that VS Code will invoke when running a task.
 	// If left empty, defaults to "builder", which assumes Builder is on your PATH.
-	// If your team doesn't put Builder on PATH, set this to wherever it lives
+	// If you/your team doesn't put Builder on PATH, set this to wherever it lives
 	// (e.g. "${workspaceFolder}/tools/builder").
 	std::string						builderPath;
 
+	// The configs that will go into tasks.json.
 	std::vector<VSCodeTaskConfig>	taskConfigs;
 
+	// The configs that will go into debug.json.
 	std::vector<VSCodeLaunchConfig>	launchConfigs;
+};
+
+struct ZedTaskConfig {
+	// The config you want Builder to build through Zed.
+	BuildConfig					config;
+
+	// When you run this config, what command line arguments do you want to be passed through?
+	std::vector<std::string>	args;
+};
+
+struct ZedDebugConfig {
+	std::string					binaryName;
+
+	// When you run this config, what command line arguments do you want to be passed through?
+	std::vector<std::string>	args;
+
+	// You'd never guess, but this sets the "cwd" field in a VS Code launch config.
+	// This defaults to '${ZED_WORKTREE_ROOT}'.
+	std::string					cwd;
+};
+
+struct ZedJSONOptions {
+	// The path to the Builder executable that VS Code will invoke when running a task.
+	// If left empty, defaults to "builder", which assumes Builder is on your PATH.
+	// If you/your team doesn't put Builder on PATH, set this to wherever it lives
+	// (e.g. "${ZED_WORKTREE_ROOT}/tools/builder").
+	std::string					builderPath;
+
+	// The configs that will go into tasks.json.
+	std::vector<ZedTaskConfig>	taskConfigs;
+
+	// The configs that will go into debug.json.
+	std::vector<ZedDebugConfig>	debugConfigs;
 };
 
 struct BuilderOptions {
@@ -305,6 +340,9 @@ struct BuilderOptions {
 	// If 'generateVSCodeJSONFiles' is enabled, Builder will use these settings when filling them in.
 	VSCodeJSONOptions			vsCodeJSONOptions;
 
+	// If 'generateZedJSONFiles' is enabled, Builder will use these settings when filling them in.
+	ZedJSONOptions				zedJSONOptions;
+
 	// Set this to true if you want Builder to force-rebuild your program.
 	// All binaries and intermediate files will get rebuilt.
 	// This is really only useful to those who are either using an editor + command line workflow, or just hate incremental builds.
@@ -320,8 +358,11 @@ struct BuilderOptions {
 	// If you don't use Visual Studio then ignore this.
 	bool						generateSolution;
 
-	// Are you using VS Code and do you want Builder to generate the tasks.json and launch.json files based off your BuildConfigs?
+	// Are you using VS Code and do you want Builder to generate the VS Code tasks.json and launch.json files based off your BuildConfigs?
 	bool						generateVSCodeJSONFiles;
+
+	// Are you using VS Code and do you want Builder to generate the Zed tasks.json and debug.json files based off your BuildConfigs?
+	bool						generateZedJSONFiles;
 
 	// Do you want to generate a compilation_commands.json for Clang tooling?
 	// If true, the file will be generated IF the build is successful.

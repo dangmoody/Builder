@@ -371,10 +371,11 @@ struct BuilderOptions {
 	// For windows target platform: Do you want to link against the Windows dynamic runtime (DLL) instead of the static runtime (LIB)?
 	// This is because on Windows the C and C++ runtimes come in both static and dynamic versions, and you have to choose which one you want to compile with and link against.
 	// All this does is set the _DLL preprocessor definition for you, which changes linking behavior to use the dynamic runtime.
+	// On Linux this doesn't do anything.
 	bool						linkAgainstWindowsDynamicRuntime;
 
 	// Tell Builder to ignore the default libraries that the compiler would normally link against.
-	// Specifically, if you don't want to link against the standard library, this is useful.
+	// This is useful if you don't want to link against the standard library.
 	// Does not do anything for static library builds.
 	// Note: On Linux this passes -nodefaultlibs to Clang, which does not exclude libgcc.
 	// If you need to exclude libgcc, pass -nostdlib via BuildConfig::additionalLinkerArguments.

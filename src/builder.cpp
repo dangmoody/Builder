@@ -90,7 +90,7 @@ bool8 g_verbose = false;
 u64 GetLastFileWriteTime( const char *filename ) {
 	u64 lastWriteTime = 0;
 	if ( !file_get_last_write_time( filename, &lastWriteTime ) ) {
-		assert( false );
+		return U64_MAX;
 	}
 
 	return lastWriteTime;

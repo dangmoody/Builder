@@ -382,7 +382,7 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		args.add( tprintf( "/LIBPATH:%s", config->additionalLibPaths[libPathIndex].c_str() ) );
 	}
 
-	if ( !options->noDefaultLibs ) {
+	if ( !options || !options->noDefaultLibs ) {
 		args.add( "kernel32.lib" );
 
 		// these defines are what drive the choice of lib windows std compiles against
@@ -437,8 +437,6 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		args.add( config->additionalLinkerArguments[libIndex].c_str() );
 	}
 #else
-	unused( options );
-
 	// clang and gcc treat static libraries as just an archive of .o files
 	// so there is no real "link" step in this case, the .o files are just "archived" together
 	// for dynamic libraries and executables clang and gcc recommend you call the compiler again and just pass in all the intermediate files

@@ -618,14 +618,14 @@ bool8 NukeFolder( const char *folder, const bool8 deleteRootFolder, const bool8 
 
 const char *GetNextSlashInPath( const char *path ) {
 	const char *nextSlash = NULL;
-	const char *nextBackSlash = strrchr( path, '\\' );
-	const char *nextForwardSlash = strrchr( path, '/' );
+	const char *nextBackSlash = strchr( path, '\\' );
+	const char *nextForwardSlash = strchr( path, '/' );
 
 	if ( !nextBackSlash && !nextForwardSlash ) {
 		return NULL;
 	}
 
-	if ( cast( u64, nextBackSlash ) > cast( u64, nextForwardSlash ) ) {
+	if ( cast( u64, nextBackSlash ) < cast( u64, nextForwardSlash ) ) {
 		nextSlash = nextBackSlash;
 	} else {
 		nextSlash = nextForwardSlash;

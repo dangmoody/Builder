@@ -13,6 +13,15 @@
 	},
 
 	{
+		"label": "Builder Tests - Release",
+		"program": "${ZED_WORKTREE_ROOT}/bin/builder_tests",
+		"cwd": "${ZED_WORKTREE_ROOT}/tests",
+		"request": "launch",
+		"adapter": "CodeLLDB",
+		"build": "Build tests release",
+	},
+
+	{
 		"label": "Builder - Debug - test_basic",
 		"program": "${ZED_WORKTREE_ROOT}/bin/builder_debug",
 		"args": ["tests/test_basic/test_basic.cpp"],

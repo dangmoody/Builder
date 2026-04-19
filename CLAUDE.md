@@ -89,6 +89,8 @@ Clang backend uses `-MMD` to emit `.d` dependency files per translation unit. On
 
 ## Workflow
 
+When fixing a bug, adding a new feature, removing a user-facing feature, or deprecating anything, always update `doc/CHANGELOG.txt` under the current unreleased version at the top of the file.
+
 After making any code changes, always build and run the tests before reporting the work as done:
 
 ```bash

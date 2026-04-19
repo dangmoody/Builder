@@ -254,7 +254,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 	char *pathFromSolutionToInputFile = cast( char *, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
 	memset( pathFromSolutionToInputFile, 0, MAX_PATH * sizeof( char ) );
 	pathFromSolutionToInputFile = path_relative_path_to( visualStudioProjectFilesPath, context->inputFilePath.data );
-	assert( pathFromSolutionToInputFile != NULL || !string_equals( pathFromSolutionToInputFile, "" ) );
+	assert( pathFromSolutionToInputFile != NULL && !string_equals( pathFromSolutionToInputFile, "" ) );
 
 	// give each project a guid
 	Array<const char *> projectGuids;

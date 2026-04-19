@@ -218,9 +218,7 @@ bool8 file_write( File* file, const void* data, const u64 offset, const u64 size
 }
 
 bool8 file_delete( const char* filename ) {
-	BOOL result = DeleteFile( filename );
-	assertf( result, "Failed to delete file %s: 0x%x.", filename, GetLastError() );
-	return cast( bool8, result );
+	return cast( bool8, DeleteFile( filename ) );
 }
 
 bool8 file_get_size( const char* filename, u64* out_size ) {

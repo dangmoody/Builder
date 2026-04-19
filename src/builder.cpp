@@ -1605,9 +1605,11 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 				}
 			}
 
-			if( options.linkAgainstWindowsDynamicRuntime ) {
+#ifdef _WIN32
+			if ( options.linkAgainstWindowsDynamicRuntime ) {
 				config->defines.push_back( "_DLL" );
 			}
+#endif
 
 			// make all non-absolute additional include paths relative to the build source file
 			For ( u64, includeIndex, 0, config->additionalIncludes.size() ) {

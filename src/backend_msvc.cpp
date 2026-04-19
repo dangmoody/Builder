@@ -144,8 +144,6 @@ static bool8 MSVC_CompileSourceFile(
 	const char *sourceFileNoPath = path_remove_path_from_file( sourceFile );
 	const char *sourceFileNoExtension = path_remove_file_extension( sourceFileNoPath );
 
-	config->additionalIncludes.emplace_back( "." );
-
 	msvcState_t *msvcState = cast( msvcState_t *, backend->data );
 
 	msvcState->includeDependencies.clear();

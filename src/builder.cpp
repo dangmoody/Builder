@@ -1250,6 +1250,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 #else
 				"NDEBUG",
 #endif
+				"_DLL",
 			},
 			.additionalIncludes = {
 				// add the folder that builder lives in as an additional include path otherwise people have no real way of being able to include it
@@ -1258,11 +1259,6 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 			.additionalLibs = {
 #if defined( _WIN64 )
 				"user32",
-#if defined( _DEBUG )
-				"msvcprtd",
-#else
-				"msvcprt",
-#endif
 #endif
 			},
 			.ignoreWarnings = {
@@ -1317,11 +1313,11 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	}
 
 	BuilderOptions options = {};
-
+	
 	Library library = library_load( userConfigFullBinaryName );
 	assertf( library.ptr, "Failed to load the user-config build DLL \"%s\".  This should never happen!\n", userConfigFullBinaryName );
 	defer( library_unload( &library ) );
-
+	
 	typedef void ( *setBuilderOptionsFunc_t )( BuilderOptions *options, CommandLineArgs *args );
 	typedef void ( *preBuildFunc_t )();
 	typedef void ( *postBuildFunc_t )();

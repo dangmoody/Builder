@@ -27,14 +27,16 @@ scripts/build.sh release
 **Windows:**
 ```bash
 scripts/build_tests.bat debug
-./bin/tests_main
+cd tests && ../bin/builder_tests_debug
 ```
 
 **Linux:**
 ```bash
 scripts/build_tests.sh debug
-./bin/tests_main
+cd tests && ../bin/builder_tests_debug
 ```
+
+Tests **must** be run from the `tests/` directory — the test paths are relative to it.
 
 ### Create a release
 

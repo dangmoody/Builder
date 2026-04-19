@@ -4,6 +4,7 @@ static void ApplyCompilerOverride( BuilderOptions *options, CommandLineArgs *arg
 	bool clang = HasCommandLineArg( args, "--clang" );
 	bool gcc = HasCommandLineArg( args, "--gcc" );
 	bool msvc = HasCommandLineArg( args, "--msvc" );
+	const char *msvcFullPath = GetCommandLineArgValue( args, "--msvc-full-path" );
 
 	if ( clang ) {
 		options->compilerPath = "../../clang/bin/clang";
@@ -17,6 +18,9 @@ static void ApplyCompilerOverride( BuilderOptions *options, CommandLineArgs *arg
 #endif
 	} else if ( msvc ) {
 		options->compilerPath = "cl";
+		options->compilerVersion = "14.44.35207";
+	} else if ( msvcFullPath ) {
+		options->compilerPath = msvcFullPath;
 		options->compilerVersion = "14.44.35207";
 	}
 }

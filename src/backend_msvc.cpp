@@ -113,10 +113,13 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const buildContext_t *contex
 	if ( string_equals( compilerPath.c_str(), "cl" ) || string_equals( compilerPath.c_str(), "cl.exe" ) ) {
 		string_printf( &msvcState->compilerPath, "%s\\bin\\Hostx64\\x64\\cl", context->msvcInstall.rootFolder.data );
 		string_printf( &msvcState->linkerPath, "%s\\bin\\Hostx64\\x64\\link", context->msvcInstall.rootFolder.data );
-
-		msvcState->microsoftCoreIncludes.push_back( context->msvcInstall.includePath.data );
-		msvcState->microsoftCoreLibPaths.push_back( context->msvcInstall.libPath.data );
+	} else {
+		const char *compilerDir = path_remove_file_from_path( compilerPath.c_str() );
+		string_printf( &msvcState->linkerPath, "%s\\link", compilerDir );
 	}
+
+	msvcState->microsoftCoreIncludes.push_back( context->msvcInstall.includePath.data );
+	msvcState->microsoftCoreLibPaths.push_back( context->msvcInstall.libPath.data );
 
 	return true;
 }

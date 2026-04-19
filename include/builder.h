@@ -387,6 +387,7 @@ struct CommandLineArgs {
 	char	**argv;
 };
 
+// Returns true if the exact argument 'arg' is present in the command line args, otherwise returns false.
 static bool HasCommandLineArg( CommandLineArgs *args, const char *arg ) {
 	for ( int argIndex = 0; argIndex < args->argc; argIndex++ ) {
 		if ( strcmp( args->argv[argIndex], arg ) == 0 ) {
@@ -395,6 +396,21 @@ static bool HasCommandLineArg( CommandLineArgs *args, const char *arg ) {
 	}
 
 	return false;
+}
+
+// Returns the value after '=' for args of the form "--key=value", or NULL if not found.
+static const char *GetCommandLineArgValue( CommandLineArgs *args, const char *arg ) {
+	size_t argLen = strlen( arg );
+
+	for ( int argIndex = 0; argIndex < args->argc; argIndex++ ) {
+		const char *currentArg = args->argv[argIndex];
+
+		if ( strncmp( currentArg, arg, argLen ) == 0 && currentArg[argLen] == '=' ) {
+			return currentArg + argLen + 1;
+		}
+	}
+
+	return NULL;
 }
 
 static void AddBuildConfigUnique( BuildConfig *config, std::vector<BuildConfig> &outConfigs );

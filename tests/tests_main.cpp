@@ -14,12 +14,13 @@
 
 
 enum compilerFlagBits_t {
-	COMPILER_DEFAULT	= bit( 0 ),
-	COMPILER_CLANG		= bit( 1 ),
-	COMPILER_GCC		= bit( 2 ),
-	COMPILER_MSVC		= bit( 3 ),
+	COMPILER_DEFAULT		= bit( 0 ),
+	COMPILER_CLANG			= bit( 1 ),
+	COMPILER_GCC			= bit( 2 ),
+	COMPILER_MSVC_SHORT		= bit( 3 ),
+	COMPILER_MSVC_FULL_PATH	= bit( 4 ),
 
-	COMPILER_ALL		= COMPILER_DEFAULT | COMPILER_CLANG | COMPILER_GCC | COMPILER_MSVC
+	COMPILER_ALL			= COMPILER_DEFAULT | COMPILER_CLANG | COMPILER_GCC | COMPILER_MSVC_SHORT | COMPILER_MSVC_FULL_PATH
 };
 typedef u32 compilerFlags_t;
 
@@ -39,10 +40,19 @@ struct buildTest_t {
 
 static const char *GetCompilerPath( const compilerFlagBits_t compiler ) {
 	switch ( compiler ) {
-		case COMPILER_DEFAULT:	return NULL;
-		case COMPILER_CLANG:	return	"../../clang/bin/clang";
-		case COMPILER_GCC:		return	"../../tools/gcc/bin/gcc";
-		case COMPILER_MSVC:		return	"cl";
+		case COMPILER_DEFAULT:			return NULL;
+		case COMPILER_CLANG:			return "../../clang/bin/clang";
+		case COMPILER_GCC:				return "../../tools/gcc/bin/gcc";
+		case COMPILER_MSVC_SHORT:		return "cl";
+#ifdef _WIN32
+		case COMPILER_MSVC_FULL_PATH: {
+			msvcInstall_t msvcInstall = {};
+			if ( Win_GetMSVCInstall( &msvcInstall ) ) {
+				return tprintf( "%s\\bin\\Hostx64\\x64\\cl", msvcInstall.rootFolder.data );
+			}
+			return NULL;
+		}
+#endif
 	}
 
 	TEMPER_CHECK_TRUE_M( false, "Bad compilerFlagBits_t passed\n" );
@@ -52,9 +62,10 @@ static const char *GetCompilerPath( const compilerFlagBits_t compiler ) {
 
 static const char *GetCompilerVersion( const compilerFlagBits_t compiler ) {
 	switch ( compiler ) {
-		case COMPILER_CLANG:	return	"20.1.5";
-		case COMPILER_GCC:		return	"15.1.0";
-		case COMPILER_MSVC:		return	"14.44.35207";
+		case COMPILER_CLANG:			return "20.1.5";
+		case COMPILER_GCC:				return "15.1.0";
+		case COMPILER_MSVC_SHORT:		return "14.44.35207";
+		case COMPILER_MSVC_FULL_PATH:	return "14.44.35207";
 	}
 
 	TEMPER_CHECK_TRUE_M( false, "Bad compilerFlagBits_t passed\n" );
@@ -144,7 +155,7 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 		compilerFlagBits_t compiler = cast( compilerFlagBits_t, bit( compilerIndex ) );
 
 #ifdef __linux__
-		if ( compiler == COMPILER_MSVC ) {
+		if ( compiler == COMPILER_MSVC_SHORT || compiler == COMPILER_MSVC_FULL_PATH ) {
 			continue;
 		}
 #endif
@@ -170,9 +181,16 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wswitch"
 			switch ( compiler ) {
-				case COMPILER_CLANG:	args.add( "--clang" );	break;
-				case COMPILER_GCC:		args.add( "--gcc" );	break;
-				case COMPILER_MSVC:		args.add( "--msvc" );	break;
+				case COMPILER_CLANG:			args.add( "--clang" );	break;
+				case COMPILER_GCC:				args.add( "--gcc" );	break;
+				case COMPILER_MSVC_SHORT:		args.add( "--msvc" );	break;
+#ifdef _WIN32
+				case COMPILER_MSVC_FULL_PATH: {
+					msvcInstall_t msvcInstall = {};
+					TEMPER_CHECK_TRUE_M( Win_GetMSVCInstall( &msvcInstall ), "Failed to find MSVC install for full-path compiler test.\n" );
+					args.add( tprintf( "--msvc-full-path=%s\\bin\\Hostx64\\x64\\cl", msvcInstall.rootFolder.data ) );
+				} break;
+#endif
 			}
 #pragma clang diagnostic pop
 
@@ -557,6 +575,10 @@ int main( int argc, char **argv ) {
 	TEMPER_RUN( argc, argv );
 
 	int exitCode = TEMPER_GET_EXIT_CODE();
+
+	if ( exitCode != 0 ) {
+		debug_break();
+	}
 
 	return exitCode;
 }

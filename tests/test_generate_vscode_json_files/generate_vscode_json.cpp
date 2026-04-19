@@ -26,8 +26,8 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArg
 			{ config, { "--release" } },
 		},
 		.launchConfigs = {
-			{ "bin/debug/" + config.binaryName   },
-			{ "bin/release/" + config.binaryName },
+			{ .binaryName = "bin/debug/" + config.binaryName,   .debuggerType = VSCODE_DEBUGGER_TYPE_CPPVSDBG   },
+			{ .binaryName = "bin/release/" + config.binaryName, .debuggerType = VSCODE_DEBUGGER_TYPE_CPPDBG_GDB },
 		},
 	};
 }

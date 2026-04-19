@@ -24,7 +24,7 @@ v0.12.0, <RELEASE DATE HERE>:
 	* On Clang (Windows), Builder will now explicitly link the correct CRT libraries based on your build configuration (_DEBUG, _DLL) rather than relying on the compiler's defaults.
 	* Does not apply to static library builds.
 	* On Linux, this passes -nodefaultlibs to Clang, which does not exclude libgcc. Use BuildConfig::additionalLinkerArguments to pass -nostdlib if you need that.
-* Windows:
+* MSVC:
 	* Fixed a bug where setting BuilderOptions::compilerPath to a full path to cl.exe would leave the linker path uninitialised, causing a crash or silent failure at link time.
 		* Builder now derives the linker path from the same directory as the compiler path in this case.
 	* Builder now emits a warning when OPTIMIZATION_LEVEL_O3 is used with the MSVC backend.

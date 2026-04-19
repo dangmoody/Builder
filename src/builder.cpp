@@ -330,7 +330,7 @@ s32 RunProc( Array<const char *> *args, Array<const char *> *environmentVariable
 	while ( ( bytesRead = process_read_stdout( process, buffer, count_of( buffer ) - 1 ) ) ) {
 		buffer[bytesRead] = 0;
 
-		string_builder_appendf( &sb, buffer );
+		string_builder_appendf( &sb, "%s", buffer );
 
 		if ( procFlags & PROC_FLAG_SHOW_STDOUT ) {
 			printf( "%s", buffer );

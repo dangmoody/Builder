@@ -1,18 +1,35 @@
 v0.12.0, <RELEASE DATE HERE>:
 
-* Added VS Code JSON file generation.
-	* Builder can now generate .vscode/tasks.json and .vscode/launch.json for you based off your BuildConfigs.
-	* Enable this by setting BuilderOptions::generateVSCodeJSONFiles to true and filling out BuilderOptions::vsCodeJSONOptions.
-	* VSCodeJSONOptions::taskConfigs lets you configure your VS Code build tasks.
-	* VSCodeJSONOptions::launchConfigs lets you configure your VS Code launch/debug configurations.
-	* VSCodeJSONOptions::builderPath lets you set the path to the Builder executable that VS Code will invoke.
-		* If left empty, this defaults to "builder", which assumes Builder is on your PATH.
+* Added VS Code and Zed JSON file generation.
+	* Builder can now generate editor JSON config files for VS Code and Zed based off your BuildConfigs.
+	* VS Code:
+		* Builder can now generate .vscode/tasks.json and .vscode/launch.json.
+		* Enable this by setting BuilderOptions::generateVSCodeJSONFiles to true and filling out BuilderOptions::vsCodeJSONOptions.
+		* VSCodeJSONOptions::taskConfigs lets you configure your VS Code build tasks.
+		* VSCodeJSONOptions::launchConfigs lets you configure your VS Code launch/debug configurations.
+		* VSCodeJSONOptions::builderPath lets you set the path to the Builder executable that VS Code will invoke.
+			* If left empty, this defaults to "builder", which assumes Builder is on your PATH.
+	* Zed:
+		* Builder can now generate .zed/tasks.json and .zed/debug.json.
+		* Enable this by setting BuilderOptions::generateZedJSONFiles to true and filling out BuilderOptions::zedJSONOptions.
+		* ZedJSONOptions::taskConfigs lets you configure your Zed build tasks.
+		* ZedJSONOptions::debugConfigs lets you configure your Zed debug configurations.
+		* ZedJSONOptions::builderPath lets you set the path to the Builder executable that Zed will invoke.
+			* If left empty, this defaults to "builder", which assumes Builder is on your PATH.
+* Added GetCommandLineArgValue( CommandLineArgs *, const char * ).
+	* Returns the value after '=' for args of the form "--key=value", or NULL if not found.
 * Added BuildConfig::noDefaultLibs (thanks @aiden-knight!).
 	* Setting this to true tells Builder not to link against the compiler's default libraries.
 	* On MSVC, this passes /NODEFAULTLIB to the linker.
 	* On Clang (Windows), Builder will now explicitly link the correct CRT libraries based on your build configuration (_DEBUG, _DLL) rather than relying on the compiler's defaults.
 	* Does not apply to static library builds.
-	* Note: On Linux, this passes -nodefaultlibs to Clang, which does not exclude libgcc. Use BuildConfig::additionalLinkerArguments to pass -nostdlib if you need that.
+	* On Linux, this passes -nodefaultlibs to Clang, which does not exclude libgcc. Use BuildConfig::additionalLinkerArguments to pass -nostdlib if you need that.
+* Windows:
+	* Fixed a bug where setting BuilderOptions::compilerPath to a full path to cl.exe would leave the linker path uninitialised, causing a crash or silent failure at link time.
+		* Builder now derives the linker path from the same directory as the compiler path in this case.
+	* Builder now emits a warning when OPTIMIZATION_LEVEL_O3 is used with the MSVC backend.
+		* MSVC has no /O3 equivalent, so Builder falls back to /O2.
+		* The warning is only shown once per build, regardless of how many configs or source files use it.
 
 ----------------------------------------------------------------
 

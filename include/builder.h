@@ -80,7 +80,7 @@ enum OptimizationLevel {
 	OPTIMIZATION_LEVEL_O0	= 0,
 	OPTIMIZATION_LEVEL_O1,
 	OPTIMIZATION_LEVEL_O2,
-	OPTIMIZATION_LEVEL_O3,
+	OPTIMIZATION_LEVEL_O3,	// MSVC has no /O3 equivalent; Builder will throw a warning telling you this and fall back to /O2.
 };
 
 struct BuildConfig {

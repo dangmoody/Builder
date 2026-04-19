@@ -95,6 +95,8 @@ static const char *OptimizationLevelToCompilerArg( const OptimizationLevel level
 }
 
 static void ReadDependencyFile( const char *depFilename, std::vector<std::string> &outIncludeDependencies ) {
+	LogVerbose( "Parsing dependency file \"%s\"...\n", depFilename );
+
 	char *depFileBuffer = NULL;
 
 	if ( !file_read_entire( depFilename, &depFileBuffer ) ) {
@@ -159,9 +161,10 @@ static void ReadDependencyFile( const char *depFilename, std::vector<std::string
 			}
 		}
 
-		// get the file timestamp
-		//u64 lastWriteTime = GetLastFileWriteTime( dependencyFilename.c_str() );
-		//printf( "Parsing dependency %s, last write time = %llu\n", dependencyFilename.c_str(), lastWriteTime );
+		{
+			u64 lastWriteTime = GetLastFileWriteTime( dependencyFilename.c_str() );
+			LogVerbose( " - Found dependency %s, last write time = %llu\n", dependencyFilename.c_str(), lastWriteTime );
+		}
 
 		outIncludeDependencies.push_back( dependencyFilename.c_str() );
 
@@ -180,6 +183,8 @@ static void ReadDependencyFile( const char *depFilename, std::vector<std::string
 			current += 1;
 		}
 	}
+
+	LogVerbose( "Finished parsing dependency file \"%s\"...\n", depFilename );
 }
 
 static void ResolveCompilerAndLinkerPaths( clangState_t *clangState, const char *compilerPath, const char *compilerName, const char *linkerName ) {

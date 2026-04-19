@@ -1061,6 +1061,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	float64 compilerBackendInitTimeMS = -1.0;
 	float64 visualStudioGenerationTimeMS = -1.0;
 	float64 vsCodeJSONGenerationTimeMS = -1.0;
+	float64 zedJSONGenerationTimeMS = -1.0;
 
 	core_init( MEM_MEGABYTES( 128 ) );	// TODO(DM): 26/03/2025: can we just use defaults for this now?
 	defer( core_shutdown() );
@@ -1400,6 +1401,15 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		}
 
 		vsCodeJSONGenerationTimeMS = time_ms() - start;
+	} else if ( options.generateZedJSONFiles ) {
+		float64 start = time_ms();
+
+		if ( !GenerateZedJSONFiles( &context, &options ) ) {
+			error( "Failed to generate Zed JSON files.\n" );
+			QUIT_ERROR();
+		}
+
+		zedJSONGenerationTimeMS = time_ms() - start;
 	} else {
 		// otherwise the user wants to actually build
 

@@ -181,6 +181,8 @@
     <None Include="README.md" />
     <None Include="scripts\build.bat" />
     <None Include="scripts\build.sh" />
+    <None Include="scripts\build_common.bat" />
+    <None Include="scripts\build_common.sh" />
     <None Include="scripts\build_tests.bat" />
     <None Include="scripts\build_tests.sh" />
     <None Include="scripts\download_dependencies.bat" />

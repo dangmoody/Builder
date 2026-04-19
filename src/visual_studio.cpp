@@ -137,14 +137,6 @@ static void VS_DeleteOldProjectFilesCallback( const FileInfo *fileInfo, void *us
 	}
 }
 
-static void VS_NukeDotVSFolder( const FileInfo *fileInfo, void *userData ) {
-	unused( userData );
-
-	if ( !file_delete( fileInfo->full_filename ) ) {
-		warning( "Failed to delete old Visual Studio file \"%s\" while deleting old Visual Studio files.  You will have to delete this one yourself.  Sorry.\n", fileInfo->full_filename );
-	}
-}
-
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunreachable-code"
 

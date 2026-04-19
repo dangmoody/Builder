@@ -818,7 +818,7 @@ static String GCC_GetCompilerVersion( compilerBackend_t *backend ) {
 
 	char buffer[1024] = {};
 	u64 bytesRead = U64_MAX;
-	while ( ( bytesRead = process_read_stdout( process, buffer, 1024 ) ) ) {
+	while ( ( bytesRead = process_read_stdout( process, buffer, count_of( buffer ) - 1 ) ) ) {
 		buffer[bytesRead] = 0;
 
 		string_builder_appendf( &gccOutput, "%s", buffer );

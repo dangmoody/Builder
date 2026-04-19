@@ -446,15 +446,15 @@ TEMPER_TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 
 		char *content = NULL;
 		u64 contentLength = 0;
-		file_read_entire( tasksJSONPath, &content, &contentLength );
+		TEMPER_CHECK_TRUE_M( file_read_entire( tasksJSONPath, &content, &contentLength ), "Failed to read tasks.json.\n" );
 		defer( file_free_buffer( &content ) );
 
-		TEMPER_CHECK_TRUE_M( strstr( content, "\"version\"" ) != NULL,              "tasks.json is missing \"version\".\n" );
-		TEMPER_CHECK_TRUE_M( strstr( content, "\"tasks\"" ) != NULL,                "tasks.json is missing \"tasks\" array.\n" );
-		TEMPER_CHECK_TRUE_M( strstr( content, "\"Build config\"" ) != NULL,         "tasks.json is missing \"Build config\" task.\n" );
-		TEMPER_CHECK_TRUE_M( strstr( content, "\"--config=config\"" ) != NULL,      "tasks.json is missing --config=config arg.\n" );
-		TEMPER_CHECK_TRUE_M( strstr( content, "\"--release\"" ) != NULL,            "tasks.json is missing --release arg for second task.\n" );
-		TEMPER_CHECK_TRUE_M( strstr( content, "generate_vscode_json.cpp" ) != NULL, "tasks.json is missing the build file arg.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"version\"" ),              "tasks.json is missing \"version\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"tasks\"" ),                "tasks.json is missing \"tasks\" array.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"Build config\"" ),         "tasks.json is missing \"Build config\" task.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"--config=config\"" ),      "tasks.json is missing --config=config arg.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"--release\"" ),            "tasks.json is missing --release arg for second task.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "generate_vscode_json.cpp" ), "tasks.json is missing the build file arg.\n" );
 	}
 
 	// launch.json
@@ -463,20 +463,20 @@ TEMPER_TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 
 		char *content = NULL;
 		u64 contentLength = 0;
-		file_read_entire( launchJSONPath, &content, &contentLength );
+		TEMPER_CHECK_TRUE_M( file_read_entire( launchJSONPath, &content, &contentLength ), "Failed to read launch.json.\n" );
 		defer( file_free_buffer( &content ) );
 
-		TEMPER_CHECK_TRUE_M( strstr( content, "\"version\"" ) != NULL,                  "launch.json is missing \"version\".\n" );
-		TEMPER_CHECK_TRUE_M( strstr( content, "\"configurations\"" ) != NULL,          "launch.json is missing \"configurations\" array.\n" );
-		TEMPER_CHECK_TRUE_M( strstr( content, "bin/debug/test_app" ) != NULL,          "launch.json is missing debug binary path.\n" );
-		TEMPER_CHECK_TRUE_M( strstr( content, "bin/release/test_app" ) != NULL,        "launch.json is missing release binary path.\n" );
-		TEMPER_CHECK_TRUE_M( strstr( content, "\"request\": \"launch\"" ) != NULL,     "launch.json is missing \"request\": \"launch\".\n" );
-		TEMPER_CHECK_TRUE_M( strstr( content, "\"cwd\": \"${workspaceFolder}\"" ) != NULL, "launch.json is missing default cwd.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"version\"" ),                     "launch.json is missing \"version\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"configurations\"" ),              "launch.json is missing \"configurations\" array.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "bin/debug/test_app" ),              "launch.json is missing debug binary path.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "bin/release/test_app" ),            "launch.json is missing release binary path.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"request\": \"launch\"" ),         "launch.json is missing \"request\": \"launch\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"cwd\": \"${workspaceFolder}\"" ), "launch.json is missing default cwd.\n" );
 #ifdef _WIN32
-		TEMPER_CHECK_TRUE_M( strstr( content, "\"type\": \"cppvsdbg\"" ) != NULL,      "launch.json is missing \"type\": \"cppvsdbg\" on Windows.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"type\": \"cppvsdbg\"" ),          "launch.json is missing \"type\": \"cppvsdbg\" on Windows.\n" );
 #else
-		TEMPER_CHECK_TRUE_M( strstr( content, "\"type\": \"cppdbg\"" ) != NULL,        "launch.json is missing \"type\": \"cppdbg\" on Linux.\n" );
-		TEMPER_CHECK_TRUE_M( strstr( content, "\"MIMode\": \"gdb\"" ) != NULL,         "launch.json is missing \"MIMode\": \"gdb\" on Linux.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"type\": \"cppdbg\"" ),            "launch.json is missing \"type\": \"cppdbg\" on Linux.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"MIMode\": \"gdb\"" ),             "launch.json is missing \"MIMode\": \"gdb\" on Linux.\n" );
 #endif
 	}
 
@@ -490,6 +490,10 @@ TEMPER_TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 			generatedFiles.fileExtensionsToDelete.add( ".d" );
 			generatedFiles.fileExtensionsToDelete.add( ".o" );
 			generatedFiles.fileExtensionsToDelete.add( ".include_dependencies" );
+			generatedFiles.fileExtensionsToDelete.add( ".lib" );
+			generatedFiles.fileExtensionsToDelete.add( ".exp" );
+			generatedFiles.fileExtensionsToDelete.add( ".pdb" );
+			generatedFiles.fileExtensionsToDelete.add( ".ilk" );
 
 			TEMPER_CHECK_TRUE( file_get_all_files_in_folder( dotBuilderFolder, true, true, GetAllGeneratedFiles, &generatedFiles ) );
 
@@ -508,6 +512,92 @@ TEMPER_TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 			TEMPER_CHECK_TRUE_M( file_delete( launchJSONPath ), "Failed to delete launch.json.\n" );
 		}
 		TEMPER_CHECK_TRUE_M( folder_delete( vsCodeFolder ), "Failed to delete .vscode folder.\n" );
+	}
+}
+
+TEMPER_TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
+	const char *buildFile        = "test_generate_zed_json_files/generate_zed_json.cpp";
+	const char *dotBuilderFolder = "test_generate_zed_json_files/.builder";
+	const char *dotZedFolder     = "test_generate_zed_json_files/.zed";
+	const char *tasksJSONPath    = "test_generate_zed_json_files/.zed/tasks.json";
+	const char *debugJSONPath    = "test_generate_zed_json_files/.zed/debug.json";
+
+	// generate the Zed JSON files
+	{
+		Array<const char *> args;
+		args.add( buildFile );
+
+		s32 exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
+		TEMPER_CHECK_TRUE_M( exitCode == 0, "BuilderMain() returned %d.\n", exitCode );
+	}
+
+	// tasks.json
+	{
+		TEMPER_CHECK_TRUE_M( file_exists( tasksJSONPath ), "tasks.json was not generated at \"%s\".\n", tasksJSONPath );
+
+		char *content = NULL;
+		u64 contentLength = 0;
+		TEMPER_CHECK_TRUE_M( file_read_entire( tasksJSONPath, &content, &contentLength ), "Failed to read tasks.json.\n" );
+		defer( file_free_buffer( &content ) );
+
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"label\""                  ), "tasks.json is missing \"label\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"Build config\""           ), "tasks.json is missing \"Build config\" task.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"command\""                ), "tasks.json is missing \"command\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"args\""                   ), "tasks.json is missing \"args\" array.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"--config=config\""        ), "tasks.json is missing --config=config arg.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"--release\""              ), "tasks.json is missing --release arg for second task.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "generate_zed_json.cpp"      ), "tasks.json is missing the build file arg.\n" );
+	}
+
+	// debug.json
+	{
+		TEMPER_CHECK_TRUE_M( file_exists( debugJSONPath ), "debug.json was not generated at \"%s\".\n", debugJSONPath );
+
+		char *content = NULL;
+		u64 contentLength = 0;
+		TEMPER_CHECK_TRUE_M( file_read_entire( debugJSONPath, &content, &contentLength ), "Failed to read debug.json.\n" );
+		defer( file_free_buffer( &content ) );
+
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"label\""                   ), "debug.json is missing \"label\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"Debug bin/debug/test_app\""), "debug.json is missing debug binary label.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"program\""                 ), "debug.json is missing \"program\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "bin/debug/test_app"          ), "debug.json is missing debug binary path.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "bin/release/test_app"        ), "debug.json is missing release binary path.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"${ZED_WORKTREE_ROOT}\""    ), "debug.json is missing default cwd.\n" );
+	}
+
+	// cleanup
+	{
+		// delete all files in .builder before removing the folder
+		// (rmdir requires an empty directory)
+		{
+			buildTestGeneratedFiles_t generatedFiles = {};
+			generatedFiles.fileExtensionsToDelete.add( GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
+			generatedFiles.fileExtensionsToDelete.add( ".d" );
+			generatedFiles.fileExtensionsToDelete.add( ".o" );
+			generatedFiles.fileExtensionsToDelete.add( ".include_dependencies" );
+			generatedFiles.fileExtensionsToDelete.add( ".lib" );
+			generatedFiles.fileExtensionsToDelete.add( ".exp" );
+			generatedFiles.fileExtensionsToDelete.add( ".pdb" );
+			generatedFiles.fileExtensionsToDelete.add( ".ilk" );
+
+			TEMPER_CHECK_TRUE( file_get_all_files_in_folder( dotBuilderFolder, true, true, GetAllGeneratedFiles, &generatedFiles ) );
+
+			For ( u32, fileIndex, 0, generatedFiles.files.count ) {
+				TEMPER_CHECK_TRUE_M( file_delete( generatedFiles.files[fileIndex] ), "Failed to delete \"%s\".\n", generatedFiles.files[fileIndex] );
+			}
+
+			TEMPER_CHECK_TRUE_M( folder_delete( dotBuilderFolder ), "Failed to delete \"%s\".\n", dotBuilderFolder );
+		}
+
+		// delete .zed contents then the folder
+		if ( file_exists( tasksJSONPath ) ) {
+			TEMPER_CHECK_TRUE_M( file_delete( tasksJSONPath ), "Failed to delete tasks.json.\n" );
+		}
+		if ( file_exists( debugJSONPath ) ) {
+			TEMPER_CHECK_TRUE_M( file_delete( debugJSONPath ), "Failed to delete debug.json.\n" );
+		}
+		TEMPER_CHECK_TRUE_M( folder_delete( dotZedFolder ), "Failed to delete .zed folder.\n" );
 	}
 }
 

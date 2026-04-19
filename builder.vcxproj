@@ -135,6 +135,7 @@
     <ClCompile Include="src\vs_code.cpp" />
     <ClCompile Include="src\win_sdk.cpp" />
     <ClCompile Include="src\win_support.cpp" />
+    <ClCompile Include="src\zed_editor.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\builder.h" />

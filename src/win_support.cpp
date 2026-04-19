@@ -66,7 +66,8 @@ static const char *FindRegistryValueFromKey( const HKEY key, const char *valueNa
 		return NULL;
 	}
 
-	char *valueStr = cast( char *, mem_temp_alloc( ( valueStrLength + 1 ) * sizeof( char ) ) );
+	// valueStrLength from RegQueryValueExA includes the null terminator for REG_SZ strings
+	char *valueStr = cast( char *, mem_temp_alloc( valueStrLength * sizeof( char ) ) );
 
 	DWORD type;
 	status = RegQueryValueExA( key, valueName, NULL, &type, cast( LPBYTE, valueStr ), &valueStrLength );
@@ -76,7 +77,6 @@ static const char *FindRegistryValueFromKey( const HKEY key, const char *valueNa
 	}
 
 	if ( status == ERROR_SUCCESS ) {
-		valueStr[valueStrLength] = 0;
 		return valueStr;
 	} else if ( status == ERROR_MORE_DATA ) {
 		assert( false );	// should never get here

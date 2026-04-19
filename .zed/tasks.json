@@ -16,7 +16,7 @@
 
 	{
 		"label": "Build tests debug",
-		"command": "./scripts/build_tests.sh debug",
+		"command": "./scripts/build_tests.sh",
 		"args": ["debug"],
 	},
 

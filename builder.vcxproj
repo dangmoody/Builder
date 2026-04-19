@@ -132,6 +132,7 @@
     <ClCompile Include="src\core\src\win64\timer.win64.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\visual_studio.cpp" />
+    <ClCompile Include="src\vs_code.cpp" />
     <ClCompile Include="src\win_sdk.cpp" />
     <ClCompile Include="src\win_support.cpp" />
   </ItemGroup>

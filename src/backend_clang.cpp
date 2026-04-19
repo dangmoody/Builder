@@ -95,6 +95,8 @@ static const char *OptimizationLevelToCompilerArg( const OptimizationLevel level
 }
 
 static void ReadDependencyFile( const char *depFilename, std::vector<std::string> &outIncludeDependencies ) {
+	LogVerbose( "Parsing dependency file \"%s\"...\n", depFilename );
+
 	char *depFileBuffer = NULL;
 
 	if ( !file_read_entire( depFilename, &depFileBuffer ) ) {
@@ -159,9 +161,10 @@ static void ReadDependencyFile( const char *depFilename, std::vector<std::string
 			}
 		}
 
-		// get the file timestamp
-		//u64 lastWriteTime = GetLastFileWriteTime( dependencyFilename.c_str() );
-		//printf( "Parsing dependency %s, last write time = %llu\n", dependencyFilename.c_str(), lastWriteTime );
+		{
+			u64 lastWriteTime = GetLastFileWriteTime( dependencyFilename.c_str() );
+			LogVerbose( " - Found dependency %s, last write time = %llu\n", dependencyFilename.c_str(), lastWriteTime );
+		}
 
 		outIncludeDependencies.push_back( dependencyFilename.c_str() );
 
@@ -180,6 +183,8 @@ static void ReadDependencyFile( const char *depFilename, std::vector<std::string
 			current += 1;
 		}
 	}
+
+	LogVerbose( "Finished parsing dependency file \"%s\"...\n", depFilename );
 }
 
 static void ResolveCompilerAndLinkerPaths( clangState_t *clangState, const char *compilerPath, const char *compilerName, const char *linkerName ) {
@@ -323,6 +328,7 @@ static bool8 Clang_CompileSourceFile(
 static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Array<const char *> &intermediateFiles, BuildConfig *config, const BuilderOptions *options ) {
 	assert( backend );
 	assert( config );
+	// assert( options );
 
 	clangState_t *clangState = cast( clangState_t *, backend->data );
 
@@ -337,7 +343,7 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		1 + // /DEBUG
 		1 + // /OUT:
 		1 + // kernel32.lib
-		4 + // CRT libs (e.g. msvcrt, msvcprt, vcruntime, ucrt when -D_DLL and NOT -D_DEBUG) 
+		4 + // CRT libs (e.g. msvcrt, msvcprt, vcruntime, ucrt when -D_DLL and NOT -D_DEBUG)
 		3 + // /LIBPATH: ucrt, um, msvc
 		intermediateFiles.count +
 		config->additionalLibPaths.size() +
@@ -389,7 +395,7 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		bool8 hasDllRuntime = false;
 		For ( u32, i, 0, config->defines.size() ) {
 			if ( config->defines[i] == "_DEBUG" ) {
-				debugBuild = true; 
+				debugBuild = true;
 			}
 			if ( config->defines[i] == "_DLL" ) {
 				hasDllRuntime = true;
@@ -473,6 +479,12 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 #ifdef _WIN32
 		args.add( tprintf( "-L%s", clangState->winSDK.ucrtLibPath.data ) );
 		args.add( tprintf( "-L%s", clangState->winSDK.umLibPath.data ) );
+#endif
+
+#ifdef __linux__
+		if ( !options || !options->noDefaultLibs ) {
+			args.add( "-lstdc++" );
+		}
 #endif
 
 		// on windows we already know the extension is going to be .lib, so we can add that ourselves
@@ -786,6 +798,16 @@ static String GCC_GetCompilerVersion( compilerBackend_t *backend ) {
 	args.add( clangState->compilerPath.data );
 	args.add( "-v" );
 
+	// DM: defined around it for now because I need to test on Windows before I remove it
+	// but this is working on Linux so its looking good so far
+#define CALL_RUN_PROC 1
+
+#if CALL_RUN_PROC
+	String gccOutputString;
+	s32 exitCode = RunProc( &args, NULL, 0, &gccOutputString );
+
+	const char *versionStart = strstr( gccOutputString.data, gccVersionPrefix );
+#else
 	Process *process = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
 
 	if ( !process ) {
@@ -799,7 +821,7 @@ static String GCC_GetCompilerVersion( compilerBackend_t *backend ) {
 
 	char buffer[1024] = {};
 	u64 bytesRead = U64_MAX;
-	while ( ( bytesRead = process_read_stdout( process, buffer, 1024 ) ) ) {
+	while ( ( bytesRead = process_read_stdout( process, buffer, count_of( buffer ) - 1 ) ) ) {
 		buffer[bytesRead] = 0;
 
 		string_builder_appendf( &gccOutput, "%s", buffer );
@@ -808,6 +830,7 @@ static String GCC_GetCompilerVersion( compilerBackend_t *backend ) {
 	const char *gccOutputString = string_builder_to_string( &gccOutput );
 
 	const char *versionStart = strstr( gccOutputString, gccVersionPrefix );
+#endif
 
 	if ( versionStart ) {
 		versionStart += strlen( gccVersionPrefix );
@@ -820,10 +843,12 @@ static String GCC_GetCompilerVersion( compilerBackend_t *backend ) {
 		string_copy_from_c_string( &compilerVersion, versionStart, versionLength );
 	}
 
+#if !CALL_RUN_PROC
 	process_join( process );
 
 	process_destroy( process );
 	process = NULL;
+#endif
 
 	return compilerVersion.data;
 }

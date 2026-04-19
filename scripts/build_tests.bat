@@ -9,7 +9,7 @@ echo Building tests config "%config%"...
 
 if /I [%config%] == [release] set optimisation=!optimisation! -ffast-math
 
-set sourceFiles=tests\\tests_main.cpp src\\builder.cpp src\\visual_studio.cpp src\\core\\src\\core.suc.cpp src\\backend_clang.cpp src\\backend_msvc.cpp src\\win_support.cpp
+set sourceFiles=tests\\tests_main.cpp src\\builder.cpp src\\visual_studio.cpp src\\vs_code.cpp src\\core\\src\\core.suc.cpp src\\backend_clang.cpp src\\backend_msvc.cpp src\\win_support.cpp
 
 set args=clang\\bin\\clang -Xlinker /NODEFAULTLIB -std=c++20 -o %binFolder%\\builder_tests_%config%.exe %symbols% %optimisation% %sourceFiles% !defines! %includes% %libPaths% !libraries! %warningLevels% %ignoreWarnings%
 echo !args!

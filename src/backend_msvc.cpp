@@ -80,7 +80,7 @@ static const char *OptimizationLevelToCompilerArg( const OptimizationLevel level
 		case OPTIMIZATION_LEVEL_O0:	return "/Od";
 		case OPTIMIZATION_LEVEL_O1:	return "/O1";
 		case OPTIMIZATION_LEVEL_O2:	return "/O2";
-		case OPTIMIZATION_LEVEL_O3:	return "/O2";	// DM!!! 22/07/2025: whats the real answer here?
+		case OPTIMIZATION_LEVEL_O3:	return "/O2";
 	}
 
 	assert( false && "Bad OptimizationLevel passed.\n" );
@@ -328,6 +328,13 @@ static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t *backe
 	}
 
 	// Optimization Level
+	if ( config->optimizationLevel == OPTIMIZATION_LEVEL_O3 ) {
+		static bool8 warned = false;
+		if ( !warned ) {
+			warning( "MSVC doesn't have optimization level /O3. /O2 is the maximum. Defaulting to that instead...\n" );
+			warned = true;
+		}
+	}
 	baseArgs.add( OptimizationLevelToCompilerArg( config->optimizationLevel ) );
 
 	// Diagnostics Flag

@@ -9,7 +9,7 @@ echo Building config "%config%"...
 
 set ignoreWarnings=!ignoreWarnings! -Wno-cast-align -Wno-nontrivial-memcall
 
-set sourceFiles=src\\main.cpp src\\builder.cpp src\\visual_studio.cpp src\\core\\src\\core.suc.cpp src\\backend_clang.cpp src\\backend_msvc.cpp src\\win_support.cpp
+set sourceFiles=src\\main.cpp src\\builder.cpp src\\visual_studio.cpp src\\core\\src\\core.suc.cpp src\\backend_clang.cpp src\\backend_msvc.cpp src\\win_support.cpp src\\vs_code.cpp
 
 set args=clang\\bin\\clang -Xlinker /NODEFAULTLIB -std=c++20 -o %binFolder%\\%programName%.exe %symbols% %optimisation% %sourceFiles% !defines! %includes% %libPaths% !libraries! %warningLevels% !ignoreWarnings!
 echo !args!

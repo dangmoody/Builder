@@ -80,7 +80,7 @@ enum OptimizationLevel {
 	OPTIMIZATION_LEVEL_O0	= 0,
 	OPTIMIZATION_LEVEL_O1,
 	OPTIMIZATION_LEVEL_O2,
-	OPTIMIZATION_LEVEL_O3,
+	OPTIMIZATION_LEVEL_O3,	// MSVC has no /O3 equivalent; Builder will throw a warning telling you this and fall back to /O2.
 };
 
 struct BuildConfig {
@@ -238,6 +238,84 @@ struct VisualStudioSolution {
 	std::string							path;
 };
 
+struct VSCodeTaskConfig {
+	// The config you want Builder to build through VS Code.
+	BuildConfig					config;
+
+	// Any additional args you want to send to Builder when building this config.
+	std::vector<std::string>	additionalBuildArgs;
+};
+
+enum VSCodeDebuggerType {
+	VSCODE_DEBUGGER_TYPE_UNSET			= 0,
+	VSCODE_DEBUGGER_TYPE_CPPDBG_GDB,	// Linux/Mac: cppdbg with MIMode gdb
+	VSCODE_DEBUGGER_TYPE_CPPDBG_LLDB,	// Linux/Mac: cppdbg with MIMode lldb
+	VSCODE_DEBUGGER_TYPE_CPPVSDBG,		// Windows: cppvsdbg (MSVC debugger)
+};
+
+struct VSCodeLaunchConfig {
+	// The config you want to run when you select this launch config in VS Code.
+	std::string					binaryName;
+
+	// When you run this config, what command line arguments do you want to be passed through?
+	std::vector<std::string>	args;
+
+	// You'd never guess, but this sets the "cwd" field in a VS Code launch config.
+	// This defaults to '${workspaceFolder}'.
+	std::string					cwd;
+
+	// Which VS Code debugger to use for this launch config.
+	// Defaults to VSCODE_DEBUGGER_TYPE_CPPDBG_GDB if unset.
+	VSCodeDebuggerType			debuggerType;
+};
+
+struct VSCodeJSONOptions {
+	// The path to the Builder executable that VS Code will invoke when running a task.
+	// If left empty, defaults to "builder", which assumes Builder is on your PATH.
+	// If you/your team doesn't put Builder on PATH, set this to wherever it lives
+	// (e.g. "${workspaceFolder}/tools/builder").
+	std::string						builderPath;
+
+	// The configs that will go into tasks.json.
+	std::vector<VSCodeTaskConfig>	taskConfigs;
+
+	// The configs that will go into debug.json.
+	std::vector<VSCodeLaunchConfig>	launchConfigs;
+};
+
+struct ZedTaskConfig {
+	// The config you want Builder to build through Zed.
+	BuildConfig					config;
+
+	// When you run this config, what command line arguments do you want to be passed through?
+	std::vector<std::string>	args;
+};
+
+struct ZedDebugConfig {
+	std::string					binaryName;
+
+	// When you run this config, what command line arguments do you want to be passed through?
+	std::vector<std::string>	args;
+
+	// You'd never guess, but this sets the "cwd" field in a VS Code launch config.
+	// This defaults to '${ZED_WORKTREE_ROOT}'.
+	std::string					cwd;
+};
+
+struct ZedJSONOptions {
+	// The path to the Builder executable that VS Code will invoke when running a task.
+	// If left empty, defaults to "builder", which assumes Builder is on your PATH.
+	// If you/your team doesn't put Builder on PATH, set this to wherever it lives
+	// (e.g. "${ZED_WORKTREE_ROOT}/tools/builder").
+	std::string					builderPath;
+
+	// The configs that will go into tasks.json.
+	std::vector<ZedTaskConfig>	taskConfigs;
+
+	// The configs that will go into debug.json.
+	std::vector<ZedDebugConfig>	debugConfigs;
+};
+
 struct BuilderOptions {
 	// The path to the compiler that you want to build with.
 	// If you want to use MSVC then you can just set this to "cl.exe" or "cl" and set 'compilerVersion' and Builder will figure it out for you.
@@ -259,6 +337,12 @@ struct BuilderOptions {
 	// If you don't use Visual Studio then ignore this.
 	VisualStudioSolution		solution;
 
+	// If 'generateVSCodeJSONFiles' is enabled, Builder will use these settings when filling them in.
+	VSCodeJSONOptions			vsCodeJSONOptions;
+
+	// If 'generateZedJSONFiles' is enabled, Builder will use these settings when filling them in.
+	ZedJSONOptions				zedJSONOptions;
+
 	// Set this to true if you want Builder to force-rebuild your program.
 	// All binaries and intermediate files will get rebuilt.
 	// This is really only useful to those who are either using an editor + command line workflow, or just hate incremental builds.
@@ -274,6 +358,12 @@ struct BuilderOptions {
 	// If you don't use Visual Studio then ignore this.
 	bool						generateSolution;
 
+	// Are you using VS Code and do you want Builder to generate the VS Code tasks.json and launch.json files based off your BuildConfigs?
+	bool						generateVSCodeJSONFiles;
+
+	// Are you using VS Code and do you want Builder to generate the Zed tasks.json and debug.json files based off your BuildConfigs?
+	bool						generateZedJSONFiles;
+
 	// Do you want to generate a compilation_commands.json for Clang tooling?
 	// If true, the file will be generated IF the build is successful.
 	bool						generateCompilationDatabase;
@@ -281,12 +371,14 @@ struct BuilderOptions {
 	// For windows target platform: Do you want to link against the Windows dynamic runtime (DLL) instead of the static runtime (LIB)?
 	// This is because on Windows the C and C++ runtimes come in both static and dynamic versions, and you have to choose which one you want to compile with and link against.
 	// All this does is set the _DLL preprocessor definition for you, which changes linking behavior to use the dynamic runtime.
+	// On Linux this doesn't do anything.
 	bool						linkAgainstWindowsDynamicRuntime;
 
 	// Tell Builder to ignore the default libraries that the compiler would normally link against.
-	// Specifically, if you don't want to link against the standard library, this is useful.
-	// Does not do anything for static library builds
-	// Note: This also does not guarantee linking of kernel32 or libgcc
+	// This is useful if you don't want to link against the standard library.
+	// Does not do anything for static library builds.
+	// Note: On Linux this passes -nodefaultlibs to Clang, which does not exclude libgcc.
+	// If you need to exclude libgcc, pass -nostdlib via BuildConfig::additionalLinkerArguments.
 	bool 						noDefaultLibs;
 };
 
@@ -373,18 +465,25 @@ static unsigned int BuilderGetConfigHash( BuildConfig *config, const unsigned in
 	hash = BuilderHashStringArray( hash, config->additionalIncludes );
 	hash = BuilderHashStringArray( hash, config->additionalLibPaths );
 	hash = BuilderHashStringArray( hash, config->additionalLibs );
+	hash = BuilderHashStringArray( hash, config->warningLevels );
 	hash = BuilderHashStringArray( hash, config->ignoreWarnings );
+	hash = BuilderHashStringArray( hash, config->additionalCompilerArguments );
+	hash = BuilderHashStringArray( hash, config->additionalLinkerArguments );
 
 	hash = BuilderHashCString( hash, config->binaryName.c_str(), config->binaryName.length() );
 	hash = BuilderHashCString( hash, config->binaryFolder.c_str(), config->binaryFolder.length() );
+	hash = BuilderHashCString( hash, config->intermediateFolder.c_str(), config->intermediateFolder.length() );
 	hash = BuilderHashCString( hash, config->name.c_str(), config->name.length() );
 
+	hash = BuilderHashSDBM( &config->languageVersion, hash, sizeof( LanguageVersion ) );
 	hash = BuilderHashSDBM( &config->binaryType, hash, sizeof( BinaryType ) );
 	hash = BuilderHashSDBM( &config->optimizationLevel, hash, sizeof( OptimizationLevel ) );
 
 	hash = BuilderHashSDBM( &config->removeSymbols, hash, sizeof( bool ) );
 	hash = BuilderHashSDBM( &config->removeFileExtension, hash, sizeof( bool ) );
 	hash = BuilderHashSDBM( &config->warningsAsErrors, hash, sizeof( bool ) );
+
+	// TODO(DM): do we hash OnPreBuild() and OnPostBuild() too?
 
 	return hash;
 }

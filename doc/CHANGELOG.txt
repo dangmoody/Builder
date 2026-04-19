@@ -1,4 +1,22 @@
-v0.11.3, <RELEASE DATE HERE>:
+v0.12.0, <RELEASE DATE HERE>:
+
+* Added VS Code JSON file generation.
+	* Builder can now generate .vscode/tasks.json and .vscode/launch.json for you based off your BuildConfigs.
+	* Enable this by setting BuilderOptions::generateVSCodeJSONFiles to true and filling out BuilderOptions::vsCodeJSONOptions.
+	* VSCodeJSONOptions::taskConfigs lets you configure your VS Code build tasks.
+	* VSCodeJSONOptions::launchConfigs lets you configure your VS Code launch/debug configurations.
+	* VSCodeJSONOptions::builderPath lets you set the path to the Builder executable that VS Code will invoke.
+		* If left empty, this defaults to "builder", which assumes Builder is on your PATH.
+* Added BuildConfig::noDefaultLibs (thanks @aiden-knight!).
+	* Setting this to true tells Builder not to link against the compiler's default libraries.
+	* On MSVC, this passes /NODEFAULTLIB to the linker.
+	* On Clang (Windows), Builder will now explicitly link the correct CRT libraries based on your build configuration (_DEBUG, _DLL) rather than relying on the compiler's defaults.
+	* Does not apply to static library builds.
+	* Note: On Linux, this passes -nodefaultlibs to Clang, which does not exclude libgcc. Use BuildConfig::additionalLinkerArguments to pass -nostdlib if you need that.
+
+----------------------------------------------------------------
+
+v0.11.3, 12/04/2026:
 
 * Fixed a bug where modifying your build source file would not trigger a full rebuild of the config (and its dependencies).
 * Fixed a bug where the --verbose command line argument was not working.

@@ -133,6 +133,8 @@ bool8 Win_GetWindowsSDK( windowsSDK_t *outSDK ) {
 	// newest version first
 	qsort( versions.data, versions.count, sizeof( windowsSDKVersion_t ), CompareWindowsSDKVersions );
 
+	bool8 foundVersion = false;
+
 	// find the first windows SDK folder that isnt malformed
 	For ( u32, versionIndex, 0, versions.count ) {
 		windowsSDKVersion_t *version = &versions[versionIndex];
@@ -140,17 +142,18 @@ bool8 Win_GetWindowsSDK( windowsSDK_t *outSDK ) {
 		if ( !folder_exists( tprintf( "%sinclude\\%d.%d.%d.%d\\ucrt",   outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 ) ) ) continue;
 		if ( !folder_exists( tprintf( "%sinclude\\%d.%d.%d.%d\\um",     outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 ) ) ) continue;
 		if ( !folder_exists( tprintf( "%sinclude\\%d.%d.%d.%d\\shared", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 ) ) ) continue;
-		if ( !folder_exists( tprintf( "%sinclude\\%d.%d.%d.%d\\ucrt",   outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 ) ) ) continue;
 
 		if ( !folder_exists( tprintf( "%sLib\\%d.%d.%d.%d\\ucrt\\x64", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 ) ) ) continue;
 		if ( !folder_exists( tprintf( "%sLib\\%d.%d.%d.%d\\um\\x64",   outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 ) ) ) continue;
 
 		outSDK->version = *version;
 
+		foundVersion = true;
+
 		break;
 	}
 
-	if ( outSDK->version.v0 == -1 && outSDK->version.v1 == -1 && outSDK->version.v2 == -1 && outSDK->version.v3 == -1 ) {
+	if ( !foundVersion ) {
 		error(
 			"Failed to find a valid installation of the Windows SDK on your machine.\n"
 			"You have %llu versions of the Windows SDK installed on your machine, and somehow all of them appear to be malformed.\n"

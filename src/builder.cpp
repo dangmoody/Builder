@@ -86,15 +86,11 @@ enum buildResult_t {
 
 bool8 g_verbose = false;
 
-#ifdef __linux__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wpadded"
-#endif
 
 u64 GetLastFileWriteTime( const char *filename ) {
 	u64 lastWriteTime = 0;
 	if ( !file_get_last_write_time( filename, &lastWriteTime ) ) {
-		assert( false );
+		return U64_MAX;
 	}
 
 	return lastWriteTime;
@@ -331,10 +327,10 @@ s32 RunProc( Array<const char *> *args, Array<const char *> *environmentVariable
 
 	u64 bytesRead = 0;
 	char buffer[1024] = {};
-	while ( ( bytesRead = process_read_stdout( process, buffer, 1024 ) ) ) {
+	while ( ( bytesRead = process_read_stdout( process, buffer, count_of( buffer ) - 1 ) ) ) {
 		buffer[bytesRead] = 0;
 
-		string_builder_appendf( &sb, buffer );
+		string_builder_appendf( &sb, "%s", buffer );
 
 		if ( procFlags & PROC_FLAG_SHOW_STDOUT ) {
 			printf( "%s", buffer );
@@ -349,6 +345,21 @@ s32 RunProc( Array<const char *> *args, Array<const char *> *environmentVariable
 
 	return exitCode;
 }
+
+bool8 WriteStringBuilderToFile( StringBuilder *stringBuilder, const char *filename ) {
+	const char *msg = string_builder_to_string( stringBuilder );
+	const u64 msgLength = strlen( msg );
+	bool8 written = file_write_entire( filename, msg, msgLength );
+
+	if ( !written ) {
+		errorCode_t errorCode = get_last_error_code();
+		error( "Failed to write \"%s\": " ERROR_CODE_FORMAT ".\n", filename, errorCode );
+
+		return false;
+	}
+
+	return true;
+};
 
 static s32 ShowUsage( const s32 exitCode ) {
 	printf(
@@ -597,7 +608,7 @@ bool8 NukeFolder( const char *folder, const bool8 deleteRootFolder, const bool8 
 
 	if ( deleteRootFolder ) {
 		if ( !folder_delete( folder ) ) {
-			error( "Failed to nuke root folder \"%s\" after deleting all the files and folders inside it.  You'll need to do this manually.  Sorry.\n" );
+			error( "Failed to nuke root folder \"%s\" after deleting all the files and folders inside it.  You'll need to do this manually.  Sorry.\n", folder );
 			result = false;
 		}
 	}
@@ -1049,6 +1060,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	float64 setBuilderOptionsTimeMS = -1.0;
 	float64 compilerBackendInitTimeMS = -1.0;
 	float64 visualStudioGenerationTimeMS = -1.0;
+	float64 vsCodeJSONGenerationTimeMS = -1.0;
 
 	core_init( MEM_MEGABYTES( 128 ) );	// TODO(DM): 26/03/2025: can we just use defaults for this now?
 	defer( core_shutdown() );
@@ -1379,6 +1391,15 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		printf( "Done.\n\n" );
 
 		visualStudioGenerationTimeMS = time_ms() - start;
+	} else if ( options.generateVSCodeJSONFiles ) {
+		float64 start = time_ms();
+
+		if ( !GenerateVSCodeJSONFiles( &context, &options ) ) {
+			error( "Failed to generate VS Code JSON files.\n" );
+			QUIT_ERROR();
+		}
+
+		vsCodeJSONGenerationTimeMS = time_ms() - start;
 	} else {
 		// otherwise the user wants to actually build
 
@@ -1580,9 +1601,11 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 				}
 			}
 
-			if( options.linkAgainstWindowsDynamicRuntime ) {
+#ifdef _WIN32
+			if ( options.linkAgainstWindowsDynamicRuntime ) {
 				config->defines.push_back( "_DLL" );
 			}
+#endif
 
 			// make all non-absolute additional include paths relative to the build source file
 			For ( u64, includeIndex, 0, config->additionalIncludes.size() ) {
@@ -1710,6 +1733,3 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	return 0;
 }
 
-#ifdef __linux__
-#pragma clang diagnostic pop
-#endif //__linux__

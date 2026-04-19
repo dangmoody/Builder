@@ -87,6 +87,15 @@ Clang backend uses `-MMD` to emit `.d` dependency files per translation unit. On
 
 `BuildConfig` has a `dependsOn` field. Builder resolves the dependency graph and builds prerequisite configs (e.g., a static library) before the config that depends on them.
 
+## Workflow
+
+After making any code changes, always build and run the tests before reporting the work as done:
+
+```bash
+scripts/build_tests.sh debug
+cd tests && ../bin/builder_tests_debug
+```
+
 ## Code conventions
 
 - Custom integer types: `u8`, `s32`, `u64`, `float64`, `bool8` (from `src/core/core_types.h`)

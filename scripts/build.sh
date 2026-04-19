@@ -19,7 +19,7 @@ if [[ "$config" != "release" ]]; then
 	optimisation="-O3"
 fi
 
-sourceFiles="$sourceFolder/main.cpp $sourceFolder/builder.cpp $sourceFolder/visual_studio.cpp $sourceFolder/backend_clang.cpp $sourceFolder/core/src/core.suc.cpp $sourceFolder/vs_code.cpp"
+sourceFiles="$sourceFolder/main.cpp $sourceFolder/builder.cpp $sourceFolder/visual_studio.cpp $sourceFolder/backend_clang.cpp $sourceFolder/core/src/core.suc.cpp $sourceFolder/vs_code.cpp $sourceFolder/zed_editor.cpp"
 
 args="${clangDir}/bin/clang -std=c++20 -ferror-limit=0 -o $binFolder/$programName $symbols $optimisation $sourceFiles $defines $includes $libPaths $libraries $warningLevels $ignoreWarnings -Wl,-rpath=$binFolder"
 echo $args

@@ -9,6 +9,7 @@
 #include "core/include/temp_storage.h"
 #include "core/include/string_helpers.h"
 #include "core/include/array.inl"
+#include "core/include/string_builder.h"
 
 #include <Windows.h>
 
@@ -139,12 +140,50 @@ bool8 Win_GetWindowsSDK( windowsSDK_t *outSDK ) {
 	For ( u32, versionIndex, 0, versions.count ) {
 		windowsSDKVersion_t *version = &versions[versionIndex];
 
-		if ( !folder_exists( tprintf( "%sinclude\\%d.%d.%d.%d\\ucrt",   outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 ) ) ) continue;
-		if ( !folder_exists( tprintf( "%sinclude\\%d.%d.%d.%d\\um",     outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 ) ) ) continue;
-		if ( !folder_exists( tprintf( "%sinclude\\%d.%d.%d.%d\\shared", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 ) ) ) continue;
+		Array<const char *> missingFolders;
+		missingFolders.reserve( 5 );
 
-		if ( !folder_exists( tprintf( "%sLib\\%d.%d.%d.%d\\ucrt\\x64", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 ) ) ) continue;
-		if ( !folder_exists( tprintf( "%sLib\\%d.%d.%d.%d\\um\\x64",   outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 ) ) ) continue;
+		// TODO(DM): 21/04/2026: rewind temp storage after we are done with this?
+		const char *ucrtIncludeFolder = tprintf( "%sinclude\\%d.%d.%d.%d\\ucrt", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
+		const char *umIncludeFolder = tprintf( "%sinclude\\%d.%d.%d.%d\\um", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
+		const char *sharedIncludeFolder = tprintf( "%sinclude\\%d.%d.%d.%d\\shared", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
+		const char *ucrtLibFolder = tprintf( "%sLib\\%d.%d.%d.%d\\ucrt\\x64", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
+		const char *umLibFolder = tprintf( "%sLib\\%d.%d.%d.%d\\um\\x64", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
+
+		if ( !folder_exists( ucrtIncludeFolder ) ) {
+			missingFolders.add( ucrtIncludeFolder );
+		}
+
+		if ( !folder_exists( umIncludeFolder ) ) {
+			missingFolders.add( umIncludeFolder );
+		}
+
+		if ( !folder_exists( sharedIncludeFolder ) ) {
+			missingFolders.add( sharedIncludeFolder );
+		}
+
+		if ( !folder_exists( ucrtLibFolder ) ) {
+			missingFolders.add( ucrtLibFolder );
+		}
+
+		if ( !folder_exists( umLibFolder ) ) {
+			missingFolders.add( umLibFolder );
+		}
+
+		if ( missingFolders.count > 0 ) {
+			StringBuilder sb = {};
+			defer( string_builder_destroy( &sb ) );
+			string_builder_reset( &sb );
+			string_builder_appendf( &sb, "Version %d.%d.%d.%d of your Windows SDK installation is malformed because the following folders could not be found:\n", version->v0, version->v1, version->v2, version->v3 );
+			For ( u32, missingFolderIndex, 0, missingFolders.count ) {
+				string_builder_appendf( &sb, " - %s\n", missingFolders[missingFolderIndex] );
+			}
+			string_builder_appendf( &sb, "If you want to use this version of the Windows SDK specifically, you will need to fix this yourself.\n" );
+
+			warning( "%s\n", string_builder_to_string( &sb ) );
+
+			continue;
+		}
 
 		outSDK->version = *version;
 
@@ -361,8 +400,31 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 	For ( u32, versionIndex, 0, foundMSVCInstalls.size() ) {
 		msvcInstall_t *install = &foundMSVCInstalls[versionIndex];
 
-		if ( !folder_exists( install->includePath.data ) ) continue;
-		if ( !folder_exists( install->libPath.data ) ) continue;
+		Array<const char *> missingFolders;
+		missingFolders.reserve( 2 );
+
+		if ( !folder_exists( install->includePath.data ) ) {
+			missingFolders.add( install->includePath.data );
+		}
+
+		if ( !folder_exists( install->libPath.data ) ) {
+			missingFolders.add( install->libPath.data );
+		}
+
+		if ( missingFolders.count > 0 ) {
+			StringBuilder sb = {};
+			defer( string_builder_destroy( &sb ) );
+			string_builder_reset( &sb );
+			string_builder_appendf( &sb, "Version %d.%d.%d of your MSVC installation is malformed because the following folders could not be found:\n", install->version.v0, install->version.v1, install->version.v2 );
+			For ( u32, missingFolderIndex, 0, missingFolders.count ) {
+				string_builder_appendf( &sb, " - %s\n", missingFolders[missingFolderIndex] );
+			}
+			string_builder_appendf( &sb, "If you want to use this version of MSVC specifically, you will need to fix this yourself.\n" );
+
+			warning( "%s\n", string_builder_to_string( &sb ) );
+
+			continue;
+		}
 
 		useVersionIndex = versionIndex;
 		found = true;

@@ -43,9 +43,9 @@
 	},
 
 	{
-		"label": "Builder - Debug - test_multiple_source_files (Clang)",
+		"label": "Builder - Debug - test_multiple_source_files",
 		"program": "${ZED_WORKTREE_ROOT}/bin/builder_debug",
-		"args": ["tests/test_multiple_source_files/build_clang.cpp"],
+		"args": ["tests/test_multiple_source_files/build.cpp"],
 		"request": "launch",
 		"adapter": "CodeLLDB",
 		"build": "Build debug",
@@ -54,7 +54,7 @@
 	{
 		"label": "Builder - Debug - test_multiple_source_files (MSVC)",
 		"program": "${ZED_WORKTREE_ROOT}/bin/builder_debug",
-		"args": ["tests/test_multiple_source_files/build_msvc.cpp"],
+		"args": ["tests/test_multiple_source_files/build.cpp", "--msvc"],
 		"request": "launch",
 		"adapter": "CodeLLDB",
 		"build": "Build debug",
@@ -63,16 +63,16 @@
 	{
 		"label": "Builder - Debug - test_static_lib (GCC)",
 		"program": "${ZED_WORKTREE_ROOT}/bin/builder_debug",
-		"args": ["tests/test_static_lib/build_gcc.cpp", "--config=program"],
+		"args": ["tests/test_static_lib/build.cpp", "--config=program", "--gcc"],
 		"request": "launch",
 		"adapter": "CodeLLDB",
 		"build": "Build debug",
 	},
 
 	{
-		"label": "Builder - Debug - test_dynamic_lib (Clang)",
+		"label": "Builder - Debug - test_dynamic_lib",
 		"program": "${ZED_WORKTREE_ROOT}/bin/builder_debug",
-		"args": ["tests/test_dynamic_lib/build_clang.cpp", "--config=program"],
+		"args": ["tests/test_dynamic_lib/build.cpp", "--config=program"],
 		"request": "launch",
 		"adapter": "CodeLLDB",
 		"build": "Build debug",

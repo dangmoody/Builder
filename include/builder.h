@@ -253,20 +253,48 @@ enum VSCodeDebuggerType {
 	VSCODE_DEBUGGER_TYPE_CPPVSDBG,		// Windows: cppvsdbg (MSVC debugger)
 };
 
+struct VSCodeDebuggerPlatformConfig {
+	// The MI debug mode to use on this platform. E.g. "gdb" or "lldb".
+	std::string	MIMode;
+
+	// The path to the debugger on this platform. E.g. "/usr/bin/gdb".
+	std::string	miDebuggerPath;
+};
+
+struct VSCodeSetupCommand {
+	std::string	description;
+	std::string	text;
+	bool		ignoreFailures;
+};
+
 struct VSCodeLaunchConfig {
 	// The config you want to run when you select this launch config in VS Code.
-	std::string					binaryName;
+	std::string								binaryName;
 
 	// When you run this config, what command line arguments do you want to be passed through?
-	std::vector<std::string>	args;
+	std::vector<std::string>				args;
 
 	// You'd never guess, but this sets the "cwd" field in a VS Code launch config.
 	// This defaults to '${workspaceFolder}'.
-	std::string					cwd;
+	std::string								cwd;
 
 	// Which VS Code debugger to use for this launch config.
 	// Defaults to VSCODE_DEBUGGER_TYPE_CPPDBG_GDB if unset.
-	VSCodeDebuggerType			debuggerType;
+	VSCodeDebuggerType						debuggerType;
+
+	// Platform-specific debugger config for Linux.
+	// When set, Builder emits a "linux": { ... } block with MIMode and miDebuggerPath
+	// instead of putting MIMode at the top level of the config.
+	VSCodeDebuggerPlatformConfig			linuxDebugger;
+
+	// Platform-specific debugger config for Windows.
+	// When set, Builder emits a "windows": { ... } block with MIMode and miDebuggerPath
+	// instead of putting MIMode at the top level of the config.
+	VSCodeDebuggerPlatformConfig			windowsDebugger;
+
+	// GDB/LLDB MI commands to send to the debugger during initialisation,
+	// before attaching to or launching the program.
+	std::vector<VSCodeSetupCommand>			setupCommands;
 };
 
 struct VSCodeJSONOptions {

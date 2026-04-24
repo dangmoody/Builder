@@ -87,6 +87,7 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 		string_builder_appendf( &launchJSONContent, "\t// For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387\n" );
 		string_builder_appendf( &launchJSONContent, "\t\"version\": \"0.2.0\",\n" );	// TODO(DM): 17/04/2026: do we need to expose the version to VSCodeJSONOptions?
 		string_builder_appendf( &launchJSONContent, "\t\"configurations\": [\n" );
+
 		For ( u32, configIndex, 0, options->vsCodeJSONOptions.launchConfigs.size() ) {
 			VSCodeLaunchConfig *launchConfig = &options->vsCodeJSONOptions.launchConfigs[configIndex];
 
@@ -95,15 +96,21 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 			{
 				VSCodeDebuggerType debuggerType = ( launchConfig->debuggerType == VSCODE_DEBUGGER_TYPE_UNSET ) ? VSCODE_DEBUGGER_TYPE_CPPDBG_GDB : launchConfig->debuggerType;
 
+				bool8 hasPlatformConfigs = !launchConfig->linuxDebugger.MIMode.empty() || !launchConfig->windowsDebugger.MIMode.empty();
+
 				switch ( debuggerType ) {
 					case VSCODE_DEBUGGER_TYPE_CPPDBG_GDB:
 						string_builder_appendf( &launchJSONContent, "\t\t\t\"type\": \"cppdbg\",\n" );
-						string_builder_appendf( &launchJSONContent, "\t\t\t\"MIMode\": \"gdb\",\n" );
+						if ( !hasPlatformConfigs ) {
+							string_builder_appendf( &launchJSONContent, "\t\t\t\"MIMode\": \"gdb\",\n" );
+						}
 						break;
 
 					case VSCODE_DEBUGGER_TYPE_CPPDBG_LLDB:
 						string_builder_appendf( &launchJSONContent, "\t\t\t\"type\": \"cppdbg\",\n" );
-						string_builder_appendf( &launchJSONContent, "\t\t\t\"MIMode\": \"lldb\",\n" );
+						if ( !hasPlatformConfigs ) {
+							string_builder_appendf( &launchJSONContent, "\t\t\t\"MIMode\": \"lldb\",\n" );
+						}
 						break;
 
 					case VSCODE_DEBUGGER_TYPE_CPPVSDBG:
@@ -114,8 +121,10 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 						break;
 				}
 			}
+
 			string_builder_appendf( &launchJSONContent, "\t\t\t\"request\": \"launch\",\n" );
 			string_builder_appendf( &launchJSONContent, "\t\t\t\"program\": \"%s\",\n", launchConfig->binaryName.c_str() );
+
 			if ( !launchConfig->args.empty() ) {
 				string_builder_appendf( &launchJSONContent, "\t\t\t\"args\": [\n" );
 
@@ -131,12 +140,48 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 
 				string_builder_appendf( &launchJSONContent, "\t\t\t],\n" );
 			}
+
 			{
 				const char *cwd = launchConfig->cwd.empty() ? "${workspaceFolder}" : launchConfig->cwd.c_str();
 				string_builder_appendf( &launchJSONContent, "\t\t\t\"cwd\": \"%s\",\n", cwd );	// TODO(DM): 16/04/2026: do we want to expose this to VSCodeJSONOptions?
 			}
+
+			if ( !launchConfig->linuxDebugger.MIMode.empty() ) {
+				string_builder_appendf( &launchJSONContent, "\t\t\t\"linux\": {\n" );
+				string_builder_appendf( &launchJSONContent, "\t\t\t\t\"MIMode\": \"%s\",\n", launchConfig->linuxDebugger.MIMode.c_str() );
+				if ( !launchConfig->linuxDebugger.miDebuggerPath.empty() ) {
+					string_builder_appendf( &launchJSONContent, "\t\t\t\t\"miDebuggerPath\": \"%s\",\n", launchConfig->linuxDebugger.miDebuggerPath.c_str() );
+				}
+				string_builder_appendf( &launchJSONContent, "\t\t\t},\n" );
+			}
+
+			if ( !launchConfig->windowsDebugger.MIMode.empty() ) {
+				string_builder_appendf( &launchJSONContent, "\t\t\t\"windows\": {\n" );
+				string_builder_appendf( &launchJSONContent, "\t\t\t\t\"MIMode\": \"%s\",\n", launchConfig->windowsDebugger.MIMode.c_str() );
+				if ( !launchConfig->windowsDebugger.miDebuggerPath.empty() ) {
+					string_builder_appendf( &launchJSONContent, "\t\t\t\t\"miDebuggerPath\": \"%s\",\n", launchConfig->windowsDebugger.miDebuggerPath.c_str() );
+				}
+				string_builder_appendf( &launchJSONContent, "\t\t\t},\n" );
+			}
+
+			if ( !launchConfig->setupCommands.empty() ) {
+				string_builder_appendf( &launchJSONContent, "\t\t\t\"setupCommands\": [\n" );
+
+				For ( u32, cmdIndex, 0, launchConfig->setupCommands.size() ) {
+					const VSCodeSetupCommand *cmd = &launchConfig->setupCommands[cmdIndex];
+					string_builder_appendf( &launchJSONContent, "\t\t\t\t{\n" );
+					string_builder_appendf( &launchJSONContent, "\t\t\t\t\t\"description\": \"%s\",\n", cmd->description.c_str() );
+					string_builder_appendf( &launchJSONContent, "\t\t\t\t\t\"text\": \"%s\",\n", cmd->text.c_str() );
+					string_builder_appendf( &launchJSONContent, "\t\t\t\t\t\"ignoreFailures\": %s,\n", cmd->ignoreFailures ? "true" : "false" );
+					string_builder_appendf( &launchJSONContent, "\t\t\t\t},\n" );
+				}
+
+				string_builder_appendf( &launchJSONContent, "\t\t\t],\n" );
+			}
+
 			string_builder_appendf( &launchJSONContent, "\t\t},\n" );
 		}
+
 		string_builder_appendf( &launchJSONContent, "\t]\n" );
 		string_builder_appendf( &launchJSONContent, "}\n" );
 

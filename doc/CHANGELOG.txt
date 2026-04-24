@@ -30,6 +30,7 @@ v0.12.0, <RELEASE DATE HERE>:
 	* Builder now warns when a Windows SDK or MSVC installation is malformed (i.e. missing expected folders), and skips it in favour of the next newest valid version.
 	* Fixed a bug where setting BuilderOptions::compilerPath to a full path to cl.exe would leave the linker path uninitialised, causing a crash or silent failure at link time.
 		* Builder now derives the linker path from the same directory as the compiler path in this case.
+	* Builder now throws an error if the Windows SDK registry key `KitsRoot10` can't be found under `SOFTWARE/Microsoft/Windows Kits/Installed Roots` instead of crashing like it used to.
 	* Builder now emits a warning when OPTIMIZATION_LEVEL_O3 is used with the MSVC backend.
 		* MSVC has no /O3 equivalent, so Builder falls back to /O2.
 		* The warning is only shown once per build, regardless of how many configs or source files use it.

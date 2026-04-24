@@ -102,12 +102,15 @@ bool8 Win_GetWindowsSDK( windowsSDK_t *outSDK ) {
 
 	HKEY key;
 
-	LSTATUS status = RegOpenKeyExA( HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows Kits\\Installed Roots", 0, KEY_QUERY_VALUE | KEY_WOW64_32KEY | KEY_ENUMERATE_SUB_KEYS, &key );
+	const char *winSDKRegPath = "SOFTWARE\\Microsoft\\Windows Kits\\Installed Roots";
+	LSTATUS status = RegOpenKeyExA( HKEY_LOCAL_MACHINE, winSDKRegPath, 0, KEY_QUERY_VALUE | KEY_WOW64_32KEY | KEY_ENUMERATE_SUB_KEYS, &key );
 
 	if ( status != ERROR_SUCCESS ) {
 		error(
-			"Failed to get Windows SDK installation directory from your Windows registry.  This likely means you don't have the Windows SDK installed on your machine.\n"
+			"Failed to get Windows SDK installation directory from your Windows registry.  The registry path \"%s\" doesn't seem to exist on your machine.\n"
+			"This likely means you don't have the Windows SDK installed on your machine.\n"
 			"In order to build using MSVC (which you asked me to do) then you will need to install a version of the Windows SDK on your PC.\n"
+			, winSDKRegPath
 		);
 
 		return false;
@@ -115,9 +118,20 @@ bool8 Win_GetWindowsSDK( windowsSDK_t *outSDK ) {
 
 	defer( RegCloseKey( key ) );
 
-	const char *windowsSDKRoot = FindRegistryValueFromKey( key, "KitsRoot10" );
+	const char *winSDKRegKey = "KitsRoot10";
+	const char *windowsSDKRoot = FindRegistryValueFromKey( key, winSDKRegKey );
 
-	assert( windowsSDKRoot );
+	if ( !windowsSDKRoot ) {
+		error(
+			"Failed to get Windows SDK installation directory from your Windows registry.  The registry key \"%s\" couldn't be queried from the registry path: \"%s\"\n"
+			"This likely means you don't have the Windows SDK installed on your machine.\n"
+			"In order to build using MSVC (which you asked me to do) then you will need to install a version of the Windows SDK on your PC.\n"
+			, winSDKRegPath
+			, winSDKRegKey
+		);
+
+		return false;
+	}
 
 	outSDK->rootFolder = windowsSDKRoot;
 

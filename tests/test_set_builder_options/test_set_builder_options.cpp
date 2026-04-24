@@ -3,7 +3,7 @@
 
 #include <builder.h>
 
-BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options ) {
+BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArgs *args ) {
 	BuildConfig debug = {
 		.name				= "debug",
 		.binaryName			= "kenneth",

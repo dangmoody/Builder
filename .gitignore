@@ -8,7 +8,6 @@ releases
 bug_reports
 *.o
 intermediate
-compile_commands.json
 *.cpp.d
 doc/notes/
 
@@ -26,6 +25,7 @@ tests/**/*.vcxproj.user
 tests/**/*.vcxproj.filters
 !tests/tests.vcxproj
 !tests/tests.vcxproj.filters
+tests/**/*.json
 
 
 #

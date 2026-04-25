@@ -210,6 +210,7 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 		const char *dotBuilderFolder = ".builder";
 
 		generatedFiles.files.reset();
+		generatedFiles.folders.reset();
 
 		TEMPER_CHECK_TRUE( file_get_all_files_in_folder( dotBuilderFolder, true, true, GetAllGeneratedFiles, &generatedFiles ) );
 		if ( test.binaryFolder ) {

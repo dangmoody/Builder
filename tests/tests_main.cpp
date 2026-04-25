@@ -114,6 +114,92 @@ static void GetAllGeneratedFiles( const FileInfo *fileInfo, void *data ) {
 	}
 }
 
+
+struct fileMatchesFilterTest_t {
+	const char	*filename;
+	const char	*filter;
+	bool8		expected;
+};
+
+TEMPER_TEST_PARAMETRIC( Test_FileMatchesFilter, TEMPER_FLAG_SHOULD_RUN, fileMatchesFilterTest_t test ) {
+	TEMPER_CHECK_TRUE_M( FileMatchesFilter( test.filename, test.filter ) == test.expected, "FileMatchesFilter( \"%s\", \"%s\" ): expected %s.\n", test.filename, test.filter, test.expected ? "true" : "false" );
+}
+
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { "main.cpp",          "main.cpp",     true  } );
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { "src/main.cpp",      "src/main.cpp", true  } );
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { "main.h",            "main.cpp",     false } );
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { "main.cpp",          "main.cpp.bak", false } );
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { "main.cpp",          "*.cpp",        true  } );
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { "main.h",            "*.cpp",        false } );
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { "src/main.cpp",      "src/*.cpp",    true  } );
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { "other/main.cpp",    "src/*.cpp",    false } );
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { "src/sub/other.cpp", "src/*.cpp",    false } );
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { "src/sub/other.cpp", "src/**/*.cpp", true  } );
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { "src/a/b/other.cpp", "src/**/*.cpp", true  } );
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { "src/main.cpp",      "src/**/*.cpp", true  } );
+
+
+static bool SourceFileListContains( const std::vector<std::string> &files, const char *filename ) {
+	For ( u64, fileIndex, 0, files.size() ) {
+		if ( string_ends_with( files[fileIndex].c_str(), filename ) ) {
+			return true;
+		}
+	}
+	return false;
+}
+
+struct sourceFilesPatternTest_t {
+	const char					*basePath;
+	const char					*pattern;
+	std::vector<const char *>	expectedPresent;
+	std::vector<const char *>	expectedAbsent;
+	u64							expectedCount;
+};
+
+TEMPER_TEST_PARAMETRIC( Test_GetSourceFilesMatchingPattern, TEMPER_FLAG_SHOULD_RUN, sourceFilesPatternTest_t test ) {
+	std::vector<std::string> files = GetSourceFilesMatchingPattern( test.basePath, test.pattern );
+
+	TEMPER_CHECK_TRUE_M( files.size() == test.expectedCount, "Expected %zu files, got %zu.\n", test.expectedCount, files.size() );
+
+	For ( u64, fileIndex, 0, test.expectedPresent.size() ) {
+		TEMPER_CHECK_TRUE_M( SourceFileListContains( files, test.expectedPresent[fileIndex] ), "Expected \"%s\" in results.\n", test.expectedPresent[fileIndex] );
+	}
+
+	For ( u64, fileIndex, 0, test.expectedAbsent.size() ) {
+		TEMPER_CHECK_FALSE_M( SourceFileListContains( files, test.expectedAbsent[fileIndex] ), "Did not expect \"%s\" in results.\n", test.expectedAbsent[fileIndex] );
+	}
+}
+
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_GetSourceFilesMatchingPattern, {
+	.basePath        = "test_file_globbing/src",
+	.pattern         = "test_file_globbing/src/*.cpp",
+	.expectedPresent = { "main.cpp", "helper.cpp" },
+	.expectedAbsent  = { "main.h", "other.cpp" },
+	.expectedCount   = 2,
+} );
+
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_GetSourceFilesMatchingPattern, {
+	.basePath        = "test_file_globbing/src",
+	.pattern         = "test_file_globbing/src/**/*.cpp",
+	.expectedPresent = { "main.cpp", "helper.cpp", "other.cpp" },
+	.expectedAbsent  = { "main.h" },
+	.expectedCount   = 3,
+} );
+
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_GetSourceFilesMatchingPattern, {
+	.basePath        = "test_file_globbing/src",
+	.pattern         = "test_file_globbing/src/main.cpp",
+	.expectedPresent = { "main.cpp" },
+	.expectedCount   = 1,
+} );
+
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_GetSourceFilesMatchingPattern, {
+	.basePath      = "test_file_globbing/src",
+	.pattern       = "test_file_globbing/src/*.xyz",
+	.expectedCount = 0,
+} );
+
+
 TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 	TEMPER_CHECK_TRUE_M( test.rootDir, "A test MUST live in its own folder, you need to tell me what the \"root\" folder for this test is.\n" );
 
@@ -658,6 +744,7 @@ TEMPER_TEST( ValidateCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 
 	TEMPER_CHECK_TRUE_M( isValid, "clang-tidy failed to load compile_commands.json - the file may be malformed\n" );
 }
+
 
 int main( int argc, char **argv ) {
 	core_init( MEM_KILOBYTES( 64 ) );

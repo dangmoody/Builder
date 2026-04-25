@@ -634,27 +634,55 @@ const char *GetNextSlashInPath( const char *path ) {
 	return nextSlash;
 }
 
-static bool8 FileMatchesFilter( const char *filename, const char *filter ) {
+bool8 FileMatchesFilter( const char *filename, const char *filter ) {
 	const char *filenameCopy = filename;
 	const char *filterCopy = filter;
 
-	const char *filenameBackup = NULL;
-	const char *filterBackup = NULL;
+	// two separate backup slots:
+	//	single-star - cannot cross '/', falls through to double-star on failure
+	//	double-star - may cross '/', used as the outer fallback
+	const char *filenameBackupSingle = NULL;
+	const char *filterBackupSingle   = NULL;
+	const char *filenameBackupDouble = NULL;
+	const char *filterBackupDouble   = NULL;
 
 	while ( *filenameCopy ) {
 		if ( *filterCopy == '*' ) {
-			filenameBackup = filenameCopy;
-			filterBackup = ++filterCopy;
+			if ( *( filterCopy + 1 ) == '*' ) {
+				// "**/" - try zero path components first (skip "*/"), then fall through to greedy
+				if ( *( filterCopy + 2 ) == '/' ) {
+					if ( FileMatchesFilter( filenameCopy, filterCopy + 3 ) ) {
+						return true;
+					}
+				}
+
+				// "**" greedy backup: crosses path separators
+				filenameBackupDouble = filenameCopy;
+				filterBackupDouble = ( filterCopy += 2 );
+				filenameBackupSingle = NULL;
+				filterBackupSingle = NULL;
+			} else {
+				// Single "*" greedy backup
+				// does not cross path separators
+				filenameBackupSingle = filenameCopy;
+				filterBackupSingle = ++filterCopy;
+			}
 		} else if ( *filenameCopy == *filterCopy ) {
-			filenameCopy += 1;
-			filterCopy += 1;
+			filenameCopy++;
+			filterCopy++;
 		} else {
-			if ( !filterBackup ) {
+			// mismatch - try single-star expansion first (but stop at '/'), then double-star
+			if ( filenameBackupSingle && *filenameBackupSingle != '/' ) {
+				filenameCopy = ++filenameBackupSingle;
+				filterCopy = filterBackupSingle;
+			} else if ( filenameBackupDouble ) {
+				filenameBackupSingle = NULL;
+				filterBackupSingle = NULL;
+				filenameCopy = ++filenameBackupDouble;
+				filterCopy = filterBackupDouble;
+			} else {
 				return false;
 			}
-
-			filenameCopy = ++filenameBackup;
-			filterCopy = filterBackup;
 		}
 	}
 
@@ -669,42 +697,62 @@ struct sourceFileFindVisitorData_t {
 static void SourceFileVisitor( const FileInfo *fileInfo, void *userData ) {
 	sourceFileFindVisitorData_t *visitorData2 = cast( sourceFileFindVisitorData_t *, userData );
 
-	const char *checkAgainst = NULL;
+	// const char *filename = NULL;
+	// if ( string_contains( visitorData2->searchFilter, "/" ) || string_contains( visitorData2->searchFilter, "\\" ) ) {
+	// 	filename = fileInfo->full_filename;
+	// } else {
+	// 	filename = fileInfo->filename;
+	// }
 
-	if ( string_contains( visitorData2->searchFilter, "/" ) || string_contains( visitorData2->searchFilter, "\\" ) ) {
-		checkAgainst = fileInfo->full_filename;
-	} else {
-		checkAgainst = fileInfo->filename;
-	}
-
-	if ( FileMatchesFilter( checkAgainst, visitorData2->searchFilter ) ) {
+	if ( FileMatchesFilter( fileInfo->full_filename/*filename*/, visitorData2->searchFilter ) ) {
 		visitorData2->sourceFiles.push_back( fileInfo->full_filename );
 	}
 }
 
-static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContext_t *context, const BuildConfig *config ) {
+std::vector<std::string> GetSourceFilesMatchingPattern( const char *basePath, const char *pattern ) {
 	sourceFileFindVisitorData_t visitorData = {};
+	visitorData.searchFilter = pattern;
+
+	bool8 recursive = string_contains( pattern, "**" );
+
+	if ( !file_get_all_files_in_folder( basePath, recursive, false, SourceFileVisitor, &visitorData ) ) {
+		fatal_error( "Failed to get source file(s) \"%s\".  This should never happen.\n", pattern );
+	}
+
+	return visitorData.sourceFiles;
+}
+
+static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContext_t *context, const BuildConfig *config ) {
+	std::vector<std::string> allSourceFiles;
 
 	For ( u64, sourceFileIndex, 0, config->sourceFiles.size() ) {
 		const char *sourceFile = config->sourceFiles[sourceFileIndex].c_str();
 
-		bool8 recursive = string_contains( sourceFile, "**" ) || string_contains( sourceFile, "/" );
+		// only glob if the filename has a wildcard
+		if ( string_contains( sourceFile, "*" ) ) {
+			// TODO(DM): 02/10/2025: needing this is (probably) a hack
+			// re-evaluate this
+			const char *basePath = NULL;//context->inputFilePath.data;
+			const char *pattern = NULL;
+			bool8 inputFileIsSameAsSourceFile = string_equals( sourceFile, context->inputFile );
+			if ( inputFileIsSameAsSourceFile ) {
+				pattern = context->inputFile;
+				basePath = context->inputFilePath.data;
+			} else {
+				pattern = tprintf( "%s%c%s", context->inputFilePath.data, '/', sourceFile );
+				basePath = path_remove_file_from_path( pattern );
+			}
 
-		// TODO(DM): 02/10/2025: needing this is (probably) a hack
-		// re-evaluate this
-		bool8 inputFileIsSameAsSourceFile = string_equals( sourceFile, context->inputFile );
-		if ( inputFileIsSameAsSourceFile ) {
-			visitorData.searchFilter = context->inputFile;
+			std::vector<std::string> matches = GetSourceFilesMatchingPattern( basePath, pattern );
+
+			allSourceFiles.insert( allSourceFiles.end(), matches.begin(), matches.end() );
 		} else {
-			visitorData.searchFilter = tprintf( "%s%c%s", context->inputFilePath.data, '/', sourceFile );
-		}
-
-		if ( !file_get_all_files_in_folder( context->inputFilePath.data, recursive, false, SourceFileVisitor, &visitorData ) ) {
-			fatal_error( "Failed to get source file(s) \"%s\".  This should never happen.\n", sourceFile );
+			// otherwise its a single file, so we can just get it
+			allSourceFiles.push_back( sourceFile );
 		}
 	}
 
-	return visitorData.sourceFiles;
+	return allSourceFiles;
 }
 
 static void AddBuildConfigAndDependenciesUnique( buildContext_t *context, const BuildConfig *config, std::vector<BuildConfig> &outConfigs ) {
@@ -1314,11 +1362,11 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	}
 
 	BuilderOptions options = {};
-	
+
 	Library library = library_load( userConfigFullBinaryName );
 	assertf( library.ptr, "Failed to load the user-config build DLL \"%s\".  This should never happen!\n", userConfigFullBinaryName );
 	defer( library_unload( &library ) );
-	
+
 	typedef void ( *setBuilderOptionsFunc_t )( BuilderOptions *options, CommandLineArgs *args );
 	typedef void ( *preBuildFunc_t )();
 	typedef void ( *postBuildFunc_t )();

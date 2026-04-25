@@ -149,6 +149,10 @@ s32			RunProc( Array<const char *> *args, Array<const char *> *environmentVariab
 
 bool8		WriteStringBuilderToFile( StringBuilder *stringBuilder, const char *filename );
 
+bool8		FileMatchesFilter( const char *filename, const char *filter );
+
+std::vector<std::string> GetSourceFilesMatchingPattern( const char *basePath, const char *pattern );
+
 bool8		GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *options );
 
 bool8		GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options );

@@ -2,9 +2,13 @@
 
 by Dan Moody.
 
-Configure C/C++ builds by writing C++ instead of learning a separate build language. **Builder is not a compiler** - it turns your build config into compiler arguments and calls the compiler.
+Configure C/C++ builds by writing C++ instead of learning a separate build language.
 
-Supports Clang, MSVC, and GCC on Windows and Linux.
+**BUILDER IS NOT A COMPILER.** - it turns your build config into compiler arguments and calls the compiler.
+
+On windows it supports Clang, MSVC, and GCC.
+
+On Linux it supports Clang and GCC.
 
 ## Installation
 
@@ -14,17 +18,17 @@ Supports Clang, MSVC, and GCC on Windows and Linux.
 
 ## Quick Start
 
-Point Builder at any C/C++ source file and it will compile it:
+When pointed at a **single** C/C++ source file, Builder will compile it:
 
 ```
 builder main.cpp
 ```
 
-Builder uses its bundled Clang, outputs the binary in the same folder, and names it after the source file. No config required.
+By default, Builder uses its bundled Clang, outputs the binary in the same folder, and names it after the source file. No config required.
 
 ### Configuring your build
 
-Add `SetBuilderOptions` to your source file for more options.
+For multiple source files, and extra options, add `SetBuilderOptions` to your source file.
 
 ```cpp
 #include <builder.h> // Builder will automatically resolve this include for you.
@@ -43,11 +47,11 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArg
 int main() { ... }
 ```
 
-Any problems add -v or --verbose calling builder.
+Any problems pass `-v` or `--verbose` when calling builder.
 
 ### Separating build code from program code
 
-`BUILDER_DOING_USER_CONFIG_BUILD` is defined when Builder is compiling your source file into a config DLL. Use it to keep build code out of your program, or put `SetBuilderOptions` in a dedicated build file entirely:
+`BUILDER_DOING_USER_CONFIG_BUILD` is defined when Builder is compiling your source file into a config DLL. Use it to keep build code out of your program, and/or put `SetBuilderOptions` in a dedicated build file entirely:
 
 ```cpp
 #if BUILDER_DOING_USER_CONFIG_BUILD
@@ -58,7 +62,7 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArg
 
 Adding `SetBuilderOptions` to a dedicated build file is recommended as it better supports incremental building.
 
-See [`include/builder.h`](include/builder.h) or [`BuilderAPI.md`](BuilderAPI.md) for the full API reference.
+See [`include/builder.h`](include/builder.h) for the full API reference.
 
 ## Custom Command Line Arguments
 
@@ -138,7 +142,44 @@ BuildConfig program = {
 AddBuildConfig( options, &program );  // also registers myLib
 ```
 
-`OnPreBuild` and `OnPostBuild` within `BuildConfig` are called just before and after compilation - useful for copying files, running codegen, etc.
+## Extra Build Steps
+
+Builder also provides you `OnPreBuild` and `OnPostBuild` for use in your `BuildConfig`.
+
+These are called just before and after compilation of that config - useful for copying files, running codegen, etc.
+
+```cpp
+#include <builder.h>
+#include <stdio.h>
+#include <time.h>
+
+static void PreBuild() {
+    FILE *buildInfoHeader = fopen( "src/generated/build_info.h", "w" );
+    fprintf( buildInfoHeader, "#pragma once\n" );
+    fprintf( buildInfoHeader, "#define BUILD_TIMESTAMP %lldLL\n", (long long) time( NULL ) );
+    fclose( buildInfoHeader );
+}
+
+static void PostBuild() {
+#ifdef _WIN32
+    system( "copy bin\\engine.dll bin\\game\\" );
+#else
+    system( "cp bin/engine.dll bin/game/" );
+#endif
+}
+
+BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArgs *args ) {
+    BuildConfig config = {
+        .binaryName   = "game",
+        .binaryFolder = "bin/game",
+        .sourceFiles  = { "src/**/*.cpp" },
+        .OnPreBuild   = PreBuild,
+        .OnPostBuild  = PostBuild,
+    };
+
+    AddBuildConfig( options, &config );
+}
+```
 
 ## Choosing a Compiler
 
@@ -238,11 +279,18 @@ Generates `compile_commands.json` on a successful build. Compatible with clangd,
 
 ## Motivation
 
-C++ build systems require learning a separate language (CMake, Makefiles, Ninja, MSBuild). Builder skips that entirely: your build config is just C++ code. Less friction, no new syntax, same language you're already writing.
+If you're a C++ programmer you've almost certainly had some trouble with your build system at one point or another.  As an example: CMake, while popular, requires you to learn a whole other language and has a ton of friction that comes with it.
+
+It's easy to see why tools like CMake have appeal on the surface.  Using C++ compilers from just the command line for even small sized codebases is not feasible given the sheer number of arguments that they require.  This is why things like Visual Studio project configurations exist.  There's a whole host of alternative options though: programs like Ninja, build scripts written in shell/bash script, Makefiles, Python, the list goes on.  Unreal Engine uses C# for this for some reason.
+
+Why don't we just configure our builds in the same language we write our programs in? It's so much more intuitive, there's a lot less friction, and you don't have to learn another language.  Enter Builder.
+
+With Builder you can build your program from the same language you write your program with, given a single C++ source file containing some code that configures your build.  This is a much more intuitive way of programmers configuring builds.
 
 ## Contributing
 
-Contributions are welcomed and much appreciated.
+Yes!
+
 Please see [Contributing.md](doc/Contributing.md).
 
 

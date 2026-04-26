@@ -144,14 +144,20 @@ AddBuildConfig( options, &program );  // also registers myLib
 
 ## Extra Build Steps
 
-Builder also provides you `OnPreBuild` and `OnPostBuild` for use in your `BuildConfig`.
-
-These are called just before and after compilation of that config - useful for copying files, running codegen, etc.
+`OnPreBuild` and `OnPostBuild` let you run custom build steps such as copying files and codegen. These are available at two scopes:
+*  Export level (`BUILDER_CALLBACK`): runs before/after the entire build and is exported like `SetBuilderOptions`.
+* `BuildConfig` level: only runs before/after that specific config builds.
 
 ```cpp
 #include <builder.h>
 #include <stdio.h>
 #include <time.h>
+
+// this happens before ANY build step
+BUILDER_CALLBACK void OnPreBuild() {}
+
+// this happens after EVERY build step
+BUILDER_CALLBACK void OnPostBuild() {}
 
 static void PreBuild() {
     FILE *buildInfoHeader = fopen( "src/generated/build_info.h", "w" );
@@ -180,6 +186,7 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArg
     AddBuildConfig( options, &config );
 }
 ```
+In this example, the flow would be `OnPreBuild` -> `PreBuild` -> Config Builds -> `PostBuild` -> `OnPostBuild`.
 
 ## Choosing a Compiler
 

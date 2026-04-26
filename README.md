@@ -196,7 +196,7 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options ) {
 		.binaryFolder		= "bin/debug",
 		.optimizationLevel	= OPTIMIZATION_LEVEL_O0,
 	};
-	
+
 	if ( HasCommandLineArg( "--release" ) ) {
 		config.defines = { "NDEBUG" };
 	} else {
@@ -271,6 +271,7 @@ Please see [Contributing.md](doc/Contributing.md).
 Builder would not have been possible without the following people who deserve, at the very least, a special thanks:
 
 * Dale Green
+* [Aiden Knight](https://github.com/aiden-knight) (Lots of fixes for lots of things)
 * [Ed Owen](https://github.com/eddyowen) (Compilation database support, QoL improvements)
 * Yann Richeux (Bug fixes)
 * Tom Whitcombe (Visual Studio project generation)

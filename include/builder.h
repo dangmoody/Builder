@@ -300,8 +300,7 @@ struct VSCodeLaunchConfig {
 struct VSCodeJSONOptions {
 	// The path to the Builder executable that VS Code will invoke when running a task.
 	// If left empty, defaults to "builder", which assumes Builder is on your PATH.
-	// If you/your team doesn't put Builder on PATH, set this to wherever it lives
-	// (e.g. "${workspaceFolder}/tools/builder").
+	// If you/your team doesn't put Builder on PATH, set this to wherever it lives (e.g. "${workspaceFolder}/tools/builder").
 	std::string						builderPath;
 
 	// The configs that will go into tasks.json.

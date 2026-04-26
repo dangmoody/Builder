@@ -37,7 +37,7 @@ static void CopyFile( const char *from, const char *to ) {
 	srcFile = NULL;
 }
 
-BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options ) {
+BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArgs *args ) {
 	BuildConfig config = {
 		.binaryFolder		= "bin",
 		.binaryName			= "sdl_test",

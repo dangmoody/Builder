@@ -255,7 +255,7 @@ enum VSCodeDebuggerType {
 
 struct VSCodeDebuggerPlatformConfig {
 	// The MI debug mode to use on this platform. E.g. "gdb" or "lldb".
-	std::string	MIMode;
+	std::string	miMode;
 
 	// The path to the debugger on this platform. E.g. "/usr/bin/gdb".
 	std::string	miDebuggerPath;

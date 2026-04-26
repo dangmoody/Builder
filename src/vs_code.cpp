@@ -96,7 +96,7 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 			{
 				VSCodeDebuggerType debuggerType = ( launchConfig->debuggerType == VSCODE_DEBUGGER_TYPE_UNSET ) ? VSCODE_DEBUGGER_TYPE_CPPDBG_GDB : launchConfig->debuggerType;
 
-				bool8 hasPlatformConfigs = !launchConfig->linuxDebugger.MIMode.empty() || !launchConfig->windowsDebugger.MIMode.empty();
+				bool8 hasPlatformConfigs = !launchConfig->linuxDebugger.miMode.empty() || !launchConfig->windowsDebugger.miMode.empty();
 
 				switch ( debuggerType ) {
 					case VSCODE_DEBUGGER_TYPE_CPPDBG_GDB:
@@ -146,18 +146,18 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 				string_builder_appendf( &launchJSONContent, "\t\t\t\"cwd\": \"%s\",\n", cwd );	// TODO(DM): 16/04/2026: do we want to expose this to VSCodeJSONOptions?
 			}
 
-			if ( !launchConfig->linuxDebugger.MIMode.empty() ) {
+			if ( !launchConfig->linuxDebugger.miMode.empty() ) {
 				string_builder_appendf( &launchJSONContent, "\t\t\t\"linux\": {\n" );
-				string_builder_appendf( &launchJSONContent, "\t\t\t\t\"MIMode\": \"%s\",\n", launchConfig->linuxDebugger.MIMode.c_str() );
+				string_builder_appendf( &launchJSONContent, "\t\t\t\t\"MIMode\": \"%s\",\n", launchConfig->linuxDebugger.miMode.c_str() );
 				if ( !launchConfig->linuxDebugger.miDebuggerPath.empty() ) {
 					string_builder_appendf( &launchJSONContent, "\t\t\t\t\"miDebuggerPath\": \"%s\",\n", launchConfig->linuxDebugger.miDebuggerPath.c_str() );
 				}
 				string_builder_appendf( &launchJSONContent, "\t\t\t},\n" );
 			}
 
-			if ( !launchConfig->windowsDebugger.MIMode.empty() ) {
+			if ( !launchConfig->windowsDebugger.miMode.empty() ) {
 				string_builder_appendf( &launchJSONContent, "\t\t\t\"windows\": {\n" );
-				string_builder_appendf( &launchJSONContent, "\t\t\t\t\"MIMode\": \"%s\",\n", launchConfig->windowsDebugger.MIMode.c_str() );
+				string_builder_appendf( &launchJSONContent, "\t\t\t\t\"MIMode\": \"%s\",\n", launchConfig->windowsDebugger.miMode.c_str() );
 				if ( !launchConfig->windowsDebugger.miDebuggerPath.empty() ) {
 					string_builder_appendf( &launchJSONContent, "\t\t\t\t\"miDebuggerPath\": \"%s\",\n", launchConfig->windowsDebugger.miDebuggerPath.c_str() );
 				}

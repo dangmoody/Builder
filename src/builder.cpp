@@ -66,8 +66,8 @@ SOFTWARE.
 
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
-	BUILDER_VERSION_MINOR	= 11,
-	BUILDER_VERSION_PATCH	= 3,
+	BUILDER_VERSION_MINOR	= 12,
+	BUILDER_VERSION_PATCH	= 0,
 };
 
 enum buildResult_t {
@@ -1114,7 +1114,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	core_init( MEM_MEGABYTES( 128 ) );	// TODO(DM): 26/03/2025: can we just use defaults for this now?
 	defer( core_shutdown() );
 
-	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+	printf( "Builder v%d.%d.%d RC0\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {
 		.configIndices	= hashmap_create( 1 ),	// TODO(DM): 30/03/2025: whats a reasonable default here?
@@ -1790,4 +1790,3 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 	return 0;
 }
-

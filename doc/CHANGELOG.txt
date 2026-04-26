@@ -19,6 +19,7 @@ v0.12.0, <RELEASE DATE HERE>:
 		* ZedJSONOptions::builderPath lets you set the path to the Builder executable that Zed will invoke.
 			* If left empty, this defaults to "builder", which assumes Builder is on your PATH.
 * Fixed file globbing.
+* Significantly improved README (thanks @aiden-knight!).
 * Added GetCommandLineArgValue( CommandLineArgs *, const char * ).
 	* Returns the value after '=' for args of the form "--key=value", or NULL if not found.
 * Added BuildConfig::noDefaultLibs (thanks @aiden-knight!).

@@ -212,12 +212,6 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArg
 		// ...
 	};
 
-	if ( HasCommandLineArg( "--release" ) ) {
-		config.defines = { "NDEBUG" };
-	} else {
-		config.defines = { "_DEBUG" };
-	}
-
 	AddBuildConfig( options, &config );
 
 	// pass --sln to generate; skips compilation

@@ -1761,6 +1761,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		};
 
 		Array<buildSummaryLine_t> buildSummaryLines;
+		buildSummaryLines.reserve( 4 + configsToBuild.size() );
 		buildSummaryLines.add( { "User config build",  userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? "(skipped)" : "" } );
 		buildSummaryLines.add( { "Compiler init time", compilerBackendInitTimeMS } );
 		buildSummaryLines.add( { "SetBuilderOptions",  setBuilderOptionsTimeMS } );
@@ -1784,6 +1785,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 				printf( "    %-*s: %f ms %s\n", lineLength, line->description, line->timeMS, line->suffix ? line->suffix : "" );
 			}
 		}
+		// leave this one separate at the end because we want to capture the end timestamp as late as possible
 		printf( "    %-*s: %f ms\n", lineLength, "Total time", time_ms() - totalTimeStart );
 		printf( "\n" );
 	}

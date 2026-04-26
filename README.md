@@ -243,7 +243,7 @@ options->generateVSCodeJSONFiles = HasCommandLineArg( args, "--vscode" );
 options->vsCodeJSONOptions = {
 	.builderPath   = "builder",
 	.taskConfigs   = {
-		{ debugConfig                   },
+		{ debugConfig                    },
 		{ releaseConfig, { "--release" } },
 	},
 	.launchConfigs = {
@@ -263,7 +263,7 @@ options->generateZedJSONFiles = HasCommandLineArg( args, "--zed" );
 options->zedJSONOptions = {
 	.builderPath  = "builder",
 	.taskConfigs  = {
-		{ debugConfig                   },
+		{ debugConfig                    },
 		{ releaseConfig, { "--release" } },
 	},
 	.debugConfigs = {

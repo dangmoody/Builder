@@ -318,7 +318,7 @@ struct VSCodeLaunchConfig {
 
 struct VSCodeCppPropertiesConfig {
 	// Overrides config.name as the configuration name in c_cpp_properties.json.
-	// Use this when the same BuildConfig is needed for multiple platforms
+	// Use this when the same BuildConfig is needed for multiple platforms/compilers
 	// (e.g. one entry named "Linux" and one named "Win32" from the same config).
 	// If empty, config.name is used.
 	std::string				name;

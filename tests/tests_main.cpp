@@ -594,30 +594,26 @@ TEMPER_TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 
 	// cleanup
 	{
-		// delete all files in .builder before removing the folder
-		// (rmdir requires an empty directory)
-		{
-			buildTestGeneratedFiles_t generatedFiles = {};
-			generatedFiles.fileExtensionsToDelete.add( GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
-			generatedFiles.fileExtensionsToDelete.add( ".d" );
-			generatedFiles.fileExtensionsToDelete.add( ".o" );
-			generatedFiles.fileExtensionsToDelete.add( ".include_dependencies" );
-			generatedFiles.fileExtensionsToDelete.add( ".lib" );
-			generatedFiles.fileExtensionsToDelete.add( ".exp" );
-			generatedFiles.fileExtensionsToDelete.add( ".pdb" );
-			generatedFiles.fileExtensionsToDelete.add( ".ilk" );
-			generatedFiles.fileExtensionsToDelete.add( ".json" );
+		buildTestGeneratedFiles_t generatedFiles = {};
+		generatedFiles.fileExtensionsToDelete.add( GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
+		generatedFiles.fileExtensionsToDelete.add( ".d" );
+		generatedFiles.fileExtensionsToDelete.add( ".o" );
+		generatedFiles.fileExtensionsToDelete.add( ".include_dependencies" );
+		generatedFiles.fileExtensionsToDelete.add( ".lib" );
+		generatedFiles.fileExtensionsToDelete.add( ".exp" );
+		generatedFiles.fileExtensionsToDelete.add( ".pdb" );
+		generatedFiles.fileExtensionsToDelete.add( ".ilk" );
+		generatedFiles.fileExtensionsToDelete.add( ".json" );
 
-			TEMPER_CHECK_TRUE( file_get_all_files_in_folder( dotBuilderFolder, true, true, GetAllGeneratedFiles, &generatedFiles ) );
-			TEMPER_CHECK_TRUE( file_get_all_files_in_folder( vsCodeFolder, true, true, GetAllGeneratedFiles, &generatedFiles ) );
+		TEMPER_CHECK_TRUE( file_get_all_files_in_folder( dotBuilderFolder, true, true, GetAllGeneratedFiles, &generatedFiles ) );
+		TEMPER_CHECK_TRUE( file_get_all_files_in_folder( vsCodeFolder, true, true, GetAllGeneratedFiles, &generatedFiles ) );
 
-			For ( u32, fileIndex, 0, generatedFiles.files.count ) {
-				TEMPER_CHECK_TRUE_M( file_delete( generatedFiles.files[fileIndex] ), "Failed to delete \"%s\".\n", generatedFiles.files[fileIndex] );
-			}
-
-			TEMPER_CHECK_TRUE_M( folder_delete( dotBuilderFolder ), "Failed to delete \"%s\".\n", dotBuilderFolder );
-			TEMPER_CHECK_TRUE_M( folder_delete( vsCodeFolder ), "Failed to delete .vscode folder.\n" );
+		For ( u32, fileIndex, 0, generatedFiles.files.count ) {
+			TEMPER_CHECK_TRUE_M( file_delete( generatedFiles.files[fileIndex] ), "Failed to delete \"%s\".\n", generatedFiles.files[fileIndex] );
 		}
+
+		TEMPER_CHECK_TRUE_M( folder_delete( dotBuilderFolder ), "Failed to delete \"%s\".\n", dotBuilderFolder );
+		TEMPER_CHECK_TRUE_M( folder_delete( vsCodeFolder ), "Failed to delete .vscode folder.\n" );
 	}
 }
 

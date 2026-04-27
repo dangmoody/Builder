@@ -1,4 +1,4 @@
-v0.12.0, <RELEASE DATE HERE>:
+v0.12.0, 01/05/2026:
 
 * Added VS Code JSON file generation.
 	* Builder can now generate .vscode/tasks.json, .vscode/launch.json, and .vscode/c_cpp_properties.json.

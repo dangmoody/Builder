@@ -317,9 +317,15 @@ struct VSCodeLaunchConfig {
 };
 
 struct VSCodeCppPropertiesConfig {
+	// Overrides config.name as the configuration name in c_cpp_properties.json.
+	// Use this when the same BuildConfig is needed for multiple platforms
+	// (e.g. one entry named "Linux" and one named "Win32" from the same config).
+	// If empty, config.name is used.
+	std::string				name;
+
 	// The config from which Builder extracts the IntelliSense settings.
-	// Builder uses: config.name (configuration name), config.additionalIncludes (includePath),
-	// config.defines, and config.languageVersion (cStandard or cppStandard).
+	// Builder uses: config.additionalIncludes (includePath), config.defines,
+	// and config.languageVersion (cStandard or cppStandard).
 	BuildConfig				config;
 
 	// The IntelliSense mode to use.

@@ -26,9 +26,9 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArg
 	options->vsCodeJSONOptions = {
 		.cppPropertiesConfigs = {
 #if defined( _WIN32 )
-			{ config, VSCODE_INTELLISENSE_MODE_WINDOWS_CLANG_X64 },
+			{ .config = config, .intelliSenseMode = VSCODE_INTELLISENSE_MODE_WINDOWS_CLANG_X64 },
 #else
-			{ config, VSCODE_INTELLISENSE_MODE_LINUX_CLANG_X64 },
+			{ .config = config, .intelliSenseMode = VSCODE_INTELLISENSE_MODE_LINUX_CLANG_X64 },
 #endif
 		},
 		.taskConfigs = {

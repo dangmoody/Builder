@@ -62,8 +62,10 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 
 			BuildConfig *config = &cppPropertiesConfig->config;
 
+			const char *configName = cppPropertiesConfig->name.empty() ? config->name.c_str() : cppPropertiesConfig->name.c_str();
+
 			string_builder_appendf( &cppPropertiesJSONContent, "\t\t{\n" );
-			string_builder_appendf( &cppPropertiesJSONContent, "\t\t\t\"name\": \"%s\",\n", config->name.c_str() );
+			string_builder_appendf( &cppPropertiesJSONContent, "\t\t\t\"name\": \"%s\",\n", configName );
 
 			if ( !config->additionalIncludes.empty() ) {
 				string_builder_appendf( &cppPropertiesJSONContent, "\t\t\t\"includePath\": [\n" );

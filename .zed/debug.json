@@ -22,6 +22,26 @@
 	},
 
 	{
+		"label": "Builder Tests - Test_FileMatchesFilter",
+		"program": "${ZED_WORKTREE_ROOT}/bin/builder_tests_debug",
+		"args": ["-p", "-t", "Test_FileMatchesFilter"],
+		"cwd": "${ZED_WORKTREE_ROOT}/tests",
+		"request": "launch",
+		"adapter": "CodeLLDB",
+		"build": "Build tests debug",
+	},
+
+	{
+		"label": "Builder Tests - Test_GetSourceFilesMatchingPattern",
+		"program": "${ZED_WORKTREE_ROOT}/bin/builder_tests_debug",
+		"args": ["-p", "-t", "Test_GetSourceFilesMatchingPattern"],
+		"cwd": "${ZED_WORKTREE_ROOT}/tests",
+		"request": "launch",
+		"adapter": "CodeLLDB",
+		"build": "Build tests debug",
+	},
+
+	{
 		"label": "Builder - Debug - test_basic",
 		"program": "${ZED_WORKTREE_ROOT}/bin/builder_debug",
 		"args": ["tests/test_basic/test_basic.cpp"],

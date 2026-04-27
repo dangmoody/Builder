@@ -163,3 +163,21 @@ inline u64 minull( const u64 x, const u64 y ) {
 	return ( x < y ) ? x : y;
 }
 
+inline const char *LanguageVersionToString( const LanguageVersion version ) {
+	switch ( version ) {
+		case LANGUAGE_VERSION_UNSET:	return NULL;
+		case LANGUAGE_VERSION_C89:		return "c89";
+		case LANGUAGE_VERSION_C99:		return "c99";
+		case LANGUAGE_VERSION_C11:		return "c11";
+		case LANGUAGE_VERSION_C17:		return "c17";
+		case LANGUAGE_VERSION_C23:		return "c23";
+		case LANGUAGE_VERSION_CPP11:	return "c++11";
+		case LANGUAGE_VERSION_CPP14:	return "c++14";
+		case LANGUAGE_VERSION_CPP17:	return "c++17";
+		case LANGUAGE_VERSION_CPP20:	return "c++20";
+		case LANGUAGE_VERSION_CPP23:	return "c++23";
+	}
+
+	return NULL;
+}
+

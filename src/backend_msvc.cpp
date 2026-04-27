@@ -56,24 +56,6 @@ struct msvcState_t {
 
 //================================================================
 
-static const char *LanguageVersionToCompilerArg( const LanguageVersion languageVersion ) {
-	switch ( languageVersion ) {
-		case LANGUAGE_VERSION_C89:		return "/std:c89";
-		case LANGUAGE_VERSION_C99:		return "/std:c99";
-		case LANGUAGE_VERSION_C11:		return "/std:c11";
-		case LANGUAGE_VERSION_C17:		return "/std:c17";
-		case LANGUAGE_VERSION_C23:		return "/std:c23";
-		case LANGUAGE_VERSION_CPP11:	return "/std:c++11";
-		case LANGUAGE_VERSION_CPP14:	return "/std:c++14";
-		case LANGUAGE_VERSION_CPP17:	return "/std:c++17";
-		case LANGUAGE_VERSION_CPP20:	return "/std:c++20";
-		case LANGUAGE_VERSION_CPP23:	return "/std:c++23";
-	}
-
-	assert( false && "Bad LanguageVersion passed.\n" );
-
-	return NULL;
-}
 
 static const char *OptimizationLevelToCompilerArg( const OptimizationLevel level ) {
 	switch ( level ) {
@@ -320,7 +302,7 @@ static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t *backe
 
 	// Language Version
 	if ( config->languageVersion != LANGUAGE_VERSION_UNSET ) {
-		baseArgs.add( LanguageVersionToCompilerArg( config->languageVersion ) );
+		baseArgs.add( tprintf( "/std:%s", LanguageVersionToString( config->languageVersion ) ) );
 	}
 
 	// Symbols Flag

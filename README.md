@@ -241,19 +241,22 @@ Generated projects call Builder - Visual Studio project property edits have no e
 // pass --vscode to generate; skips compilation
 options->generateVSCodeJSONFiles = HasCommandLineArg( args, "--vscode" );
 options->vsCodeJSONOptions = {
-	.builderPath   = "builder",
-	.taskConfigs   = {
+	.builderPath          = "builder",
+	.cppPropertiesConfigs = {
+		{ debugConfig, VSCODE_INTELLISENSE_MODE_LINUX_CLANG_X64 },
+	},
+	.taskConfigs          = {
 		{ debugConfig                    },
 		{ releaseConfig, { "--release" } },
 	},
-	.launchConfigs = {
+	.launchConfigs        = {
 		{ .binaryName = "bin/debug/my-program",   .debuggerType = VSCODE_DEBUGGER_TYPE_CPPVSDBG   },
 		{ .binaryName = "bin/release/my-program", .debuggerType = VSCODE_DEBUGGER_TYPE_CPPDBG_GDB },
 	},
 };
 ```
 
-Generates `.vscode/tasks.json` and `.vscode/launch.json`. `builderPath` defaults to `"builder"`, assuming it is on your `PATH`.
+Generates `.vscode/c_cpp_properties.json`, `.vscode/tasks.json`, and `.vscode/launch.json`. `builderPath` defaults to `"builder"`, assuming it is on your `PATH`.
 
 ## Zed
 
@@ -286,13 +289,11 @@ Generates `compile_commands.json` on a successful build. Compatible with clangd,
 
 ## Motivation
 
-If you're a C++ programmer you've almost certainly had some trouble with your build system at one point or another.  As an example: CMake, while popular, requires you to learn a whole other language and has a ton of friction that comes with it.
+C++ has no standard build system, so at some point every C++ programmer has to pick one and every option asks the same thing of you: learn a new language.  CMake has its own DSL, Makefiles have their own syntax and rules, Premake uses Lua, Meson uses Python.  Even if you learn one well, the knowledge doesn't transfer to the next project that uses a different one and you have to learn a project's build system all over again.
 
-It's easy to see why tools like CMake have appeal on the surface.  Using C++ compilers from just the command line for even small sized codebases is not feasible given the sheer number of arguments that they require.  This is why things like Visual Studio project configurations exist.  There's a whole host of alternative options though: programs like Ninja, build scripts written in shell/bash script, Makefiles, Python, the list goes on.  Unreal Engine uses C# for this for some reason.
+You already know C++.  Why should configuring a C++ build require learning anything else?
 
-Why don't we just configure our builds in the same language we write our programs in? It's so much more intuitive, there's a lot less friction, and you don't have to learn another language.  Enter Builder.
-
-With Builder you can build your program from the same language you write your program with, given a single C++ source file containing some code that configures your build.  This is a much more intuitive way of programmers configuring builds.
+Builder's answer is to not require it.  Your build config is just a C++ source file.  The types are C++ structs.  The logic is C++.  If you can write C++, you already know how to use Builder.
 
 ## Contributing
 

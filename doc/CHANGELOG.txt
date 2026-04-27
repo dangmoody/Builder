@@ -1,24 +1,11 @@
 v0.12.0, <RELEASE DATE HERE>:
 
-* Added VS Code and Zed JSON file generation.
-	* Builder can now generate editor JSON config files for VS Code and Zed based off your BuildConfigs.
-	* VS Code:
-		* Builder can now generate .vscode/tasks.json, .vscode/launch.json, and .vscode/c_cpp_properties.json.
-		* Enable this by setting BuilderOptions::generateVSCodeJSONFiles to true and filling out BuilderOptions::vsCodeJSONOptions.
-		* VSCodeJSONOptions::cppPropertiesConfigs lets you configure your IntelliSense configurations.
-		* VSCodeJSONOptions::taskConfigs lets you configure your VS Code build tasks.
-		* VSCodeJSONOptions::launchConfigs lets you configure your VS Code launch/debug configurations.
-		* VSCodeLaunchConfig::linuxDebugger and VSCodeLaunchConfig::windowsDebugger (VSCodeDebuggerPlatformConfig) emit platform-specific "linux"/"windows" blocks with MIMode and miDebuggerPath instead of putting MIMode at the top level.
-		* VSCodeLaunchConfig::setupCommands (VSCodeSetupCommand) lets you specify GDB/LLDB MI commands to send to the debugger during initialisation.
-		* VSCodeJSONOptions::builderPath lets you set the path to the Builder executable that VS Code will invoke.
-			* If left empty, this defaults to "builder", which assumes Builder is on your PATH.
-	* Zed:
-		* Builder can now generate .zed/tasks.json and .zed/debug.json.
-		* Enable this by setting BuilderOptions::generateZedJSONFiles to true and filling out BuilderOptions::zedJSONOptions.
-		* ZedJSONOptions::taskConfigs lets you configure your Zed build tasks.
-		* ZedJSONOptions::debugConfigs lets you configure your Zed debug configurations.
-		* ZedJSONOptions::builderPath lets you set the path to the Builder executable that Zed will invoke.
-			* If left empty, this defaults to "builder", which assumes Builder is on your PATH.
+* Added VS Code JSON file generation.
+	* Builder can now generate .vscode/tasks.json, .vscode/launch.json, and .vscode/c_cpp_properties.json.
+	* Enable this by setting BuilderOptions::generateVSCodeJSONFiles to true and filling out BuilderOptions::vsCodeJSONOptions.
+* Added Zed Editor JSON file generation.
+	* Builder can now generate .zed/tasks.json and .zed/debug.json files for Zed.
+	* Enable this by setting BuilderOptions::generateZedJSONFiles to true and filling out BuilderOptions::zedJSONOptions.
 * Fixed file globbing.
 * Significantly improved README (thanks @aiden-knight!).
 * Added GetCommandLineArgValue( CommandLineArgs *, const char * ).

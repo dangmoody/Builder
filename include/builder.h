@@ -253,6 +253,25 @@ enum VSCodeDebuggerType {
 	VSCODE_DEBUGGER_TYPE_CPPVSDBG,		// Windows: cppvsdbg (MSVC debugger)
 };
 
+// Builder does not currently support MacOS, so there are no MacOS IntelliSense modes here.
+enum VSCodeIntelliSenseMode {
+	VSCODE_INTELLISENSE_MODE_UNSET				= 0,
+	VSCODE_INTELLISENSE_MODE_LINUX_CLANG_X64,
+	VSCODE_INTELLISENSE_MODE_LINUX_CLANG_X86,
+	VSCODE_INTELLISENSE_MODE_LINUX_CLANG_ARM64,
+	VSCODE_INTELLISENSE_MODE_LINUX_CLANG_ARM,
+	VSCODE_INTELLISENSE_MODE_LINUX_GCC_X64,
+	VSCODE_INTELLISENSE_MODE_LINUX_GCC_X86,
+	VSCODE_INTELLISENSE_MODE_LINUX_GCC_ARM64,
+	VSCODE_INTELLISENSE_MODE_LINUX_GCC_ARM,
+	VSCODE_INTELLISENSE_MODE_WINDOWS_MSVC_X64,
+	VSCODE_INTELLISENSE_MODE_WINDOWS_MSVC_X86,
+	VSCODE_INTELLISENSE_MODE_WINDOWS_MSVC_ARM64,
+	VSCODE_INTELLISENSE_MODE_WINDOWS_MSVC_ARM,
+	VSCODE_INTELLISENSE_MODE_WINDOWS_CLANG_X64,
+	VSCODE_INTELLISENSE_MODE_WINDOWS_CLANG_X86,
+};
+
 struct VSCodeDebuggerPlatformConfig {
 	// The MI debug mode to use on this platform. E.g. "gdb" or "lldb".
 	std::string	miMode;
@@ -297,17 +316,32 @@ struct VSCodeLaunchConfig {
 	std::vector<VSCodeSetupCommand>			setupCommands;
 };
 
+struct VSCodeCppPropertiesConfig {
+	// The config from which Builder extracts the IntelliSense settings.
+	// Builder uses: config.name (configuration name), config.additionalIncludes (includePath),
+	// config.defines, and config.languageVersion (cStandard or cppStandard).
+	BuildConfig				config;
+
+	// The IntelliSense mode to use.
+	// If unset, the "intelliSenseMode" field is omitted from the output.
+	VSCodeIntelliSenseMode	intelliSenseMode;
+};
+
 struct VSCodeJSONOptions {
 	// The path to the Builder executable that VS Code will invoke when running a task.
 	// If left empty, defaults to "builder", which assumes Builder is on your PATH.
 	// If you/your team doesn't put Builder on PATH, set this to wherever it lives (e.g. "${workspaceFolder}/tools/builder").
-	std::string						builderPath;
+	std::string								builderPath;
+
+	// The configs that will go into c_cpp_properties.json.
+	// Builder will also use BuilderOptions::compilerPath for the "compilerPath" field.
+	std::vector<VSCodeCppPropertiesConfig>	cppPropertiesConfigs;
 
 	// The configs that will go into tasks.json.
-	std::vector<VSCodeTaskConfig>	taskConfigs;
+	std::vector<VSCodeTaskConfig>			taskConfigs;
 
-	// The configs that will go into debug.json.
-	std::vector<VSCodeLaunchConfig>	launchConfigs;
+	// The configs that will go into launch.json.
+	std::vector<VSCodeLaunchConfig>			launchConfigs;
 };
 
 struct ZedTaskConfig {

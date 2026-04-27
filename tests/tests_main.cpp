@@ -512,11 +512,12 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 }
 
 TEMPER_TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
-	const char *buildFile        = "test_generate_vscode_json_files/generate_vscode_json.cpp";
-	const char *dotBuilderFolder = "test_generate_vscode_json_files/.builder";
-	const char *vsCodeFolder     = "test_generate_vscode_json_files/.vscode";
-	const char *tasksJSONPath    = "test_generate_vscode_json_files/.vscode/tasks.json";
-	const char *launchJSONPath   = "test_generate_vscode_json_files/.vscode/launch.json";
+	const char *buildFile              = "test_generate_vscode_json_files/generate_vscode_json.cpp";
+	const char *dotBuilderFolder       = "test_generate_vscode_json_files/.builder";
+	const char *vsCodeFolder           = "test_generate_vscode_json_files/.vscode";
+	const char *cppPropertiesJSONPath  = "test_generate_vscode_json_files/.vscode/c_cpp_properties.json";
+	const char *tasksJSONPath          = "test_generate_vscode_json_files/.vscode/tasks.json";
+	const char *launchJSONPath         = "test_generate_vscode_json_files/.vscode/launch.json";
 
 	// generate the VS Code JSON files
 	{
@@ -525,6 +526,30 @@ TEMPER_TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 
 		s32 exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "BuilderMain() returned %d.\n", exitCode );
+	}
+
+	// c_cpp_properties.json
+	{
+		TEMPER_CHECK_TRUE_M( file_exists( cppPropertiesJSONPath ), "c_cpp_properties.json was not generated at \"%s\".\n", cppPropertiesJSONPath );
+
+		char *content = NULL;
+		u64 contentLength = 0;
+		TEMPER_CHECK_TRUE_M( file_read_entire( cppPropertiesJSONPath, &content, &contentLength ), "Failed to read c_cpp_properties.json.\n" );
+		defer( file_free_buffer( &content ) );
+
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"configurations\"" ),         "c_cpp_properties.json is missing \"configurations\" array.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"version\": 4" ),             "c_cpp_properties.json is missing \"version\": 4.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"name\": \"config\"" ),        "c_cpp_properties.json is missing config name.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"includePath\"" ),            "c_cpp_properties.json is missing \"includePath\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "${workspaceFolder}/include" ),  "c_cpp_properties.json is missing include path.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"defines\"" ),                "c_cpp_properties.json is missing \"defines\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "MY_DEFINE=1" ),                "c_cpp_properties.json is missing define.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"cppStandard\": \"c++17\"" ),  "c_cpp_properties.json is missing cppStandard.\n" );
+#if defined( _WIN32 )
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"windows-clang-x64\"" ),      "c_cpp_properties.json is missing intelliSenseMode.\n" );
+#else
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"linux-clang-x64\"" ),        "c_cpp_properties.json is missing intelliSenseMode.\n" );
+#endif
 	}
 
 	// tasks.json
@@ -581,24 +606,18 @@ TEMPER_TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 			generatedFiles.fileExtensionsToDelete.add( ".exp" );
 			generatedFiles.fileExtensionsToDelete.add( ".pdb" );
 			generatedFiles.fileExtensionsToDelete.add( ".ilk" );
+			generatedFiles.fileExtensionsToDelete.add( ".json" );
 
 			TEMPER_CHECK_TRUE( file_get_all_files_in_folder( dotBuilderFolder, true, true, GetAllGeneratedFiles, &generatedFiles ) );
+			TEMPER_CHECK_TRUE( file_get_all_files_in_folder( vsCodeFolder, true, true, GetAllGeneratedFiles, &generatedFiles ) );
 
 			For ( u32, fileIndex, 0, generatedFiles.files.count ) {
 				TEMPER_CHECK_TRUE_M( file_delete( generatedFiles.files[fileIndex] ), "Failed to delete \"%s\".\n", generatedFiles.files[fileIndex] );
 			}
 
 			TEMPER_CHECK_TRUE_M( folder_delete( dotBuilderFolder ), "Failed to delete \"%s\".\n", dotBuilderFolder );
+			TEMPER_CHECK_TRUE_M( folder_delete( vsCodeFolder ), "Failed to delete .vscode folder.\n" );
 		}
-
-		// delete .vscode contents then the folder
-		if ( file_exists( tasksJSONPath ) ) {
-			TEMPER_CHECK_TRUE_M( file_delete( tasksJSONPath ),  "Failed to delete tasks.json.\n" );
-		}
-		if ( file_exists( launchJSONPath ) ) {
-			TEMPER_CHECK_TRUE_M( file_delete( launchJSONPath ), "Failed to delete launch.json.\n" );
-		}
-		TEMPER_CHECK_TRUE_M( folder_delete( vsCodeFolder ), "Failed to delete .vscode folder.\n" );
 	}
 }
 

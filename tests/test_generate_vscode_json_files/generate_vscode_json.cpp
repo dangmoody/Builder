@@ -4,10 +4,13 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArg
 	(void) args;
 
 	BuildConfig config = {
-		.name			= "config",
-		.sourceFiles	= { "src/main.cpp" },
-		.binaryType		= BINARY_TYPE_EXE,
-		.binaryName		= "test_app",
+		.name				= "config",
+		.sourceFiles		= { "src/main.cpp" },
+		.defines			= { "MY_DEFINE=1" },
+		.additionalIncludes	= { "${workspaceFolder}/include" },
+		.binaryType			= BINARY_TYPE_EXE,
+		.binaryName			= "test_app",
+		.languageVersion	= LANGUAGE_VERSION_CPP17,
 	};
 
 	if ( HasCommandLineArg( args, "--release" ) ) {
@@ -21,6 +24,13 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArg
 	options->generateVSCodeJSONFiles = true;
 
 	options->vsCodeJSONOptions = {
+		.cppPropertiesConfigs = {
+#if defined( _WIN32 )
+			{ config, VSCODE_INTELLISENSE_MODE_WINDOWS_CLANG_X64 },
+#else
+			{ config, VSCODE_INTELLISENSE_MODE_LINUX_CLANG_X64 },
+#endif
+		},
 		.taskConfigs = {
 			{ config                  },
 			{ config, { "--release" } },

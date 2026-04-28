@@ -705,6 +705,7 @@ static void SourceFileVisitor( const FileInfo *fileInfo, void *userData ) {
 	// }
 
 	if ( FileMatchesFilter( fileInfo->full_filename/*filename*/, visitorData2->searchFilter ) ) {
+		LogVerbose( " - Found \"%s\"\n", fileInfo->full_filename );
 		visitorData2->sourceFiles.push_back( fileInfo->full_filename );
 	}
 }
@@ -730,6 +731,8 @@ static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContex
 
 		// only glob if the filename has a wildcard
 		if ( string_contains( sourceFile, "*" ) ) {
+			LogVerbose( "About to glob all source files found under user-specified pattern \"%s\" to the list of source files to build with:\n" );
+
 			// TODO(DM): 02/10/2025: needing this is (probably) a hack
 			// re-evaluate this
 			const char *basePath = NULL;//context->inputFilePath.data;
@@ -748,6 +751,8 @@ static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContex
 			allSourceFiles.insert( allSourceFiles.end(), matches.begin(), matches.end() );
 		} else {
 			// otherwise its a single file, so we can just get it
+			LogVerbose( "Adding source file \"%s\" to the list of source files to build with (no glob).\n" );
+
 			allSourceFiles.push_back( tprintf( "%s%c%s", context->inputFilePath.data, '/', sourceFile ) );
 		}
 	}
@@ -1114,7 +1119,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	core_init( MEM_MEGABYTES( 128 ) );	// TODO(DM): 26/03/2025: can we just use defaults for this now?
 	defer( core_shutdown() );
 
-	printf( "Builder v%d.%d.%d RC2\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+	printf( "Builder v%d.%d.%d RC3\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {
 		.configIndices	= hashmap_create( 1 ),	// TODO(DM): 30/03/2025: whats a reasonable default here?
@@ -1385,7 +1390,6 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 			setBuilderOptionsFunc( &options, &args );
 
-			printf( "%s override function Finished.\n\n", SET_BUILDER_OPTIONS_FUNC_NAME );
 			printf( "%s override function finished.\n\n", SET_BUILDER_OPTIONS_FUNC_NAME );
 		} else {
 			LogVerbose( "No %s override function was found.\n\n", SET_BUILDER_OPTIONS_FUNC_NAME );

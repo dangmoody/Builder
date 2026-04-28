@@ -748,7 +748,7 @@ static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContex
 			allSourceFiles.insert( allSourceFiles.end(), matches.begin(), matches.end() );
 		} else {
 			// otherwise its a single file, so we can just get it
-			allSourceFiles.push_back( sourceFile );
+			allSourceFiles.push_back( tprintf( "%s%c%s", context->inputFilePath.data, '/', sourceFile ) );
 		}
 	}
 

@@ -512,12 +512,12 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 }
 
 TEMPER_TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
-	const char *buildFile              = "test_generate_vscode_json_files/generate_vscode_json.cpp";
-	const char *dotBuilderFolder       = "test_generate_vscode_json_files/.builder";
-	const char *vsCodeFolder           = "test_generate_vscode_json_files/.vscode";
-	const char *cppPropertiesJSONPath  = "test_generate_vscode_json_files/.vscode/c_cpp_properties.json";
-	const char *tasksJSONPath          = "test_generate_vscode_json_files/.vscode/tasks.json";
-	const char *launchJSONPath         = "test_generate_vscode_json_files/.vscode/launch.json";
+	const char *buildFile				= "test_generate_vscode_json_files/generate_vscode_json.cpp";
+	const char *dotBuilderFolder		= "test_generate_vscode_json_files/.builder";
+	const char *vsCodeFolder			= "test_generate_vscode_json_files/.vscode";
+	const char *cppPropertiesJSONPath	= "test_generate_vscode_json_files/.vscode/c_cpp_properties.json";
+	const char *tasksJSONPath			= "test_generate_vscode_json_files/.vscode/tasks.json";
+	const char *launchJSONPath			= "test_generate_vscode_json_files/.vscode/launch.json";
 
 	// generate the VS Code JSON files
 	{
@@ -539,12 +539,12 @@ TEMPER_TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 
 		TEMPER_CHECK_TRUE_M( string_contains( content, "\"configurations\"" ),         "c_cpp_properties.json is missing \"configurations\" array.\n" );
 		TEMPER_CHECK_TRUE_M( string_contains( content, "\"version\": 4" ),             "c_cpp_properties.json is missing \"version\": 4.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"name\": \"config\"" ),        "c_cpp_properties.json is missing config name.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"name\": \"config\"" ),       "c_cpp_properties.json is missing config name.\n" );
 		TEMPER_CHECK_TRUE_M( string_contains( content, "\"includePath\"" ),            "c_cpp_properties.json is missing \"includePath\".\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "${workspaceFolder}/include" ),  "c_cpp_properties.json is missing include path.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "${workspaceFolder}/include" ), "c_cpp_properties.json is missing include path.\n" );
 		TEMPER_CHECK_TRUE_M( string_contains( content, "\"defines\"" ),                "c_cpp_properties.json is missing \"defines\".\n" );
 		TEMPER_CHECK_TRUE_M( string_contains( content, "MY_DEFINE=1" ),                "c_cpp_properties.json is missing define.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"cppStandard\": \"c++17\"" ),  "c_cpp_properties.json is missing cppStandard.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"cppStandard\": \"c++17\"" ), "c_cpp_properties.json is missing cppStandard.\n" );
 #if defined( _WIN32 )
 		TEMPER_CHECK_TRUE_M( string_contains( content, "\"windows-clang-x64\"" ),      "c_cpp_properties.json is missing intelliSenseMode.\n" );
 #else
@@ -642,13 +642,13 @@ TEMPER_TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 		TEMPER_CHECK_TRUE_M( file_read_entire( tasksJSONPath, &content, &contentLength ), "Failed to read tasks.json.\n" );
 		defer( file_free_buffer( &content ) );
 
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"label\""                  ), "tasks.json is missing \"label\".\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"Build config\""           ), "tasks.json is missing \"Build config\" task.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"command\""                ), "tasks.json is missing \"command\".\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"args\""                   ), "tasks.json is missing \"args\" array.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"--config=config\""        ), "tasks.json is missing --config=config arg.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"--release\""              ), "tasks.json is missing --release arg for second task.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "generate_zed_json.cpp"      ), "tasks.json is missing the build file arg.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"label\""             ), "tasks.json is missing \"label\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"Build config\""      ), "tasks.json is missing \"Build config\" task.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"command\""           ), "tasks.json is missing \"command\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"args\""              ), "tasks.json is missing \"args\" array.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"--config=config\""   ), "tasks.json is missing --config=config arg.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"--release\""         ), "tasks.json is missing --release arg for second task.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "generate_zed_json.cpp" ), "tasks.json is missing the build file arg.\n" );
 	}
 
 	// debug.json
@@ -660,12 +660,12 @@ TEMPER_TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 		TEMPER_CHECK_TRUE_M( file_read_entire( debugJSONPath, &content, &contentLength ), "Failed to read debug.json.\n" );
 		defer( file_free_buffer( &content ) );
 
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"label\""                   ), "debug.json is missing \"label\".\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"Debug bin/debug/test_app\""), "debug.json is missing debug binary label.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"program\""                 ), "debug.json is missing \"program\".\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "bin/debug/test_app"          ), "debug.json is missing debug binary path.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "bin/release/test_app"        ), "debug.json is missing release binary path.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"${ZED_WORKTREE_ROOT}\""    ), "debug.json is missing default cwd.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"label\""                    ), "debug.json is missing \"label\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"Debug bin/debug/test_app\"" ), "debug.json is missing debug binary label.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"program\""                  ), "debug.json is missing \"program\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "bin/debug/test_app"           ), "debug.json is missing debug binary path.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "bin/release/test_app"         ), "debug.json is missing release binary path.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"${ZED_WORKTREE_ROOT}\""     ), "debug.json is missing default cwd.\n" );
 	}
 
 	// cleanup

@@ -16,9 +16,9 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions* options, CommandLineArg
 			// or entire folders at a time
 			// you can also filter by wildcard
 #if defined( _WIN32 )
-			"src/*.win64.cpp",
+			"src/**/*.win64.cpp",
 #elif defined( __linux__ )
-			"src/*.linux.cpp",
+			"src/**/*.linux.cpp",
 #endif
 		},
 	};

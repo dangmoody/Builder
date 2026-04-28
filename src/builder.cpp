@@ -1386,6 +1386,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 			setBuilderOptionsFunc( &options, &args );
 
 			printf( "%s override function Finished.\n\n", SET_BUILDER_OPTIONS_FUNC_NAME );
+			printf( "%s override function finished.\n\n", SET_BUILDER_OPTIONS_FUNC_NAME );
 		} else {
 			LogVerbose( "No %s override function was found.\n\n", SET_BUILDER_OPTIONS_FUNC_NAME );
 		}

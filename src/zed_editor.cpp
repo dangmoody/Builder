@@ -48,6 +48,8 @@ bool8 GenerateZedJSONFiles( buildContext_t *context, BuilderOptions *options ) {
 	{
 		const char *tasksJSONFilename = tprintf( "%s%ctasks.json", dotZedFolder, PATH_SEPARATOR );
 
+		printf( "Generating %s ... ", tasksJSONFilename );
+
 		StringBuilder tasksJSONContent = {};
 		defer( string_builder_destroy( &tasksJSONContent ) );
 
@@ -97,11 +99,15 @@ bool8 GenerateZedJSONFiles( buildContext_t *context, BuilderOptions *options ) {
 			error( "Failed to write \"%s\".\n", tasksJSONFilename );
 			return false;
 		}
+
+		printf( "Done\n" );
 	}
 
 	// debug.json
 	{
 		const char *debugJSONFilename = tprintf( "%s%cdebug.json", dotZedFolder, PATH_SEPARATOR );
+
+		printf( "Generating %s ... ", debugJSONFilename );
 
 		StringBuilder debugJSONContent = {};
 		defer( string_builder_destroy( &debugJSONContent ) );
@@ -153,7 +159,11 @@ bool8 GenerateZedJSONFiles( buildContext_t *context, BuilderOptions *options ) {
 			error( "Failed to write \"%s\".\n", debugJSONFilename );
 			return false;
 		}
+
+		printf( "Done\n" );
 	}
+
+	printf( "\n" );
 
 	return true;
 }

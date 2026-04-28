@@ -48,6 +48,8 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 	{
 		const char *cppPropertiesJSONFilename = tprintf( "%s%cc_cpp_properties.json", dotVSCodeFolder, PATH_SEPARATOR );
 
+		printf( "Generating %s ... ", cppPropertiesJSONFilename );
+
 		StringBuilder cppPropertiesJSONContent = {};
 		defer( string_builder_destroy( &cppPropertiesJSONContent ) );
 
@@ -148,11 +150,15 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 			error( "Failed to write \"%s\".\n", cppPropertiesJSONFilename );
 			return false;
 		}
+
+		printf( "Done\n" );
 	}
 
 	// tasks.json
 	{
 		const char *tasksJSONFilename = tprintf( "%s%ctasks.json", dotVSCodeFolder, PATH_SEPARATOR );
+
+		printf( "Generating %s ... ", tasksJSONFilename );
 
 		StringBuilder tasksJSONContent = {};
 		defer( string_builder_destroy( &tasksJSONContent ) );
@@ -205,11 +211,15 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 			error( "Failed to write \"%s\".\n", tasksJSONFilename );
 			return false;
 		}
+
+		printf( "Done\n" );
 	}
 
 	// launch.json
 	{
 		const char *launchJSONFilename = tprintf( "%s%claunch.json", dotVSCodeFolder, PATH_SEPARATOR );
+
+		printf( "Generating %s ... ", launchJSONFilename );
 
 		StringBuilder launchJSONContent = {};
 		defer( string_builder_destroy( &launchJSONContent ) );
@@ -325,7 +335,11 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 			error( "Failed to write \"%s\".\n", launchJSONFilename );
 			return false;
 		}
+
+		printf( "Done\n" );
 	}
+
+	printf( "\n" );
 
 	return true;
 }

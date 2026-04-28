@@ -21,7 +21,7 @@ if %errorlevel% NEQ 0 (
 )
 
 REM We have to build builder before running tests so don't share functionality
-echo Copying libclang.dll to "%binFolder%"...
+echo Copying libclang.dll to %binFolder%...
 copy /y clang\\bin\\libclang.dll %binFolder%\\libclang.dll
 
 popd

@@ -743,7 +743,24 @@ static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContex
 				basePath = context->inputFilePath.data;
 			} else {
 				pattern = tprintf( "%s%c%s", context->inputFilePath.data, '/', sourceFile );
-				basePath = path_remove_file_from_path( pattern );
+
+				// basePath must be the directory before the first wildcard
+				const char *firstStar = strchr( pattern, '*' );
+				u64 baseLen = cast( u64, firstStar ) - cast( u64, pattern );
+				while ( baseLen > 0 && pattern[baseLen - 1] != '/' && pattern[baseLen - 1] != '\\' ) {
+					baseLen--;
+				}
+
+				// remove trailing slash if found
+				if ( baseLen > 0 ) {
+					baseLen--;
+				}
+
+				char *trimmedBasePath = cast( char *, mem_temp_alloc( ( baseLen + 1 ) * sizeof( char ) ) );
+				memcpy( trimmedBasePath, pattern, baseLen );
+				trimmedBasePath[baseLen] = '\0';
+
+				basePath = trimmedBasePath;
 			}
 
 			std::vector<std::string> matches = GetSourceFilesMatchingPattern( basePath, pattern );

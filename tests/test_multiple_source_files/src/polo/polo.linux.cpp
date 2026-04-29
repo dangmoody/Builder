@@ -1,6 +1,6 @@
 #ifdef __linux__
 
-#include "marco_polo.h"
+#include "../marco_polo.h"
 
 #include <stdio.h>
 

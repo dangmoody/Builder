@@ -18,7 +18,6 @@ v0.12.0, 01/05/2026:
 	* Setting this to true tells Builder not to link against the compiler's default libraries.
 	* On MSVC, this passes /NODEFAULTLIB to the linker.
 	* On Clang (Windows), Builder always passes /NODEFAULTLIB to the linker internally.  When noDefaultLibs is false (the default), Builder explicitly links the correct CRT libraries based on your build configuration (_DEBUG, _DLL).  When noDefaultLibs is true, those libs are omitted entirely.
-	* Does not apply to static library builds.
 	* On Linux, this passes -nodefaultlibs to Clang, which does not exclude libgcc. Use BuildConfig::additionalLinkerArguments to pass -nostdlib if you need that.
 * MSVC:
 	* Builder now warns when a Windows SDK or MSVC installation is malformed (i.e. missing expected folders), and skips it in favour of the next newest valid version.

@@ -443,7 +443,6 @@ struct BuilderOptions {
 
 	// Tell Builder to ignore the default libraries that the compiler would normally link against.
 	// This is useful if you don't want to link against the standard library.
-	// Does not do anything for static library builds.
 	// Note: On Linux this passes -nodefaultlibs to Clang, which does not exclude libgcc.
 	// If you need to exclude libgcc, pass -nostdlib via BuildConfig::additionalLinkerArguments.
 	bool 						noDefaultLibs;

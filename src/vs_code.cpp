@@ -46,6 +46,18 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 
 	// c_cpp_properties.json
 	{
+		if ( options->vsCodeJSONOptions.cppPropertiesConfigs.empty() ) {
+			LogVerbose( "VS Code JSON generation was requested, but no c_cpp_properties JSON data was found.  All found BuildConfigs will be used as defaults.\n" );
+
+			options->vsCodeJSONOptions.cppPropertiesConfigs.reserve( options->configs.size() );
+
+			For ( u32, configIndex, 0, options->configs.size() ) {
+				options->vsCodeJSONOptions.cppPropertiesConfigs.push_back( {
+					.config = options->configs[configIndex],
+				} );
+			}
+		}
+
 		const char *cppPropertiesJSONFilename = tprintf( "%s%cc_cpp_properties.json", dotVSCodeFolder, PATH_SEPARATOR );
 
 		printf( "Generating %s ... ", cppPropertiesJSONFilename );
@@ -156,6 +168,18 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 
 	// tasks.json
 	{
+		if ( options->vsCodeJSONOptions.taskConfigs.empty() ) {
+			LogVerbose( "VS Code JSON generation was requested, but no tasks JSON data was found.  All found BuildConfigs will be used as defaults.\n" );
+
+			options->vsCodeJSONOptions.taskConfigs.reserve( options->configs.size() );
+
+			For ( u32, configIndex, 0, options->configs.size() ) {
+				options->vsCodeJSONOptions.taskConfigs.push_back( {
+					options->configs[configIndex]
+				} );
+			}
+		}
+
 		const char *tasksJSONFilename = tprintf( "%s%ctasks.json", dotVSCodeFolder, PATH_SEPARATOR );
 
 		printf( "Generating %s ... ", tasksJSONFilename );
@@ -217,6 +241,32 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 
 	// launch.json
 	{
+		if ( options->vsCodeJSONOptions.launchConfigs.empty() ) {
+			LogVerbose( "VS Code JSON generation was requested, but no launch JSON data was found.  All found BuildConfigs will be used as defaults.\n" );
+
+			options->vsCodeJSONOptions.launchConfigs.reserve( options->configs.size() );
+
+			For( u32, configIndex, 0, options->configs.size() ) {
+				const BuildConfig *config = &options->configs[configIndex];
+
+				VSCodeLaunchConfig launchConfig = {
+					.binaryName = tprintf( "${workspaceFolder}/%s", BuildConfig_GetFullBinaryName( config ) ),
+					.cwd = "${workspaceFolder}",
+				};
+
+#if defined( _WIN64 )
+				launchConfig.debuggerType = VSCODE_DEBUGGER_TYPE_CPPVSDBG;
+#elif defined( __linux__ )
+				launchConfig.linuxDebugger = {
+					.miMode = "gdb",
+					.miDebuggerPath = "/usr/bin/gdb",
+				};
+#endif
+
+				options->vsCodeJSONOptions.launchConfigs.push_back( launchConfig );
+			}
+		}
+
 		const char *launchJSONFilename = tprintf( "%s%claunch.json", dotVSCodeFolder, PATH_SEPARATOR );
 
 		printf( "Generating %s ... ", launchJSONFilename );

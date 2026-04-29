@@ -13,7 +13,7 @@ v0.12.0, 01/05/2026:
 * Added BuildConfig::noDefaultLibs (thanks @aiden-knight!).
 	* Setting this to true tells Builder not to link against the compiler's default libraries.
 	* On MSVC, this passes /NODEFAULTLIB to the linker.
-	* On Clang (Windows), Builder will now explicitly link the correct CRT libraries based on your build configuration (_DEBUG, _DLL) rather than relying on the compiler's defaults.
+	* On Clang (Windows), Builder always passes /NODEFAULTLIB to the linker internally.  When noDefaultLibs is false (the default), Builder explicitly links the correct CRT libraries based on your build configuration (_DEBUG, _DLL).  When noDefaultLibs is true, those libs are omitted entirely.
 	* Does not apply to static library builds.
 	* On Linux, this passes -nodefaultlibs to Clang, which does not exclude libgcc. Use BuildConfig::additionalLinkerArguments to pass -nostdlib if you need that.
 * MSVC:

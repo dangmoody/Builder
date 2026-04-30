@@ -52,6 +52,8 @@ CORE_API bool8	string_contains( const char* str, const char* substring );
 // Takes a slice of characters from string 'str' starting at 'offset' + 'count' characters and puts it into out_string.
 CORE_API void	string_substring( const char* str, const u64 offset, const u64 count, char* out_string );
 
+CORE_API const char	*string_replace( const char *str, const char old_char, const char new_char );
+
 // TODO(DM): 13/2/2023: these wrappers shouldnt really exist
 // what we should do instead is just #define sprintf to be either the C implementation or the stb one (or whatever)
 // and then people can just call sprintf instead of having to use these

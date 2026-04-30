@@ -101,6 +101,21 @@ void string_substring( const char* str, const u64 offset, const u64 count, char*
 	out_string[count - 1] = 0;
 }
 
+const char *string_replace( const char *str, const char old_char, const char new_char ) {
+	u64 length = strlen( str );
+	char *result = cast( char *, mem_temp_alloc( ( length + 1 ) * sizeof( char ) ) );
+	memcpy( result, str, ( length + 1 ) * sizeof( char ) );
+	result[length] = 0;
+
+	For ( u64, char_index, 0, length ) {
+		if ( result[char_index] == old_char ) {
+			result[char_index] = new_char;
+		}
+	}
+
+	return result;
+}
+
 // TODO(DM): 1/1/2023: this needs to be replaced with a sprintf #define that chooses stb if the use_stb define is set
 int string_sprintf( char* buffer, const char* fmt, ... ) {
 	va_list args;

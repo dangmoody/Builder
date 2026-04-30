@@ -358,7 +358,19 @@ struct ZedTaskConfig {
 	std::vector<std::string>	args;
 };
 
+enum ZedDebuggerAdapter {
+	ZED_DEBUGGER_ADAPTER_CODELLDB	= 0,
+	ZED_DEBUGGER_ADAPTER_GDB,
+};
+
+enum ZedDebuggerRequest {
+	ZED_DEBUGGER_REQUEST_LAUNCH	= 0,
+	ZED_DEBUGGER_REQUEST_ATTACH,
+};
+
 struct ZedDebugConfig {
+	std::string					label;
+
 	std::string					binaryName;
 
 	// When you run this config, what command line arguments do you want to be passed through?
@@ -367,6 +379,12 @@ struct ZedDebugConfig {
 	// You'd never guess, but this sets the "cwd" field in a Zed debug config.
 	// This defaults to '${ZED_WORKTREE_ROOT}'.
 	std::string					cwd;
+
+	// Which debugger adapter do you want to use?
+	ZedDebuggerAdapter			adapter;
+
+	// When you run this debug config, do you want to launch the executable or attach to it?
+	ZedDebuggerRequest			request;
 };
 
 struct ZedJSONOptions {

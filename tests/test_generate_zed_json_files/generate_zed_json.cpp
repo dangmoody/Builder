@@ -26,8 +26,8 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArg
 			{ config, { "--release" } },
 		},
 		.debugConfigs = {
-			{ .binaryName = "bin/debug/" + config.binaryName   },
-			{ .binaryName = "bin/release/" + config.binaryName },
+			{ .label = "config (debug)",   .binaryName = "bin/debug/" + config.binaryName   },
+			{ .label = "config (release)", .binaryName = "bin/release/" + config.binaryName },
 		},
 	};
 }

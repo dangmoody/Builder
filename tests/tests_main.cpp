@@ -618,16 +618,14 @@ TEMPER_TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 }
 
 TEMPER_TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
-	const char *buildFile        = "test_generate_zed_json_files/generate_zed_json.cpp";
 	const char *dotBuilderFolder = "test_generate_zed_json_files/.builder";
-	const char *dotZedFolder     = "test_generate_zed_json_files/.zed";
 	const char *tasksJSONPath    = "test_generate_zed_json_files/.zed/tasks.json";
 	const char *debugJSONPath    = "test_generate_zed_json_files/.zed/debug.json";
 
 	// generate the Zed JSON files
 	{
 		Array<const char *> args;
-		args.add( buildFile );
+		args.add( "test_generate_zed_json_files/generate_zed_json.cpp" );
 
 		s32 exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "BuilderMain() returned %d.\n", exitCode );
@@ -660,12 +658,17 @@ TEMPER_TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 		TEMPER_CHECK_TRUE_M( file_read_entire( debugJSONPath, &content, &contentLength ), "Failed to read debug.json.\n" );
 		defer( file_free_buffer( &content ) );
 
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"label\""                    ), "debug.json is missing \"label\".\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"Debug bin/debug/test_app\"" ), "debug.json is missing debug binary label.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"program\""                  ), "debug.json is missing \"program\".\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "bin/debug/test_app"           ), "debug.json is missing debug binary path.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "bin/release/test_app"         ), "debug.json is missing release binary path.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"${ZED_WORKTREE_ROOT}\""     ), "debug.json is missing default cwd.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"label\""                ), "debug.json is missing \"label\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"config (debug)\""       ), "debug.json is missing config (debug) binary label.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"config (release)\""     ), "debug.json is missing config (release) binary label.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"program\""              ), "debug.json is missing \"program\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "bin/debug/test_app"       ), "debug.json is missing debug binary path.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "bin/release/test_app"     ), "debug.json is missing release binary path.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"${ZED_WORKTREE_ROOT}\"" ), "debug.json is missing default cwd.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"adapter\""              ), "debug.json is missing \"adapter\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"CodeLLDB\""             ), "debug.json is missing \"CodeLLDB\" adapter.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"request\""              ), "debug.json is missing \"request\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content, "\"launch\""               ), "debug.json is missing \"launch\" request.\n" );
 	}
 
 	// cleanup
@@ -699,7 +702,7 @@ TEMPER_TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 		if ( file_exists( debugJSONPath ) ) {
 			TEMPER_CHECK_TRUE_M( file_delete( debugJSONPath ), "Failed to delete debug.json.\n" );
 		}
-		TEMPER_CHECK_TRUE_M( folder_delete( dotZedFolder ), "Failed to delete .zed folder.\n" );
+		TEMPER_CHECK_TRUE_M( folder_delete( "test_generate_zed_json_files/.zed" ), "Failed to delete .zed folder.\n" );
 	}
 }
 

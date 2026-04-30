@@ -239,11 +239,11 @@ static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t *backend, const Array
 		args.add( "/DLL" );
 	}
 
-	if ( !config->removeSymbols ) {
+	if ( !config->removeSymbols && config->binaryType != BINARY_TYPE_STATIC_LIBRARY ) {
 		args.add( "/DEBUG" );
 	}
 
-	if ( options && options->noDefaultLibs && config->binaryType != BINARY_TYPE_STATIC_LIBRARY ) {
+	if ( options && options->noDefaultLibs ) {
 		args.add( "/NODEFAULTLIB" );
 	}
 

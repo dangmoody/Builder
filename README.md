@@ -201,6 +201,16 @@ options->compilerVersion = "15.1.0";  // optional - warns on mismatch
 
 Set `compilerPath` to `"cl"` and Builder will locate the MSVC toolchain and Windows SDK automatically. A hard-coded path works too but requires you to manage SDK paths yourself.
 
+### Windows Runtime
+
+On Windows, the C and C++ runtimes come in both static and dynamic (DLL) variants. By default Builder links against the static runtime. Set `linkAgainstWindowsDynamicRuntime` to link against the dynamic runtime instead:
+
+```cpp
+options->linkAgainstWindowsDynamicRuntime = true;
+```
+
+This adds the `_DLL` preprocessor definition, which changes linking behavior to use the dynamic runtime. It has no effect on Linux.
+
 ## Visual Studio and Rider
 
 ```cpp

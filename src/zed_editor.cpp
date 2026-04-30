@@ -46,6 +46,18 @@ bool8 GenerateZedJSONFiles( buildContext_t *context, BuilderOptions *options ) {
 
 	// tasks.json
 	{
+		if ( options->zedJSONOptions.taskConfigs.empty() ) {
+			LogVerbose( "Zed JSON generation was requested, but no tasks JSON data was found.  All found BuildConfigs will be used as defaults.\n" );
+
+			options->zedJSONOptions.taskConfigs.reserve( options->configs.size() );
+
+			For ( u32, configIndex, 0, options->configs.size() ) {
+				options->zedJSONOptions.taskConfigs.push_back( {
+					options->configs[configIndex]
+				} );
+			}
+		}
+
 		const char *tasksJSONFilename = tprintf( "%s%ctasks.json", dotZedFolder, PATH_SEPARATOR );
 
 		printf( "Generating %s ... ", tasksJSONFilename );
@@ -105,6 +117,23 @@ bool8 GenerateZedJSONFiles( buildContext_t *context, BuilderOptions *options ) {
 
 	// debug.json
 	{
+		if ( options->zedJSONOptions.debugConfigs.empty() ) {
+			LogVerbose( "Zed JSON generation was requested, but no debug JSON data was found.  All found BuildConfigs will be used as defaults.\n" );
+
+			options->zedJSONOptions.debugConfigs.reserve( options->configs.size() );
+
+			For ( u32, configIndex, 0, options->configs.size() ) {
+				const BuildConfig *config = &options->configs[configIndex];
+
+				ZedDebugConfig debugConfig = {
+					.binaryName	= tprintf( "${ZED_WORKTREE_ROOT}/%s", BuildConfig_GetFullBinaryName( config ) ),
+					.cwd		= "${ZED_WORKTREE_ROOT}",
+				};
+
+				options->zedJSONOptions.debugConfigs.push_back( debugConfig );
+			}
+		}
+
 		const char *debugJSONFilename = tprintf( "%s%cdebug.json", dotZedFolder, PATH_SEPARATOR );
 
 		printf( "Generating %s ... ", debugJSONFilename );

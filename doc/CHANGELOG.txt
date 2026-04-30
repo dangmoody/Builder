@@ -10,17 +10,20 @@ v0.12.0, 01/05/2026:
 * Significantly improved README (thanks @aiden-knight!).
 * Added GetCommandLineArgValue( CommandLineArgs *, const char * ).
 	* Returns the value after '=' for args of the form "--key=value", or NULL if not found.
+* Added BuilderOptions::linkAgainstWindowsDynamicRuntime (thanks @aiden-knight!).
+	* On Windows, links against the dynamic C/C++ runtime (DLL) instead of the static runtime.
+	* Sets the _DLL preprocessor definition, which changes linking behavior accordingly.
+	* Has no effect on Linux.
 * Added BuildConfig::noDefaultLibs (thanks @aiden-knight!).
 	* Setting this to true tells Builder not to link against the compiler's default libraries.
 	* On MSVC, this passes /NODEFAULTLIB to the linker.
-	* On Clang (Windows), Builder will now explicitly link the correct CRT libraries based on your build configuration (_DEBUG, _DLL) rather than relying on the compiler's defaults.
-	* Does not apply to static library builds.
+	* On Clang (Windows), Builder always passes /NODEFAULTLIB to the linker internally.  When noDefaultLibs is false (the default), Builder explicitly links the correct CRT libraries based on your build configuration (_DEBUG, _DLL).  When noDefaultLibs is true, those libs are omitted entirely.
 	* On Linux, this passes -nodefaultlibs to Clang, which does not exclude libgcc. Use BuildConfig::additionalLinkerArguments to pass -nostdlib if you need that.
 * MSVC:
 	* Builder now warns when a Windows SDK or MSVC installation is malformed (i.e. missing expected folders), and skips it in favour of the next newest valid version.
 	* Fixed a bug where setting BuilderOptions::compilerPath to a full path to cl.exe would leave the linker path uninitialised, causing a crash or silent failure at link time.
 		* Builder now derives the linker path from the same directory as the compiler path in this case.
-	* Builder now throws an error if the Windows SDK registry key `KitsRoot10` can't be found under `SOFTWARE/Microsoft/Windows Kits/Installed Roots` instead of crashing like it used to.
+	* Builder now throws an error if the Windows SDK registry key KitsRoot10 can't be found under SOFTWARE/Microsoft/Windows Kits/Installed Roots instead of crashing like it used to.
 	* Builder now emits a warning when OPTIMIZATION_LEVEL_O3 is used with the MSVC backend.
 		* MSVC has no /O3 equivalent, so Builder falls back to /O2.
 		* The warning is only shown once per build, regardless of how many configs or source files use it.

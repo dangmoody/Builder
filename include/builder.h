@@ -364,7 +364,7 @@ struct ZedDebugConfig {
 	// When you run this config, what command line arguments do you want to be passed through?
 	std::vector<std::string>	args;
 
-	// You'd never guess, but this sets the "cwd" field in a VS Code launch config.
+	// You'd never guess, but this sets the "cwd" field in a Zed debug config.
 	// This defaults to '${ZED_WORKTREE_ROOT}'.
 	std::string					cwd;
 };
@@ -443,7 +443,6 @@ struct BuilderOptions {
 
 	// Tell Builder to ignore the default libraries that the compiler would normally link against.
 	// This is useful if you don't want to link against the standard library.
-	// Does not do anything for static library builds.
 	// Note: On Linux this passes -nodefaultlibs to Clang, which does not exclude libgcc.
 	// If you need to exclude libgcc, pass -nostdlib via BuildConfig::additionalLinkerArguments.
 	bool 						noDefaultLibs;

@@ -329,6 +329,9 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 
 	args.reset();
 
+	// TODO(DM): 30/04/2026: this is a repetition of MSVC_LinkIntermediateFiles
+	// so we need to start splitting backend files down by compiler and linker
+	// and then unify the linker codepaths on windows when calling either clang or msvc
 #ifdef _WIN32
 	//args.add( clangState->linkerPath.data );
 	if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {

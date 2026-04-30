@@ -246,7 +246,7 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 
 			options->vsCodeJSONOptions.launchConfigs.reserve( options->configs.size() );
 
-			For( u32, configIndex, 0, options->configs.size() ) {
+			For ( u32, configIndex, 0, options->configs.size() ) {
 				const BuildConfig *config = &options->configs[configIndex];
 
 				VSCodeLaunchConfig launchConfig = {

@@ -38,7 +38,7 @@ elif [[ "$config" == "release" ]]; then
 	defines="$defines -DNDEBUG -DBUILDER_PROGRAM_NAME=\"$programName\""
 fi
 
-includes="-I${builderDir}/src/core/include -I${builderDir}/clang/include"
+includes="-I${builderDir}/src/core/include"
 
 libPaths="-L${builderDir}/clang/lib"
 

@@ -50,7 +50,7 @@ if /I [%config%] == [debug] (
 
 	set libraries=-luser32.lib -lShlwapi.lib -lDbgHelp.lib -lOle32.lib -lAdvapi32.lib -lOleAut32.lib -llibclang.lib -lkernel32.lib^
  -lmsvcrtd.lib -lmsvcprtd.lib -lvcruntimed.lib -lucrtd.lib
-) 
+)
 
 if /I [%config%] == [release]  (
 	set symbols=
@@ -64,7 +64,7 @@ if /I [%config%] == [release]  (
 )
 
 REM Set up shared environment variables
-set includes=-Isrc\\core\\include -Iclang\\include
+set includes=-Isrc\\core\\include
 
 set libPaths=-Lclang\\lib
 

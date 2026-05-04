@@ -37,6 +37,13 @@ popd
 
 mkdir -p releases
 
+echo "Smoke-testing trimmed Clang..."
+printf 'int main(void) { return 0; }\n' > releases/smoke.c
+"${builderDir}/clang/bin/clang" -o releases/smoke_test releases/smoke.c
+rm releases/smoke.c releases/smoke_test
+echo "Done."
+echo ""
+
 echo "Making release archive..."
 tar cvf releases/builder_${version}_linux.tar.xz -I 'xz -9e --lzma2=dict=256M' ./bin/builder ./bin/libclang.so ./bin/libclang.so.20.1 clang include doc/CHANGELOG.txt doc/Contributing.md README.md LICENSE
 

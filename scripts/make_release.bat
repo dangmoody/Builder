@@ -36,6 +36,20 @@ if %errorlevel% NEQ 0 (
 )
 popd
 
+:: Smoke-test that the trimmed Clang can compile a trivial program
+echo Smoke-testing trimmed Clang...
+if not exist releases mkdir releases
+echo int main(void){} > releases\smoke.c
+.\\clang\\bin\\clang.exe -o releases\\smoke_test.exe releases\\smoke.c
+if %errorlevel% NEQ 0 (
+    echo ERROR: Trimmed Clang failed smoke test -- release cannot be made
+    del /q releases\\smoke.c 2>nul
+    exit /B 1
+)
+del /q releases\\smoke.c releases\\smoke_test.exe
+echo Done.
+echo.
+
 :: now actually make release package
 set tempFolder=.\\releases\\temp
 

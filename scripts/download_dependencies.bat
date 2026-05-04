@@ -27,6 +27,47 @@ del /q "..\\clang\\clang.tar.xz"
 echo Done.
 echo.
 
+:: Remove unused Clang files to reduce size
+echo Removing unused Clang files...
+
+:: Entire top-level directories not needed at runtime
+if exist "..\\clang\\include"  rmdir /s /q "..\\clang\\include"
+if exist "..\\clang\\share"    rmdir /s /q "..\\clang\\share"
+
+:: Subdirectories of lib/ not needed at runtime
+:: (lib\clang\ is the compiler resource dir and must be kept)
+if exist "..\\clang\\lib\\cmake"        rmdir /s /q "..\\clang\\lib\\cmake"
+if exist "..\\clang\\lib\\libscanbuild" rmdir /s /q "..\\clang\\lib\\libscanbuild"
+if exist "..\\clang\\lib\\libear"       rmdir /s /q "..\\clang\\lib\\libear"
+
+:: From lib\: delete all .lib files (lib\clang\ subdirectory is unaffected — no /s flag)
+del /q "..\\clang\\lib\\*.lib" 2>nul
+
+:: From bin\: delete everything except the tools Builder needs
+for %%f in ("..\\clang\\bin\\*") do (
+    set "keep="
+    if /i "%%~nxf"=="clang.exe"         set "keep=1"
+    if /i "%%~nxf"=="clang++.exe"       set "keep=1"
+    if /i "%%~nxf"=="clang-20.exe"      set "keep=1"
+    if /i "%%~nxf"=="clang-cl.exe"      set "keep=1"
+    if /i "%%~nxf"=="clang-cpp.exe"     set "keep=1"
+    if /i "%%~nxf"=="lld.exe"           set "keep=1"
+    if /i "%%~nxf"=="lld-link.exe"      set "keep=1"
+    if /i "%%~nxf"=="ld.lld.exe"        set "keep=1"
+    if /i "%%~nxf"=="llvm-ar.exe"       set "keep=1"
+    if /i "%%~nxf"=="llvm-ranlib.exe"   set "keep=1"
+    if /i "%%~nxf"=="llvm-lib.exe"      set "keep=1"
+    if /i "%%~nxf"=="llvm-dlltool.exe"  set "keep=1"
+    if /i "%%~nxf"=="libclang.dll"      set "keep=1"
+    if /i "%%~nxf"=="LLVM-C.dll"        set "keep=1"
+    if /i "%%~nxf"=="LTO.dll"           set "keep=1"
+    if /i "%%~nxf"=="Remarks.dll"       set "keep=1"
+    if not defined keep del /q "%%f"
+)
+
+echo Done.
+echo.
+
 :: ----------------------------------------------------------------
 
 set gccVersion=15.1.0

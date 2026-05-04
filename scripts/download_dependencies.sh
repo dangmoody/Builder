@@ -32,7 +32,8 @@ echo ""
 echo "Removing unused Clang files..."
 
 # Entire top-level directories not needed at runtime
-rm -rf "${clangDir}/include"
+# include/clang-c must be kept -- backend_clang.cpp includes <clang-c/Index.h> from there
+find "${clangDir}/include" -mindepth 1 -maxdepth 1 ! -name 'clang-c' -exec rm -rf {} +
 rm -rf "${clangDir}/share"
 rm -rf "${clangDir}/libexec"
 rm -rf "${clangDir}/local"

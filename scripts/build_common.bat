@@ -64,7 +64,7 @@ if /I [%config%] == [release]  (
 )
 
 REM Set up shared environment variables
-set includes=-Isrc\\core\\include
+set includes=-Isrc\\core\\include -Iclang\\include
 
 set libPaths=-Lclang\\lib
 

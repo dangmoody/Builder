@@ -30,18 +30,29 @@ echo.
 :: Remove unused Clang files to reduce size
 echo Removing unused Clang files...
 
-:: Entire top-level directories not needed at runtime
-if exist "..\\clang\\include"  rmdir /s /q "..\\clang\\include"
-if exist "..\\clang\\share"    rmdir /s /q "..\\clang\\share"
+if exist "..\\clang\\share" rmdir /s /q "..\\clang\\share"
 
-:: Subdirectories of lib/ not needed at runtime
-:: (lib\clang\ is the compiler resource dir and must be kept)
-if exist "..\\clang\\lib\\cmake"        rmdir /s /q "..\\clang\\lib\\cmake"
-if exist "..\\clang\\lib\\libscanbuild" rmdir /s /q "..\\clang\\lib\\libscanbuild"
-if exist "..\\clang\\lib\\libear"       rmdir /s /q "..\\clang\\lib\\libear"
+:: From include\: delete all subdirectories except clang-c (needed by backend_clang.cpp)
+for /d %%d in ("..\\clang\\include\\*") do (
+    set "keep="
+    if /i "%%~nxd"=="clang-c" set "keep=1"
+    if not defined keep rmdir /s /q "%%d"
+)
+del /q "..\\clang\\include\\*" 2>nul
 
-:: From lib\: delete all .lib files (lib\clang\ subdirectory is unaffected — no /s flag)
-del /q "..\\clang\\lib\\*.lib" 2>nul
+:: From lib\: delete all subdirectories except clang (compiler resource dir)
+for /d %%d in ("..\\clang\\lib\\*") do (
+    set "keep="
+    if /i "%%~nxd"=="clang" set "keep=1"
+    if not defined keep rmdir /s /q "%%d"
+)
+
+:: From lib\: delete all files except libclang.lib (needed to link against libclang.dll)
+for %%f in ("..\\clang\\lib\\*") do (
+    set "keep="
+    if /i "%%~nxf"=="libclang.lib" set "keep=1"
+    if not defined keep del /q "%%f"
+)
 
 :: From bin\: delete everything except the tools Builder needs
 for %%f in ("..\\clang\\bin\\*") do (

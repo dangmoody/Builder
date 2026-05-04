@@ -1,3 +1,11 @@
+v0.13.0, TBD:
+
+* Release archives are now drastically smaller.
+	* The bundled Clang installation previously included the full LLVM toolchain: Fortran/MLIR tools, LLDB, dozens of standalone LLVM utilities, all static libraries, and development headers.  The vast majority of this was never used by Builder.
+	* The download_dependencies scripts now prune the Clang directory after extraction, keeping only what Builder needs at runtime: the compiler (clang/clang++), the linker (lld), the archiver (llvm-ar), the required runtime shared libraries, and the Clang resource directory (built-in headers).
+
+----------------------------------------------------------------
+
 v0.12.0, 01/05/2026:
 
 * Added VS Code JSON file generation.

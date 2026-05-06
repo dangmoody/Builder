@@ -1248,6 +1248,17 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		}
 	}
 
+	// we need a source file specified at the command line
+	// otherwise we dont know what to build!
+	if ( context.inputFile == NULL ) {
+		error(
+			"You haven't told me what source files I need to build.  I need one.\n"
+			"Run builder " ARG_HELP_LONG " if you need help.\n"
+		);
+
+		QUIT_ERROR();
+	}
+
 #ifdef _WIN32
 	if ( !Win_GetWindowsSDK( &context.winSDK ) ) {
 		QUIT_ERROR();
@@ -1259,17 +1270,6 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 	printf( "\n" );
 #endif
-
-	// we need a source file specified at the command line
-	// otherwise we dont know what to build!
-	if ( context.inputFile == NULL ) {
-		error(
-			"You haven't told me what source files I need to build.  I need one.\n"
-			"Run builder " ARG_HELP_LONG " if you need help.\n"
-		);
-
-		QUIT_ERROR();
-	}
 
 	// the default binary folder is the same folder as the source file
 	// if the file doesnt have a path then assume its in the same path as the current working directory (where we are calling builder from)

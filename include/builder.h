@@ -197,6 +197,10 @@ struct VisualStudioConfig {
 
 	// Default debugger command line arguments.
 	std::vector<std::string>	debuggerArguments;
+
+	// The directory you want to set as the CWD when running this config.
+	// Defaults to $(SolutionDir) if not set.
+	std::string					runFromDirectory;
 };
 
 struct VisualStudioProject {

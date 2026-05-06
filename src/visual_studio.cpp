@@ -284,6 +284,11 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 				For ( u32, configIndex, 0, project->configs.size() ) {
 					VisualStudioConfig *config = &project->configs[configIndex];
 
+					if ( config->runFromDirectory.empty() ) {
+						LogVerbose( "Working directory for config inside project \"%s\" wasn't set, so defaulting to $(SolutionDir) instead.\n", project->name.c_str() );
+						config->runFromDirectory = "$(SolutionDir)";
+					}
+
 					For ( u32, sourceFileIndex, 0, config->options.sourceFiles.size() ) {
 						const char *sourceFile = config->options.sourceFiles[sourceFileIndex].c_str();
 
@@ -333,7 +338,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 				}
 				string_builder_appendf( &sb, "\nIf you want more or different file types to be present in this project you will need to override this yourself.\n" );
 
-				printf( "%s", string_builder_to_string( &sb ) );
+				LogVerbose( "%s", string_builder_to_string( &sb ) );
 
 				project->fileExtensions = defaultFileExtensions;
 			}
@@ -792,7 +797,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 						string_builder_appendf( &vcxprojContent, "\t\t<LocalDebuggerDebuggerType>Auto</LocalDebuggerDebuggerType>\n" );
 						string_builder_appendf( &vcxprojContent, "\t\t<LocalDebuggerAttach>false</LocalDebuggerAttach>\n" );
 						string_builder_appendf( &vcxprojContent, "\t\t<LocalDebuggerCommand>%s</LocalDebuggerCommand>\n", pathFromSolutionToBinary );
-						string_builder_appendf( &vcxprojContent, "\t\t<LocalDebuggerWorkingDirectory>$(SolutionDir)</LocalDebuggerWorkingDirectory>\n" );
+						string_builder_appendf( &vcxprojContent, "\t\t<LocalDebuggerWorkingDirectory>%s</LocalDebuggerWorkingDirectory>\n", config->runFromDirectory.c_str() );
 
 						// if debugger arguments were specified, put those in
 						if ( config->debuggerArguments.size() > 0 ) {

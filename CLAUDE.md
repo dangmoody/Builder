@@ -102,7 +102,7 @@ cd tests && ../bin/builder_tests_debug
 
 ## Code conventions
 
-- Custom integer types: `u8`, `s32`, `u64`, `float64`, `bool8` (from `src/core/core_types.h`)
+- Custom integer types: `u8`, `s32`, `u64`, `float64`, `bool8` (from `src/core/int_types.h`)
 - `String` wraps a C string (from core)
 - Memory: `mem_alloc()` / `mem_free()`; `defer(...)` for cleanup
 - Errors: `assertf()` for programmer errors; `error()` / `fatal_error()` for runtime errors

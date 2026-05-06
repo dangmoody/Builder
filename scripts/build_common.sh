@@ -26,7 +26,7 @@ mkdir -p $binFolder
 intermediateFolder="${builderDir}/intermediate"
 mkdir -p $intermediateFolder
 
-defines="-D_CRT_SECURE_NO_WARNINGS -DCORE_USE_XXHASH -DCORE_SUC -DCORE_USE_SUBPROCESS -DHASHMAP_HIDE_MISSING_KEY_WARNING -DHLML_NAMESPACE"
+defines="-D_CRT_SECURE_NO_WARNINGS -DHLML_NAMESPACE"
 if [[ "$config" == "debug" ]]; then
 	symbols="-g"
 	optimisation=""
@@ -40,9 +40,9 @@ fi
 
 includes="-I${builderDir}/src/core/include -I${builderDir}/clang/include"
 
-libPaths="-L${builderDir}/clang/lib"
+libPaths="-L${builderDir}/clang/lib -L${builderDir}/3rdparty/core"
 
-libraries="-lstdc++ -luuid -lclang"
+libraries="-lstdc++ -luuid -lclang -l:core.so"
 
 warningLevels="-Werror -Wall -Wextra -Weverything -Wpedantic"
 ignoreWarnings="-Wno-newline-eof -Wno-format-nonliteral -Wno-gnu-zero-variadic-macro-arguments -Wno-declaration-after-statement -Wno-unsafe-buffer-usage -Wno-zero-as-null-pointer-constant -Wno-c++98-compat-pedantic -Wno-old-style-cast -Wno-missing-field-initializers -Wno-switch-default -Wno-covered-switch-default -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-cast-align -Wno-double-promotion -Wno-alloca -Wno-padded -Wno-documentation-unknown-command"

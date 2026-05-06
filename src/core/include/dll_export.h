@@ -33,30 +33,19 @@ SOFTWARE.
 
 	DLL Export
 
-	Core is an header-only library and does not compile out to a DLL.  However, you may want to
-	use Core in a project that does.  This means that if you want any program that's including
-	and linking to your DLL program to also use code from Core then you will need to expose
-	Core to the DLL.  This header lets you do that.
-
-	If you're familiar with exporting functions to DLLs then you already know what's happening
-	in this header, but if not here's what all the #defines mean:
-
-	All you really need to know as the user is this: If you're using Core in a program that
-	compiles out to a dynamic library then you want to #define both CORE_DLL and CORE_EXPORTS
-	in your build system somewhere.
-
-	CORE_API will either export the function to the DLL, or import the function from it
-	depending on whether or not CORE_EXPORTS is #defined.
-
 ================================================================================================
 */
 
-#ifdef CORE_DLL
+#if defined( _WIN32 )
 	#ifdef CORE_EXPORTS
 		#define CORE_API	__declspec( dllexport )
 	#else
 		#define CORE_API	__declspec( dllimport )
 	#endif
-#else
-	#define CORE_API
+#elif defined( __linux__ )
+	#ifdef CORE_EXPORTS
+		#define CORE_API	__attribute__( ( visibility( "default" ) ) )
+	#else
+		#define CORE_API
+	#endif
 #endif

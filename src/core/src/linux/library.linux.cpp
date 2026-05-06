@@ -30,7 +30,11 @@ SOFTWARE.
 
 #include <library.h>
 
+#include <debug.h>
+
 #include <dlfcn.h>
+#include <errno.h>
+#include <string.h>
 
 /*
 ================================================================================================
@@ -40,29 +44,32 @@ SOFTWARE.
 ================================================================================================
 */
 
-Library library_load( const char* name ) {
+Library library_load( const char *name ) {
 	return Library {
 		.ptr = dlopen( name, RTLD_LAZY ),
 	};
 }
 
-void library_unload( Library* library ) {
+bool8 library_unload( Library *library ) {
 	assert( library );
 	assert( library->ptr );
 
 	if ( dlclose( library->ptr ) != 0 ) {
 		int err = errno;
-		error( "Failed to close library handle: %s\n", strerror( err ) );
+		error( "Failed to close library handle: %s\n", strerror( err ) );	// TODO: DM: 20/03/2026: I think we want to get rid of this
+		return false;
 	}
 
 	library->ptr = NULL;
+
+	return true;
 }
 
-void* library_get_proc_address( const Library library, const char* func_name ) {
+void *library_get_symbol( const Library library, const char *symbol_name ) {
 	assert( library.ptr );
-	assert( func_name );
+	assert( symbol_name );
 
-	return dlsym( library.ptr, func_name );
+	return dlsym( library.ptr, symbol_name );
 }
 
 #endif // __linux__

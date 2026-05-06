@@ -28,10 +28,15 @@ SOFTWARE.
 
 #include "builder_local.h"
 
-#include "core/include/allocation_context.h"
-#include "core/include/array.inl"
-#include "core/include/core_types.h"
-#include "core/include/string_helpers.h"
+#include "core/include/core_math.h"
+#include "core/include/linear_allocator.h"
+#include "win_support.h"
+
+// #include "core/include/allocation_context.h"
+#include "core/include/core_helpers.h"
+#include "core/include/core_array.inl"
+#include "core/include/int_types.h"
+#include "core/include/core_string.h"
 #include "core/include/string_builder.h"
 #include "core/include/paths.h"
 #include "core/include/core_process.h"
@@ -43,8 +48,7 @@ SOFTWARE.
 #include "core/include/library.h"
 #include "core/include/core_string.h"
 #include "core/include/hashmap.h"
-#include "core/include/file.h"
-#include "win_support.h"
+#include "core/include/defer.h"
 
 #ifdef _WIN64
 #include <Shlwapi.h>
@@ -53,6 +57,7 @@ SOFTWARE.
 #endif
 
 #include <stdio.h>
+#include <stdarg.h>
 
 /*
 =============================================================================
@@ -113,7 +118,7 @@ const char *GetFileExtensionFromBinaryType( const BinaryType type ) {
 #error Unrecognised paltform.
 #endif
 
-	assertf( false, "Something went really wrong here.\n" );
+	assert( false );
 
 	return "ERROR";
 }
@@ -150,7 +155,7 @@ bool8 FileIsHeaderFile( const char *filename ) {
 	return false;
 }
 
-static const char *BuildConfig_ToString( const BuildConfig *config ) {
+static const char *BuildConfig_ToString( const BuildConfig *config, LinearAllocator *allocator ) {
 	auto LanguageVersionToString = []( const LanguageVersion version ) -> const char * {
 		switch ( version ) {
 			case LANGUAGE_VERSION_UNSET:	return "LANGUAGE_VERSION_UNSET";
@@ -185,7 +190,7 @@ static const char *BuildConfig_ToString( const BuildConfig *config ) {
 	};
 
 	StringBuilder builder = {};
-	string_builder_reset( &builder );
+	string_builder_init( &builder, allocator );
 
 	auto PrintCStringArray = [&builder]( const char *name, const std::vector<const char *> &array ) {
 		string_builder_appendf( &builder, "\t%s: { ", name );
@@ -256,11 +261,11 @@ static const char *BuildConfig_ToString( const BuildConfig *config ) {
 	return string_builder_to_string( &builder );
 }
 
-const char *BuildConfig_GetFullBinaryName( const BuildConfig *config ) {
+const char *BuildConfig_GetFullBinaryName( const BuildConfig *config, LinearAllocator *allocator ) {
 	assert( !config->binaryName.empty() );
 
 	StringBuilder sb = {};
-	string_builder_reset( &sb );
+	string_builder_init( &sb, allocator );
 
 	if ( !config->binaryFolder.empty() ) {
 		string_builder_appendf( &sb, "%s%c", config->binaryFolder.c_str(), PATH_SEPARATOR );
@@ -301,7 +306,7 @@ s32 RunProc( Array<const char *> *args, Array<const char *> *environmentVariable
 		printf( "\n" );
 	}
 
-	Process *process = process_create( args, environmentVariables, PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
+	Process *process = process_create( g_temp_storage, args, environmentVariables, PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
 
 	if ( !process ) {
 		error(
@@ -316,14 +321,14 @@ s32 RunProc( Array<const char *> *args, Array<const char *> *environmentVariable
 		return -1;
 	}
 
-	defer(
+	defer {
 		process_destroy( process );
 		process = NULL;
-	);
+	};
 
 	// show stdout
 	StringBuilder sb = {};
-	string_builder_reset( &sb );
+	string_builder_init( &sb, g_temp_storage );
 
 	u64 bytesRead = 0;
 	char buffer[1024] = {};
@@ -338,7 +343,8 @@ s32 RunProc( Array<const char *> *args, Array<const char *> *environmentVariable
 	}
 
 	if ( outStdout ) {
-		*outStdout = string_builder_to_string( &sb );
+		//*outStdout = string_builder_to_string( &sb );
+		string_copy_from_c_string( outStdout, string_builder_to_string( &sb ) );
 	}
 
 	s32 exitCode = process_join( process );
@@ -352,7 +358,7 @@ bool8 WriteStringBuilderToFile( StringBuilder *stringBuilder, const char *filena
 	bool8 written = file_write_entire( filename, msg, msgLength );
 
 	if ( !written ) {
-		errorCode_t errorCode = get_last_error_code();
+		s32 errorCode = get_last_error_code();
 		error( "Failed to write \"%s\": " ERROR_CODE_FORMAT ".\n", filename, errorCode );
 
 		return false;
@@ -402,14 +408,14 @@ static s32 ShowUsage( const s32 exitCode ) {
 static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, compilerBackend_t *compilerBackend, const BuilderOptions *options ) {
 	// create binary folder
 	if ( !folder_create_if_it_doesnt_exist( config->binaryFolder.c_str() ) ) {
-		errorCode_t errorCode = get_last_error_code();
+		s32 errorCode = get_last_error_code();
 		fatal_error( "Failed to create the binary folder you specified inside %s: \"%s\".  Error code: " ERROR_CODE_FORMAT "", SET_BUILDER_OPTIONS_FUNC_NAME, config->binaryFolder.c_str(), errorCode );
 		return BUILD_RESULT_FAILED;
 	}
 
 	// create intermediate folder
 	if ( !folder_create_if_it_doesnt_exist( config->intermediateFolder.c_str() ) ) {
-		errorCode_t errorCode = get_last_error_code();
+		s32 errorCode = get_last_error_code();
 		fatal_error( "Failed to create intermediate binary folder.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
 		return BUILD_RESULT_FAILED;
 	}
@@ -420,6 +426,7 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 	}
 
 	Array<const char *> intermediateFiles;
+	intermediateFiles.init( g_temp_storage );
 	intermediateFiles.reserve( config->sourceFiles.size() );
 
 	// TODO(DM): 03/08/2025: this is kinda ugly
@@ -492,10 +499,10 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 		const char *sourceFile = config->sourceFiles[sourceFileIndex].c_str();
 		const char *sourceFileNoPath = path_remove_path_from_file( sourceFile );
 
-		const char *intermediateFilename = tprintf( "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, path_remove_file_extension( sourceFileNoPath ) );
+		const char *intermediateFilename = temp_printf( "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, path_remove_file_extension( sourceFileNoPath ) );
 		intermediateFiles.add( intermediateFilename );
 
-		const char *depFilename = tprintf( "%s%c%s.d", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPath );
+		const char *depFilename = temp_printf( "%s%c%s.d", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPath );
 
 		u32 sourceFileHashmapIndex = hashmap_get_value( context->sourceFileIndices, hash_string( sourceFile, 0 ) );
 
@@ -525,7 +532,7 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 	{
 		bool8 doLinking = false;
 
-		const char *fullBinaryName = BuildConfig_GetFullBinaryName( config );
+		const char *fullBinaryName = BuildConfig_GetFullBinaryName( config, g_temp_storage );
 
 		u64 binaryFileLastWriteTime = 0;
 
@@ -585,8 +592,11 @@ bool8 NukeFolder( const char *folder, const bool8 deleteRootFolder, const bool8 
 	nukeContext_t nukeContext = {
 		.printDeletions = printDeletions,
 	};
+	nukeContext.subfolders.init( g_temp_storage );
 
-	if ( !file_get_all_files_in_folder( folder, true, true, Nuke_DeleteAllFilesAndCacheFoldersInternal, &nukeContext ) ) {
+	FileVisitFlags visitFlags = FILE_VISIT_FILES | FILE_VISIT_RECURSIVE | FILE_VISIT_FOLDERS;
+
+	if ( !file_get_all_files_in_folder( folder, visitFlags, Nuke_DeleteAllFilesAndCacheFoldersInternal, &nukeContext ) ) {
 		error( "Failed to visit all files in folder \"%s\" while trying to nuke it.  You'll have to clean these files and folders up manually.  Sorry.\n", folder );
 		QUIT_ERROR();
 	}
@@ -716,7 +726,9 @@ std::vector<std::string> GetSourceFilesMatchingPattern( const char *basePath, co
 
 	bool8 recursive = string_contains( pattern, "**" );
 
-	if ( !file_get_all_files_in_folder( basePath, recursive, false, SourceFileVisitor, &visitorData ) ) {
+	FileVisitFlags visitFlags = FILE_VISIT_RECURSIVE | FILE_VISIT_FILES;
+
+	if ( !file_get_all_files_in_folder( basePath, visitFlags, SourceFileVisitor, &visitorData ) ) {
 		fatal_error( "Failed to get source file(s) \"%s\".  This should never happen.\n", pattern );
 	}
 
@@ -742,7 +754,7 @@ static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContex
 				pattern = context->inputFile;
 				basePath = context->inputFilePath.data;
 			} else {
-				pattern = tprintf( "%s%c%s", context->inputFilePath.data, '/', sourceFile );
+				pattern = temp_printf( "%s%c%s", context->inputFilePath.data, '/', sourceFile );
 
 				// basePath must be the directory before the first wildcard
 				const char *firstStar = strchr( pattern, '*' );
@@ -770,7 +782,7 @@ static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContex
 			// otherwise its a single file, so we can just get it
 			LogVerbose( "Adding source file \"%s\" to the list of source files to build with (no glob).\n" );
 
-			allSourceFiles.push_back( tprintf( "%s%c%s", context->inputFilePath.data, '/', sourceFile ) );
+			allSourceFiles.push_back( temp_printf( "%s%c%s", context->inputFilePath.data, '/', sourceFile ) );
 		}
 	}
 
@@ -799,8 +811,7 @@ struct byteBuffer_t {
 
 static const char *GetIncludeDepsFilename( buildContext_t *context ) {
 	const char *inputFileStripped = path_remove_path_from_file( path_remove_file_extension( context->inputFile ) );
-	const char *includeDepsFilename = tprintf( "%s%c%s.include_dependencies", context->dotBuilderFolder.data, PATH_SEPARATOR, inputFileStripped );
-
+	const char *includeDepsFilename = temp_printf( "%s%c%s.include_dependencies", context->dotBuilderFolder.data, PATH_SEPARATOR, inputFileStripped );
 	return includeDepsFilename;
 }
 
@@ -808,7 +819,8 @@ static void ReadIncludeDependenciesFile( buildContext_t *context ) {
 	const char *includeDepsFilename = GetIncludeDepsFilename( context );
 
 	byteBuffer_t byteBuffer = {};
-	byteBuffer.data.allocator = mem_get_current_allocator();
+	// DM!!! what allocator do we set here?
+	// byteBuffer.data.init( g_temp_storage );
 
 	// there wont be an include dependencies file on the first build or if you nuked the binaries folder (for instance)
 	// so this is allowed to fail
@@ -902,7 +914,7 @@ static bool8 WriteIncludeDependenciesFile( buildContext_t *context ) {
 	}
 
 	if ( !file_write_entire( includeDepsFilename, byteBuffer.data.data, byteBuffer.data.count ) ) {
-		errorCode_t errorCode = get_last_error_code();
+		s32 errorCode = get_last_error_code();
 		error( "Failed to write file \"%s\".  Error code: " ERROR_CODE_FORMAT ".\n", includeDepsFilename, errorCode );
 		return false;
 	}
@@ -1059,8 +1071,7 @@ static bool WriteCompilationDatabase( buildContext_t *context ) {
 	}
 
 	StringBuilder sb = {};
-	string_builder_reset( &sb );
-	defer( string_builder_destroy( &sb ) );
+	string_builder_init( &sb, g_temp_storage );
 
 	string_builder_appendf( &sb, "[\n" );
 
@@ -1109,9 +1120,9 @@ static bool WriteCompilationDatabase( buildContext_t *context ) {
 	const char *json = string_builder_to_string( &sb );
 	assert( json );
 
-	const char *outputFilename = tprintf( "%s%ccompile_commands.json", context->inputFilePath.data, PATH_SEPARATOR );
+	const char *outputFilename = temp_printf( "%s%ccompile_commands.json", context->inputFilePath.data, PATH_SEPARATOR );
 	if ( !file_write_entire( outputFilename, json, strlen( json ) ) ) {
-		errorCode_t errorCode = get_last_error_code();
+		s32 errorCode = get_last_error_code();
 		error(
 			"Failed to write compilation database \"%s\". Error code: " ERROR_CODE_FORMAT "\n",
 			outputFilename,
@@ -1133,13 +1144,23 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	float64 vsCodeJSONGenerationTimeMS = -1.0;
 	float64 zedJSONGenerationTimeMS = -1.0;
 
-	core_init( MEM_MEGABYTES( 128 ) );	// TODO(DM): 26/03/2025: can we just use defaults for this now?
-	defer( core_shutdown() );
+	// core_init( MEM_MEGABYTES( 128 ) );	// TODO(DM): 26/03/2025: can we just use defaults for this now?
+	// defer {
+	// 	core_shutdown();
+	// };
+	mem_init_temp_storage( MEM_MEGABYTES( 128 ) );
+	defer { mem_shutdown_temp_storage(); };
 
 	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {
+		.allocator		= linear_allocator_create( MEM_KILOBYTES( 128 ) ),
 		.configIndices	= hashmap_create( 1 ),	// TODO(DM): 30/03/2025: whats a reasonable default here?
+	};
+
+	defer {
+		linear_allocator_destroy( context.allocator );
+		context.allocator = NULL;
 	};
 
 	// parse command line args
@@ -1155,15 +1176,17 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcast-qual"
-	args.argv = cast( char **, mem_alloc( cast( u32, argc ) * sizeof( const char * ) ) );
+	// DM!!! this wants linear allocator, probably
+	// if it does then remove the free() call below too
+	args.argv = cast( char **, malloc( cast( u32, argc ) * sizeof( const char * ) ) );
 	For ( s32, argIndex, 0, argc ) {
 		args.argv[argIndex] = cast( char *, argv[argIndex] );
 	}
 #pragma clang diagnostic pop
-	defer(
-		mem_free( args.argv );
+	defer {
+		free( args.argv );
 		args.argv = NULL;
-	);
+	};
 
 	For ( s32, argIndex, firstArg, argc ) {
 		const char *arg = argv[argIndex];
@@ -1283,9 +1306,13 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		const char *inputFileNoPath = path_remove_path_from_file( context.inputFile );
 		const char *inputFileNoPathOrExtension = path_remove_file_extension( inputFileNoPath );
 
-		context.inputFilePath = inputFilePath;
+		// context.inputFilePath = inputFilePath;
+		string_init( &context.inputFilePath, context.allocator );
+		string_copy_from_c_string( &context.inputFilePath, inputFilePath );
 
-		string_printf( &context.dotBuilderFolder, "%s%c.builder", context.inputFilePath.data, PATH_SEPARATOR );
+		// string_printf( &context.dotBuilderFolder, "%s%c.builder", context.inputFilePath.data, PATH_SEPARATOR );
+		string_init( &context.dotBuilderFolder, context.allocator );
+		string_copy_from_c_string( &context.dotBuilderFolder, path_join( context.allocator, context.inputFilePath.data, ".builder" ) );
 	}
 
 	const char *defaultBinaryName = path_remove_file_extension( path_remove_path_from_file( context.inputFile ) );
@@ -1295,9 +1322,11 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	// init default compiler backend (the version of clang that builder came with)
 	compilerBackend_t compilerBackend = {};
 	CreateCompilerBackend_Clang( &compilerBackend );
-	const char *defaultCompilerPath = tprintf( "%s%c..%cclang%cbin%cclang", path_remove_file_from_path( path_app_path() ), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
+	const char *defaultCompilerPath = temp_printf( "%s%c..%cclang%cbin%cclang", path_remove_file_from_path( path_app_path() ), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
 	compilerBackend.Init( &compilerBackend, &context, defaultCompilerPath, std::string() );
-	defer( compilerBackend.Shutdown( &compilerBackend ) );
+	defer {
+		compilerBackend.Shutdown( &compilerBackend );
+	};
 
 	// user config build step
 	// see if they have SetBuilderOptions() overridden
@@ -1325,7 +1354,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 			},
 			.additionalIncludes = {
 				// add the folder that builder lives in as an additional include path otherwise people have no real way of being able to include it
-				tprintf( "%s%c..%cinclude", path_remove_file_from_path( path_app_path() ), PATH_SEPARATOR, PATH_SEPARATOR ),
+				temp_printf( "%s%c..%cinclude", path_remove_file_from_path( path_app_path() ), PATH_SEPARATOR, PATH_SEPARATOR ),
 			},
 			.additionalLibs = {
 #if defined( _WIN64 )
@@ -1354,7 +1383,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 #endif
 		};
 
-		userConfigFullBinaryName = BuildConfig_GetFullBinaryName( &userConfigBuildConfig );
+		userConfigFullBinaryName = BuildConfig_GetFullBinaryName( &userConfigBuildConfig, g_temp_storage );
 
 		// Within build binary and check against the options checks for its existance, defaulting to false which is what the user config build wants for each option
 		// So just pass through nullptr when calling BuildBinary for the options build and it will work as expected
@@ -1386,19 +1415,26 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	BuilderOptions options = {};
 
 	Library library = library_load( userConfigFullBinaryName );
-	assertf( library.ptr, "Failed to load the user-config build DLL \"%s\".  This should never happen!\n", userConfigFullBinaryName );
-	defer( library_unload( &library ) );
+
+	if ( !library.ptr ) {
+		fatal_error( "Failed to load the user-config build DLL \"%s\".  This should never happen!\n", userConfigFullBinaryName );
+		QUIT_ERROR();
+	}
+
+	defer {
+		library_unload( &library );
+	};
 
 	typedef void ( *setBuilderOptionsFunc_t )( BuilderOptions *options, CommandLineArgs *args );
 	typedef void ( *preBuildFunc_t )();
 	typedef void ( *postBuildFunc_t )();
 
-	preBuildFunc_t preBuildFunc = cast( preBuildFunc_t, library_get_proc_address( library, PRE_BUILD_FUNC_NAME ) );
-	postBuildFunc_t postBuildFunc = cast( postBuildFunc_t, library_get_proc_address( library, POST_BUILD_FUNC_NAME ) );
+	preBuildFunc_t preBuildFunc = cast( preBuildFunc_t, library_get_symbol( library, PRE_BUILD_FUNC_NAME ) );
+	postBuildFunc_t postBuildFunc = cast( postBuildFunc_t, library_get_symbol( library, POST_BUILD_FUNC_NAME ) );
 
 	// get the user-specified options
 	{
-		setBuilderOptionsFunc_t setBuilderOptionsFunc = cast( setBuilderOptionsFunc_t, library_get_proc_address( library, SET_BUILDER_OPTIONS_FUNC_NAME ) );
+		setBuilderOptionsFunc_t setBuilderOptionsFunc = cast( setBuilderOptionsFunc_t, library_get_symbol( library, SET_BUILDER_OPTIONS_FUNC_NAME ) );
 
 		float64 setBuilderOptionsTimeStart = time_ms();
 
@@ -1421,7 +1457,9 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	std::vector<BuildConfig> configsToBuild;
 
 	Array<float64> configBuildTimes;
+	configBuildTimes.init( g_temp_storage );
 	Array<buildResult_t> configBuildResults;
+	configBuildResults.init( g_temp_storage );
 
 	// if the user wants to generate a visual studio solution then only do that
 	if ( options.generateSolution && !isVisualStudioBuild ) {
@@ -1643,7 +1681,9 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 			const char *oldCWD = path_current_working_directory();
 			path_set_current_directory( context.inputFilePath.data );
-			defer( path_set_current_directory( oldCWD ) );
+			defer {
+				path_set_current_directory( oldCWD );
+			};
 
 			preBuildFunc();
 		}
@@ -1657,14 +1697,14 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 			// make sure that the binary folder and binary name are at least set to defaults
 			if ( !config->binaryFolder.empty() ) {
-				config->binaryFolder = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, config->binaryFolder.c_str() );
+				config->binaryFolder = temp_printf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, config->binaryFolder.c_str() );
 			} else {
 				config->binaryFolder = context.inputFilePath.data;
 			}
 
 			// make sure intermediate folder is set relative to the binary folder
 			if ( !config->intermediateFolder.empty() ) {
-				config->intermediateFolder = tprintf( "%s%c%s", config->binaryFolder.c_str(), PATH_SEPARATOR, config->intermediateFolder.c_str() );
+				config->intermediateFolder = temp_printf( "%s%c%s", config->binaryFolder.c_str(), PATH_SEPARATOR, config->intermediateFolder.c_str() );
 			} else {
 				config->intermediateFolder = config->binaryFolder;
 			}
@@ -1692,7 +1732,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 				const char *additionalInclude = config->additionalIncludes[includeIndex].c_str();
 
 				if ( !path_is_absolute( additionalInclude ) ) {
-					config->additionalIncludes[includeIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalInclude );
+					config->additionalIncludes[includeIndex] = temp_printf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalInclude );
 				}
 			}
 
@@ -1701,7 +1741,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 				const char *additionalLibPath = config->additionalLibPaths[libPathIndex].c_str();
 
 				if ( !path_is_absolute( additionalLibPath ) ) {
-					config->additionalLibPaths[libPathIndex] = tprintf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalLibPath );
+					config->additionalLibPaths[libPathIndex] = temp_printf( "%s%c%s", context.inputFilePath.data, PATH_SEPARATOR, additionalLibPath );
 				}
 			}
 
@@ -1755,7 +1795,9 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 			const char *oldCWD = path_current_working_directory();
 			path_set_current_directory( context.inputFilePath.data );
-			defer( path_set_current_directory( oldCWD ) );
+			defer {
+				path_set_current_directory( oldCWD );
+			};
 
 			postBuildFunc();
 		}
@@ -1774,8 +1816,6 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 	// build summary
 	{
-		using namespace hlml;
-
 		struct buildSummaryLine_t {
 			const char		*description;
 			const float64	timeMS;
@@ -1783,6 +1823,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		};
 
 		Array<buildSummaryLine_t> buildSummaryLines;
+		buildSummaryLines.init( g_temp_storage );
 		buildSummaryLines.reserve( 4 + configsToBuild.size() );
 		buildSummaryLines.add( { "User config build",  userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? "(skipped)" : "" } );
 		buildSummaryLines.add( { "Compiler init time", compilerBackendInitTimeMS } );
@@ -1791,7 +1832,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 			buildSummaryLines.add( { "Generate solution", visualStudioGenerationTimeMS } );
 		}
 		For ( u32, configIndex, 0, configsToBuild.size() ) {
-			buildSummaryLines.add( { tprintf( "Build \"%s\"", configsToBuild[configIndex].name.c_str() ), configBuildTimes[configIndex], ( configBuildResults[configIndex] == BUILD_RESULT_SKIPPED ) ? "(skipped)" : "" } );
+			buildSummaryLines.add( { temp_printf( "Build \"%s\"", configsToBuild[configIndex].name.c_str() ), configBuildTimes[configIndex], ( configBuildResults[configIndex] == BUILD_RESULT_SKIPPED ) ? "(skipped)" : "" } );
 		}
 
 		u32 lineLength = 0;
@@ -1803,7 +1844,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		For ( u32, lineIndex, 0, buildSummaryLines.count ) {
 			buildSummaryLine_t *line = &buildSummaryLines[lineIndex];
 
-			if ( !doubleeq( line->timeMS, -1.0 ) ) {
+			if ( !float64_equals( line->timeMS, -1.0 ) ) {
 				printf( "    %-*s: %f ms %s\n", lineLength, line->description, line->timeMS, line->suffix ? line->suffix : "" );
 			}
 		}

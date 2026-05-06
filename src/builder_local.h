@@ -31,11 +31,11 @@ SOFTWARE.
 #include "../include/builder.h"
 
 // TODO(DM): 01/04/2026: we only need this is because buildContext_t needs windowsSDK_t and msvcInstall_t
-// can we keep those there without needing this include to do it? header files shouldn't include other header files (unless it's core_types.h or something like that)!
+// can we keep those there without needing this include to do it? header files shouldn't include other header files (unless it's int_types.h or something like that)!
 #include "win_support.h"
 
-#include "core/include/core_types.h"
-#include "core/include/array.h"
+#include "core/include/int_types.h"
+#include "core/include/core_array.h"
 #include "core/include/core_string.h"
 
 #ifdef _WIN64
@@ -60,6 +60,7 @@ struct buildContext_t;
 
 struct Hashmap;
 struct StringBuilder;
+struct LinearAllocator;
 
 enum procFlagBits_t {
 	PROC_FLAG_SHOW_ARGS		= bit( 0 ),
@@ -103,6 +104,8 @@ struct compilationDatabaseEntry_t {
 };
 
 struct buildContext_t {
+	LinearAllocator							*allocator;
+
 	Hashmap									*configIndices;
 	Hashmap									*sourceFileIndices;
 	std::vector<includeDependencies_t>		sourceFileIncludeDependencies;
@@ -141,7 +144,7 @@ bool8		FileIsHeaderFile( const char *filename );
 
 const char	*GetFileExtensionFromBinaryType( const BinaryType type );
 
-const char	*BuildConfig_GetFullBinaryName( const BuildConfig *config );
+const char	*BuildConfig_GetFullBinaryName( const BuildConfig *config, LinearAllocator *allocator );
 
 void		RecordCompilationDatabaseEntry( buildContext_t *buildContext, const char *sourceFileName, const Array<const char *> &compilationCommandArray );
 

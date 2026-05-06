@@ -191,7 +191,7 @@
     <ClInclude Include="src\core\include\core_string.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\core\include\core_types.h">
+    <ClInclude Include="src\core\include\int_types.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\core\include\date_and_time.h">

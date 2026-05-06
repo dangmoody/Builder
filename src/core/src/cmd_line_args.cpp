@@ -38,7 +38,7 @@ SOFTWARE.
 
 CommandLineArgs g_cmd_line_args = {};
 
-void set_command_line_args( int argc, char** argv ) {
+void set_command_line_args( int argc, char **argv ) {
 	g_cmd_line_args.count = argc;
 	g_cmd_line_args.data = argv;
 }

@@ -1,15 +1,18 @@
 #include "../src/builder_local.h"
 
 #include <debug.h>
-#include <array.inl>
+#include <core_array.inl>
 #include <typecast.inl>
 #include <paths.h>
 #include <string_builder.h>
+#include <defer.h>
+#include <core_helpers.h>
+#include <temp_storage.h>
 
 #define TEMPERDEV_ASSERT assert
 #define TEMPER_IMPLEMENTATION
 #include "../src/core/include/file.h"
-#include "../src/core/include/string_helpers.h"
+#include "../src/core/include/core_string.h"
 #include "temper/temper.h"
 
 
@@ -48,7 +51,7 @@ static const char *GetCompilerPath( const compilerFlagBits_t compiler ) {
 		case COMPILER_MSVC_FULL_PATH: {
 			msvcInstall_t msvcInstall = {};
 			if ( Win_GetMSVCInstall( &msvcInstall ) ) {
-				return tprintf( "%s\\bin\\Hostx64\\x64\\cl", msvcInstall.rootFolder.data );
+				return temp_printf( "%s\\bin\\Hostx64\\x64\\cl", msvcInstall.rootFolder.data );
 			}
 			return NULL;
 		}
@@ -208,11 +211,14 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 	// then come back when were done
 	const char *oldCWD = path_current_working_directory();
 	TEMPER_CHECK_TRUE_M( path_set_current_directory( test.rootDir ), "Failed to cd into the test folder \"%s\".\n", test.rootDir );
-	defer( TEMPER_CHECK_TRUE_M( path_set_current_directory( oldCWD ), "Failed to cd back out of the test folder.\n" ) );
+	defer { TEMPER_CHECK_TRUE_M( path_set_current_directory( oldCWD ), "Failed to cd back out of the test folder.\n" ); };
 
 	// get all the files that this test will generate
 	// we will want these later to check if they got successfully deleted (tests should clean up after themselves properly)
 	buildTestGeneratedFiles_t generatedFiles = {};
+	generatedFiles.fileExtensionsToDelete.init( g_temp_storage );
+	generatedFiles.files.init( g_temp_storage );
+	generatedFiles.folders.init( g_temp_storage );
 #ifdef _WIN32
 	// exes have no file extension on linux
 	// which means when we check for this "extension" on linux we actually check if the string ends with "", which always passes
@@ -258,10 +264,11 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 			// args should also be const because we never actually modify them
 			// I know how to get this done, leave this work with me
 			Array<const char *> args;
+			args.init( g_temp_storage );
 			args.add( test.buildSourceFile );
 
 			if ( test.config ) {
-				args.add( tprintf( "--config=%s", test.config ) );
+				args.add( temp_printf( "--config=%s", test.config ) );
 			}
 
 #pragma clang diagnostic push
@@ -274,7 +281,7 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 				case COMPILER_MSVC_FULL_PATH: {
 					msvcInstall_t msvcInstall = {};
 					TEMPER_CHECK_TRUE_M( Win_GetMSVCInstall( &msvcInstall ), "Failed to find MSVC install for full-path compiler test.\n" );
-					args.add( tprintf( "--msvc-full-path=%s\\bin\\Hostx64\\x64\\cl", msvcInstall.rootFolder.data ) );
+					args.add( temp_printf( "--msvc-full-path=%s\\bin\\Hostx64\\x64\\cl", msvcInstall.rootFolder.data ) );
 				} break;
 #endif
 			}
@@ -288,9 +295,9 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 		// linux requires the "./" prefix because without that it tries to run the subprocess from your PATH
 		const char *fullBinaryName = NULL;
 		if ( test.binaryFolder ) {
-			fullBinaryName = tprintf( "./%s%c%s%s", test.binaryFolder, PATH_SEPARATOR, test.binaryName, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
+			fullBinaryName = temp_printf( "./%s%c%s%s", test.binaryFolder, PATH_SEPARATOR, test.binaryName, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
 		} else {
-			fullBinaryName = tprintf( "./%s%s", test.binaryName, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
+			fullBinaryName = temp_printf( "./%s%s", test.binaryName, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
 		}
 
 		const char *dotBuilderFolder = ".builder";
@@ -298,12 +305,12 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 		generatedFiles.files.reset();
 		generatedFiles.folders.reset();
 
-		TEMPER_CHECK_TRUE( file_get_all_files_in_folder( dotBuilderFolder, true, true, GetAllGeneratedFiles, &generatedFiles ) );
+		TEMPER_CHECK_TRUE( file_get_all_files_in_folder( dotBuilderFolder, FILE_VISIT_RECURSIVE | FILE_VISIT_FILES | FILE_VISIT_FOLDERS, GetAllGeneratedFiles, &generatedFiles ) );
 		if ( test.binaryFolder ) {
-			TEMPER_CHECK_TRUE( file_get_all_files_in_folder( test.binaryFolder, true, true, GetAllGeneratedFiles, &generatedFiles ) );
+			TEMPER_CHECK_TRUE( file_get_all_files_in_folder( test.binaryFolder, FILE_VISIT_RECURSIVE | FILE_VISIT_FILES | FILE_VISIT_FOLDERS, GetAllGeneratedFiles, &generatedFiles ) );
 		} else {
 			// if there is no binary folder specified then binaries get made in the same folder as the build source file
-			TEMPER_CHECK_TRUE( file_get_all_files_in_folder( "./", false, false, GetAllGeneratedFiles, &generatedFiles ) );
+			TEMPER_CHECK_TRUE( file_get_all_files_in_folder( "./", FILE_VISIT_FILES, GetAllGeneratedFiles, &generatedFiles ) );
 
 			// if there is no binary folder specified then an intermediate folder gets made in the same folder as the build source file
 			// TEMPER_CHECK_TRUE( file_get_all_files_in_folder( "intermediate", true, true, GetAllGeneratedFiles, &generatedFiles ) );
@@ -314,13 +321,14 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 			TEMPER_CHECK_TRUE( file_exists( fullBinaryName ) );
 			TEMPER_CHECK_TRUE( folder_exists( dotBuilderFolder ) );
 
-			const char *userConfigBuildDLLFilename = tprintf( "%s%c%s%s", dotBuilderFolder, PATH_SEPARATOR, buildSourceFileWithoutExtension, GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
+			const char *userConfigBuildDLLFilename = temp_printf( "%s%c%s%s", dotBuilderFolder, PATH_SEPARATOR, buildSourceFileWithoutExtension, GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
 			TEMPER_CHECK_TRUE( file_exists( userConfigBuildDLLFilename ) );
 		}
 
 		// now run the program we just built
 		{
 			Array<const char *> args;
+			args.init( g_temp_storage );
 			args.add( fullBinaryName );
 
 			exitCode = RunProc( &args, NULL );
@@ -430,8 +438,10 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 	// detect where msbuild is stored
 	{
 		String vswhereStdout;
+		string_init( &vswhereStdout, g_temp_storage );
 
 		Array<const char *> args;
+		args.init( g_temp_storage );
 		args.add( "C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe" );
 		args.add( "-latest" );
 		args.add( "-products" );
@@ -473,6 +483,7 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 	// generate the solution
 	if ( exitCode == 0 ) {
 		Array<const char *> args;
+		args.init( g_temp_storage );
 		args.add( "test_generate_visual_studio_files/generate_solution.cpp" );
 
 		exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
@@ -488,8 +499,9 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 		String msbuildStdout;
 
 		Array<const char *> args;
+		args.init( g_temp_storage );
 #if defined( _WIN32 )
-		args.add( tprintf( "%s%cMSBuild%cCurrent%cBin%cMSBuild.exe", msbuildInstallationPath.c_str(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR ) );	// TODO(DM): query for this instead
+		args.add( temp_printf( "%s%cMSBuild%cCurrent%cBin%cMSBuild.exe", msbuildInstallationPath.c_str(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR ) );	// TODO(DM): query for this instead
 #elif defined( __linux__ )
 		args.add( "msbuild" );
 #endif
@@ -503,6 +515,7 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 	// run the program, make sure it returns the correct exit code
 	if ( exitCode == 0 ) {
 		Array<const char *> args;
+		args.init( g_temp_storage );
 		args.add( "test_generate_visual_studio_files/bin/debug/the-app.exe" );
 		exitCode = RunProc( &args, NULL );
 
@@ -522,6 +535,7 @@ TEMPER_TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	// generate the VS Code JSON files
 	{
 		Array<const char *> args;
+		args.init( g_temp_storage );
 		args.add( buildFile );
 
 		s32 exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
@@ -535,7 +549,7 @@ TEMPER_TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 		char *content = NULL;
 		u64 contentLength = 0;
 		TEMPER_CHECK_TRUE_M( file_read_entire( cppPropertiesJSONPath, &content, &contentLength ), "Failed to read c_cpp_properties.json.\n" );
-		defer( file_free_buffer( &content ) );
+		defer { file_free_buffer( &content ); };
 
 		TEMPER_CHECK_TRUE_M( string_contains( content, "\"configurations\"" ),         "c_cpp_properties.json is missing \"configurations\" array.\n" );
 		TEMPER_CHECK_TRUE_M( string_contains( content, "\"version\": 4" ),             "c_cpp_properties.json is missing \"version\": 4.\n" );
@@ -559,7 +573,7 @@ TEMPER_TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 		char *content = NULL;
 		u64 contentLength = 0;
 		TEMPER_CHECK_TRUE_M( file_read_entire( tasksJSONPath, &content, &contentLength ), "Failed to read tasks.json.\n" );
-		defer( file_free_buffer( &content ) );
+		defer { file_free_buffer( &content ); };
 
 		TEMPER_CHECK_TRUE_M( string_contains( content, "\"version\"" ),              "tasks.json is missing \"version\".\n" );
 		TEMPER_CHECK_TRUE_M( string_contains( content, "\"tasks\"" ),                "tasks.json is missing \"tasks\" array.\n" );
@@ -576,7 +590,7 @@ TEMPER_TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 		char *content = NULL;
 		u64 contentLength = 0;
 		TEMPER_CHECK_TRUE_M( file_read_entire( launchJSONPath, &content, &contentLength ), "Failed to read launch.json.\n" );
-		defer( file_free_buffer( &content ) );
+		defer { file_free_buffer( &content ); };
 
 		TEMPER_CHECK_TRUE_M( string_contains( content, "\"version\"" ),                     "launch.json is missing \"version\".\n" );
 		TEMPER_CHECK_TRUE_M( string_contains( content, "\"configurations\"" ),              "launch.json is missing \"configurations\" array.\n" );
@@ -595,6 +609,9 @@ TEMPER_TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	// cleanup
 	{
 		buildTestGeneratedFiles_t generatedFiles = {};
+		generatedFiles.fileExtensionsToDelete.init( g_temp_storage );
+		generatedFiles.files.init( g_temp_storage );
+		generatedFiles.folders.init( g_temp_storage );
 		generatedFiles.fileExtensionsToDelete.add( GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
 		generatedFiles.fileExtensionsToDelete.add( ".d" );
 		generatedFiles.fileExtensionsToDelete.add( ".o" );
@@ -605,8 +622,8 @@ TEMPER_TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 		generatedFiles.fileExtensionsToDelete.add( ".ilk" );
 		generatedFiles.fileExtensionsToDelete.add( ".json" );
 
-		TEMPER_CHECK_TRUE( file_get_all_files_in_folder( dotBuilderFolder, true, true, GetAllGeneratedFiles, &generatedFiles ) );
-		TEMPER_CHECK_TRUE( file_get_all_files_in_folder( vsCodeFolder, true, true, GetAllGeneratedFiles, &generatedFiles ) );
+		TEMPER_CHECK_TRUE( file_get_all_files_in_folder( dotBuilderFolder, FILE_VISIT_RECURSIVE | FILE_VISIT_FILES | FILE_VISIT_FOLDERS, GetAllGeneratedFiles, &generatedFiles ) );
+		TEMPER_CHECK_TRUE( file_get_all_files_in_folder( vsCodeFolder, FILE_VISIT_RECURSIVE | FILE_VISIT_FILES | FILE_VISIT_FOLDERS, GetAllGeneratedFiles, &generatedFiles ) );
 
 		For ( u32, fileIndex, 0, generatedFiles.files.count ) {
 			TEMPER_CHECK_TRUE_M( file_delete( generatedFiles.files[fileIndex] ), "Failed to delete \"%s\".\n", generatedFiles.files[fileIndex] );
@@ -625,6 +642,7 @@ TEMPER_TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	// generate the Zed JSON files
 	{
 		Array<const char *> args;
+		args.init( g_temp_storage );
 		args.add( "test_generate_zed_json_files/generate_zed_json.cpp" );
 
 		s32 exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
@@ -638,7 +656,7 @@ TEMPER_TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 		char *content = NULL;
 		u64 contentLength = 0;
 		TEMPER_CHECK_TRUE_M( file_read_entire( tasksJSONPath, &content, &contentLength ), "Failed to read tasks.json.\n" );
-		defer( file_free_buffer( &content ) );
+		defer { file_free_buffer( &content ); };
 
 		TEMPER_CHECK_TRUE_M( string_contains( content, "\"label\""             ), "tasks.json is missing \"label\".\n" );
 		TEMPER_CHECK_TRUE_M( string_contains( content, "\"Build config\""      ), "tasks.json is missing \"Build config\" task.\n" );
@@ -656,7 +674,7 @@ TEMPER_TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 		char *content = NULL;
 		u64 contentLength = 0;
 		TEMPER_CHECK_TRUE_M( file_read_entire( debugJSONPath, &content, &contentLength ), "Failed to read debug.json.\n" );
-		defer( file_free_buffer( &content ) );
+		defer { file_free_buffer( &content ); };
 
 		TEMPER_CHECK_TRUE_M( string_contains( content, "\"label\""                ), "debug.json is missing \"label\".\n" );
 		TEMPER_CHECK_TRUE_M( string_contains( content, "\"config (debug)\""       ), "debug.json is missing config (debug) binary label.\n" );
@@ -677,6 +695,9 @@ TEMPER_TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 		// (rmdir requires an empty directory)
 		{
 			buildTestGeneratedFiles_t generatedFiles = {};
+			generatedFiles.fileExtensionsToDelete.init( g_temp_storage );
+			generatedFiles.files.init( g_temp_storage );
+			generatedFiles.folders.init( g_temp_storage );
 			generatedFiles.fileExtensionsToDelete.add( GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
 			generatedFiles.fileExtensionsToDelete.add( ".d" );
 			generatedFiles.fileExtensionsToDelete.add( ".o" );
@@ -686,7 +707,7 @@ TEMPER_TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 			generatedFiles.fileExtensionsToDelete.add( ".pdb" );
 			generatedFiles.fileExtensionsToDelete.add( ".ilk" );
 
-			TEMPER_CHECK_TRUE( file_get_all_files_in_folder( dotBuilderFolder, true, true, GetAllGeneratedFiles, &generatedFiles ) );
+			TEMPER_CHECK_TRUE( file_get_all_files_in_folder( dotBuilderFolder, FILE_VISIT_RECURSIVE | FILE_VISIT_FILES | FILE_VISIT_FOLDERS, GetAllGeneratedFiles, &generatedFiles ) );
 
 			For ( u32, fileIndex, 0, generatedFiles.files.count ) {
 				TEMPER_CHECK_TRUE_M( file_delete( generatedFiles.files[fileIndex] ), "Failed to delete \"%s\".\n", generatedFiles.files[fileIndex] );
@@ -720,7 +741,7 @@ TEMPER_TEST( ValidateCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 	char *content = NULL;
 	u64 contentLength = 0;
 	file_read_entire( compileCommandsPath, &content, &contentLength );
-	defer( file_free_buffer( &content ) );
+	defer { file_free_buffer( &content ); };
 
 	// Count occurrences of "file": which indicates individual entries
 	u64 entriesCount = 0;
@@ -740,12 +761,14 @@ TEMPER_TEST( ValidateCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 	//     "Error while trying to load a compilation database"
 
 	Array<const char *> args;
+	args.init( g_temp_storage );
 	args.add( "../clang/bin/clang-tidy" );
 	args.add( sourceFile );
-	args.add( tprintf( "-p=%s", compileCommandsDir ) );
+	args.add( temp_printf( "-p=%s", compileCommandsDir ) );
 	args.add( "--checks=-*" );  // Disable all checks - we only want to test DB loading
 
 	Array<const char *> stdoutOutput;
+	stdoutOutput.init( g_temp_storage );
 	s32 exitCode = RunProc( &args, &stdoutOutput, false );
 	bool isValid = true;
 	// Check for specific error messages that indicate database problems
@@ -765,8 +788,8 @@ TEMPER_TEST( ValidateCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 
 
 int main( int argc, char **argv ) {
-	core_init( MEM_KILOBYTES( 64 ) );
-	defer( core_shutdown() );
+	mem_init_temp_storage( MEM_KILOBYTES( 64 ) );
+	defer { mem_shutdown_temp_storage(); };
 
 	TEMPER_RUN( argc, argv );
 

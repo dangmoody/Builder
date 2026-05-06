@@ -32,14 +32,13 @@ SOFTWARE.
 #include "../file_local.h"
 
 #include <debug.h>
-#include <allocation_context.h>
 #include <defer.h>
 #include <temp_storage.h>
 #include <typecast.inl>
 #include <paths.h>
-#include <array.inl>
+#include <core_array.inl>
+#include <core_string.h>
 
-#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
 /*
@@ -50,58 +49,47 @@ SOFTWARE.
 ================================================================================================
 */
 
-static File open_file_internal( const char* filename, const DWORD access_flags, const DWORD creation_disposition ) {
+static File open_file_internal( const char *filename, const DWORD open_flags, const DWORD creation_disposition ) {
 	assert( filename );
 
 	DWORD file_share_flags = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
 	DWORD flags_and_attribs = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED;
 
-	HANDLE handle = CreateFileA( filename, access_flags, file_share_flags, NULL, creation_disposition, flags_and_attribs, NULL );
+	HANDLE handle = CreateFileA( filename, open_flags, file_share_flags, NULL, creation_disposition, flags_and_attribs, NULL );
 	//assertf( handle != INVALID_HANDLE_VALUE, "Failed to create/open file \"%s\": 0x%X", filename, GetLastError() );
 
-	// TODO(DM): allow setting a logging level for the file system? verbose logging?
+	// TODO: DM: allow setting a logging level for the file system? verbose logging?
 	//printf( "%s last error: 0x%08X\n", __FUNCTION__, GetLastError() );
 
 	return { cast( u64, handle ), 0 };
 }
 
-static bool8 create_folder_internal( const char* path ) {
-	assert( path );
-
-	if ( folder_exists( path ) ) {
-		return true;
-	}
-
-	SECURITY_ATTRIBUTES attributes = {};
-	attributes.nLength = sizeof( SECURITY_ATTRIBUTES );
-
-	bool8 result = cast( bool8, CreateDirectoryA( path, &attributes ) );
-
-	return result;
-}
-
 //================================================================
 
-File file_open( const char* filename ) {
+File file_open( const char *filename, const FileOpenFlags open_flags ) {
 	assert( filename );
 
-	return open_file_internal( filename, GENERIC_READ | GENERIC_WRITE, OPEN_EXISTING );
+	DWORD open_flags_win = 0;
+	if ( open_flags & FILE_OPEN_READ )  open_flags_win |= GENERIC_READ;
+	if ( open_flags & FILE_OPEN_WRITE ) open_flags_win |= GENERIC_WRITE;
+
+	return open_file_internal( filename, open_flags_win, OPEN_EXISTING );
 }
 
-File file_open_or_create( const char* filename, const bool8 keep_existing_content ) {
+File file_open_or_create( const char *filename, const bool8 keep_existing_content ) {
 	assert( filename );
 
 	DWORD creation_disposition = ( keep_existing_content ) ? CREATE_NEW : CREATE_ALWAYS;
 
 	//return open_or_create_file_internal( filename, GENERIC_READ | GENERIC_WRITE, creation_disposition );
-	DWORD access_flags = GENERIC_READ | GENERIC_WRITE;
-	File file_handle = open_file_internal( filename, access_flags, creation_disposition );
+	DWORD open_flags = GENERIC_READ | GENERIC_WRITE;
+	File file_handle = open_file_internal( filename, open_flags, creation_disposition );
 
 	if ( file_handle.handle != INVALID_FILE_HANDLE ) {
 		return file_handle;
 	}
 
-	return open_file_internal( filename, access_flags, creation_disposition );
+	return open_file_internal( filename, open_flags, creation_disposition );
 }
 
 bool8 file_close( File* file ) {
@@ -119,25 +107,24 @@ bool8 file_close( File* file ) {
 	return cast( bool8, result );
 }
 
-bool8 file_copy( const char* original_path, const char* new_path ) {
+bool8 file_copy( const char *original_path, const char *new_path ) {
 	assert( original_path );
 	assert( new_path );
 
-	BOOL copied = CopyFileA( original_path, new_path, FALSE );
-	assertf( copied, "Failed to copy file \"%s\" to \"%s\": 0x%x.", original_path, new_path, GetLastError() );
+	BOOL copied = CopyFile( original_path, new_path, FALSE );
+	//assertf( copied, "Failed to copy file \"%s\" to \"%s\": 0x%x.", original_path, new_path, GetLastError() );
 
 	return cast( bool8, copied );
 }
 
-bool8 file_rename( const char* old_filename, const char* new_filename ) {
+bool8 file_rename( const char *old_filename, const char *new_filename ) {
 	assert( old_filename );
 	assert( new_filename );
 
-	bool8 renamed = cast( bool8, MoveFileA( old_filename, new_filename ) );
+	BOOL renamed = MoveFile( old_filename, new_filename );
+	//assertf( renamed, "Failed to rename file \"%s\" to \"%s\": 0x%x.", old_filename, new_filename, GetLastError() );
 
-	assertf( renamed, "Failed to rename file \"%s\" to \"%s\": 0x%x.", old_filename, new_filename, GetLastError() );
-
-	return renamed;
+	return cast( bool8, renamed );
 }
 
 bool8 file_read( File* file, const u64 offset, const u64 size, void* out_data ) {
@@ -165,13 +152,13 @@ bool8 file_read( File* file, const u64 offset, const u64 size, void* out_data ) 
 		result = GetOverlappedResult( handle, &overlapped, &bytes_read, TRUE );
 		if ( !result ) {
 			last_error = GetLastError();
-			assertf( result, "Failed to read from file 0x%x.", GetLastError() );
+			//assertf( result, "Failed to read from file 0x%x.", GetLastError() );
 			return 0;
 		}
 	}
 
 	if ( !result || bytes_read != bytes_to_read ) {
-		assertf( result, "Failed to read all required data from file 0x%x.", GetLastError() );
+		//assertf( result, "Failed to read all required data from file 0x%x.", GetLastError() );
 		return 0;
 	}
 
@@ -196,7 +183,7 @@ bool8 file_write( File* file, const void* data, const u64 offset, const u64 size
 	overlapped.Offset = cast( DWORD, offset >> 0 ) & 0xFFFFFFFF;
 	overlapped.OffsetHigh = cast( DWORD, offset >> 32 ) & 0xFFFFFFFF;
 
-	BOOL result = WriteFile( handle, cast( const char*, data ), bytes_to_write, &bytes_written, &overlapped );
+	BOOL result = WriteFile( handle, cast( const char *, data ), bytes_to_write, &bytes_written, &overlapped );
 
 	DWORD last_error = GetLastError();
 
@@ -204,24 +191,26 @@ bool8 file_write( File* file, const void* data, const u64 offset, const u64 size
 		result = GetOverlappedResult( handle, &overlapped, &bytes_written, TRUE );
 		if ( !result ) {
 			last_error = GetLastError();
-			assertf( result, "Failed to write to file 0x%x.", GetLastError() );
+			//assertf( result, "Failed to write to file 0x%x.", GetLastError() );
 			return 0;
 		}
 	}
 
 	if ( !result || bytes_written != bytes_to_write ) {
-		assertf( result, "Failed to write all required data to file 0x%x.", GetLastError() );
+		//assertf( result, "Failed to write all required data to file 0x%x.", GetLastError() );
 		return 0;
 	}
 
 	return bytes_written == size;
 }
 
-bool8 file_delete( const char* filename ) {
-	return cast( bool8, DeleteFile( filename ) );
+bool8 file_delete( const char *filename ) {
+	BOOL result = DeleteFile( filename );
+	//assertf( result, "Failed to delete file %s: 0x%x.", filename, GetLastError() );
+	return cast( bool8, result );
 }
 
-bool8 file_get_size( const char* filename, u64* out_size ) {
+bool8 file_get_size( const char *filename, u64* out_size ) {
 	assert( filename );
 	assert( out_size );
 
@@ -231,7 +220,7 @@ bool8 file_get_size( const char* filename, u64* out_size ) {
 		return false;
 	}
 
-	defer( file_close( &file ) );
+	defer { file_close( &file ); };
 
 	LARGE_INTEGER large_int = {};
 
@@ -244,7 +233,7 @@ bool8 file_get_size( const char* filename, u64* out_size ) {
 	return true;
 }
 
-bool8 file_get_last_write_time( const char* filename, u64* out_last_write_time ) {
+bool8 file_get_last_write_time( const char *filename, u64* out_last_write_time ) {
 	assert( filename );
 	assert( out_last_write_time );
 
@@ -254,7 +243,7 @@ bool8 file_get_last_write_time( const char* filename, u64* out_last_write_time )
 		return false;
 	}
 
-	defer( file_close( &file ) );
+	defer { file_close( &file ); };
 
 	FILETIME lastWriteTime = {};
 
@@ -267,25 +256,26 @@ bool8 file_get_last_write_time( const char* filename, u64* out_last_write_time )
 	return true;
 }
 
-bool8 file_get_all_files_in_folder( const char* path, const bool8 recursive, const bool8 visit_folders, FileVisitCallback visit_callback, void* user_data ) {
+bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit_flags, FileVisitCallback visit_callback, void* user_data ) {
 	assert( path );
 	assert( visit_callback );
 
-	Array<const char*> directories;	// TODO(DM): 02/10/2025: allocate this on temp storage
+	Array<const char *> directories;
+	directories.init( g_temp_storage );
 	directories.add( path );
 
 	u32 dir_index = 0;
 
 	while ( dir_index < directories.count ) {
-		const char* dir = directories[dir_index];
+		const char *dir = directories[dir_index];
 
 		dir_index += 1;
 
-		const char* search_path = NULL;
+		const char *search_path = NULL;
 		if ( string_ends_with( dir, "/" ) ) {
-			search_path = tprintf( "%s*", dir );
+			search_path = temp_printf( "%s*", dir );
 		} else {
-			search_path = tprintf( "%s%c*", dir, '/' );
+			search_path = path_join( dir, "*" );
 		}
 
 		WIN32_FIND_DATA find_data = {};
@@ -297,24 +287,24 @@ bool8 file_get_all_files_in_folder( const char* path, const bool8 recursive, con
 
 		while ( 1 ) {
 			FileInfo file_info = {
-				.is_directory		= cast( bool8, find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ),
-				.last_write_time	= ( trunc_cast( u64, find_data.ftLastWriteTime.dwHighDateTime ) << 32 ) | find_data.ftLastWriteTime.dwLowDateTime,
 				.size_bytes			= ( trunc_cast( u64, find_data.nFileSizeHigh ) << 32 ) | find_data.nFileSizeLow,
+				.last_write_time	= ( trunc_cast( u64, find_data.ftLastWriteTime.dwHighDateTime ) << 32 ) | find_data.ftLastWriteTime.dwLowDateTime,
+				.is_directory		= cast( bool8, find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ),
 				.filename			= find_data.cFileName,
-				.full_filename		= tprintf( "%s%c%s", dir, '/', file_info.filename ),
+				.full_filename		= path_join( dir, file_info.filename ),
 			};
 
 			if ( file_info.is_directory ) {
 				if ( !string_equals( find_data.cFileName, "." ) && !string_equals( find_data.cFileName, ".." ) ) {
-					if ( visit_folders ) {
+					if ( visit_flags & FILE_VISIT_FOLDERS ) {
 						visit_callback( &file_info, user_data );
 					}
 
-					if ( recursive ) {
+					if ( visit_flags & FILE_VISIT_RECURSIVE ) {
 						directories.add( file_info.full_filename );
 					}
 				}
-			} else {
+			} else if ( visit_flags & FILE_VISIT_FILES ) {
 				visit_callback( &file_info, user_data );
 			}
 
@@ -331,13 +321,28 @@ bool8 file_get_all_files_in_folder( const char* path, const bool8 recursive, con
 	return true;
 }
 
-bool8 file_exists( const char* filename ) {
+bool8 file_exists( const char *filename ) {
 	assert( filename );
 
 	return GetFileAttributes( filename ) != INVALID_FILE_ATTRIBUTES;
 }
 
-bool8 folder_delete( const char* path ) {
+bool8 create_folder_internal( const char *path ) {
+	assert( path );
+
+	if ( folder_exists( path ) ) {
+		return true;
+	}
+
+	SECURITY_ATTRIBUTES attributes = {};
+	attributes.nLength = sizeof( SECURITY_ATTRIBUTES );
+
+	bool8 result = cast( bool8, CreateDirectoryA( path, &attributes ) );
+
+	return result;
+}
+
+bool8 folder_delete( const char *path ) {
 	assert( path );
 
 	bool8 result = cast( bool8, RemoveDirectoryA( path ) );
@@ -349,7 +354,7 @@ bool8 folder_delete( const char* path ) {
 	return result;
 }
 
-bool8 folder_exists( const char* path ) {
+bool8 folder_exists( const char *path ) {
 	assert( path );
 
 	DWORD attribs = GetFileAttributes( path );

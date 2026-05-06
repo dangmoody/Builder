@@ -28,19 +28,17 @@ SOFTWARE.
 
 #pragma once
 
-#include "core_types.h"
-#include "memory_units.h"
+#include "int_types.h"
 #include "dll_export.h"
 
+struct LinearAllocator;
 
-CORE_API void	mem_reset_temp_storage( void );
-CORE_API u64	mem_tell_temp_storage( void );
-CORE_API void	mem_rewind_temp_storage( const u64 position );
 
-// DONT CALL THESE DIRECTLY
-CORE_API void*	mem_temp_alloc_internal( const u64 size );
-CORE_API void*	mem_temp_alloc_aligned_internal( const u64 size, const MemoryAlignment alignment );
+extern CORE_API LinearAllocator *g_temp_storage;
 
-// call these instead
-#define mem_temp_alloc( size )						mem_temp_alloc_internal( size )
-#define mem_temp_alloc_aligned( size, alignment )	mem_temp_alloc_aligned_internal( size, cast( MemoryAlignment, (alignment) ) )
+CORE_API void	mem_init_temp_storage( const u64 size_bytes );
+CORE_API void	mem_shutdown_temp_storage();
+
+CORE_API void*	mem_temp_alloc( const u64 size_bytes, const u32 alignment = 8 );
+
+CORE_API void	mem_reset_temp_storage();

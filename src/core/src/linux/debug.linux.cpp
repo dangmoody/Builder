@@ -30,31 +30,67 @@ SOFTWARE.
 
 #include <debug.h>
 
-#include <core_types.h>
-#include <string_helpers.h>
-#include <typecast.inl>
+#include <core_array.inl>
+#include <core_helpers.h>
+#include <linear_allocator.h>
+#include <temp_storage.h>
+#include <defer.h>
 
-#include <stdio.h>	// printf, vprintf
-#include <stdlib.h>	// malloc, free
-#include <malloc.h>	// alloca
-#include <errno.h>  // linux specific error code handling
-#include <string.h> // linux specific error code conversion to string
+#include <stdio.h>
+#include <malloc.h>
+#include <errno.h>
+#include <execinfo.h>
+#include <dlfcn.h>
+#include <cxxabi.h>
 
-#include <stdarg.h>
+Array<const char *> get_callstack( LinearAllocator *allocator ) {
+	const int NUM_FRAMES = 1024;
+	void *buffer[NUM_FRAMES];
 
-/*
-================================================================================================
+	int frames_count = backtrace( buffer, NUM_FRAMES );
 
-	Linux debug
+	char **fallback_names = backtrace_symbols( buffer, frames_count );
+	defer { free( fallback_names ); };
 
-================================================================================================
-*/
+	Array<const char *> frames;
+	frames.init( allocator );
+	frames.reserve( trunc_cast( u64, frames_count ) );
+
+	// skip the first found frame because that will just be this function that we're in, which is useless for a callstack
+	For ( u32, frame_index, 1, frames_count ) {
+		Dl_info info;
+		const char *name = fallback_names[frame_index];
+		char *demangled = NULL;
+
+		if ( dladdr( buffer[frame_index], &info ) && info.dli_sname ) {
+			int status = 0;
+			demangled = abi::__cxa_demangle( info.dli_sname, NULL, NULL, &status );
+
+			if ( status == 0 && demangled ) {
+				name = demangled;
+			} else {
+				name = info.dli_sname;
+			}
+		}
+
+		u64 len = strlen( name );
+		char *frame = cast( char *, linear_allocator_alloc( allocator, len + 1 ) );
+		memcpy( frame, name, len + 1 );
+
+		free( demangled );
+		demangled = NULL;
+
+		frames.add( frame );
+	}
+
+	return frames;
+}
 
 void set_console_text_color( const ConsoleTextColor color ) {
-	const char* color_linux = NULL;
+	const char *color_linux = NULL;
 
 	switch ( color ) {
-		case CONSOLE_TEXT_COLOR_DEFAULT:		color_linux = "\033[0m"; break;
+		case CONSOLE_TEXT_COLOR_DEFAULT:		color_linux = "\033[0m";    break;
 		case CONSOLE_TEXT_COLOR_RED:			color_linux = "\033[0;31m"; break;
 		case CONSOLE_TEXT_COLOR_YELLOW:			color_linux = "\033[0;32m"; break;
 		case CONSOLE_TEXT_COLOR_BLUE:			color_linux = "\033[1;34m"; break;
@@ -67,47 +103,16 @@ void set_console_text_color( const ConsoleTextColor color ) {
 	printf( "%s", color_linux );
 }
 
-#ifdef _DEBUG
-void dump_callstack( void ) {
-	printf(
-		"Callstack:\n"
-		"TODO(DM): this\n"
-	);
-}
-#endif // _DEBUG
-
-static void assert_dialog_internal( const char* file, const int line, const char* prefix, const char* msg ) {
-	set_console_text_color( CONSOLE_TEXT_COLOR_RED );
-
-	printf( "%s: %s line %d: ", prefix, file, line );
-
-	set_console_text_color( CONSOLE_TEXT_COLOR_YELLOW );
-
-	printf( "%s\n", msg );
-
-#ifdef _DEBUG
-	dump_callstack();
-#endif
-
-	set_console_text_color( CONSOLE_TEXT_COLOR_DEFAULT );
-
-#ifdef _DEBUG
-	//_CrtDbgReport( _CRT_ASSERT, file, line, NULL, msg );
-#else
-	// TODO (MY) - maybe consider revisiting
-	// MessageBox( NULL, msg, "ASSERTION ERROR", MB_OK );
-#endif
-    printf( "FATAL ERROR!\n" );    // DM!!! whats the linux equivalent of MessageBox()?
+s32 get_last_error_code() {
+	return errno;
 }
 
-errorCode_t get_last_error_code() {
-	errorCode_t captured_error = errno;
+void assert_internal( const char *file, const int line, const char *fmt, ... ) {
+	unused( file );
+	unused( line );
+	unused( fmt );
 
-	if ( captured_error != 0 ) {
-		printf( "Linux error: %s\n", strerror( captured_error ) );
-	}
-
-	return captured_error;
+	// TODO: DM: write me!
 }
 
 #endif // __linux__

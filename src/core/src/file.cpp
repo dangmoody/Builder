@@ -29,6 +29,12 @@ SOFTWARE.
 #include <file.h>
 #include "file_local.h"
 
+#include <typecast.inl>
+#include <debug.h>
+
+#include <malloc.h>
+#include <string.h>
+
 /*
 ================================================================================================
 
@@ -37,26 +43,14 @@ SOFTWARE.
 ================================================================================================
 */
 
-void file_free_buffer( char** buffer ) {
-	//TODO(TOM): Figure out how to configure the file IO allocator
-	Allocator* platform_allocator = g_core_ptr->allocator_stack[0];
-
-	mem_push_allocator( platform_allocator );
-	defer( mem_pop_allocator() );
-
-	mem_free( *buffer );
+void file_free_buffer( char **buffer ) {
+	free( *buffer );
 	*buffer = NULL;
 }
 
-bool8 file_read_entire( const char* filename, char** outBuffer, u64* out_file_length ) {
-	assertf( filename, "Specified file name to read from cannot be null." );
-	assertf( !*outBuffer, "Specified out-buffer MUST be null because this function news it." );
-
-	//TODO(TOM): Figure out how to configure the file IO allocator
-	Allocator* platform_allocator = g_core_ptr->allocator_stack[0];
-
-	mem_push_allocator( platform_allocator );
-	defer( mem_pop_allocator() );
+bool8 file_read_entire( const char *filename, char **outBuffer, u64 *out_file_length ) {
+	assert( filename );
+	assert( !*outBuffer && "Specified out-buffer MUST be null because this function news it." );
 
 	u64 file_size = 0;
 	if ( !file_get_size( filename, &file_size ) ) {
@@ -69,7 +63,7 @@ bool8 file_read_entire( const char* filename, char** outBuffer, u64* out_file_le
 		return 0;
 	}
 
-	char* temp = cast( char*, mem_alloc( file_size + 1 ) );
+	char *temp = cast( char *, malloc( file_size + 1 ) );
 
 	bool8 read = file_read( &file, 0, file_size, temp );
 
@@ -86,7 +80,7 @@ bool8 file_read_entire( const char* filename, char** outBuffer, u64* out_file_le
 	return read;
 }
 
-bool8 file_read( File* file, const u64 size, void* out_data ) {
+bool8 file_read( File *file, const u64 size, void *out_data ) {
 	bool8 read = file_read( file, file->offset, size, out_data );
 
 	if ( read ) {
@@ -96,9 +90,9 @@ bool8 file_read( File* file, const u64 size, void* out_data ) {
 	return read;
 }
 
-bool8 file_write_entire( const char* filename, const void* data, const u64 size ) {
-	assertf( filename, "File name cannot be null." );
-	assertf( data, "Write data cannot be null." );
+bool8 file_write_entire( const char *filename, const void *data, const u64 size ) {
+	assert( filename );
+	assert( data );
 
 	File file = file_open_or_create( filename );
 
@@ -117,7 +111,7 @@ bool8 file_write_entire( const char* filename, const void* data, const u64 size 
 	return true;
 }
 
-bool8 file_write( File* file, const void* data, const u64 size ) {
+bool8 file_write( File *file, const void *data, const u64 size ) {
 	bool8 written = file_write( file, data, file->offset, size );
 
 	if ( written ) {
@@ -127,17 +121,17 @@ bool8 file_write( File* file, const void* data, const u64 size ) {
 	return written;
 }
 
-bool8 file_write( File* file, const char* data ) {
+bool8 file_write( File *file, const char *data ) {
 	return file_write( file, data, strlen( data ) * sizeof( char ) );
 }
 
-bool8 file_write_line( File* file, const char* line ) {
+bool8 file_write_line( File *file, const char *line ) {
 	bool8 main_write = file_write( file, line );
 	return main_write && file_write( file, "\n" );
 }
 
-bool8 folder_create_if_it_doesnt_exist( const char* path ) {
-	assertf( path, "Path cannot be NULL." );
+bool8 folder_create_if_it_doesnt_exist( const char *path ) {
+	assert( path );
 
 	if ( folder_exists( path ) ) {
 		return true;

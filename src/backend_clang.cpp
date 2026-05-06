@@ -27,6 +27,7 @@ SOFTWARE.
 */
 
 #include "builder_local.h"
+#include "core/include/temp_storage.h"
 
 #ifdef _WIN32
 #include "win_support.h"
@@ -34,12 +35,14 @@ SOFTWARE.
 
 #include "core/include/core_string.h"
 #include "core/include/debug.h"
-#include "core/include/string_helpers.h"
+#include "core/include/core_string.h"
 #include "core/include/paths.h"
-#include "core/include/array.inl"
+#include "core/include/core_array.inl"
 #include "core/include/file.h"
 #include "core/include/core_process.h"
 #include "core/include/string_builder.h"
+#include "core/include/defer.h"
+#include "core/include/core_helpers.h"
 
 #include <clang-c/Index.h>
 
@@ -76,12 +79,12 @@ static void ReadDependencyFile( const char *depFilename, std::vector<std::string
 	char *depFileBuffer = NULL;
 
 	if ( !file_read_entire( depFilename, &depFileBuffer ) ) {
-		errorCode_t errorCode = get_last_error_code();
+		s32 errorCode = get_last_error_code();
 		fatal_error( "Failed to read \"%s\".  This should never happen! Error code: " ERROR_CODE_FORMAT "\n", depFilename, errorCode );
 		return;
 	}
 
-	defer( file_free_buffer( &depFileBuffer ) );
+	defer { file_free_buffer( &depFileBuffer ); };
 
 	outIncludeDependencies.clear();
 
@@ -163,15 +166,18 @@ static void ReadDependencyFile( const char *depFilename, std::vector<std::string
 	LogVerbose( "Finished parsing dependency file \"%s\"...\n", depFilename );
 }
 
-static void ResolveCompilerAndLinkerPaths( clangState_t *clangState, const char *compilerPath, const char *compilerName, const char *linkerName ) {
+static void ResolveCompilerAndLinkerPaths( clangState_t *clangState, LinearAllocator *allocator, const char *compilerPath, const char *compilerName, const char *linkerName ) {
 	const char *pathToCompiler = path_remove_file_from_path( compilerPath );
 
 	if ( pathToCompiler == NULL ) {
-		clangState->compilerPath = compilerPath;
-		clangState->linkerPath = linkerName;
+		string_copy_from_c_string( &clangState->compilerPath, compilerPath );
+		string_copy_from_c_string( &clangState->linkerPath, linkerName );
 	} else {
-		clangState->compilerPath = tprintf( "%s%c%s", pathToCompiler, PATH_SEPARATOR, compilerName );
-		clangState->linkerPath = tprintf( "%s%c%s", pathToCompiler, PATH_SEPARATOR, linkerName );
+		const char *compilerPathFull = path_join( allocator, pathToCompiler, compilerName );
+		const char *linkerPathFull = path_join( allocator, pathToCompiler, linkerName );
+
+		string_copy_from_c_string( &clangState->compilerPath, compilerPathFull );
+		string_copy_from_c_string( &clangState->linkerPath, linkerPathFull );
 	}
 }
 
@@ -182,12 +188,18 @@ static bool8 Clang_Init( compilerBackend_t *backend, const buildContext_t *conte
 	unused( context );
 #endif
 
-	backend->data = cast( clangState_t *, mem_alloc( sizeof( clangState_t ) ) );
+	backend->data = cast( clangState_t *, linear_allocator_alloc( context->allocator, sizeof( clangState_t ) ) );
 	new( backend->data ) clangState_t;
 
 	clangState_t *clangState = cast( clangState_t *, backend->data );
+	clangState->args.init( g_temp_storage );
+	string_init( &clangState->compilerPath, context->allocator );
+	string_init( &clangState->compilerVersion, context->allocator );
+	string_init( &clangState->linkerPath, context->allocator );
+	string_init( &clangState->arPath, context->allocator );
 
-	clangState->compilerVersion = compilerVersion.c_str();
+	// clangState->compilerVersion = compilerVersion.c_str();
+	string_copy_from_c_string( &clangState->compilerVersion, compilerVersion.c_str() );
 
 	const char *clangExe = "clang";
 #if defined( _WIN32 )
@@ -198,7 +210,7 @@ static bool8 Clang_Init( compilerBackend_t *backend, const buildContext_t *conte
 #error Unrecognised platform.
 #endif
 
-	ResolveCompilerAndLinkerPaths( clangState, compilerPath.c_str(), clangExe, linkerExe );
+	ResolveCompilerAndLinkerPaths( clangState, context->allocator, compilerPath.c_str(), clangExe, linkerExe );
 
 	const char *pathToCompiler = path_remove_file_from_path( compilerPath.c_str() );
 
@@ -221,14 +233,19 @@ static bool8 GCC_Init( compilerBackend_t *backend, const buildContext_t *context
 	// can we do better here?
 	unused( context );
 
-	backend->data = cast( clangState_t *, mem_alloc( sizeof( clangState_t ) ) );
+	backend->data = cast( clangState_t *, linear_allocator_alloc( context->allocator, sizeof( clangState_t ) ) );
 	new( backend->data ) clangState_t;
 
 	clangState_t *clangState = cast( clangState_t *, backend->data );
+	clangState->args.init( g_temp_storage );
+	string_init( &clangState->compilerPath, context->allocator );
+	string_init( &clangState->compilerVersion, context->allocator );
+	string_init( &clangState->linkerPath, context->allocator );
+	string_init( &clangState->arPath, context->allocator );
 
-	clangState->compilerVersion = compilerVersion.c_str();
+	string_copy_from_c_string( &clangState->compilerVersion, compilerVersion.c_str() );
 
-	ResolveCompilerAndLinkerPaths( clangState, compilerPath.c_str(), "gcc", "ld" );
+	ResolveCompilerAndLinkerPaths( clangState, context->allocator, compilerPath.c_str(), "gcc", "ld" );
 
 	const char *pathToCompiler = path_remove_file_from_path( compilerPath.c_str() );
 
@@ -242,8 +259,9 @@ static bool8 GCC_Init( compilerBackend_t *backend, const buildContext_t *context
 }
 
 static void Clang_Shutdown( compilerBackend_t *backend ) {
-	mem_free( backend->data );
-	backend->data = NULL;
+	unused( backend );
+	// free( backend->data );
+	// backend->data = NULL;
 }
 
 static bool8 Clang_CompileSourceFile(
@@ -260,11 +278,11 @@ static bool8 Clang_CompileSourceFile(
 	clangState_t *clangState = cast( clangState_t *, backend->data );
 
 	const char *sourceFileNoPath = path_remove_path_from_file( sourceFile );
-	const char *depFilename = tprintf( "%s%c%s.d", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPath );
+	const char *depFilename = temp_printf( "%s%c%s.d", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPath );
 
 	Array<const char *> finalArgs = cmdArchetype.baseArgs;
 
-	const char *intermediateFile = tprintf( "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, path_remove_file_extension( sourceFileNoPath ) );
+	const char *intermediateFile = temp_printf( "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, path_remove_file_extension( sourceFileNoPath ) );
 
 	// Fill up remaining arguments
 
@@ -272,7 +290,7 @@ static bool8 Clang_CompileSourceFile(
 	For ( u64, flagIndex, 0, cmdArchetype.dependencyFlags.count ) {
 		finalArgs.add( cmdArchetype.dependencyFlags[flagIndex] );
 	}
-	finalArgs.add( tprintf( "%s%c%s.d", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPath ) );
+	finalArgs.add( temp_printf( "%s%c%s.d", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPath ) );
 
 	// Output Flag/File
 	finalArgs.add( cmdArchetype.outputFlag );
@@ -308,7 +326,7 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 
 	clangState_t *clangState = cast( clangState_t *, backend->data );
 
-	const char *fullBinaryName = BuildConfig_GetFullBinaryName( config );
+	const char *fullBinaryName = BuildConfig_GetFullBinaryName( config, g_temp_storage );
 
 	Array<const char *> &args = clangState->args;
 	args.reserve(
@@ -335,9 +353,9 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 #ifdef _WIN32
 	//args.add( clangState->linkerPath.data );
 	if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
-		args.add( tprintf( "%s\\bin\\Hostx64\\x64\\lib", clangState->msvcInstall.rootFolder.data ) );
+		args.add( temp_printf( "%s\\bin\\Hostx64\\x64\\lib", clangState->msvcInstall.rootFolder.data ) );
 	} else {
-		args.add( tprintf( "%s\\bin\\Hostx64\\x64\\link", clangState->msvcInstall.rootFolder.data ) );
+		args.add( temp_printf( "%s\\bin\\Hostx64\\x64\\link", clangState->msvcInstall.rootFolder.data ) );
 
 		args.add( "/NODEFAULTLIB" );
 	}
@@ -354,16 +372,16 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		args.add( "/DEBUG" );
 	}
 
-	args.add( tprintf( "/OUT:%s", fullBinaryName ) );
+	args.add( temp_printf( "/OUT:%s", fullBinaryName ) );
 
 	args.add_range( &intermediateFiles );
 
-	args.add( tprintf( "/LIBPATH:%s", clangState->winSDK.ucrtLibPath.data ) );
-	args.add( tprintf( "/LIBPATH:%s", clangState->winSDK.umLibPath.data ) );
-	args.add( tprintf( "/LIBPATH:%s", clangState->msvcInstall.libPath.data ) );
+	args.add( temp_printf( "/LIBPATH:%s", clangState->winSDK.ucrtLibPath.data ) );
+	args.add( temp_printf( "/LIBPATH:%s", clangState->winSDK.umLibPath.data ) );
+	args.add( temp_printf( "/LIBPATH:%s", clangState->msvcInstall.libPath.data ) );
 
 	For ( u32, libPathIndex, 0, config->additionalLibPaths.size() ) {
-		args.add( tprintf( "/LIBPATH:%s", config->additionalLibPaths[libPathIndex].c_str() ) );
+		args.add( temp_printf( "/LIBPATH:%s", config->additionalLibPaths[libPathIndex].c_str() ) );
 	}
 
 	if ( !options || !options->noDefaultLibs ) {
@@ -414,7 +432,7 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 	}
 
 	For ( u32, libIndex, 0, config->additionalLibs.size() ) {
-		args.add( tprintf( "%s%s", config->additionalLibs[libIndex].c_str(), GetFileExtensionFromBinaryType( BINARY_TYPE_STATIC_LIBRARY ) ) );
+		args.add( temp_printf( "%s%s", config->additionalLibs[libIndex].c_str(), GetFileExtensionFromBinaryType( BINARY_TYPE_STATIC_LIBRARY ) ) );
 	}
 
 	For ( u32, libIndex, 0, config->additionalLinkerArguments.size() ) {
@@ -452,12 +470,12 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		args.add_range( &intermediateFiles );
 
 		For ( u32, libPathIndex, 0, config->additionalLibPaths.size() ) {
-			args.add( tprintf( "-L%s", config->additionalLibPaths[libPathIndex].c_str() ) );
+			args.add( temp_printf( "-L%s", config->additionalLibPaths[libPathIndex].c_str() ) );
 		}
 
 #ifdef _WIN32
-		args.add( tprintf( "-L%s", clangState->winSDK.ucrtLibPath.data ) );
-		args.add( tprintf( "-L%s", clangState->winSDK.umLibPath.data ) );
+		args.add( temp_printf( "-L%s", clangState->winSDK.ucrtLibPath.data ) );
+		args.add( temp_printf( "-L%s", clangState->winSDK.umLibPath.data ) );
 #endif
 
 #ifdef __linux__
@@ -471,9 +489,9 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		// so on linux make the user specify the file extension themselves
 		For ( u32, libIndex, 0, config->additionalLibs.size() ) {
 #ifdef _WIN32
-			args.add( tprintf( "-l%s%s", config->additionalLibs[libIndex].c_str(), GetFileExtensionFromBinaryType( BINARY_TYPE_STATIC_LIBRARY ) ) );
+			args.add( temp_printf( "-l%s%s", config->additionalLibs[libIndex].c_str(), GetFileExtensionFromBinaryType( BINARY_TYPE_STATIC_LIBRARY ) ) );
 #else
-			args.add( tprintf( "-l%s", config->additionalLibs[libIndex].c_str() ) );
+			args.add( temp_printf( "-l%s", config->additionalLibs[libIndex].c_str() ) );
 #endif
 		}
 
@@ -486,7 +504,7 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 #ifdef __linux__
 		if ( config->binaryType == BINARY_TYPE_EXE ) {
 			const char *fullBinaryPath = path_remove_file_from_path( fullBinaryName );
-			args.add( tprintf( "-Wl,-rpath=%s", fullBinaryPath ) );
+			args.add( temp_printf( "-Wl,-rpath=%s", fullBinaryPath ) );
 		}
 #endif
 
@@ -506,7 +524,7 @@ static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const Array<
 
 	clangState_t *clangState = cast( clangState_t *, backend->data );
 
-	const char *fullBinaryName = BuildConfig_GetFullBinaryName( config );
+	const char *fullBinaryName = BuildConfig_GetFullBinaryName( config, g_temp_storage );
 
 	Array<const char *> &args = clangState->args;
 	args.reserve(
@@ -560,16 +578,16 @@ static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const Array<
 		args.add_range( &intermediateFiles );
 
 		For ( u32, libPathIndex, 0, config->additionalLibPaths.size() ) {
-			args.add( tprintf( "-L%s", config->additionalLibPaths[libPathIndex].c_str() ) );
+			args.add( temp_printf( "-L%s", config->additionalLibPaths[libPathIndex].c_str() ) );
 		}
 
 // #ifdef _WIN32
-// 		args.add( tprintf( "-L%s", clangState->winSDK.ucrtLibPath.data ) );
-// 		args.add( tprintf( "-L%s", clangState->winSDK.umLibPath.data ) );
+// 		args.add( temp_printf( "-L%s", clangState->winSDK.ucrtLibPath.data ) );
+// 		args.add( temp_printf( "-L%s", clangState->winSDK.umLibPath.data ) );
 // #endif
 
 		For ( u32, libIndex, 0, config->additionalLibs.size() ) {
-			args.add( tprintf( "-l%s", config->additionalLibs[libIndex].c_str() ) );
+			args.add( temp_printf( "-l%s", config->additionalLibs[libIndex].c_str() ) );
 		}
 
 		For ( u32, libIndex, 0, config->additionalLinkerArguments.size() ) {
@@ -581,7 +599,7 @@ static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const Array<
 #ifdef __linux__
 		if ( config->binaryType == BINARY_TYPE_EXE ) {
 			const char *fullBinaryPath = path_remove_file_from_path( fullBinaryName );
-			args.add( tprintf( "-Wl,-rpath=%s", fullBinaryPath ) );
+			args.add( temp_printf( "-Wl,-rpath=%s", fullBinaryPath ) );
 		}
 #endif
 
@@ -596,6 +614,9 @@ static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const Array<
 
 static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t *backend, const BuildConfig *config, compilationCommandArchetype_t &outCmdArchetype ) {
 	clangState_t *clangState = cast( clangState_t *, backend->data );
+
+	outCmdArchetype.baseArgs.init( g_temp_storage );
+	outCmdArchetype.dependencyFlags.init( g_temp_storage );
 
 	const char *compilerPath = clangState->compilerPath.data;
 
@@ -640,7 +661,7 @@ static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t *back
 
 	// Language Version
 	if ( config->languageVersion != LANGUAGE_VERSION_UNSET ) {
-		baseArgs.add( tprintf( "-std=%s", LanguageVersionToString( config->languageVersion ) ) );
+		baseArgs.add( temp_printf( "-std=%s", LanguageVersionToString( config->languageVersion ) ) );
 	}
 
 	// Symbols Flag
@@ -653,19 +674,19 @@ static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t *back
 
 	// Defines
 	For ( u32, defineIndex, 0, definesCount ) {
-		baseArgs.add( tprintf( "-D%s", config->defines[defineIndex].c_str() ) );
+		baseArgs.add( temp_printf( "-D%s", config->defines[defineIndex].c_str() ) );
 	}
 
 // #ifdef _WIN32
 // 	// windows SDK includes
-// 	baseArgs.add( tprintf( "-isystem%s", clangState->winSDK.ucrtInclude.data ) );
-// 	baseArgs.add( tprintf( "-isystem%s", clangState->winSDK.umInclude.data ) );
-// 	baseArgs.add( tprintf( "-isystem%s", clangState->winSDK.sharedInclude.data ) );
+// 	baseArgs.add( temp_printf( "-isystem%s", clangState->winSDK.ucrtInclude.data ) );
+// 	baseArgs.add( temp_printf( "-isystem%s", clangState->winSDK.umInclude.data ) );
+// 	baseArgs.add( temp_printf( "-isystem%s", clangState->winSDK.sharedInclude.data ) );
 // #endif
 
 	// Additional Includes
 	For ( u32, includeIndex, 0, additionalIncludesCount ) {
-		baseArgs.add( tprintf( "-I%s", config->additionalIncludes[includeIndex].c_str() ) );
+		baseArgs.add( temp_printf( "-I%s", config->additionalIncludes[includeIndex].c_str() ) );
 	}
 
 	// Warning As Error
@@ -749,9 +770,10 @@ static String Clang_GetCompilerVersion( compilerBackend_t *backend ) {
 	CXString clangVersionString = clang_getClangVersion();
 	const char *clangVersionCStr = clang_getCString( clangVersionString );
 	u64 clangVersionCStrLength = strlen( clangVersionCStr );
-	defer( clang_disposeString( clangVersionString ) );
+	defer { clang_disposeString( clangVersionString ); };
 
 	String result;
+	string_init( &result, g_temp_storage );
 	string_copy_from_c_string( &result, clangVersionCStr, clangVersionCStrLength );
 
 	if ( string_starts_with( result.data, "clang version " ) ) {
@@ -770,46 +792,20 @@ static String GCC_GetCompilerVersion( compilerBackend_t *backend ) {
 	clangState_t *clangState = cast( clangState_t *, backend->data );
 
 	String compilerVersion;
+	string_init( &compilerVersion, g_temp_storage );
 
 	const char *gccVersionPrefix = "gcc version ";
 
 	Array<const char *> args;
+	args.init( g_temp_storage );
 	args.add( clangState->compilerPath.data );
 	args.add( "-v" );
 
-	// DM: defined around it for now because I need to test on Windows before I remove it
-	// but this is working on Linux so its looking good so far
-#define CALL_RUN_PROC 1
-
-#if CALL_RUN_PROC
 	String gccOutputString;
+	string_init( &gccOutputString, g_temp_storage );
 	s32 exitCode = RunProc( &args, NULL, 0, &gccOutputString );
 
 	const char *versionStart = strstr( gccOutputString.data, gccVersionPrefix );
-#else
-	Process *process = process_create( &args, NULL, PROCESS_FLAG_ASYNC | PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
-
-	if ( !process ) {
-		error( "Failed to find process \"%s\".  Did you type it correctly?\n", args[0] );
-		return String();
-	}
-
-	StringBuilder gccOutput = {};
-	string_builder_reset( &gccOutput );
-	defer( string_builder_destroy( &gccOutput ) );
-
-	char buffer[1024] = {};
-	u64 bytesRead = U64_MAX;
-	while ( ( bytesRead = process_read_stdout( process, buffer, count_of( buffer ) - 1 ) ) ) {
-		buffer[bytesRead] = 0;
-
-		string_builder_appendf( &gccOutput, "%s", buffer );
-	}
-
-	const char *gccOutputString = string_builder_to_string( &gccOutput );
-
-	const char *versionStart = strstr( gccOutputString, gccVersionPrefix );
-#endif
 
 	if ( versionStart ) {
 		versionStart += strlen( gccVersionPrefix );
@@ -822,14 +818,7 @@ static String GCC_GetCompilerVersion( compilerBackend_t *backend ) {
 		string_copy_from_c_string( &compilerVersion, versionStart, versionLength );
 	}
 
-#if !CALL_RUN_PROC
-	process_join( process );
-
-	process_destroy( process );
-	process = NULL;
-#endif
-
-	return compilerVersion.data;
+	return compilerVersion;
 }
 
 void CreateCompilerBackend_Clang( compilerBackend_t *outBackend ) {

@@ -149,7 +149,7 @@
     <ClInclude Include="src\core\include\core_math.h" />
     <ClInclude Include="src\core\include\core_process.h" />
     <ClInclude Include="src\core\include\core_string.h" />
-    <ClInclude Include="src\core\include\core_types.h" />
+    <ClInclude Include="src\core\include\int_types.h" />
     <ClInclude Include="src\core\include\date_and_time.h" />
     <ClInclude Include="src\core\include\debug.h" />
     <ClInclude Include="src\core\include\defer.h" />

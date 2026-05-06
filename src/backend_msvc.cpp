@@ -132,12 +132,12 @@ static bool8 MSVC_CompileSourceFile(
 
 	Array<const char *> finalArgs = cmdArchetype.baseArgs;
 
-	const char *intermediateFile = tprintf( "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoExtension );
+	const char *intermediateFile = temp_printf( "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoExtension );
 
 	// Fill up remaining arguments
 
 	// Output Flag/File
-	finalArgs.add( tprintf( "%s%s", cmdArchetype.outputFlag, intermediateFile ) );
+	finalArgs.add( temp_printf( "%s%s", cmdArchetype.outputFlag, intermediateFile ) );
 
 	// Source File
 	finalArgs.add( sourceFile );
@@ -247,20 +247,20 @@ static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t *backend, const Array
 		args.add( "/NODEFAULTLIB" );
 	}
 
-	args.add( tprintf( "/OUT:%s", fullBinaryName ) );
+	args.add( temp_printf( "/OUT:%s", fullBinaryName ) );
 
 	args.add_range( &intermediateFiles );
 
 	For ( u32, libPathIndex, 0, msvcState->microsoftCoreLibPaths.size() ) {
-		args.add( tprintf( "/LIBPATH:%s", msvcState->microsoftCoreLibPaths[libPathIndex].c_str() ) );
+		args.add( temp_printf( "/LIBPATH:%s", msvcState->microsoftCoreLibPaths[libPathIndex].c_str() ) );
 	}
 
 	For ( u32, libPathIndex, 0, config->additionalLibPaths.size() ) {
-		args.add( tprintf( "/LIBPATH:%s", config->additionalLibPaths[libPathIndex].c_str() ) );
+		args.add( temp_printf( "/LIBPATH:%s", config->additionalLibPaths[libPathIndex].c_str() ) );
 	}
 
 	For ( u32, libIndex, 0, config->additionalLibs.size() ) {
-		args.add( tprintf( "%s%s", config->additionalLibs[libIndex].c_str(), GetFileExtensionFromBinaryType( BINARY_TYPE_STATIC_LIBRARY ) ) );
+		args.add( temp_printf( "%s%s", config->additionalLibs[libIndex].c_str(), GetFileExtensionFromBinaryType( BINARY_TYPE_STATIC_LIBRARY ) ) );
 	}
 
 	For ( u32, libIndex, 0, config->additionalLinkerArguments.size() ) {
@@ -305,7 +305,7 @@ static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t *backe
 
 	// Language Version
 	if ( config->languageVersion != LANGUAGE_VERSION_UNSET ) {
-		baseArgs.add( tprintf( "/std:%s", LanguageVersionToString( config->languageVersion ) ) );
+		baseArgs.add( temp_printf( "/std:%s", LanguageVersionToString( config->languageVersion ) ) );
 	}
 
 	// Symbols Flag
@@ -328,17 +328,17 @@ static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t *backe
 
 	// Defines
 	For ( u32, defineIndex, 0, definesCount ) {
-		baseArgs.add( tprintf( "/D%s", config->defines[defineIndex].c_str() ) );
+		baseArgs.add( temp_printf( "/D%s", config->defines[defineIndex].c_str() ) );
 	}
 
 	// Microsoft Core Includes
 	For ( u32, includeIndex, 0, microsoftCoreIncludesCount ) {
-		baseArgs.add( tprintf( "/I%s", msvcState->microsoftCoreIncludes[includeIndex].c_str() ) );
+		baseArgs.add( temp_printf( "/I%s", msvcState->microsoftCoreIncludes[includeIndex].c_str() ) );
 	}
 
 	// Additional Includes
 	For ( u32, includeIndex, 0, additionalIncludesCount ) {
-		baseArgs.add( tprintf( "/I%s", config->additionalIncludes[includeIndex].c_str() ) );
+		baseArgs.add( temp_printf( "/I%s", config->additionalIncludes[includeIndex].c_str() ) );
 	}
 
 	// Warning As Error
@@ -361,7 +361,7 @@ static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t *backe
 		// MSVC only allows one warning level to be set
 		if ( config->warningLevels.size() > 1 ) {
 			StringBuilder builder;
-			string_builder_reset( &builder );
+			string_builder_init( &builder );
 
 			string_builder_appendf( &builder, "MSVC only allows ONE of the following warning levels to be set:\n" );
 

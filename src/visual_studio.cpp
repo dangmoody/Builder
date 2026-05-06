@@ -28,10 +28,11 @@ SOFTWARE.
 
 #include "builder_local.h"
 
-#include "core/include/core_types.h"
+#include "core/include/int_types.h"
+#include "core/include/linear_allocator.h"
 #include "core/include/string_builder.h"
-#include "core/include/string_helpers.h"
-#include "core/include/array.inl"
+#include "core/include/core_string.h"
+#include "core/include/core_array.inl"
 #include "core/include/file.h"
 #include "core/include/paths.h"
 #include "core/include/typecast.inl"
@@ -39,6 +40,8 @@ SOFTWARE.
 #include "core/include/hash.h"
 #include "core/include/hashmap.h"
 #include "core/include/debug.h"
+#include "core/include/core_helpers.h"
+#include "core/include/defer.h"
 
 #if defined( _WIN32 )
 #include <Shlwapi.h>
@@ -80,7 +83,7 @@ static void VisualStudio_OnFoundSourceFile( const FileInfo *fileInfo, void *user
 			}
 
 			visualStudioFileFilter_t filterFile = {
-				.filenameAndPathFromRoot	= tprintf( "%s%c%s", folderInFilter, PATH_SEPARATOR, fileInfo->filename ),
+				.filenameAndPathFromRoot	= temp_printf( "%s%c%s", folderInFilter, PATH_SEPARATOR, fileInfo->filename ),
 				.folderInFilter				= folderInFilter,
 			};
 
@@ -99,7 +102,7 @@ static const char *CreateVisualStudioGuid() {
 	HRESULT hr = CoCreateGuid( &guid );
 	assert( hr == S_OK );
 
-	return tprintf( "%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X", guid.Data1, guid.Data2, guid.Data3, guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3], guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7] );
+	return temp_printf( "%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X", guid.Data1, guid.Data2, guid.Data3, guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3], guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7] );
 #elif defined( __linux__ )
 	const u64 guidStringLength = 37;
 	char *guidString = cast( char *, mem_temp_alloc( guidStringLength * sizeof( char ) ) );
@@ -121,7 +124,8 @@ static void VS_DeleteOldProjectFilesCallback( const FileInfo *fileInfo, void *us
 	visualStudioNukeContext_t *nukeContext = cast( visualStudioNukeContext_t *, userData );
 
 	if ( fileInfo->is_directory && string_equals( fileInfo->filename, ".vs" ) ) {
-		nukeContext->dotVSFolder = fileInfo->full_filename;
+		// nukeContext->dotVSFolder = fileInfo->full_filename;
+		string_copy_from_c_string( &nukeContext->dotVSFolder, fileInfo->full_filename );
 	}
 
 	For ( u32, fileExtensionIndex, 0, nukeContext->fileExtensionsToCheck.count ) {
@@ -149,7 +153,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 	Array<char *> projectFolders;
 
 	Hashmap *projectFolderIndices = hashmap_create( 1 );
-	defer( hashmap_destroy( projectFolderIndices ) );
+	defer { hashmap_destroy( projectFolderIndices ); };
 
 	struct guidParentMapping_t {
 		u64	guidIndex;
@@ -201,8 +205,11 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 			}
 
 			if ( !foundDefaultPlatformName ) {
+				// u64 pos = mem_temp_tell();
+				// defer { mem_temp_rewind_to( pos ); };
+
 				StringBuilder error = {};
-				string_builder_reset( &error );
+				string_builder_init( &error, g_temp_storage );
 				string_builder_appendf( &error, "None of your platform names are any of the Visual Studio recognized defaults:\n" );
 				For ( u64, platformIndex, 0, count_of( defaultPlatformNames ) ) {
 					string_builder_appendf( &error, "\t- %s\n", defaultPlatformNames[platformIndex] );
@@ -218,7 +225,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 	const char *visualStudioProjectFilesPath = NULL;
 	if ( !options->solution.path.empty() ) {
-		visualStudioProjectFilesPath = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, options->solution.path.c_str() );
+		visualStudioProjectFilesPath = temp_printf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, options->solution.path.c_str() );
 	} else {
 		visualStudioProjectFilesPath = context->inputFilePath.data;
 	}
@@ -233,14 +240,14 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 		nukeContext.fileExtensionsToCheck.add( ".vcxproj.user" );
 		nukeContext.fileExtensionsToCheck.add( ".vcxproj.filters" );
 
-		file_get_all_files_in_folder( visualStudioProjectFilesPath, false, true, VS_DeleteOldProjectFilesCallback, &nukeContext );
+		file_get_all_files_in_folder( visualStudioProjectFilesPath, FILE_VISIT_FILES | FILE_VISIT_FOLDERS, VS_DeleteOldProjectFilesCallback, &nukeContext );
 
 		if ( nukeContext.dotVSFolder.data ) {
 			NukeFolder( nukeContext.dotVSFolder.data, true, g_verbose );
 		}
 	}
 
-	const char *solutionFilename = tprintf( "%s%c%s.sln", visualStudioProjectFilesPath, PATH_SEPARATOR, options->solution.name.c_str() );
+	const char *solutionFilename = temp_printf( "%s%c%s.sln", visualStudioProjectFilesPath, PATH_SEPARATOR, options->solution.name.c_str() );
 
 	// get relative path from visual studio to the input file
 	char *pathFromSolutionToInputFile = cast( char *, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
@@ -257,7 +264,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 	}
 
 	if ( !folder_create_if_it_doesnt_exist( visualStudioProjectFilesPath ) ) {
-		errorCode_t errorCode = get_last_error_code();
+		s32 errorCode = get_last_error_code();
 		error( "Failed to create the Visual Studio Solution folder.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
 
 		return false;
@@ -328,9 +335,12 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 			// if the user didnt specify any file extensions for their files then use the defaults
 			if ( project->fileExtensions.size() == 0 ) {
+				u64 pos = linear_allocator_tell( g_temp_storage );
+				defer { linear_allocator_rewind_to( g_temp_storage, pos ); };
+
 				StringBuilder sb = {};
-				string_builder_reset( &sb );
-				defer( string_builder_destroy( &sb ) );
+				string_builder_init( &sb, g_temp_storage );
+				// defer { string_builder_destroy( &sb ); };
 				string_builder_appendf( &sb, "No file extensions were provided for project \"%s\".  The following defaults will be used for generation:\n", project->name.c_str() );
 				string_builder_appendf( &sb, "%s", defaultFileExtensions[0].c_str() );
 				For ( u32, fileExtensionIndex, 1, defaultFileExtensions.size() ) {
@@ -467,7 +477,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 					.rootFolder = context->inputFilePath.data,
 				};
 
-				const char *searchPath = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, codeFolder );
+				const char *searchPath = temp_printf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, codeFolder );
 
 				if ( !folder_exists( searchPath ) ) {
 					error(
@@ -478,7 +488,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 					return false;
 				}
 
-				if ( !file_get_all_files_in_folder( searchPath, true, false, VisualStudio_OnFoundSourceFile, &visitorData ) ) {
+				if ( !file_get_all_files_in_folder( searchPath, FILE_VISIT_FILES | FILE_VISIT_RECURSIVE, VisualStudio_OnFoundSourceFile, &visitorData ) ) {
 					error( "Failed to get all files in \"%s\" (including subdirectories).\n", searchPath );
 					return false;
 				}
@@ -536,13 +546,13 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 		// .vcxproj
 		{
-			const char *projectPath = tprintf( "%s%c%s.vcxproj", visualStudioProjectFilesPath, PATH_SEPARATOR, projectNameNoFolder );
+			const char *projectPath = temp_printf( "%s%c%s.vcxproj", visualStudioProjectFilesPath, PATH_SEPARATOR, projectNameNoFolder );
 
 			printf( "Generating %s ... ", projectPath );
 
 			StringBuilder vcxprojContent = {};
-			string_builder_reset( &vcxprojContent );
-			defer( string_builder_destroy( &vcxprojContent ) );
+			string_builder_init( &vcxprojContent, g_temp_storage );
+			// defer { string_builder_destroy( &vcxprojContent ); };
 
 			string_builder_appendf( &vcxprojContent, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
 			string_builder_appendf( &vcxprojContent, "<Project DefaultTargets=\"Build\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n" );
@@ -576,16 +586,16 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 				string_builder_appendf( &vcxprojContent, "\t</PropertyGroup>\n" );
 			}
 
-			string_builder_appendf( &vcxprojContent, tprintf( "\t<Import Project=\"$(VCTargetsPath)%cMicrosoft.Cpp.Default.props\" Condition=\"'$(OS)' == 'Windows_NT'\" />\n", PATH_SEPARATOR ) );
+			string_builder_appendf( &vcxprojContent, temp_printf( "\t<Import Project=\"$(VCTargetsPath)%cMicrosoft.Cpp.Default.props\" Condition=\"'$(OS)' == 'Windows_NT'\" />\n", PATH_SEPARATOR ) );
 
 			// for each config and platform, define config type, toolset, out dir, and intermediate dir
 			For ( u64, configIndex, 0, project->configs.size() ) {
 				VisualStudioConfig *config = &project->configs[configIndex];
 
-				const char *fullBinaryName = BuildConfig_GetFullBinaryName( &config->options );
+				const char *fullBinaryName = BuildConfig_GetFullBinaryName( &config->options, g_temp_storage );
 
 				const char *from = visualStudioProjectFilesPath;
-				const char *to = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, fullBinaryName );
+				const char *to = temp_printf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, fullBinaryName );
 				//to = path_canonicalise( to );
 
 				char *pathFromSolutionToBinary = cast( char *, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
@@ -610,7 +620,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 				}
 			}
 
-			string_builder_appendf( &vcxprojContent, tprintf( "\t<Import Project=\"$(VCTargetsPath)%cMicrosoft.Cpp.props\" Condition=\"'$(OS)' == 'Windows_NT'\" />\n", PATH_SEPARATOR ) );
+			string_builder_appendf( &vcxprojContent, temp_printf( "\t<Import Project=\"$(VCTargetsPath)%cMicrosoft.Cpp.props\" Condition=\"'$(OS)' == 'Windows_NT'\" />\n", PATH_SEPARATOR ) );
 
 			// not sure what this is or why we need this one but visual studio seems to want it
 			string_builder_appendf( &vcxprojContent, "\t<ImportGroup Label=\"ExtensionSettings\">\n" );
@@ -624,7 +634,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 					const char *platform = options->solution.platforms[platformIndex].c_str();
 
 					string_builder_appendf( &vcxprojContent, "\t<ImportGroup Label=\"PropertySheets\" Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">\n", config->name.c_str(), platform );
-					string_builder_appendf( &vcxprojContent, tprintf( "\t\t<Import Project=\"$(UserRootDir)%cMicrosoft.Cpp.$(Platform).user.props\" Condition=\"exists(\'$(UserRootDir)%cMicrosoft.Cpp.$(Platform).user.props\')\" Label=\"LocalAppDataPlatform\" />\n", PATH_SEPARATOR, PATH_SEPARATOR ) );
+					string_builder_appendf( &vcxprojContent, temp_printf( "\t\t<Import Project=\"$(UserRootDir)%cMicrosoft.Cpp.$(Platform).user.props\" Condition=\"exists(\'$(UserRootDir)%cMicrosoft.Cpp.$(Platform).user.props\')\" Label=\"LocalAppDataPlatform\" />\n", PATH_SEPARATOR, PATH_SEPARATOR ) );
 					string_builder_appendf( &vcxprojContent, "\t</ImportGroup>\n" );
 				}
 			}
@@ -682,7 +692,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 					const char *fullConfigName = config->options.name.c_str();
 
 					const char *inputFileNoPath = path_remove_path_from_file( context->inputFile );
-					const char *inputFileRelative = tprintf( "%s%c%s", pathFromSolutionToInputFile, PATH_SEPARATOR, inputFileNoPath );
+					const char *inputFileRelative = temp_printf( "%s%c%s", pathFromSolutionToInputFile, PATH_SEPARATOR, inputFileNoPath );
 
 					const char *appPath = path_remove_file_from_path( path_app_path() );
 
@@ -706,7 +716,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 					// preprocessor definitions
 					string_builder_appendf( &vcxprojContent, "\t\t<NMakePreprocessorDefinitions>" );
 					For ( u64, definitionIndex, 0, config->options.defines.size() ) {
-						string_builder_appendf( &vcxprojContent, tprintf( "%s;", config->options.defines[definitionIndex].c_str() ) );
+						string_builder_appendf( &vcxprojContent, temp_printf( "%s;", config->options.defines[definitionIndex].c_str() ) );
 					}
 					string_builder_appendf( &vcxprojContent, "$(NMakePreprocessorDefinitions)" );
 					string_builder_appendf( &vcxprojContent, "</NMakePreprocessorDefinitions>\n" );
@@ -742,7 +752,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 				WriteFilterFilesToVcxproj( &vcxprojContent, otherFiles, "None" );
 			}
 
-			string_builder_appendf( &vcxprojContent, tprintf( "\t<Import Project=\"$(VCTargetsPath)%cMicrosoft.Cpp.targets\" Condition=\"'$(OS)' == 'Windows_NT'\" />\n", PATH_SEPARATOR ) );
+			string_builder_appendf( &vcxprojContent, temp_printf( "\t<Import Project=\"$(VCTargetsPath)%cMicrosoft.Cpp.targets\" Condition=\"'$(OS)' == 'Windows_NT'\" />\n", PATH_SEPARATOR ) );
 
 			// not sure what this is or why we need this one but visual studio seems to want it
 			string_builder_appendf( &vcxprojContent, "\t<ImportGroup Label=\"ExtensionTargets\">\n" );
@@ -759,13 +769,13 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 		// .vcxproj.user
 		{
-			const char *projectPath = tprintf( "%s%c%s.vcxproj.user", visualStudioProjectFilesPath, PATH_SEPARATOR, projectNameNoFolder );
+			const char *projectPath = temp_printf( "%s%c%s.vcxproj.user", visualStudioProjectFilesPath, PATH_SEPARATOR, projectNameNoFolder );
 
 			printf( "Generating %s ... ", projectPath );
 
 			StringBuilder vcxprojContent = {};
-			string_builder_reset( &vcxprojContent );
-			defer( string_builder_destroy( &vcxprojContent ) );
+			string_builder_init( &vcxprojContent, g_temp_storage );
+			// defer { string_builder_destroy( &vcxprojContent ); };
 
 			string_builder_appendf( &vcxprojContent, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
 			string_builder_appendf( &vcxprojContent, "<Project ToolsVersion=\"Current\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n" );
@@ -779,10 +789,10 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 				For ( u64, configIndex, 0, project->configs.size() ) {
 					VisualStudioConfig *config = &project->configs[configIndex];
 
-					const char *fullBinaryName = BuildConfig_GetFullBinaryName( &config->options );
+					const char *fullBinaryName = BuildConfig_GetFullBinaryName( &config->options, g_temp_storage );
 
 					const char *from = visualStudioProjectFilesPath;
-					const char *to = tprintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, fullBinaryName );
+					const char *to = temp_printf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, fullBinaryName );
 					//to = path_canonicalise( to );
 
 					char *pathFromSolutionToBinary = cast( char *, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
@@ -824,13 +834,13 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 		// .vcxproj.filter
 		{
-			const char *projectPath = tprintf( "%s%c%s.vcxproj.filters", visualStudioProjectFilesPath, PATH_SEPARATOR, projectNameNoFolder );
+			const char *projectPath = temp_printf( "%s%c%s.vcxproj.filters", visualStudioProjectFilesPath, PATH_SEPARATOR, projectNameNoFolder );
 
 			printf( "Generating %s ... ", projectPath );
 
 			StringBuilder vcxprojContent = {};
-			string_builder_reset( &vcxprojContent );
-			defer( string_builder_destroy( &vcxprojContent ) );
+			string_builder_init( &vcxprojContent, g_temp_storage );
+			// defer { string_builder_destroy( &vcxprojContent ); };
 
 			string_builder_appendf( &vcxprojContent, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
 			string_builder_appendf( &vcxprojContent, "<Project ToolsVersion=\"4.0\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n" );
@@ -896,8 +906,8 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 		printf( "Generating %s ... ", solutionFilename );
 
 		StringBuilder slnContent = {};
-		string_builder_reset( &slnContent );
-		defer( string_builder_destroy( &slnContent ) );
+		string_builder_init( &slnContent, g_temp_storage );
+		// defer { string_builder_destroy( &slnContent ); };
 
 		string_builder_appendf( &slnContent, "\n" );
 		string_builder_appendf( &slnContent, "Microsoft Visual Studio Solution File, Format Version 12.00\n" );
@@ -938,7 +948,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 					For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
 						const char *platform = options->solution.platforms[platformIndex].c_str();
 
-						string_builder_appendf( &slnContent, tprintf( "\t\t%s|%s = %s|%s\n", config->name.c_str(), platform, config->name.c_str(), platform ) );
+						string_builder_appendf( &slnContent, temp_printf( "\t\t%s|%s = %s|%s\n", config->name.c_str(), platform, config->name.c_str(), platform ) );
 					}
 				}
 			}

@@ -30,6 +30,8 @@ SOFTWARE.
 
 #include <timer.h>
 
+#include <typecast.inl>
+
 #include <time.h>
 
 /*
@@ -40,7 +42,7 @@ SOFTWARE.
 ================================================================================================
 */
 
-// TODO(DM): how do we get clock cycles on linux?
+// TODO: DM: how do we get clock cycles on linux?
 // this isnt it!
 s64 time_cycles( void ) {
 	struct timespec now;
@@ -50,9 +52,6 @@ s64 time_cycles( void ) {
 
 	return clocks;
 }
-
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wimplicit-int-float-conversion"
 
 float64 time_seconds( void ) {
 	return cast( float64, time_cycles() / 1000000000.0 );
@@ -69,7 +68,5 @@ float64 time_us( void ) {
 float64 time_ns( void ) {
 	return cast( float64, time_cycles() );
 }
-
-#pragma clang diagnostic pop
 
 #endif // __linux__

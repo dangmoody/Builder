@@ -28,9 +28,16 @@ SOFTWARE.
 
 #pragma once
 
-#include "core_types.h"
-#include "array.h"
+#include "int_types.h"
 #include "dll_export.h"
+
+struct LinearAllocator;
+template<typename T> struct Array;
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
+#endif
 
 struct Process;
 
@@ -41,10 +48,16 @@ enum ProcessFlagBits {
 typedef u32 ProcessFlags;
 
 
-CORE_API Process*	process_create( Array<const char*>* args, Array<const char*>* environment_variables, const ProcessFlags flags );
+CORE_API Process	*process_create( LinearAllocator *allocator, Array<const char *> *args, Array<const char *> *environment_variables = NULL, const ProcessFlags flags = 0 );
 
-CORE_API void		process_destroy( Process* process );
+CORE_API bool8		process_destroy( Process *process );
 
-CORE_API s32		process_join( Process* process );
+CORE_API s32		process_join( Process *process );
 
-CORE_API u32		process_read_stdout( Process* process, char* out_buffer, const u32 count );
+CORE_API u32		process_read_stdout( Process *process, char *out_buffer, const u64 count );
+
+CORE_API u32		process_read_stderr( Process *process, char *out_buffer, const u64 count );
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

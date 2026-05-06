@@ -28,8 +28,10 @@ SOFTWARE.
 
 #pragma once
 
-#include "core_types.h"
+#include "int_types.h"
 #include "dll_export.h"
+
+struct LinearAllocator;
 
 /*
 ================================================================================================
@@ -43,42 +45,56 @@ SOFTWARE.
 */
 
 #ifdef _WIN32
-	#define PATH_SEPARATOR '\\'
+	#define PATH_SEPARATOR	'\\'
 #else
-	#define PATH_SEPARATOR '/'
+	#define PATH_SEPARATOR	'/'
 #endif
 
 // Returns the absolute path of where the current program is running from.
-CORE_API const char*	path_app_path();
+CORE_API const char			*path_app_path();
 
 // Returns the path that your program is currently running from.
-CORE_API const char*	path_current_working_directory();
+CORE_API const char			*path_current_working_directory();
 
-// Returns the absolute path of 'path'.
-CORE_API const char*	path_absolute_path( const char *path );
+// Returns the absolute path of 'file'.
+CORE_API const char			*path_absolute_path( const char *path );
 
 // Given a file path that also includes a filename, will remove the filename part, leaving just the path.
-CORE_API const char*	path_remove_file_from_path( const char* path );
+CORE_API const char			*path_remove_file_from_path( const char *path );
 
 // Given a file path that also includes a filename, will remove the path part, leaving just the filename.
-CORE_API const char*	path_remove_path_from_file( const char* path );
+CORE_API const char			*path_remove_path_from_file( const char *path );
 
 // Returns the name of a file without its file extension, if there is one.
-CORE_API const char*	path_remove_file_extension( const char* filename );
+CORE_API const char			*path_remove_file_extension( const char *filename );
 
 // On Windows:   Returns true if the path starts with a letter followed by a colon (for example: "C:"), otherwise returns false.
 // On Mac/Linux: Returns true if the path starts with two backslashes or a single forward slash, otherwise returns false.
-CORE_API bool8			path_is_absolute( const char* path );
+CORE_API bool8				path_is_absolute( const char *path );
 
-CORE_API const char*	path_canonicalise( const char* path );
+CORE_API const char			*path_canonicalize( const char *path );
 
 // Make sure that any slashes found in 'path' are what the OS expects them to be.
-CORE_API const char*	path_fix_slashes( const char* path );
+CORE_API const char			*path_fix_slashes( const char *path );
 
-CORE_API char*			path_relative_path_to( const char* pathFrom, const char* pathTo );
+CORE_API char				*path_relative_path_to( const char *path_from, const char *path_to );
 
-CORE_API bool8			path_set_current_directory( const char* path );
+CORE_API bool8				path_set_current_directory( const char *path );
 
-// Takes a potentially-infinite number of strings and separates each one with a slash (back slash on Windows, forward slash on all other platforms).
-// template<class... Args>
-// CORE_API const char*	path_join( const char* first, const Args*... args );
+// DO NOT CALL THIS DIRECTLY.
+// CALL path_join INSTEAD.
+CORE_API const char			*path_join_internal( LinearAllocator *allocator, const int count, ... );
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wc++98-compat"
+#pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
+
+template<typename ...Args>
+inline int path_va_args_count( Args&&... ) {
+	return sizeof...( Args );
+}
+
+// Takes a variable number of strings and separates each one with a slash (back slash on Windows, forward slash on all other platforms).
+#define path_join( allocator, ... )	path_join_internal( allocator, path_va_args_count( __VA_ARGS__ ), __VA_ARGS__ )
+
+#pragma clang diagnostic pop

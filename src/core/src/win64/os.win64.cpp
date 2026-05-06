@@ -1,0 +1,59 @@
+/*
+===========================================================================
+
+Core
+
+Copyright (c) 2025 Dan Moody
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+===========================================================================
+*/
+
+#ifdef _WIN32
+
+#include <os.h>
+
+#include <Windows.h>
+
+/*
+================================================================================================
+
+	OS helpers
+
+	TODO: DM: 29/12/2025: calling GetSystemInfo() every time like this is obviously bad
+	but having core cache state at startup caused problems before
+	so I'm gun-shy about doing that again
+
+================================================================================================
+*/
+
+u32 os_get_virtual_memory_page_size() {
+	SYSTEM_INFO sys_info = {};
+	GetSystemInfo( &sys_info );
+	return sys_info.dwPageSize;
+}
+
+u32 os_get_num_cpu_cores() {
+	SYSTEM_INFO sys_info = {};
+	GetSystemInfo( &sys_info );
+	return sys_info.dwNumberOfProcessors;
+}
+
+#endif // _WIN32

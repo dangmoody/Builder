@@ -136,7 +136,7 @@ bool8 Win_GetWindowsSDK( windowsSDK_t *outSDK ) {
 	outSDK->rootFolder = windowsSDKRoot;
 
 	// get the latest version of the windows sdk
-	const char *windowsSDKFolder = tprintf( "%sLib", windowsSDKRoot );
+	const char *windowsSDKFolder = temp_printf( "%sLib", windowsSDKRoot );
 
 	Array<windowsSDKVersion_t> versions;
 
@@ -158,11 +158,11 @@ bool8 Win_GetWindowsSDK( windowsSDK_t *outSDK ) {
 		missingFolders.reserve( 5 );
 
 		// TODO(DM): 21/04/2026: rewind temp storage after we are done with this?
-		const char *ucrtIncludeFolder = tprintf( "%sinclude\\%d.%d.%d.%d\\ucrt", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
-		const char *umIncludeFolder = tprintf( "%sinclude\\%d.%d.%d.%d\\um", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
-		const char *sharedIncludeFolder = tprintf( "%sinclude\\%d.%d.%d.%d\\shared", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
-		const char *ucrtLibFolder = tprintf( "%sLib\\%d.%d.%d.%d\\ucrt\\x64", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
-		const char *umLibFolder = tprintf( "%sLib\\%d.%d.%d.%d\\um\\x64", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
+		const char *ucrtIncludeFolder = temp_printf( "%sinclude\\%d.%d.%d.%d\\ucrt", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
+		const char *umIncludeFolder = temp_printf( "%sinclude\\%d.%d.%d.%d\\um", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
+		const char *sharedIncludeFolder = temp_printf( "%sinclude\\%d.%d.%d.%d\\shared", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
+		const char *ucrtLibFolder = temp_printf( "%sLib\\%d.%d.%d.%d\\ucrt\\x64", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
+		const char *umLibFolder = temp_printf( "%sLib\\%d.%d.%d.%d\\um\\x64", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
 
 		if ( !folder_exists( ucrtIncludeFolder ) ) {
 			missingFolders.add( ucrtIncludeFolder );
@@ -187,7 +187,7 @@ bool8 Win_GetWindowsSDK( windowsSDK_t *outSDK ) {
 		if ( missingFolders.count > 0 ) {
 			StringBuilder sb = {};
 			defer( string_builder_destroy( &sb ) );
-			string_builder_reset( &sb );
+			string_builder_init( &sb );
 			string_builder_appendf( &sb, "Version %d.%d.%d.%d of your Windows SDK installation is malformed because the following folders could not be found:\n", version->v0, version->v1, version->v2, version->v3 );
 			For ( u32, missingFolderIndex, 0, missingFolders.count ) {
 				string_builder_appendf( &sb, " - %s\n", missingFolders[missingFolderIndex] );
@@ -217,7 +217,7 @@ bool8 Win_GetWindowsSDK( windowsSDK_t *outSDK ) {
 		return false;
 	}
 
-	const char *versionStr = tprintf( "%d.%d.%d.%d", outSDK->version.v0, outSDK->version.v1, outSDK->version.v2, outSDK->version.v3 );
+	const char *versionStr = temp_printf( "%d.%d.%d.%d", outSDK->version.v0, outSDK->version.v1, outSDK->version.v2, outSDK->version.v3 );
 
 	string_printf( &outSDK->ucrtInclude,   "%sinclude\\%s\\ucrt",   windowsSDKRoot, versionStr );
 	string_printf( &outSDK->umInclude,     "%sinclude\\%s\\um",     windowsSDKRoot, versionStr );
@@ -388,7 +388,7 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 			visualStudioInstallationPath[utf8Length] = 0;
 		}
 
-		msvcRootFolder = tprintf( "%s\\VC\\Tools\\MSVC", visualStudioInstallationPath );
+		msvcRootFolder = temp_printf( "%s\\VC\\Tools\\MSVC", visualStudioInstallationPath );
 
 		foundMSVCInstallData_t data = {
 			.rootFolder	= msvcRootFolder,
@@ -428,7 +428,7 @@ bool8 Win_GetMSVCInstall( msvcInstall_t *outInstall ) {
 		if ( missingFolders.count > 0 ) {
 			StringBuilder sb = {};
 			defer( string_builder_destroy( &sb ) );
-			string_builder_reset( &sb );
+			string_builder_init( &sb );
 			string_builder_appendf( &sb, "Version %d.%d.%d of your MSVC installation is malformed because the following folders could not be found:\n", install->version.v0, install->version.v1, install->version.v2 );
 			For ( u32, missingFolderIndex, 0, missingFolders.count ) {
 				string_builder_appendf( &sb, " - %s\n", missingFolders[missingFolderIndex] );

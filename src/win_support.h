@@ -2,7 +2,7 @@
 
 #ifdef _WIN32
 
-#include "core/include/core_types.h"
+#include "core/include/int_types.h"
 #include "core/include/core_string.h"
 
 struct windowsSDKVersion_t {

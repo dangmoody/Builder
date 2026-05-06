@@ -27,29 +27,24 @@ SOFTWARE.
 */
 
 #include <core_string.h>
-
-#include <allocation_context.h>
 #include <debug.h>
 #include <typecast.inl>
+#include <temp_storage.h>
+#include <defer.h>
+#include <core_helpers.h>
+
+#include <linear_allocator.h>
 
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
 
-static void string_reserve_internal( String* dst, const u64 length ) {
-	if ( length > dst->count ) {
-		dst->allocator = ( dst->allocator == NULL ) ? mem_get_current_allocator() : dst->allocator;
-
-		mem_push_allocator( dst->allocator );
-		defer( mem_pop_allocator() );
-
-		dst->original_data = cast( char*, mem_realloc( dst->data, length * sizeof( char ) ) );
-		dst->data = dst->original_data;
+static void string_realloc_internal( String *out_str, const u64 length ) {
+	if ( length > out_str->count ) {
+		char *new_data = cast( char *, linear_allocator_alloc( out_str->allocator, length * sizeof( char ) ) );
+		memcpy( new_data, out_str->data, out_str->count * sizeof( char ) );
+		out_str->data = new_data;
 	}
-}
-
-static void string_copy_internal( String* dst, const String* src ) {
-	string_copy_from_c_string( dst, src->data, src->count );
 }
 
 /*
@@ -60,80 +55,123 @@ static void string_copy_internal( String* dst, const String* src ) {
 ================================================================================================
 */
 
-String::String( const char* str ) {
-	string_copy_from_c_string( this, str, strlen( str ) );
+void string_init( String *out_str, LinearAllocator *allocator ) {
+	out_str->allocator = allocator;
+	out_str->data = NULL;
+	out_str->count = 0;
 }
 
-String::String( const String& str ) {
-	string_copy_internal( this, &str );
+void string_zero( String *out_str ) {
+	out_str->allocator = NULL;
+	out_str->data = NULL;
+	out_str->count = 0;
 }
 
-String::~String() {
-	if ( original_data ) {
-		assert( allocator != nullptr );
+void string_printf( String *out_str, const char *fmt, ... ) {
+	assert( out_str );
+	assert( fmt );
 
-		mem_push_allocator( allocator );
+	va_list args;
+	va_start( args, fmt );
+	defer { va_end( args ); };
 
-		mem_free( original_data );
-		original_data = NULL;
+	u64 length = cast( u64, vsnprintf( NULL, 0, fmt, args ) );
 
-		mem_pop_allocator();
-	}
+	string_realloc_internal( out_str, length + 1 );
+	vsnprintf( out_str->data, length, fmt, args );
+	out_str->data[length] = 0;
 }
 
-String& String::operator=( const char* str ) {
-	string_copy_from_c_string( this, str, strlen( str ) );
-	return *this;
+void string_copy( String *dst, String *src ) {
+	string_copy_from_c_string( dst, src->data, src->count );
 }
 
-String& String::operator=( const String& str ) {
-	string_copy_internal( this, &str );
-	return *this;
+void string_copy_from_c_string( String *out_str, const char *c_str ) {
+	string_copy_from_c_string( out_str, c_str, strlen( c_str ) );
 }
 
-char String::operator[]( const u64 index ) {
-	assert( index < count );
-	return data[index];
+void string_copy_from_c_string( String *out_str, const char *c_str, const u64 length ) {
+	string_realloc_internal( out_str, length + 1 );
+	memcpy( out_str->data, c_str, length );
+	out_str->data[length] = 0;
+	out_str->count = length;
 }
 
-char String::operator[]( const u64 index ) const {
-	assert( index < count );
-	return data[index];
-}
-
-//================================================================
-
-bool8 string_equals( const String* lhs, const String* rhs ) {
+bool8 string_equals( const char *lhs, const char *rhs ) {
 	assert( lhs );
 	assert( rhs );
 
-	return strcmp( lhs->data, rhs->data ) == 0;
+	u64 lhs_len = strlen( lhs );
+	return lhs_len == strlen( rhs ) && strncmp( lhs, rhs, lhs_len ) == 0;
 }
 
-void string_copy_from_c_string( String* dst, const char* src, const u64 length ) {
-	string_reserve_internal( dst, length + 1 );
+bool8 string_starts_with( const char *str, const char *prefix ) {
+	assert( str );
+	assert( prefix );
 
-	dst->count = length;
-
-	memcpy( dst->original_data, src, length );
-	dst->original_data[length] = 0;
-
-	dst->data = dst->original_data;
+	return strncmp( str, prefix, strlen( prefix ) ) == 0;
 }
 
-void string_printf( String* dst, const char* fmt, ... ) {
+bool8 string_ends_with( const char *str, const char end ) {
+	assert( str );
+
+	return str[strlen( str ) - 1] == end;
+}
+
+bool8 string_ends_with( const char *str, const char *suffix ) {
+	assert( str );
+	assert( suffix );
+
+	u64 suffix_length = strlen( suffix );
+	return strncmp( str + strlen( str ) - suffix_length, suffix, suffix_length ) == 0;
+}
+
+bool8 string_contains( const char *str, const char *substring ) {
+	assert( str );
+	assert( substring );
+
+	return strstr( str, substring ) != NULL;
+}
+
+const char *string_replace( const char *str, const char old_char, const char new_char ) {
+	char *result = temp_c_string( str );
+
+	For ( u32, i, 0, strlen( str ) ) {
+		if ( result[i] == old_char ) {
+			result[i] = new_char;
+		}
+	}
+
+	return result;
+}
+
+const char *temp_printf( const char *fmt, ... ) {
+	assert( fmt );
+
 	va_list args;
 	va_start( args, fmt );
-	defer( va_end( args ) );
 
-	u64 length = cast( u64, string_vsnprintf( NULL, 0, fmt, args ) );
+	u64 string_length = cast( u64, vsnprintf( NULL, 0, fmt, args ) );
 
-	string_reserve_internal( dst, length + 1 );
+	char *out_string = cast( char *, mem_temp_alloc( ( string_length + 1 ) * sizeof( char ) ) );
 
-	dst->count = length;
+	vsnprintf( out_string, string_length + 1, fmt, args );
+	out_string[string_length] = 0;
 
-	vsnprintf( dst->original_data, dst->count + 1, fmt, args );
-	dst->original_data[length] = 0;
+	va_end( args );
 
-	dst->data = dst->original_data;
+	return out_string;
 }
+
+char *temp_c_string( const char *from ) {
+	return temp_c_string( from, strlen( from ) );
+}
+
+char *temp_c_string( const char *from, const u64 num_chars ) {
+	char *result = cast( char *, mem_temp_alloc( ( num_chars + 1 ) * sizeof( char ) ) );
+	strncpy( result, from, num_chars * sizeof( char ) );
+	result[num_chars] = 0;
+
+	return result;
+}
+

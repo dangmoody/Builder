@@ -28,14 +28,19 @@ SOFTWARE.
 
 #pragma once
 
-#include "core_types.h"
+#include "int_types.h"
 #include "dll_export.h"
 
 struct Library {
-	void* ptr;
+	void			*ptr;
 };
 
-CORE_API Library	library_load( const char* name );
-CORE_API void		library_unload( Library* library );
+// Loads a dynamic library.
+CORE_API Library	library_load( const char *name );
 
-CORE_API void*		library_get_proc_address( const Library library, const char* func_name );
+// Attempts to unload a dynamic library and returns true if successful, otherwise returns false.
+CORE_API bool8		library_unload( Library *library );
+
+// Returns the symbol as a pointer from the dynamic library.
+// If the symbol can't be found then returns NULL.
+CORE_API void		*library_get_symbol( const Library library, const char *symbol_name );

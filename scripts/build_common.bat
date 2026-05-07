@@ -45,28 +45,24 @@ if /I [%config%] == [debug] (
 	set symbols=-g
 	set optimisation=-O0
 	set programName=builder_debug
-	set defines=-D_CRT_SECURE_NO_WARNINGS -DCORE_USE_XXHASH -DCORE_USE_SUBPROCESS -DCORE_SUC -DHASHMAP_HIDE_MISSING_KEY_WARNING^
- -DHLML_NAMESPACE -D_DEBUG -DBUILDER_PROGRAM_NAME=\"builder_debug\"
-
+	set defines=-D_CRT_SECURE_NO_WARNINGS -DHLML_NAMESPACE -D_DEBUG -DBUILDER_PROGRAM_NAME=\"builder_debug\"
 	set libraries=-luser32.lib -lShlwapi.lib -lDbgHelp.lib -lOle32.lib -lAdvapi32.lib -lOleAut32.lib -llibclang.lib -lkernel32.lib^
- -lmsvcrtd.lib -lmsvcprtd.lib -lvcruntimed.lib -lucrtd.lib
+ -lmsvcrtd.lib -lmsvcprtd.lib -lvcruntimed.lib -lucrtd.lib -lcore/core.lib
 )
 
 if /I [%config%] == [release]  (
 	set symbols=
 	set optimisation=-O3
 	set programName=builder
-	set defines=-D_CRT_SECURE_NO_WARNINGS -DCORE_USE_XXHASH -DCORE_USE_SUBPROCESS -DCORE_SUC -DHASHMAP_HIDE_MISSING_KEY_WARNING^
- -DHLML_NAMESPACE -DNDEBUG -DBUILDER_PROGRAM_NAME=\"builder\"
-
+	set defines=-D_CRT_SECURE_NO_WARNINGS -DHLML_NAMESPACE -DNDEBUG -DBUILDER_PROGRAM_NAME=\"builder\"
 	set libraries=-luser32.lib -lShlwapi.lib -lDbgHelp.lib -lOle32.lib -lAdvapi32.lib -lOleAut32.lib -llibclang.lib -lkernel32.lib^
- -lmsvcrt.lib -lmsvcprt.lib -lvcruntime.lib -lucrt.lib
+ -lmsvcrt.lib -lmsvcprt.lib -lvcruntime.lib -lucrt.lib -lcore/core.lib
 )
 
 REM Set up shared environment variables
 set includes=-Isrc\\core\\include -Iclang\\include
 
-set libPaths=-Lclang\\lib
+set libPaths=-Lclang\\lib -L3rdparty
 
 set warningLevels=-Werror -Wall -Wextra -Weverything -Wpedantic
 

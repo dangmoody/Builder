@@ -5,6 +5,8 @@
 #include "core/include/int_types.h"
 #include "core/include/core_string.h"
 
+struct LinearAllocator;
+
 struct windowsSDKVersion_t {
 	s32	v0, v1, v2, v3;
 };
@@ -22,7 +24,7 @@ struct windowsSDK_t {
 	windowsSDKVersion_t	version;
 };
 
-bool8	Win_GetWindowsSDK( windowsSDK_t *outSDK );
+bool8	Win_GetWindowsSDK( LinearAllocator *allocator, windowsSDK_t *outSDK );
 
 
 //================================================================
@@ -40,6 +42,6 @@ struct msvcInstall_t {
 	msvcVersion_t	version;
 };
 
-bool8	Win_GetMSVCInstall( msvcInstall_t *outMSVC );
+bool8	Win_GetMSVCInstall( LinearAllocator *allocator, msvcInstall_t *outMSVC );
 
 #endif // _WIN32

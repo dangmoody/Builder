@@ -32,13 +32,14 @@ SOFTWARE.
 #include "win_support.h"
 
 #include "core/include/debug.h"
-#include "core/include/string_helpers.h"
+#include "core/include/core_string.h"
 #include "core/include/paths.h"
-#include "core/include/array.inl"
+#include "core/include/core_array.inl"
 #include "core/include/string_builder.h"
 #include "core/include/core_process.h"
 #include "core/include/file.h"
 #include "core/include/temp_storage.h"
+#include "core/include/core_helpers.h"
 
 struct msvcState_t {
 	String						compilerPath;
@@ -77,11 +78,13 @@ static const char *OptimizationLevelToCompilerArg( const OptimizationLevel level
 // its ridiculous that Microsoft genuinely think this isnt a frankly retarded way of grabbing some simple information off your PC
 
 static bool8 MSVC_Init( compilerBackend_t *backend, const buildContext_t *context, const std::string &compilerPath, const std::string &compilerVersion ) {
-	msvcState_t *msvcState = cast( msvcState_t *, mem_alloc( sizeof( msvcState_t ) ) );
+	msvcState_t *msvcState = cast( msvcState_t *, linear_allocator_alloc( context->allocator, sizeof( msvcState_t ) ) );
 	new( msvcState ) msvcState_t;
 
-	msvcState->compilerPath = compilerPath.c_str();
-	msvcState->compilerVersion = compilerVersion.c_str();
+	//msvcState->compilerPath = compilerPath.c_str();
+	//msvcState->compilerVersion = compilerVersion.c_str();
+	string_copy_from_c_string( &msvcState->compilerPath, compilerPath.c_str() );
+	string_copy_from_c_string( &msvcState->compilerVersion, compilerVersion.c_str() );
 
 	backend->data = msvcState;
 
@@ -107,8 +110,9 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const buildContext_t *contex
 }
 
 static void MSVC_Shutdown( compilerBackend_t *backend ) {
-	mem_free( backend->data );
-	backend->data = NULL;
+	unused( backend );
+	//mem_free( backend->data );
+	//backend->data = NULL;
 }
 
 static bool8 MSVC_CompileSourceFile(
@@ -210,7 +214,7 @@ static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t *backend, const Array
 	assert( backend );
 	assert( config );
 
-	const char *fullBinaryName = BuildConfig_GetFullBinaryName( config );
+	const char *fullBinaryName = BuildConfig_GetFullBinaryName( config, g_temp_storage );
 
 	msvcState_t *msvcState = cast( msvcState_t *, backend->data );
 	Array<const char *> &args = msvcState->args;
@@ -361,7 +365,7 @@ static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t *backe
 		// MSVC only allows one warning level to be set
 		if ( config->warningLevels.size() > 1 ) {
 			StringBuilder builder;
-			string_builder_init( &builder );
+			string_builder_init( &builder, g_temp_storage );
 
 			string_builder_appendf( &builder, "MSVC only allows ONE of the following warning levels to be set:\n" );
 

@@ -1283,11 +1283,11 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	}
 
 #ifdef _WIN32
-	if ( !Win_GetWindowsSDK( &context.winSDK ) ) {
+	if ( !Win_GetWindowsSDK( context.allocator, &context.winSDK ) ) {
 		QUIT_ERROR();
 	}
 
-	if ( !Win_GetMSVCInstall( &context.msvcInstall ) ) {
+	if ( !Win_GetMSVCInstall( context.allocator, &context.msvcInstall ) ) {
 		QUIT_ERROR();
 	}
 

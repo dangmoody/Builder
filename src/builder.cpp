@@ -182,10 +182,10 @@ static const char *BuildConfig_ToString( const BuildConfig *config, LinearAlloca
 
 	auto OptimizationLevelToString = []( OptimizationLevel level ) -> const char * {
 		switch ( level ) {
-			case OPTIMIZATION_LEVEL_O0: return "OPTIMIZATION_LEVEL_00";
-			case OPTIMIZATION_LEVEL_O1: return "OPTIMIZATION_LEVEL_01";
-			case OPTIMIZATION_LEVEL_O2: return "OPTIMIZATION_LEVEL_02";
-			case OPTIMIZATION_LEVEL_O3: return "OPTIMIZATION_LEVEL_03";
+			case OPTIMIZATION_LEVEL_O0: return "OPTIMIZATION_LEVEL_O0";
+			case OPTIMIZATION_LEVEL_O1: return "OPTIMIZATION_LEVEL_O1";
+			case OPTIMIZATION_LEVEL_O2: return "OPTIMIZATION_LEVEL_O2";
+			case OPTIMIZATION_LEVEL_O3: return "OPTIMIZATION_LEVEL_O3";
 		}
 	};
 

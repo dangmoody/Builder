@@ -231,7 +231,7 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 				continue;
 			}
 
-			const char *full_filename = path_join( directory, entry->d_name );
+			const char *full_filename = path_join( g_temp_storage, directory, entry->d_name );
 
 			struct stat file_stat = {};
 			if ( stat( full_filename, &file_stat ) != 0 ) {

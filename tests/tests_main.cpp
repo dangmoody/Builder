@@ -204,21 +204,32 @@ TEMPER_INVOKE_PARAMETRIC_TEST( Test_GetSourceFilesMatchingPattern, {
 
 
 TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
+	printf( "Running test %s\n", test.rootDir );
+
 	TEMPER_CHECK_TRUE_M( test.rootDir, "A test MUST live in its own folder, you need to tell me what the \"root\" folder for this test is.\n" );
+
+	// Builder uses temp storage a lot internally
+	// so make our own temp storage for each test and free once were done
+	LinearAllocator *testScratch = linear_allocator_create( MEM_KILOBYTES( 64 ) );
+	defer { linear_allocator_destroy( testScratch ); };
 
 	// move ourselves to the root folder of that test
 	// run the test from that folder
 	// then come back when were done
-	const char *oldCWD = path_current_working_directory();
-	TEMPER_CHECK_TRUE_M( path_set_current_directory( test.rootDir ), "Failed to cd into the test folder \"%s\".\n", test.rootDir );
-	defer { TEMPER_CHECK_TRUE_M( path_set_current_directory( oldCWD ), "Failed to cd back out of the test folder.\n" ); };
+
+	String oldCWD;
+	string_init( &oldCWD, testScratch );
+	string_copy_from_c_string( &oldCWD, path_get_cwd() );
+
+	TEMPER_CHECK_TRUE_M( path_set_cwd( test.rootDir ), "Failed to cd into the test folder \"%s\": %s.\n", test.rootDir, strerror( errno ) );
+	defer { TEMPER_CHECK_TRUE_M( path_set_cwd( oldCWD.data ), "Failed to cd back out of the test folder: %s.\n", strerror( errno ) ); };
 
 	// get all the files that this test will generate
 	// we will want these later to check if they got successfully deleted (tests should clean up after themselves properly)
 	buildTestGeneratedFiles_t generatedFiles = {};
-	generatedFiles.fileExtensionsToDelete.init( g_temp_storage );
-	generatedFiles.files.init( g_temp_storage );
-	generatedFiles.folders.init( g_temp_storage );
+	generatedFiles.fileExtensionsToDelete.init( testScratch );
+	generatedFiles.files.init( testScratch );
+	generatedFiles.folders.init( testScratch );
 #ifdef _WIN32
 	// exes have no file extension on linux
 	// which means when we check for this "extension" on linux we actually check if the string ends with "", which always passes
@@ -264,7 +275,7 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 			// args should also be const because we never actually modify them
 			// I know how to get this done, leave this work with me
 			Array<const char *> args;
-			args.init( g_temp_storage );
+			args.init( testScratch );
 			args.add( test.buildSourceFile );
 
 			if ( test.config ) {
@@ -328,7 +339,7 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 		// now run the program we just built
 		{
 			Array<const char *> args;
-			args.init( g_temp_storage );
+			args.init( testScratch );
 			args.add( fullBinaryName );
 
 			exitCode = RunProc( &args, NULL );
@@ -356,6 +367,8 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 				TEMPER_CHECK_TRUE_M( !folder_exists( generatedFolder ), "We deleted the folder \"%s\" just now, but the OS tells us it still exists?\n", generatedFolder );
 			}
 		}
+
+		mem_reset_temp_storage();
 	}
 }
 
@@ -374,7 +387,7 @@ TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 	.rootDir			= "test_dynamic_runtime_linking",
 	.buildSourceFile	= "test_dynamic_runtime_linking.cpp",
-	.compilers			= COMPILER_DEFAULT,
+	// .compilers			= COMPILER_DEFAULT,
 } );
 
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {

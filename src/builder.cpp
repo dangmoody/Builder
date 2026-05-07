@@ -879,9 +879,10 @@ static bool8 WriteIncludeDependenciesFile( buildContext_t *context ) {
 	const char *includeDepsFilename = GetIncludeDepsFilename( context );
 
 	byteBuffer_t byteBuffer = {};
+	byteBuffer.data.init( g_temp_storage );
 
 	auto ByteBuffer_Write_U32 = []( byteBuffer_t *buffer, const u32 x ) {
-		buffer->data.reserve( buffer->data.alloced + sizeof( u32 ) );
+		buffer->data.reserve( buffer->data.count + sizeof( u32 ) );
 
 		buffer->data.add( ( x ) & 0xFF );
 		buffer->data.add( ( x >> 8 ) & 0xFF );
@@ -1144,12 +1145,17 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	float64 vsCodeJSONGenerationTimeMS = -1.0;
 	float64 zedJSONGenerationTimeMS = -1.0;
 
-	// core_init( MEM_MEGABYTES( 128 ) );	// TODO(DM): 26/03/2025: can we just use defaults for this now?
-	// defer {
-	// 	core_shutdown();
-	// };
-	mem_init_temp_storage( MEM_MEGABYTES( 128 ) );
-	defer { mem_shutdown_temp_storage(); };
+	// TODO: DM: 07/05/2026: we only do this check of ownership because the tests also need to init temp storage
+	// I feel like there's a cleaner solution to this, just not sure what
+	bool8 ownsTempStorage = g_temp_storage == NULL;
+	if ( ownsTempStorage ) {
+		mem_init_temp_storage( MEM_MEGABYTES( 128 ) );
+	}
+	defer {
+		if ( ownsTempStorage ) {
+			mem_shutdown_temp_storage();
+		}
+	};
 
 	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
@@ -1300,7 +1306,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		const char *inputFilePath = path_remove_file_from_path( context.inputFile );
 
 		if ( !inputFilePath ) {
-			inputFilePath = path_current_working_directory();
+			inputFilePath = path_get_cwd();
 		}
 
 		const char *inputFileNoPath = path_remove_path_from_file( context.inputFile );
@@ -1679,10 +1685,10 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		if ( preBuildFunc ) {
 			printf( "Running pre-build code...\n" );
 
-			const char *oldCWD = path_current_working_directory();
-			path_set_current_directory( context.inputFilePath.data );
+			const char *oldCWD = path_get_cwd();
+			path_set_cwd( context.inputFilePath.data );
 			defer {
-				path_set_current_directory( oldCWD );
+				path_set_cwd( oldCWD );
 			};
 
 			preBuildFunc();
@@ -1793,10 +1799,10 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		if ( postBuildFunc ) {
 			printf( "Running post-build code...\n" );
 
-			const char *oldCWD = path_current_working_directory();
-			path_set_current_directory( context.inputFilePath.data );
+			const char *oldCWD = path_get_cwd();
+			path_set_cwd( context.inputFilePath.data );
 			defer {
-				path_set_current_directory( oldCWD );
+				path_set_cwd( oldCWD );
 			};
 
 			postBuildFunc();

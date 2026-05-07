@@ -49,28 +49,28 @@ rm -rf "${clangDir}/lib/x86_64-unknown-linux-gnu"
 # From lib/: delete all files except libclang.so*
 # (subdirectories like lib/clang/ are untouched by -maxdepth 1)
 find "${clangDir}/lib" -maxdepth 1 \( -type f -o -type l \) \
-    ! -name 'libclang.so*'   \
-    ! -name 'libLLVM.so*'    \
-    ! -name 'libLTO.so*'     \
-    ! -name 'libRemarks.so*' \
-    -delete
+	! -name 'libclang.so*'   \
+	! -name 'libLLVM.so*'    \
+	! -name 'libLTO.so*'     \
+	! -name 'libRemarks.so*' \
+	-delete
 
 # From bin/: delete everything except the tools Builder needs
 find "${clangDir}/bin" -maxdepth 1 \( -type f -o -type l \) \
-    ! -name 'clang'         \
-    ! -name 'clang++'       \
-    ! -name 'clang-20'      \
-    ! -name 'clang-cl'      \
-    ! -name 'clang-cpp'     \
-    ! -name 'lld'           \
-    ! -name 'lld-link'      \
-    ! -name 'ld.lld'        \
-    ! -name 'ld64.lld'      \
-    ! -name 'llvm-ar'       \
-    ! -name 'llvm-ranlib'   \
-    ! -name 'llvm-lib'      \
-    ! -name 'llvm-dlltool'  \
-    -delete
+	! -name 'clang'        \
+	! -name 'clang++'      \
+	! -name 'clang-20'     \
+	! -name 'clang-cl'     \
+	! -name 'clang-cpp'    \
+	! -name 'lld'          \
+	! -name 'lld-link'     \
+	! -name 'ld.lld'       \
+	! -name 'ld64.lld'     \
+	! -name 'llvm-ar'      \
+	! -name 'llvm-ranlib'  \
+	! -name 'llvm-lib'     \
+	! -name 'llvm-dlltool' \
+	-delete
 
 echo "Done."
 echo ""

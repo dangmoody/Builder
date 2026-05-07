@@ -68,7 +68,7 @@ const char *path_app_path() {
 	return result;
 }
 
-const char *path_current_working_directory() {
+const char *path_get_cwd() {
 	char *temp = cast( char *, mem_temp_alloc( PATH_MAX * sizeof( char ) ) );
 
 	const char *cwd = getcwd( temp, PATH_MAX * sizeof( char ) );
@@ -79,6 +79,17 @@ const char *path_current_working_directory() {
 	}
 
 	return cwd;
+}
+
+bool8 path_set_cwd( const char *path ) {
+	if ( chdir( path ) != 0 ) {
+		int err = errno;
+		fatal_error( "Failed to set current directory: %s.\n", strerror( err ) );
+
+		return false;
+	}
+
+	return true;
 }
 
 const char *path_absolute_path( const char *path ) {
@@ -119,18 +130,6 @@ const char *path_canonicalize( const char *path ) {
 
 const char *path_fix_slashes( const char *path ) {
 	return string_replace( path, '\\', '/' );
-}
-
-
-bool8 path_set_current_directory( const char *path ) {
-	if ( chdir( path ) != 0 ) {
-		int err = errno;
-		fatal_error( "Failed to set current directory: %s.\n", strerror( err ) );
-
-		return false;
-	}
-
-	return true;
 }
 
 #endif // __linux__

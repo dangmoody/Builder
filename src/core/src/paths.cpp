@@ -100,9 +100,9 @@ const char *path_remove_file_extension( const char *filename ) {
 	return temp_c_string( filename, result_length );
 }
 
-static const char *path_join_internalv( const int count, va_list args ) {
+static const char *path_join_internalv( LinearAllocator *allocator, const int count, va_list args ) {
 	StringBuilder builder = {};
-	string_builder_init( &builder, g_temp_storage );
+	string_builder_init( &builder, allocator );
 
 	For ( int, arg_index, 0, count ) {
 		if ( arg_index > 0 ) {
@@ -117,10 +117,10 @@ static const char *path_join_internalv( const int count, va_list args ) {
 	return string_builder_to_string( &builder );
 }
 
-const char *path_join_internal( const int count, ... ) {
+const char *path_join_internal( LinearAllocator *allocator, const int count, ... ) {
 	va_list args;
 	va_start( args, count );
-	const char *result = path_join_internalv( count, args );
+	const char *result = path_join_internalv( allocator, count, args );
 	va_end( args );
 
 	return result;

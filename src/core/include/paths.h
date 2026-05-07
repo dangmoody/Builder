@@ -54,7 +54,10 @@ struct LinearAllocator;
 CORE_API const char			*path_app_path();
 
 // Returns the path that your program is currently running from.
-CORE_API const char			*path_current_working_directory();
+CORE_API const char			*path_get_cwd();
+
+// Makes the program run from the following directory.
+CORE_API bool8				path_set_cwd( const char *path );
 
 // Returns the absolute path of 'file'.
 CORE_API const char			*path_absolute_path( const char *path );
@@ -78,8 +81,6 @@ CORE_API const char			*path_canonicalize( const char *path );
 CORE_API const char			*path_fix_slashes( const char *path );
 
 CORE_API char				*path_relative_path_to( const char *path_from, const char *path_to );
-
-CORE_API bool8				path_set_current_directory( const char *path );
 
 // DO NOT CALL THIS DIRECTLY.
 // CALL path_join INSTEAD.

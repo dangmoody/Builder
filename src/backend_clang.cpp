@@ -184,10 +184,6 @@ static void ResolveCompilerAndLinkerPaths( clangState_t *clangState, LinearAlloc
 //================================================================
 
 static bool8 Clang_Init( compilerBackend_t *backend, const buildContext_t *context, const std::string &compilerPath, const std::string &compilerVersion ) {
-#ifdef __linux__
-	unused( context );
-#endif
-
 	backend->data = cast( clangState_t *, linear_allocator_alloc( context->allocator, sizeof( clangState_t ) ) );
 	new( backend->data ) clangState_t;
 
@@ -229,10 +225,6 @@ static bool8 Clang_Init( compilerBackend_t *backend, const buildContext_t *conte
 }
 
 static bool8 GCC_Init( compilerBackend_t *backend, const buildContext_t *context, const std::string &compilerPath, const std::string &compilerVersion ) {
-	// TODO(DM): 01/04/2026: clang and msvc need this for windows SDK includes, but gcc never will
-	// can we do better here?
-	unused( context );
-
 	backend->data = cast( clangState_t *, linear_allocator_alloc( context->allocator, sizeof( clangState_t ) ) );
 	new( backend->data ) clangState_t;
 

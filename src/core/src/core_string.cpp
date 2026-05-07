@@ -73,13 +73,19 @@ void string_printf( String *out_str, const char *fmt, ... ) {
 
 	va_list args;
 	va_start( args, fmt );
-	defer { va_end( args ); };
+
+	va_list args_copy;
+	va_start( args_copy, fmt );
 
 	u64 length = cast( u64, vsnprintf( NULL, 0, fmt, args ) );
 
 	string_realloc_internal( out_str, length + 1 );
-	vsnprintf( out_str->data, length + 1, fmt, args );
+	vsnprintf( out_str->data, length + 1, fmt, args_copy );
 	out_str->data[length] = 0;
+
+	va_end( args_copy );
+
+	va_end( args );
 }
 
 void string_copy( String *dst, String *src ) {
@@ -151,13 +157,17 @@ const char *temp_printf( const char *fmt, ... ) {
 	va_list args;
 	va_start( args, fmt );
 
+	va_list args_copy;
+	va_start( args_copy, fmt );
+
 	u64 string_length = cast( u64, vsnprintf( NULL, 0, fmt, args ) );
 
 	char *out_string = cast( char *, mem_temp_alloc( ( string_length + 1 ) * sizeof( char ) ) );
 
-	vsnprintf( out_string, string_length + 1, fmt, args );
+	vsnprintf( out_string, string_length + 1, fmt, args_copy );
 	out_string[string_length] = 0;
 
+	va_end( args_copy );
 	va_end( args );
 
 	return out_string;
@@ -174,4 +184,3 @@ char *temp_c_string( const char *from, const u64 num_chars ) {
 
 	return result;
 }
-

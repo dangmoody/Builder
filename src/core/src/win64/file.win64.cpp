@@ -275,7 +275,7 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 		if ( string_ends_with( dir, "/" ) ) {
 			search_path = temp_printf( "%s*", dir );
 		} else {
-			search_path = path_join( dir, "*" );
+			search_path = path_join( g_temp_storage, dir, "*" );
 		}
 
 		WIN32_FIND_DATA find_data = {};
@@ -291,7 +291,7 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 				.last_write_time	= ( trunc_cast( u64, find_data.ftLastWriteTime.dwHighDateTime ) << 32 ) | find_data.ftLastWriteTime.dwLowDateTime,
 				.is_directory		= cast( bool8, find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ),
 				.filename			= find_data.cFileName,
-				.full_filename		= path_join( dir, file_info.filename ),
+				.full_filename		= path_join( g_temp_storage, dir, file_info.filename ),
 			};
 
 			if ( file_info.is_directory ) {

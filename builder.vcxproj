@@ -100,18 +100,25 @@
     <ClCompile Include="src\core\src\core.linux.suc.cpp" />
     <ClCompile Include="src\core\src\core.suc.cpp" />
     <ClCompile Include="src\core\src\core.win64.suc.cpp" />
+    <ClCompile Include="src\core\src\core_math.cpp" />
     <ClCompile Include="src\core\src\core_process.subprocess.cpp" />
     <ClCompile Include="src\core\src\core_string.cpp" />
     <ClCompile Include="src\core\src\debug.cpp" />
     <ClCompile Include="src\core\src\file.cpp" />
+    <ClCompile Include="src\core\src\hash.cpp" />
     <ClCompile Include="src\core\src\hash.xxhash.cpp" />
     <ClCompile Include="src\core\src\hashmap.cpp" />
+    <ClCompile Include="src\core\src\intrinsics.clang.cpp" />
+    <ClCompile Include="src\core\src\linear_allocator.cpp" />
     <ClCompile Include="src\core\src\linux\allocator_malloc.linux.cpp" />
+    <ClCompile Include="src\core\src\linux\core_memory.linux.cpp" />
     <ClCompile Include="src\core\src\linux\core_process.linux.cpp" />
+    <ClCompile Include="src\core\src\linux\core_thread.linux.cpp" />
     <ClCompile Include="src\core\src\linux\debug.linux.cpp" />
     <ClCompile Include="src\core\src\linux\file.linux.cpp" />
     <ClCompile Include="src\core\src\linux\init.linux.cpp" />
     <ClCompile Include="src\core\src\linux\library.linux.cpp" />
+    <ClCompile Include="src\core\src\linux\os.linux.cpp" />
     <ClCompile Include="src\core\src\linux\paths.linux.cpp" />
     <ClCompile Include="src\core\src\linux\timer.linux.cpp" />
     <ClCompile Include="src\core\src\math.cpp" />
@@ -122,14 +129,18 @@
     <ClCompile Include="src\core\src\string_helpers.cpp" />
     <ClCompile Include="src\core\src\temp_storage.cpp" />
     <ClCompile Include="src\core\src\win64\allocator_malloc.win64.cpp" />
+    <ClCompile Include="src\core\src\win64\core_memory.win64.cpp" />
     <ClCompile Include="src\core\src\win64\core_process.win64.cpp" />
+    <ClCompile Include="src\core\src\win64\core_thread.win64.cpp" />
     <ClCompile Include="src\core\src\win64\date_and_time.win64.cpp" />
     <ClCompile Include="src\core\src\win64\debug.win64.cpp" />
     <ClCompile Include="src\core\src\win64\file.win64.cpp" />
     <ClCompile Include="src\core\src\win64\init.win64.cpp" />
     <ClCompile Include="src\core\src\win64\library.win64.cpp" />
+    <ClCompile Include="src\core\src\win64\os.win64.cpp" />
     <ClCompile Include="src\core\src\win64\paths.win64.cpp" />
     <ClCompile Include="src\core\src\win64\timer.win64.cpp" />
+    <ClCompile Include="src\core\src\xxhash\xxhash.c" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\visual_studio.cpp" />
     <ClCompile Include="src\vs_code.cpp" />
@@ -146,9 +157,13 @@
     <ClInclude Include="src\core\include\allocator_malloc.h" />
     <ClInclude Include="src\core\include\array.h" />
     <ClInclude Include="src\core\include\cmd_line_args.h" />
+    <ClInclude Include="src\core\include\core_array.h" />
+    <ClInclude Include="src\core\include\core_helpers.h" />
     <ClInclude Include="src\core\include\core_math.h" />
+    <ClInclude Include="src\core\include\core_memory.h" />
     <ClInclude Include="src\core\include\core_process.h" />
     <ClInclude Include="src\core\include\core_string.h" />
+    <ClInclude Include="src\core\include\core_thread.h" />
     <ClInclude Include="src\core\include\int_types.h" />
     <ClInclude Include="src\core\include\date_and_time.h" />
     <ClInclude Include="src\core\include\debug.h" />
@@ -158,8 +173,10 @@
     <ClInclude Include="src\core\include\hash.h" />
     <ClInclude Include="src\core\include\hashmap.h" />
     <ClInclude Include="src\core\include\library.h" />
+    <ClInclude Include="src\core\include\linear_allocator.h" />
     <ClInclude Include="src\core\include\memory_tracking.h" />
     <ClInclude Include="src\core\include\memory_units.h" />
+    <ClInclude Include="src\core\include\os.h" />
     <ClInclude Include="src\core\include\paths.h" />
     <ClInclude Include="src\core\include\random.h" />
     <ClInclude Include="src\core\include\ring.h" />
@@ -172,6 +189,7 @@
     <ClInclude Include="src\core\src\3rdparty\xxhash\xxhash.h" />
     <ClInclude Include="src\core\src\core_local.h" />
     <ClInclude Include="src\core\src\file_local.h" />
+    <ClInclude Include="src\core\src\xxhash\xxhash.h" />
     <ClInclude Include="src\win_sdk.h" />
     <ClInclude Include="src\win_support.h" />
   </ItemGroup>
@@ -190,6 +208,7 @@
     <None Include="scripts\make_release.bat" />
     <None Include="scripts\make_release.sh" />
     <None Include="src\core\include\array.inl" />
+    <None Include="src\core\include\core_array.inl" />
     <None Include="src\core\include\ring.inl" />
     <None Include="src\core\include\typecast.inl" />
   </ItemGroup>

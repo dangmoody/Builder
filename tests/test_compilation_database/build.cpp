@@ -20,8 +20,7 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions* options, CommandLineArg
 		.removeSymbols = false,
 		.defines = { "TEST_DEFINE" },
 		.sourceFiles = {
-			"src/main.cpp",
-			"src/helper.cpp",
+			"src/*.cpp",
 		}
 	};
 

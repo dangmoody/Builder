@@ -246,12 +246,15 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 	generatedFiles.fileExtensionsToDelete.add( ".d" );
 	generatedFiles.fileExtensionsToDelete.add( ".json" );
 
-	const char *buildSourceFileWithoutExtension = path_remove_file_extension( test.buildSourceFile );
+	//const char *buildSourceFileWithoutExtension = path_remove_file_extension( test.buildSourceFile );
+	String buildSourceFileWithoutExtension = {};
+	string_init( &buildSourceFileWithoutExtension, testScratch );
+	string_copy_from_c_string( &buildSourceFileWithoutExtension, path_remove_file_extension( test.buildSourceFile ) );
 
 	// binary name doesnt have to be set by users, but we need it
 	// this is the default
 	if ( !test.binaryName ) {
-		test.binaryName = buildSourceFileWithoutExtension;
+		test.binaryName = buildSourceFileWithoutExtension.data;
 	}
 
 	For ( u32, compilerIndex, 0, COMPILER_ALL ) {
@@ -332,7 +335,7 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 			TEMPER_CHECK_TRUE( file_exists( fullBinaryName ) );
 			TEMPER_CHECK_TRUE( folder_exists( dotBuilderFolder ) );
 
-			const char *userConfigBuildDLLFilename = temp_printf( "%s%c%s%s", dotBuilderFolder, PATH_SEPARATOR, buildSourceFileWithoutExtension, GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
+			const char *userConfigBuildDLLFilename = temp_printf( "%s%c%s%s", dotBuilderFolder, PATH_SEPARATOR, buildSourceFileWithoutExtension.data, GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
 			TEMPER_CHECK_TRUE( file_exists( userConfigBuildDLLFilename ) );
 		}
 
@@ -777,24 +780,27 @@ TEMPER_TEST( ValidateCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 	// If the compile_commands.json is malformed, clang-tidy will fail with an error like:
 	//     "Error while trying to load a compilation database"
 
+	LinearAllocator *testScratch = linear_allocator_create( MEM_KILOBYTES( 1 ) );
+	defer { linear_allocator_destroy( testScratch ); };
+
 	Array<const char *> args;
-	args.init( g_temp_storage );
+	args.init( testScratch );
 	args.add( "../clang/bin/clang-tidy" );
 	args.add( sourceFile );
 	args.add( temp_printf( "-p=%s", compileCommandsDir ) );
 	args.add( "--checks=-*" );  // Disable all checks - we only want to test DB loading
 
-	Array<const char *> stdoutOutput;
-	stdoutOutput.init( g_temp_storage );
-	s32 exitCode = RunProc( &args, &stdoutOutput, false );
+	String stdoutOutput;
+	string_init( &stdoutOutput, testScratch );
+	s32 exitCode = RunProc( &args, NULL, 0, &stdoutOutput );
 	bool isValid = true;
 	// Check for specific error messages that indicate database problems
 	if ( stdoutOutput.data ) {
-		if ( strstr( *stdoutOutput.data, "Error while trying to load a compilation database" ) ) {
-			printf( "clang-tidy failed to load compilation database: %s\n", *stdoutOutput.data );
+		if ( strstr( stdoutOutput.data, "Error while trying to load a compilation database" ) ) {
+			printf( "clang-tidy failed to load compilation database: %s\n", stdoutOutput.data );
 			isValid = false;
 		}
-		if ( strstr( *stdoutOutput.data, "error: no compilation database found" ) ) {
+		if ( strstr( stdoutOutput.data, "error: no compilation database found" ) ) {
 			printf( "clang-tidy could not find compilation database\n" );
 			isValid = false;
 		}

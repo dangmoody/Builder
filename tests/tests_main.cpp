@@ -274,9 +274,6 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 
 		// test doing the actual build
 		{
-			// DM: 04/02/2026: this is stupid and ugly
-			// args should also be const because we never actually modify them
-			// I know how to get this done, leave this work with me
 			Array<const char *> args;
 			args.init( testScratch );
 			args.add( test.buildSourceFile );

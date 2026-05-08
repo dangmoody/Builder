@@ -106,7 +106,7 @@ static void GetAllGeneratedFiles( const FileInfo *fileInfo, void *data ) {
 				}
 
 				if ( !duplicate ) {
-					printf( "Found generated file %s\n", fileInfo->full_filename );
+					LogVerbose( "Found generated file %s\n", fileInfo->full_filename );
 
 					generatedFiles->files.add( fileInfo->full_filename );
 				}
@@ -352,19 +352,23 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 			For ( u32, fileIndex, 0, generatedFiles.files.count ) {
 				const char *generatedFile = generatedFiles.files[fileIndex];
 
-				printf( "Deleting file %s ... ", generatedFile );
+				LogVerbose( "Deleting file %s ... ", generatedFile );
 
 				TEMPER_CHECK_TRUE_M( file_delete( generatedFile ), "Couldn't delete file \"%s\".\n", generatedFile );
 				TEMPER_CHECK_TRUE_M( !file_exists( generatedFile ), "We deleted the file \"%s\" just now, but the OS tells us it still exists?\n", generatedFile );
 
-				printf( "Done\n" );
+				LogVerbose( "Done\n" );
 			}
 
 			For ( u32, folderIndex, 0, generatedFiles.folders.count ) {
 				const char *generatedFolder = generatedFiles.folders[folderIndex];
 
+				LogVerbose( "Deleting folder %s ... ", generatedFolder );
+
 				TEMPER_CHECK_TRUE_M( folder_delete( generatedFolder ), "Couldn't delete folder \"%s\".\n", generatedFolder );
 				TEMPER_CHECK_TRUE_M( !folder_exists( generatedFolder ), "We deleted the folder \"%s\" just now, but the OS tells us it still exists?\n", generatedFolder );
+
+				LogVerbose( "Done\n" );
 			}
 		}
 

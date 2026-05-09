@@ -32,6 +32,7 @@ SOFTWARE.
 #include "dll_export.h"
 
 struct LinearAllocator;
+struct String;
 
 /*
 ================================================================================================
@@ -51,25 +52,25 @@ struct LinearAllocator;
 #endif
 
 // Returns the absolute path of where the current program is running from.
-CORE_API const char			*path_app_path();
+CORE_API String				path_app_path( LinearAllocator *allocator );
 
 // Returns the path that your program is currently running from.
-CORE_API const char			*path_get_cwd();
+CORE_API String				path_get_cwd( LinearAllocator *allocator );
 
-// Makes the program run from the following directory.
+// Sets the current working directory (cwd) that the program will run from to the specified path.
 CORE_API bool8				path_set_cwd( const char *path );
 
 // Returns the absolute path of 'file'.
-CORE_API const char			*path_absolute_path( const char *path );
+CORE_API String				path_absolute_path( LinearAllocator *allocator, const char *path );
 
 // Given a file path that also includes a filename, will remove the filename part, leaving just the path.
-CORE_API const char			*path_remove_file_from_path( const char *path );
+CORE_API void				path_remove_file_from_path( String *path );
 
 // Given a file path that also includes a filename, will remove the path part, leaving just the filename.
-CORE_API const char			*path_remove_path_from_file( const char *path );
+CORE_API void				path_remove_path_from_file( String *path );
 
 // Returns the name of a file without its file extension, if there is one.
-CORE_API const char			*path_remove_file_extension( const char *filename );
+CORE_API void				path_remove_file_extension( String *filename );
 
 // On Windows:   Returns true if the path starts with a letter followed by a colon (for example: "C:"), otherwise returns false.
 // On Mac/Linux: Returns true if the path starts with two backslashes or a single forward slash, otherwise returns false.
@@ -78,13 +79,13 @@ CORE_API bool8				path_is_absolute( const char *path );
 CORE_API const char			*path_canonicalize( const char *path );
 
 // Make sure that any slashes found in 'path' are what the OS expects them to be.
-CORE_API const char			*path_fix_slashes( const char *path );
+CORE_API void				path_fix_slashes( String *str );
 
 CORE_API char				*path_relative_path_to( const char *path_from, const char *path_to );
 
 // DO NOT CALL THIS DIRECTLY.
 // CALL path_join INSTEAD.
-CORE_API const char			*path_join_internal( LinearAllocator *allocator, const int count, ... );
+CORE_API String				path_join_internal( LinearAllocator *allocator, const int count, ... );
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wc++98-compat"

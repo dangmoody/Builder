@@ -231,10 +231,10 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 				continue;
 			}
 
-			const char *full_filename = path_join( g_temp_storage, directory, entry->d_name );
+			String full_filename = path_join( g_temp_storage, directory, entry->d_name );
 
 			struct stat file_stat = {};
-			if ( stat( full_filename, &file_stat ) != 0 ) {
+			if ( stat( full_filename.data, &file_stat ) != 0 ) {
 				/*int err = errno;
 				printf( "Can't stat \"%s\": %s\n", full_filename, strerror( err ) );*/
 				return false;
@@ -245,7 +245,7 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 				.last_write_time	= trunc_cast( u64, file_stat.st_mtime ),
 				.is_directory		= S_ISDIR( file_stat.st_mode ),
 				.filename			= entry->d_name,
-				.full_filename		= full_filename,
+				.full_filename		= full_filename.data,
 			};
 
 			if ( file_info.is_directory ) {
@@ -254,7 +254,7 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 				}
 
 				if ( visit_flags & FILE_VISIT_RECURSIVE ) {
-					directories.add( full_filename );
+					directories.add( full_filename.data );
 				}
 			} else if ( visit_flags & FILE_VISIT_FILES ) {
 				visit_callback( &file_info, user_data );

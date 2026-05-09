@@ -48,7 +48,7 @@ SOFTWARE.
 #pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
 #endif
 
-struct Allocator;
+struct LinearAllocator;
 
 constexpr u64 HASHMAP_UNUSED_BUCKET 	= 0U;
 constexpr u64 HASHMAP_TOMBSTONE_BUCKET 	= 0xffffffffffffffffU;
@@ -70,8 +70,7 @@ struct Hashmap {
 	HashmapBucket	*buckets;
 };
 
-CORE_API Hashmap	*hashmap_create( u32 starting_capacity, float32 normalized_max_utilisation = 0.5f, bool8 should_grow = true );
-CORE_API void		hashmap_destroy( Hashmap *map );
+CORE_API Hashmap	*hashmap_create( LinearAllocator *allocator, u32 starting_capacity, float32 normalized_max_utilisation = 0.5f, bool8 should_grow = true );
 
 CORE_API void		hashmap_reset( Hashmap *map );
 

@@ -127,11 +127,14 @@ bool8 GenerateZedJSONFiles( buildContext_t *context, BuilderOptions *options ) {
 			For ( u32, configIndex, 0, options->configs.size() ) {
 				const BuildConfig *config = &options->configs[configIndex];
 
-				const char *zedDebugConfigBinaryName = string_replace( BuildConfig_GetFullBinaryName( config, g_temp_storage ), '\\', '/' );
+				const char *fullBinaryName = BuildConfig_GetFullBinaryName( config, g_temp_storage );
+
+				String zedDebugConfigBinaryName = string_set( g_temp_storage, fullBinaryName );
+				string_replace( &zedDebugConfigBinaryName, '\\', '/' );
 
 				ZedDebugConfig debugConfig = {
 					.label		= temp_printf( "Debug %s", config->name.c_str() ),
-					.binaryName	= temp_printf( "${ZED_WORKTREE_ROOT}/%s", zedDebugConfigBinaryName ),
+					.binaryName	= temp_printf( "${ZED_WORKTREE_ROOT}/%s", zedDebugConfigBinaryName.data ),
 					.cwd		= "${ZED_WORKTREE_ROOT}",
 					.adapter	= ZED_DEBUGGER_ADAPTER_CODELLDB,
 					.request	= ZED_DEBUGGER_REQUEST_LAUNCH,

@@ -31,6 +31,18 @@ SOFTWARE.
 #include "int_types.h"
 #include "dll_export.h"
 
+/*
+================================================================================================
+
+	Thread
+
+	OS-agnostic functions for creating, scheduling, and destroying threads and semaphores.
+
+	Also contains basic data structure and functions for atomics and atomic operations.
+
+================================================================================================
+*/
+
 struct Thread {
 	void	*ptr;
 };

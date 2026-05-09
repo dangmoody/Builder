@@ -39,6 +39,16 @@ template<typename T> struct Array;
 #pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
 #endif
 
+/*
+================================================================================================
+
+	Process
+
+	OS-agnostic interface for running other processes from your program.
+
+================================================================================================
+*/
+
 struct Process;
 
 enum ProcessFlagBits {

@@ -36,6 +36,8 @@ SOFTWARE.
 #include <temp_storage.h>
 #include <typecast.inl>
 #include <core_string.h>
+#include <defer.h>
+#include <linear_allocator.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -54,34 +56,39 @@ SOFTWARE.
 ================================================================================================
 */
 
-const char *path_app_path() {
-	char *result = cast( char *, mem_temp_alloc( PATH_MAX * sizeof( char ) ) );
-	s64 length = readlink( "/proc/self/exe", result, PATH_MAX );
+String path_app_path( LinearAllocator *allocator ) {
+	assert( allocator );
+
+	char app_path[PATH_MAX] = {};
+	s64 length = readlink( "/proc/self/exe", app_path, PATH_MAX );
 
 	if ( length == -1 ) {
 		int err = errno;
 		fatal_error( "Failed to get app path: %s.\n", strerror( err ) );
+		return {};
 	}
 
-	result[length] = 0;
-
-	return result;
+	return string_set( allocator, app_path, trunc_cast( u64, length ) );
 }
 
-const char *path_get_cwd() {
-	char *temp = cast( char *, mem_temp_alloc( PATH_MAX * sizeof( char ) ) );
+String path_get_cwd( LinearAllocator *allocator ) {
+	assert( allocator );
 
-	const char *cwd = getcwd( temp, PATH_MAX * sizeof( char ) );
+	char temp[PATH_MAX] = {};
+	const char *cwd = getcwd( temp, PATH_MAX );
 
 	if ( !cwd ) {
 		int err = errno;
 		fatal_error( "Failed to get CWD: %s.\n", strerror( err ) );
+		return {};
 	}
 
-	return cwd;
+	return string_set( allocator, cwd );
 }
 
 bool8 path_set_cwd( const char *path ) {
+	assert( path );
+
 	if ( chdir( path ) != 0 ) {
 		int err = errno;
 		fatal_error( "Failed to set current directory: %s.\n", strerror( err ) );
@@ -92,7 +99,13 @@ bool8 path_set_cwd( const char *path ) {
 	return true;
 }
 
-const char *path_absolute_path( const char *path ) {
+String path_absolute_path( LinearAllocator *allocator, const char *path ) {
+	assert( allocator );
+	assert( path );
+
+	u64 temp_pos = linear_allocator_tell( g_temp_storage );
+	defer { linear_allocator_rewind_to( g_temp_storage, temp_pos ); };
+
 	char *path_copy = temp_c_string( path, PATH_MAX * sizeof( char ) );
 
 	const char *result = realpath( path_copy, NULL );
@@ -100,10 +113,10 @@ const char *path_absolute_path( const char *path ) {
 	if ( !result ) {
 		int err = errno;
 		fatal_error( "Failed to get absolute path of \"%s\": %s.\n", path, strerror( err ) );
-		return NULL;
+		return {};
 	}
 
-	return result;
+	return string_set( allocator, result );
 }
 
 bool8 path_is_absolute( const char *path ) {
@@ -114,6 +127,9 @@ bool8 path_is_absolute( const char *path ) {
 
 const char *path_canonicalize( const char *path ) {
 	assert( path );
+
+	u64 temp_pos = linear_allocator_tell( g_temp_storage );
+	defer { linear_allocator_rewind_to( g_temp_storage, temp_pos ); };
 
 	char *path_copy = temp_c_string( path, PATH_MAX * sizeof( char ) );
 
@@ -128,8 +144,8 @@ const char *path_canonicalize( const char *path ) {
 	return result;
 }
 
-const char *path_fix_slashes( const char *path ) {
-	return string_replace( path, '\\', '/' );
+void path_fix_slashes( String *str ) {
+	return string_replace( str, '\\', PATH_SEPARATOR );
 }
 
 #endif // __linux__

@@ -31,6 +31,7 @@ SOFTWARE.
 #include <debug.h>
 
 #include <core_array.inl>
+#include <core_string.h>
 #include <core_helpers.h>
 #include <linear_allocator.h>
 #include <temp_storage.h>
@@ -43,7 +44,7 @@ SOFTWARE.
 #include <dlfcn.h>
 #include <cxxabi.h>
 
-Array<const char *> get_callstack( LinearAllocator *allocator ) {
+Array<String> get_callstack( LinearAllocator *allocator ) {
 	const int NUM_FRAMES = 1024;
 	void *buffer[NUM_FRAMES];
 
@@ -52,7 +53,7 @@ Array<const char *> get_callstack( LinearAllocator *allocator ) {
 	char **fallback_names = backtrace_symbols( buffer, frames_count );
 	defer { free( fallback_names ); };
 
-	Array<const char *> frames;
+	Array<String> frames;
 	frames.init( allocator );
 	frames.reserve( trunc_cast( u64, frames_count ) );
 
@@ -73,9 +74,7 @@ Array<const char *> get_callstack( LinearAllocator *allocator ) {
 			}
 		}
 
-		u64 len = strlen( name );
-		char *frame = cast( char *, linear_allocator_alloc( allocator, len + 1 ) );
-		memcpy( frame, name, len + 1 );
+		String frame = string_set( allocator, name );
 
 		free( demangled );
 		demangled = NULL;

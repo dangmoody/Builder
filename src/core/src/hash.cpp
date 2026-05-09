@@ -30,6 +30,9 @@ SOFTWARE.
 
 #include <typecast.inl>
 #include <core_helpers.h>
+#include <linear_allocator.h>
+#include <core_string.h>
+#include <debug.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
@@ -47,23 +50,37 @@ SOFTWARE.
 */
 
 u32 hash32( const void *data, const u64 length, const u32 seed ) {
+	assert( data );
+
 	return XXH32( data, length, seed );
 }
 
 u64 hash64( const void *data, const u64 length, const u64 seed ) {
+	assert( data );
+
 	return XXH64( data, length, seed );
 }
 
 u64 hash_string( const char *string, const u64 seed ) {
+	assert( string );
+
 	return hash64( string, strlen( string ), seed );
+}
+
+u64 hash_string( const String *string, const u64 seed ) {
+	assert( string );
+
+	return hash64( string->data, string->count, seed );
 }
 
 struct Hasher {
 	XXH64_state_t*	state;
 };
 
-Hasher *hasher_create( const u64 seed ) {
-	Hasher *hasher = cast( Hasher *, malloc( sizeof( Hasher ) ) );
+Hasher *hasher_create( LinearAllocator *allocator, const u64 seed ) {
+	assert( allocator );
+
+	Hasher *hasher = cast( Hasher *, linear_allocator_alloc( allocator, sizeof( Hasher ) ) );
 	memset( hasher, 0, sizeof( Hasher ) );
 
 	hasher->state = XXH64_createState();
@@ -74,24 +91,29 @@ Hasher *hasher_create( const u64 seed ) {
 }
 
 void hasher_destroy( Hasher *hasher ) {
+	assert( hasher );
+
 	XXH64_freeState( hasher->state );
 	hasher->state = NULL;
-
-	free( hasher );
-	hasher = NULL;
 }
 
 void hasher_reset( Hasher *hasher, const u64 seed ) {
+	assert( hasher );
+
 	XXH_errorcode result = XXH64_reset( hasher->state, seed );
 	assert( result != XXH_ERROR );
 	unused( result );
 }
 
 void hasher_hash( Hasher *hasher, const void *ptr, const u64 size ) {
+	assert( hasher );
+
 	XXH64_update( hasher->state, ptr, size );
 }
 
 u64 hasher_get_hash( Hasher *hasher ) {
+	assert( hasher );
+
 	return XXH64_digest( hasher->state );
 }
 

@@ -31,6 +31,17 @@ SOFTWARE.
 #include "int_types.h"
 #include "dll_export.h"
 
+/*
+================================================================================================
+
+	Library
+
+	Loading and unloading dynamic libraries (.dll files on Windows, .so files on Linux) as well
+	as getting symbols from them.
+
+================================================================================================
+*/
+
 struct Library {
 	void			*ptr;
 };

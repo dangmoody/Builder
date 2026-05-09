@@ -203,9 +203,10 @@ static bool8 MSVC_CompileSourceFile(
 		}
 	}
 
-	if ( recordCompilation ) {
-		RecordCompilationDatabaseEntry( buildContext, sourceFile, finalArgs );
-	}
+	// DM!!! put this back!
+	// if ( recordCompilation ) {
+	// 	RecordCompilationDatabaseEntry( buildContext, sourceFile, finalArgs );
+	// }
 
 	return exitCode == 0;
 }

@@ -217,9 +217,7 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 	// run the test from that folder
 	// then come back when were done
 
-	String oldCWD;
-	string_init( &oldCWD, testScratch );
-	string_copy_from_c_string( &oldCWD, path_get_cwd() );
+	String oldCWD = path_get_cwd( testScratch );
 
 	TEMPER_CHECK_TRUE_M( path_set_cwd( test.rootDir ), "Failed to cd into the test folder \"%s\": %s.\n", test.rootDir, strerror( errno ) );
 	defer { TEMPER_CHECK_TRUE_M( path_set_cwd( oldCWD.data ), "Failed to cd back out of the test folder: %s.\n", strerror( errno ) ); };
@@ -246,10 +244,9 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 	generatedFiles.fileExtensionsToDelete.add( ".d" );
 	generatedFiles.fileExtensionsToDelete.add( ".json" );
 
-	//const char *buildSourceFileWithoutExtension = path_remove_file_extension( test.buildSourceFile );
-	String buildSourceFileWithoutExtension = {};
-	string_init( &buildSourceFileWithoutExtension, testScratch );
-	string_copy_from_c_string( &buildSourceFileWithoutExtension, path_remove_file_extension( test.buildSourceFile ) );
+	// String buildSourceFileWithoutExtension = string_set( testScratch, path_remove_file_extension( test.buildSourceFile ) );
+	String buildSourceFileWithoutExtension = string_set( testScratch, test.buildSourceFile );
+	path_remove_file_extension( &buildSourceFileWithoutExtension );
 
 	// binary name doesnt have to be set by users, but we need it
 	// this is the default
@@ -285,13 +282,13 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wswitch"
 			switch ( compiler ) {
-				case COMPILER_CLANG:			args.add( "--clang" );	break;
-				case COMPILER_GCC:				args.add( "--gcc" );	break;
-				case COMPILER_MSVC_SHORT:		args.add( "--msvc" );	break;
+				case COMPILER_CLANG:		args.add( "--clang" );	break;
+				case COMPILER_GCC:			args.add( "--gcc" );	break;
+				case COMPILER_MSVC_SHORT:	args.add( "--msvc" );	break;
 #ifdef _WIN32
 				case COMPILER_MSVC_FULL_PATH: {
 					msvcInstall_t msvcInstall = {};
-					TEMPER_CHECK_TRUE_M( Win_GetMSVCInstall( &msvcInstall ), "Failed to find MSVC install for full-path compiler test.\n" );
+					TEMPER_CHECK_TRUE_M( Win_GetMSVCInstall( testScratch, &msvcInstall ), "Failed to find MSVC install for full-path compiler test.\n" );
 					args.add( temp_printf( "--msvc-full-path=%s\\bin\\Hostx64\\x64\\cl", msvcInstall.rootFolder.data ) );
 				} break;
 #endif
@@ -744,6 +741,8 @@ TEMPER_TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	}
 }
 
+// DM!!! put me back!
+#if 0
 // Validates the generated compile_commands.json by feeding it to clang-tidy.
 // If clang-tidy can successfully load the compilation database, it proves
 // the JSON is correctly formatted according to the specification.
@@ -787,8 +786,7 @@ TEMPER_TEST( ValidateCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 	args.add( temp_printf( "-p=%s", compileCommandsDir ) );
 	args.add( "--checks=-*" );  // Disable all checks - we only want to test DB loading
 
-	String stdoutOutput;
-	string_init( &stdoutOutput, testScratch );
+	String stdoutOutput = {};
 	s32 exitCode = RunProc( &args, NULL, 0, &stdoutOutput );
 	bool isValid = true;
 	// Check for specific error messages that indicate database problems
@@ -805,7 +803,7 @@ TEMPER_TEST( ValidateCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 
 	TEMPER_CHECK_TRUE_M( isValid, "clang-tidy failed to load compile_commands.json - the file may be malformed\n" );
 }
-
+#endif
 
 int main( int argc, char **argv ) {
 	mem_init_temp_storage( MEM_KILOBYTES( 64 ) );

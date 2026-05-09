@@ -56,7 +56,7 @@ const char *path_app_path() {
 	return app_full_path;
 }
 
-const char *path_get_cwd() {
+const char *path_current_working_directory() {
 	char *cwd = cast( char *, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
 	DWORD length = GetCurrentDirectory( MAX_PATH, cwd );
 	cwd[length] = 0;
@@ -106,12 +106,11 @@ const char *path_canonicalize( const char *path ) {
 	return result;
 }
 
-const char *path_fix_slashes( const char *path ) {
-	return string_replace( path, '/', '\\' );
+void path_fix_slashes( String *str ) {
+	return string_replace( str, '/', PATH_SEPARATOR );
 }
 
-
-bool8 path_set_cwd( const char *path ) {
+bool8 path_set_current_directory( const char *path ) {
 	assert( path );
 
 	return cast( bool8, SetCurrentDirectory( path ) );

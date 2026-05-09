@@ -33,6 +33,7 @@ SOFTWARE.
 #include <debug.h>
 #include <typecast.inl>
 #include <core_math.h>
+#include <linear_allocator.h>
 
 #include <memory.h>	// memset
 #include <malloc.h>
@@ -45,30 +46,20 @@ SOFTWARE.
 ================================================================================================
 */
 
-Hashmap *hashmap_create( const u32 starting_capacity, float32 normalized_max_utilisation, bool8 should_grow ) {
+Hashmap *hashmap_create( LinearAllocator *allocator, const u32 starting_capacity, float32 normalized_max_utilisation, bool8 should_grow ) {
 	assert( starting_capacity );
 	assert( normalized_max_utilisation > 0.0f );
 	assert( normalized_max_utilisation <= 1.0f );
 
-	Hashmap *map = cast( Hashmap *, malloc( sizeof( Hashmap ) ) );
+	Hashmap *map = cast( Hashmap *, linear_allocator_alloc( allocator, sizeof( Hashmap ) ) );
 	map->capacity = starting_capacity;
-	map->buckets = cast( HashmapBucket *, malloc( starting_capacity * sizeof( HashmapBucket ) ) );
+	map->buckets = cast( HashmapBucket *, linear_allocator_alloc( allocator, starting_capacity * sizeof( HashmapBucket ) ) );
 	map->should_grow = should_grow;
 	map->max_utilisation = normalized_max_utilisation;
 
 	hashmap_reset( map );
 
 	return map;
-}
-
-void hashmap_destroy( Hashmap *map ) {
-	assert( map );
-
-	free( map->buckets );
-	map->buckets = NULL;
-
-	free( map );
-	map = NULL;
 }
 
 inline void set_key_at_index( Hashmap *map, u32 index, u64 key ) {
@@ -135,7 +126,7 @@ void hashmap_set_value( Hashmap *map, const u64 key, const u32 value ) {
 		if ( utilization > map->max_utilisation ) {
 			if ( map->should_grow ) {
 				HashmapBucket* old_buckets = map->buckets;
-				defer { free( old_buckets ); };
+				// defer { free( old_buckets ); };
 
 				u32 old_capacity = map->capacity;
 				map->capacity = max( cast( u32, cast( float32, map->capacity ) * 1.5f ), 2U );

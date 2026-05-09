@@ -97,10 +97,17 @@ struct includeDependencies_t {
 };
 
 struct compilationDatabaseEntry_t {
+#if 0
 	std::vector<std::string>	arguments;
 	std::string					directory;
 	std::string					file;
 	std::string					outputFile;
+#else
+	std::vector<String>			arguments;
+	String						directory;
+	String						file;
+	String						outputFile;
+#endif
 };
 
 struct buildContext_t {
@@ -113,6 +120,7 @@ struct buildContext_t {
 	const char								*inputFile;
 	String									inputFilePath;
 	String									dotBuilderFolder;
+	String									includeDependenciesFilename;
 
 	bool8									forceRebuild;
 	bool8									consolidateCompilerArgs;
@@ -137,6 +145,8 @@ u64			GetLastFileWriteTime( const char *filename );
 
 bool8		NukeFolder( const char *folder, const bool8 deleteRootFolder, const bool8 printDeletions );
 
+bool8		PathHasSlash( const char *str );
+
 const char	*GetNextSlashInPath( const char *path );
 
 bool8		FileIsSourceFile( const char *filename );
@@ -146,7 +156,8 @@ const char	*GetFileExtensionFromBinaryType( const BinaryType type );
 
 const char	*BuildConfig_GetFullBinaryName( const BuildConfig *config, LinearAllocator *allocator );
 
-void		RecordCompilationDatabaseEntry( buildContext_t *buildContext, const char *sourceFileName, const Array<const char *> &compilationCommandArray );
+// DM!!! put this back!
+// void		RecordCompilationDatabaseEntry( buildContext_t *buildContext, const char *sourceFileName, const Array<const char *> &compilationCommandArray );
 
 s32			RunProc( Array<const char *> *args, Array<const char *> *environmentVariables, const procFlags_t procFlags = 0, String *outStdout = NULL );
 

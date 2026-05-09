@@ -167,17 +167,14 @@ static void ReadDependencyFile( const char *depFilename, std::vector<std::string
 }
 
 static void ResolveCompilerAndLinkerPaths( clangState_t *clangState, LinearAllocator *allocator, const char *compilerPath, const char *compilerName, const char *linkerName ) {
-	const char *pathToCompiler = path_remove_file_from_path( compilerPath );
-
-	if ( pathToCompiler == NULL ) {
-		string_copy_from_c_string( &clangState->compilerPath, compilerPath );
-		string_copy_from_c_string( &clangState->linkerPath, linkerName );
+	if ( PathHasSlash( compilerPath ) ) {
+		clangState->compilerPath = string_set( allocator, compilerPath );
+		clangState->linkerPath = string_set( allocator, linkerName );
 	} else {
-		const char *compilerPathFull = path_join( allocator, pathToCompiler, compilerName );
-		const char *linkerPathFull = path_join( allocator, pathToCompiler, linkerName );
-
-		string_copy_from_c_string( &clangState->compilerPath, compilerPathFull );
-		string_copy_from_c_string( &clangState->linkerPath, linkerPathFull );
+		// clangState->compilerPath = path_join( allocator, compilerPath, compilerName );
+		// clangState->linkerPath = path_join( allocator, compilerPath, linkerName );
+		clangState->compilerPath = string_set( allocator, compilerName );
+		clangState->linkerPath = string_set( allocator, linkerName );
 	}
 }
 
@@ -189,13 +186,8 @@ static bool8 Clang_Init( compilerBackend_t *backend, const buildContext_t *conte
 
 	clangState_t *clangState = cast( clangState_t *, backend->data );
 	clangState->args.init( g_temp_storage );
-	string_init( &clangState->compilerPath, context->allocator );
-	string_init( &clangState->compilerVersion, context->allocator );
-	string_init( &clangState->linkerPath, context->allocator );
-	string_init( &clangState->arPath, context->allocator );
 
-	// clangState->compilerVersion = compilerVersion.c_str();
-	string_copy_from_c_string( &clangState->compilerVersion, compilerVersion.c_str() );
+	clangState->compilerVersion = string_set( context->allocator, compilerVersion.c_str() );
 
 	const char *clangExe = "clang";
 #if defined( _WIN32 )
@@ -208,12 +200,13 @@ static bool8 Clang_Init( compilerBackend_t *backend, const buildContext_t *conte
 
 	ResolveCompilerAndLinkerPaths( clangState, context->allocator, compilerPath.c_str(), clangExe, linkerExe );
 
-	const char *pathToCompiler = path_remove_file_from_path( compilerPath.c_str() );
+	String pathToCompiler = string_set( g_temp_storage, compilerPath.c_str() );
+	path_remove_file_from_path( &pathToCompiler );
 
 #if defined( _WIN32 )
-	string_printf( &clangState->arPath, "%s%car", pathToCompiler, PATH_SEPARATOR );
+	clangState->arPath = path_join( context->allocator, pathToCompiler.data, "ar" );
 #elif defined( __linux__ )
-	string_printf( &clangState->arPath, "%s%c%s", pathToCompiler, PATH_SEPARATOR, linkerExe );
+	clangState->arPath = path_join( context->allocator, pathToCompiler.data, linkerExe );
 #endif
 
 #ifdef _WIN32
@@ -230,30 +223,29 @@ static bool8 GCC_Init( compilerBackend_t *backend, const buildContext_t *context
 
 	clangState_t *clangState = cast( clangState_t *, backend->data );
 	clangState->args.init( g_temp_storage );
-	string_init( &clangState->compilerPath, context->allocator );
-	string_init( &clangState->compilerVersion, context->allocator );
-	string_init( &clangState->linkerPath, context->allocator );
-	string_init( &clangState->arPath, context->allocator );
 
-	string_copy_from_c_string( &clangState->compilerVersion, compilerVersion.c_str() );
+	clangState->compilerVersion = string_set( context->allocator, compilerVersion.c_str() );
 
 	ResolveCompilerAndLinkerPaths( clangState, context->allocator, compilerPath.c_str(), "gcc", "ld" );
 
-	const char *pathToCompiler = path_remove_file_from_path( compilerPath.c_str() );
+	String pathToCompiler = string_set( g_temp_storage, compilerPath.c_str() );
+	path_remove_file_from_path( &pathToCompiler );
 
-	if ( pathToCompiler ) {
-		string_printf( &clangState->arPath, "%s%car", pathToCompiler, PATH_SEPARATOR );
+	// if ( pathToCompiler ) {
+	if ( PathHasSlash( pathToCompiler.data ) ) {
+		clangState->arPath = path_join( context->allocator, pathToCompiler.data, "ar" );
 	} else {
-		string_printf( &clangState->arPath, "ar" );
+		clangState->arPath = string_set( context->allocator, "ar" );
 	}
 
 	return true;
 }
 
 static void Clang_Shutdown( compilerBackend_t *backend ) {
-	unused( backend );
-	// free( backend->data );
-	// backend->data = NULL;
+	clangState_t *clangState = cast( clangState_t *, backend->data );
+
+	clangState->~clangState_t();
+	backend->data = NULL;
 }
 
 static bool8 Clang_CompileSourceFile(
@@ -267,14 +259,21 @@ static bool8 Clang_CompileSourceFile(
 	assert( backend );
 	assert( sourceFile );
 
+	unused( recordCompilation );	// DM!!! remove this when compilation DBs go back in!
+
 	clangState_t *clangState = cast( clangState_t *, backend->data );
 
-	const char *sourceFileNoPath = path_remove_path_from_file( sourceFile );
-	const char *depFilename = temp_printf( "%s%c%s.d", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPath );
+	String sourceFileNoPath = string_set( g_temp_storage, sourceFile );
+	path_remove_path_from_file( &sourceFileNoPath );
+
+	const char *depFilename = temp_printf( "%s%c%s.d", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPath.data );
 
 	Array<const char *> finalArgs = cmdArchetype.baseArgs;
 
-	const char *intermediateFile = temp_printf( "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, path_remove_file_extension( sourceFileNoPath ) );
+	String sourceFileNoPathAndExtension = string_copy( g_temp_storage, &sourceFileNoPath );
+	path_remove_file_extension( &sourceFileNoPathAndExtension );
+
+	const char *intermediateFile = temp_printf( "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPathAndExtension.data );
 
 	// Fill up remaining arguments
 
@@ -282,7 +281,7 @@ static bool8 Clang_CompileSourceFile(
 	For ( u64, flagIndex, 0, cmdArchetype.dependencyFlags.count ) {
 		finalArgs.add( cmdArchetype.dependencyFlags[flagIndex] );
 	}
-	finalArgs.add( temp_printf( "%s%c%s.d", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPath ) );
+	finalArgs.add( temp_printf( "%s%c%s.d", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPath.data ) );
 
 	// Output Flag/File
 	finalArgs.add( cmdArchetype.outputFlag );
@@ -304,9 +303,10 @@ static bool8 Clang_CompileSourceFile(
 		ReadDependencyFile( depFilename, clangState->includeDependencies );
 	}
 
-	if ( recordCompilation ) {
-		RecordCompilationDatabaseEntry( buildContext, sourceFile, finalArgs );
-	}
+	// DM!!! put this back!
+	// if ( recordCompilation ) {
+	// 	RecordCompilationDatabaseEntry( buildContext, sourceFile, finalArgs );
+	// }
 
 	return exitCode == 0;
 }
@@ -495,8 +495,10 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		// or do we want to just do this by default on linux because its a really common thing that people do?
 #ifdef __linux__
 		if ( config->binaryType == BINARY_TYPE_EXE ) {
-			const char *fullBinaryPath = path_remove_file_from_path( fullBinaryName );
-			args.add( temp_printf( "-Wl,-rpath=%s", fullBinaryPath ) );
+			String fullBinaryPath = string_set( g_temp_storage, fullBinaryName );
+			path_remove_file_from_path( &fullBinaryPath );
+
+			args.add( temp_printf( "-Wl,-rpath=%s", fullBinaryPath.data ) );
 		}
 #endif
 
@@ -590,8 +592,10 @@ static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const Array<
 		// or do we want to just do this by default on linux because its a really common thing that people do?
 #ifdef __linux__
 		if ( config->binaryType == BINARY_TYPE_EXE ) {
-			const char *fullBinaryPath = path_remove_file_from_path( fullBinaryName );
-			args.add( temp_printf( "-Wl,-rpath=%s", fullBinaryPath ) );
+			String fullBinaryPath = string_set( g_temp_storage, fullBinaryName );
+			path_remove_file_from_path( &fullBinaryPath );
+
+			args.add( temp_printf( "-Wl,-rpath=%s", fullBinaryPath.data ) );
 		}
 #endif
 
@@ -759,32 +763,34 @@ static String Clang_GetCompilerPath( compilerBackend_t *backend ) {
 static String Clang_GetCompilerVersion( compilerBackend_t *backend ) {
 	unused( backend );
 
+	// TODO: DM: 09/05/2026: pretty sure we can do better with this bit here
 	CXString clangVersionString = clang_getClangVersion();
 	const char *clangVersionCStr = clang_getCString( clangVersionString );
 	u64 clangVersionCStrLength = strlen( clangVersionCStr );
 	defer { clang_disposeString( clangVersionString ); };
 
-	String result;
-	string_init( &result, g_temp_storage );
-	string_copy_from_c_string( &result, clangVersionCStr, clangVersionCStrLength );
+	String result = string_set( g_temp_storage, clangVersionCStr, clangVersionCStrLength );
 
 	if ( string_starts_with( result.data, "clang version " ) ) {
-		result.data += strlen( "clang version " );
+		u64 versionPrefixLength = strlen( "clang version " );
+		result.data += versionPrefixLength;
+		result.count -= versionPrefixLength;
 	}
 
-	char *firstWhitespace = strchr( result.data, ' ' );
-	if ( firstWhitespace ) {
-		*firstWhitespace = 0;
+	u64 firstWhitespacePos = 0;
+	if ( string_find_from_left( &result, ' ', &firstWhitespacePos ) ) {
+		result.count = firstWhitespacePos;
+		result.data[result.count] = 0;
 	}
 
 	return result;
 }
 
+// TODO: DM: 09/05/2026: revisit this function
 static String GCC_GetCompilerVersion( compilerBackend_t *backend ) {
 	clangState_t *clangState = cast( clangState_t *, backend->data );
 
-	String compilerVersion;
-	string_init( &compilerVersion, g_temp_storage );
+	String compilerVersion = {};
 
 	const char *gccVersionPrefix = "gcc version ";
 
@@ -793,8 +799,7 @@ static String GCC_GetCompilerVersion( compilerBackend_t *backend ) {
 	args.add( clangState->compilerPath.data );
 	args.add( "-v" );
 
-	String gccOutputString;
-	string_init( &gccOutputString, g_temp_storage );
+	String gccOutputString = {};
 	s32 exitCode = RunProc( &args, NULL, 0, &gccOutputString );
 
 	const char *versionStart = strstr( gccOutputString.data, gccVersionPrefix );
@@ -807,7 +812,7 @@ static String GCC_GetCompilerVersion( compilerBackend_t *backend ) {
 
 		u64 versionLength = cast( u64, versionEnd ) - cast( u64, versionStart );
 
-		string_copy_from_c_string( &compilerVersion, versionStart, versionLength );
+		compilerVersion = string_set( g_temp_storage, versionStart, versionLength );
 	}
 
 	return compilerVersion;

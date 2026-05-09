@@ -252,7 +252,7 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 				const BuildConfig *config = &options->configs[configIndex];
 
 				VSCodeLaunchConfig launchConfig = {
-					.binaryName	= path_join( g_temp_storage, "${workspaceFolder}", BuildConfig_GetFullBinaryName( config, g_temp_storage ) ),
+					.binaryName	= std::string( "${workspaceFolder}" ) + PATH_SEPARATOR + BuildConfig_GetFullBinaryName( config, g_temp_storage ),
 					.cwd		= "${workspaceFolder}",
 				};
 
@@ -289,8 +289,8 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 		For ( u32, configIndex, 0, options->vsCodeJSONOptions.launchConfigs.size() ) {
 			VSCodeLaunchConfig *launchConfig = &options->vsCodeJSONOptions.launchConfigs[configIndex];
 
-			string_builder_appendf( &launchJSONContent,          "\t\t{\n" );
-			string_builder_appendf( &launchJSONContent, temp_printf( "\t\t\t\"name\": \"%s\",\n", launchConfig->binaryName.c_str() ) );
+			string_builder_appendf( &launchJSONContent, "\t\t{\n" );
+			string_builder_appendf( &launchJSONContent, "\t\t\t\"name\": \"%s\",\n", launchConfig->binaryName.c_str() );
 			{
 				VSCodeDebuggerType debuggerType = ( launchConfig->debuggerType == VSCODE_DEBUGGER_TYPE_UNSET ) ? VSCODE_DEBUGGER_TYPE_CPPDBG_GDB : launchConfig->debuggerType;
 

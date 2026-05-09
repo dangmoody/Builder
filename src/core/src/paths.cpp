@@ -33,27 +33,24 @@ SOFTWARE.
 #include <typecast.inl>
 #include <core_string.h>
 #include <string_builder.h>
-#include <defer.h>
+#include <core_math.h>
 
 #include <stdarg.h>
 #include <string.h>
 
-static const char *get_last_slash( const char *path ) {
-	const char *last_slash = NULL;
-	const char *last_back_slash = strrchr( path, '\\' );
-	const char *last_forward_slash = strrchr( path, '/' );
+static bool8 get_last_slash( String *path, u64 *out_last_slash_pos ) {
+	u64 last_forward_slash = 0;
+	u64 last_back_slash = 0;
 
-	if ( !last_back_slash && !last_forward_slash ) {
-		return NULL;
+	if ( !string_find_from_right( path, '/', &last_forward_slash ) && !string_find_from_right( path, '\\', &last_back_slash ) ) {
+		return false;
 	}
 
-	if ( cast( u64, last_back_slash ) > cast( u64, last_forward_slash ) ) {
-		last_slash = last_back_slash;
-	} else {
-		last_slash = last_forward_slash;
+	if ( out_last_slash_pos ) {
+		*out_last_slash_pos = max( last_forward_slash, last_back_slash );
 	}
 
-	return last_slash;
+	return true;
 }
 
 /*
@@ -64,43 +61,43 @@ static const char *get_last_slash( const char *path ) {
 ================================================================================================
 */
 
-const char *path_remove_file_from_path( const char *path ) {
-	const char *last_slash = get_last_slash( path );
-
-	if ( !last_slash ) {
-		return NULL;
+void path_remove_file_from_path( String *path ) {
+	u64 last_slash_pos = 0;
+	if ( !get_last_slash( path, &last_slash_pos ) ) {
+		return;
 	}
 
-	u64 path_length = cast( u64, last_slash ) - cast( u64, path );
+	u64 file_length = path->count - last_slash_pos;
 
-	return temp_c_string( path, path_length );
+	path->count -= file_length;
+	path->data[path->count] = 0;
 }
 
-const char *path_remove_path_from_file( const char *path ) {
-	const char *last_slash = get_last_slash( path );
-
-	if ( !last_slash ) {
-		last_slash = path;
-	} else {
-		last_slash++;
+void path_remove_path_from_file( String *path ) {
+	u64 last_slash_pos = 0;
+	if ( !get_last_slash( path, &last_slash_pos ) ) {
+		return;
 	}
 
-	return last_slash;
+	last_slash_pos += 1;	// want to skip past the last slash
+
+	path->data += last_slash_pos;
+	path->count -= last_slash_pos;
 }
 
-const char *path_remove_file_extension( const char *filename ) {
-	const char *dot = strrchr( filename, '.' );
-
-	if ( !dot ) {
-		return filename;
+void path_remove_file_extension( String *filename ) {
+	u64 dot_pos = 0;
+	if ( !string_find_from_right( filename, '.', &dot_pos ) ) {
+		return;
 	}
 
-	u64 result_length = cast( u64, dot ) - cast( u64, filename );
+	u64 extension_length = filename->count - dot_pos;
 
-	return temp_c_string( filename, result_length );
+	filename->count -= extension_length;
+	filename->data[filename->count] = 0;
 }
 
-static const char *path_join_internalv( LinearAllocator *allocator, const int count, va_list args ) {
+static String path_join_internalv( LinearAllocator *allocator, const int count, va_list args ) {
 	StringBuilder builder = {};
 	string_builder_init( &builder, allocator );
 
@@ -111,16 +108,23 @@ static const char *path_join_internalv( LinearAllocator *allocator, const int co
 
 		const char *part = va_arg( args, const char * );
 
-		string_builder_appendf( &builder, part );
+		string_builder_appendf( &builder, "%s", part );
 	}
 
-	return string_builder_to_string( &builder );
+	const char *final_path = string_builder_to_string( &builder );
+
+	String str = {
+		.data	= cast( char *, final_path ),
+		.count	= strlen( final_path ),
+	};
+
+	return str;
 }
 
-const char *path_join_internal( LinearAllocator *allocator, const int count, ... ) {
+String path_join_internal( LinearAllocator *allocator, const int count, ... ) {
 	va_list args;
 	va_start( args, count );
-	const char *result = path_join_internalv( allocator, count, args );
+	String result = path_join_internalv( allocator, count, args );
 	va_end( args );
 
 	return result;
@@ -130,11 +134,11 @@ char *path_relative_path_to( const char *path_from, const char *path_to ) {
 	assert( path_from );
 	assert( path_to );
 
-	path_from = path_fix_slashes( path_from );
-	path_to   = path_fix_slashes( path_to );
+	// path_from = path_fix_slashes( path_from );
+	// path_to   = path_fix_slashes( path_to );
 
-	u32 num_same_chars = 0;
-	u32 num_backs = 0;
+	u64 num_same_chars = 0;
+	u64 num_backs = 0;
 
 	while ( path_from[num_same_chars] && path_to[num_same_chars] && path_from[num_same_chars] == path_to[num_same_chars] ) {
 		num_same_chars += 1;
@@ -156,11 +160,11 @@ char *path_relative_path_to( const char *path_from, const char *path_to ) {
 	StringBuilder sb = {};
 	string_builder_init( &sb, g_temp_storage );
 
-	For ( u32, back_index, 0, num_backs ) {
+	For ( u64, back_index, 0, num_backs ) {
 		string_builder_appendf( &sb, "..%c", PATH_SEPARATOR );
 	}
 
-	string_builder_appendf( &sb, path_to + num_same_chars );
+	string_builder_appendf( &sb, "%s", path_to + num_same_chars );
 
 	return cast( char *, string_builder_to_string( &sb ) );
 }

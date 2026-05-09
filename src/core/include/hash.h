@@ -31,6 +31,9 @@ SOFTWARE.
 #include "int_types.h"
 #include "dll_export.h"
 
+struct LinearAllocator;
+struct String;
+
 
 // Creates a hash based on the given 32 bit 'data' that is 'length' bytes long.
 // If 'seed' is zero then will not use a pre-existing seed as a base for the hash.
@@ -43,11 +46,12 @@ CORE_API u64		hash64( const void *data, const u64 length, const u64 seed );
 // Returns a 64 bit hash based on the given string.
 // If 'seed' is zero then will not use a pre-existing seed as a base for the hash.
 CORE_API u64		hash_string( const char *string, const u64 seed );
+CORE_API u64		hash_string( const String *string, const u64 seed );
 
 
 struct Hasher;
 
-CORE_API Hasher		*hasher_create( const u64 seed );
+CORE_API Hasher		*hasher_create( LinearAllocator *allocator, const u64 seed );
 CORE_API void		hasher_destroy( Hasher *hasher );
 
 CORE_API void		hasher_reset( Hasher *hasher, const u64 seed );

@@ -31,6 +31,14 @@ SOFTWARE.
 #include "int_types.h"
 #include "dll_export.h"
 
+/*
+================================================================================================
+
+	Functions for random number generation
+
+================================================================================================
+*/
+
 // Generates a seed for random number generation based on time.
 CORE_API void		random_generate_seed();
 

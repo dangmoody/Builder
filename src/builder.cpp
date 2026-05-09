@@ -32,7 +32,6 @@ SOFTWARE.
 #include "core/include/linear_allocator.h"
 #include "win_support.h"
 
-// #include "core/include/allocation_context.h"
 #include "core/include/core_helpers.h"
 #include "core/include/core_array.inl"
 #include "core/include/int_types.h"
@@ -298,6 +297,10 @@ s32 RunProc( Array<const char *> *args, Array<const char *> *environmentVariable
 	assert( args );
 	assert( args->data );
 	assert( args->count >= 1 );
+	if ( outStdout ) {
+		assert( outStdout->data == NULL );
+		assert( outStdout->count == 0 );
+	}
 
 	if ( procFlags & PROC_FLAG_SHOW_ARGS ) {
 		For ( u64, argIndex, 0, args->count ) {
@@ -343,8 +346,7 @@ s32 RunProc( Array<const char *> *args, Array<const char *> *environmentVariable
 	}
 
 	if ( outStdout ) {
-		//*outStdout = string_builder_to_string( &sb );
-		string_copy_from_c_string( outStdout, string_builder_to_string( &sb ) );
+		*outStdout = string_set( g_temp_storage, string_builder_to_string( &sb ) );
 	}
 
 	s32 exitCode = process_join( process );
@@ -496,22 +498,27 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 	// make .o files for all compilation units
 	// TODO(DM): 14/06/2025: embarrassingly parallel
 	For ( u64, sourceFileIndex, 0, config->sourceFiles.size() ) {
-		const char *sourceFile = config->sourceFiles[sourceFileIndex].c_str();
-		const char *sourceFileNoPath = path_remove_path_from_file( sourceFile );
+		String sourceFile = string_set( g_temp_storage, config->sourceFiles[sourceFileIndex].c_str(), config->sourceFiles[sourceFileIndex].size() );
 
-		const char *intermediateFilename = temp_printf( "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, path_remove_file_extension( sourceFileNoPath ) );
-		intermediateFiles.add( intermediateFilename );
+		String sourceFileNoPath = string_copy( g_temp_storage, &sourceFile );
+		path_remove_path_from_file( &sourceFileNoPath );
 
-		const char *depFilename = temp_printf( "%s%c%s.d", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPath );
+		String sourceFileNoPathAndExtension = string_copy( g_temp_storage, &sourceFileNoPath );
+		path_remove_file_extension( &sourceFileNoPathAndExtension );
 
-		u32 sourceFileHashmapIndex = hashmap_get_value( context->sourceFileIndices, hash_string( sourceFile, 0 ) );
+		String intermediateFilename = string_printf( g_temp_storage, "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPathAndExtension.data );
+		intermediateFiles.add( intermediateFilename.data );
+
+		const char *depFilename = temp_printf( "%s%c%s.d", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPath.data );
+
+		u32 sourceFileHashmapIndex = hashmap_get_value( context->sourceFileIndices, hash_string( sourceFile.data, 0 ) );
 
 		// only rebuild the .o file if the source file (or any of the files that source file depends on) was written to more recently or it doesnt exist
-		if ( !ShouldRebuildSourceFile( sourceFile, intermediateFilename, sourceFileHashmapIndex ) ) {
+		if ( !ShouldRebuildSourceFile( sourceFile.data, intermediateFilename.data, sourceFileHashmapIndex ) ) {
 			continue;
 		}
 
-		if ( !compilerBackend->CompileSourceFile( compilerBackend, context, config, cmdArchetype, sourceFile, generateCompilationDatabase ) ) {
+		if ( !compilerBackend->CompileSourceFile( compilerBackend, context, config, cmdArchetype, sourceFile.data, generateCompilationDatabase ) ) {
 			error( "Compile failed.\n" );
 			return BUILD_RESULT_FAILED;
 		}
@@ -522,7 +529,7 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 		if ( sourceFileHashmapIndex != HASHMAP_INVALID_VALUE ) {
 			context->sourceFileIncludeDependencies[sourceFileHashmapIndex].includeDependencies = includeDependencies;
 		} else {
-			context->sourceFileIncludeDependencies.push_back( { sourceFile, includeDependencies } );
+			context->sourceFileIncludeDependencies.push_back( { sourceFile.data, includeDependencies } );
 		}
 	}
 
@@ -624,6 +631,10 @@ bool8 NukeFolder( const char *folder, const bool8 deleteRootFolder, const bool8 
 	}
 
 	return result;
+}
+
+bool8 PathHasSlash( const char *str ) {
+	return string_contains( str, "/" ) || string_contains( str, "\\" );
 }
 
 const char *GetNextSlashInPath( const char *path ) {
@@ -809,23 +820,15 @@ struct byteBuffer_t {
 	u64			readOffset;
 };
 
-static const char *GetIncludeDepsFilename( buildContext_t *context ) {
-	const char *inputFileStripped = path_remove_path_from_file( path_remove_file_extension( context->inputFile ) );
-	const char *includeDepsFilename = temp_printf( "%s%c%s.include_dependencies", context->dotBuilderFolder.data, PATH_SEPARATOR, inputFileStripped );
-	return includeDepsFilename;
-}
-
 static void ReadIncludeDependenciesFile( buildContext_t *context ) {
-	const char *includeDepsFilename = GetIncludeDepsFilename( context );
-
 	byteBuffer_t byteBuffer = {};
 	// DM!!! what allocator do we set here?
 	// byteBuffer.data.init( g_temp_storage );
 
 	// there wont be an include dependencies file on the first build or if you nuked the binaries folder (for instance)
 	// so this is allowed to fail
-	if ( !file_read_entire( includeDepsFilename, cast( char **, &byteBuffer.data.data ), &byteBuffer.data.count ) ) {
-		context->sourceFileIndices = hashmap_create( 1, 1.0f );
+	if ( !file_read_entire( context->includeDependenciesFilename.data, cast( char **, &byteBuffer.data.data ), &byteBuffer.data.count ) ) {
+		context->sourceFileIndices = hashmap_create( context->allocator, 1, 1.0f );
 		return;
 	}
 
@@ -852,7 +855,7 @@ static void ReadIncludeDependenciesFile( buildContext_t *context ) {
 
 	u32 numSourceFiles = ByteBuffer_Read_U32( &byteBuffer );
 
-	context->sourceFileIndices = hashmap_create( numSourceFiles, 1.0f );
+	context->sourceFileIndices = hashmap_create( context->allocator, numSourceFiles, 1.0f );
 
 	context->sourceFileIncludeDependencies.resize( numSourceFiles );
 
@@ -876,8 +879,6 @@ static void ReadIncludeDependenciesFile( buildContext_t *context ) {
 }
 
 static bool8 WriteIncludeDependenciesFile( buildContext_t *context ) {
-	const char *includeDepsFilename = GetIncludeDepsFilename( context );
-
 	byteBuffer_t byteBuffer = {};
 	byteBuffer.data.init( g_temp_storage );
 
@@ -914,16 +915,17 @@ static bool8 WriteIncludeDependenciesFile( buildContext_t *context ) {
 		}
 	}
 
-	if ( !file_write_entire( includeDepsFilename, byteBuffer.data.data, byteBuffer.data.count ) ) {
+	if ( !file_write_entire( context->includeDependenciesFilename.data, byteBuffer.data.data, byteBuffer.data.count ) ) {
 		s32 errorCode = get_last_error_code();
-		error( "Failed to write file \"%s\".  Error code: " ERROR_CODE_FORMAT ".\n", includeDepsFilename, errorCode );
+		error( "Failed to write file \"%s\".  Error code: " ERROR_CODE_FORMAT ".\n", context->includeDependenciesFilename.data, errorCode );
 		return false;
 	}
 
 	return true;
 }
 
-
+// DM!!! put this back!
+#if 0
 void RecordCompilationDatabaseEntry(
 	buildContext_t *buildContext,
 	const char *sourceFileName,
@@ -1134,6 +1136,7 @@ static bool WriteCompilationDatabase( buildContext_t *context ) {
 
 	return true;
 }
+#endif
 
 int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	float64 totalTimeStart = time_ms();
@@ -1159,10 +1162,9 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
-	buildContext_t context = {
-		.allocator		= linear_allocator_create( MEM_KILOBYTES( 128 ) ),
-		.configIndices	= hashmap_create( 1 ),	// TODO(DM): 30/03/2025: whats a reasonable default here?
-	};
+	buildContext_t context = {};
+	context.allocator = linear_allocator_create( MEM_KILOBYTES( 128 ) );
+	context.configIndices = hashmap_create( context.allocator, 1 );	// TODO(DM): 30/03/2025: whats a reasonable default here?
 
 	defer {
 		linear_allocator_destroy( context.allocator );
@@ -1303,33 +1305,35 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	// the default binary folder is the same folder as the source file
 	// if the file doesnt have a path then assume its in the same path as the current working directory (where we are calling builder from)
 	{
-		const char *inputFilePath = path_remove_file_from_path( context.inputFile );
-
-		if ( !inputFilePath ) {
-			inputFilePath = path_get_cwd();
+		if ( PathHasSlash( context.inputFile ) ) {
+			context.inputFilePath = string_set( context.allocator, context.inputFile );
+			path_remove_file_from_path( &context.inputFilePath );
+		} else {
+			context.inputFilePath = path_get_cwd( context.allocator );
 		}
 
-		const char *inputFileNoPath = path_remove_path_from_file( context.inputFile );
-		const char *inputFileNoPathOrExtension = path_remove_file_extension( inputFileNoPath );
+		context.dotBuilderFolder = path_join( context.allocator, context.inputFilePath.data, ".builder" );
 
-		// context.inputFilePath = inputFilePath;
-		string_init( &context.inputFilePath, context.allocator );
-		string_copy_from_c_string( &context.inputFilePath, inputFilePath );
+		String inputFileNoExt = string_set( context.allocator, context.inputFile );
+		path_remove_file_extension( &inputFileNoExt );
 
-		// string_printf( &context.dotBuilderFolder, "%s%c.builder", context.inputFilePath.data, PATH_SEPARATOR );
-		string_init( &context.dotBuilderFolder, context.allocator );
-		string_copy_from_c_string( &context.dotBuilderFolder, path_join( context.allocator, context.inputFilePath.data, ".builder" ) );
+		context.includeDependenciesFilename = string_printf( context.allocator, "%s%c%s.include_dependencies", context.dotBuilderFolder.data, PATH_SEPARATOR, inputFileNoExt.data );
 	}
 
-	const char *defaultBinaryName = path_remove_file_extension( path_remove_path_from_file( context.inputFile ) );
+	String defaultBinaryName = string_set( context.allocator, context.inputFile );
+	path_remove_path_from_file( &defaultBinaryName );
+	path_remove_file_extension( &defaultBinaryName );
 
 	ReadIncludeDependenciesFile( &context );
+
+	String appPathOnly = path_app_path( g_temp_storage );
+	path_remove_file_from_path( &appPathOnly );
 
 	// init default compiler backend (the version of clang that builder came with)
 	compilerBackend_t compilerBackend = {};
 	CreateCompilerBackend_Clang( &compilerBackend );
-	const char *defaultCompilerPath = temp_printf( "%s%c..%cclang%cbin%cclang", path_remove_file_from_path( path_app_path() ), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR );
-	compilerBackend.Init( &compilerBackend, &context, defaultCompilerPath, std::string() );
+	String defaultCompilerPath = path_join( g_temp_storage, appPathOnly.data, "..", "clang", "bin", "clang" );
+	compilerBackend.Init( &compilerBackend, &context, defaultCompilerPath.data, std::string() );
 	defer {
 		compilerBackend.Shutdown( &compilerBackend );
 	};
@@ -1360,7 +1364,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 			},
 			.additionalIncludes = {
 				// add the folder that builder lives in as an additional include path otherwise people have no real way of being able to include it
-				temp_printf( "%s%c..%cinclude", path_remove_file_from_path( path_app_path() ), PATH_SEPARATOR, PATH_SEPARATOR ),
+				temp_printf( "%s%c..%cinclude", appPathOnly.data, PATH_SEPARATOR, PATH_SEPARATOR ),
 			},
 			.additionalLibs = {
 #if defined( _WIN64 )
@@ -1376,7 +1380,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 				"-fPIC"
 			},
 #endif
-			.binaryName = defaultBinaryName,
+			.binaryName = defaultBinaryName.data,
 			.binaryFolder = context.dotBuilderFolder.data,
 			.intermediateFolder = context.dotBuilderFolder.data,
 			.binaryType = BINARY_TYPE_DYNAMIC_LIBRARY,
@@ -1534,21 +1538,24 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 			compilerBackend.Shutdown( &compilerBackend );
 
-			if ( string_ends_with( options.compilerPath.c_str(), ".exe" ) ) {
-				options.compilerPath = path_remove_file_extension( options.compilerPath.c_str() );
+			String actualCompilerPath = {};
+			{
+				if ( PathHasSlash( options.compilerPath.c_str() ) && !path_is_absolute( options.compilerPath.c_str() ) ) {
+					actualCompilerPath = path_join( g_temp_storage, context.inputFilePath.data, options.compilerPath.c_str() );
+				} else {
+					actualCompilerPath = string_set( g_temp_storage, options.compilerPath.c_str() );
+				}
+
+				if ( string_ends_with( actualCompilerPath.data, ".exe" ) ) {
+					path_remove_file_extension( &actualCompilerPath );
+				}
 			}
 
-			const char *path = path_remove_file_from_path( options.compilerPath.c_str() );
-
-			if ( path && !path_is_absolute( path ) ) {
-				options.compilerPath = context.inputFilePath.data + std::string( "/" ) + options.compilerPath;
-			}
-
-			if ( string_ends_with( options.compilerPath.c_str(), "clang" ) ) {
+			if ( string_ends_with( actualCompilerPath.data, "clang" ) ) {
 				CreateCompilerBackend_Clang( &compilerBackend );
-			} else if ( string_ends_with( options.compilerPath.c_str(), "gcc" ) ) {
+			} else if ( string_ends_with( actualCompilerPath.data, "gcc" ) ) {
 				CreateCompilerBackend_GCC( &compilerBackend );
-			} else if ( string_ends_with( options.compilerPath.c_str(), "cl" ) ) {
+			} else if ( string_ends_with( actualCompilerPath.data, "cl" ) ) {
 #ifdef _WIN32
 				CreateCompilerBackend_MSVC( &compilerBackend );
 #else
@@ -1569,6 +1576,8 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 				QUIT_ERROR();
 			}
+
+			options.compilerPath = actualCompilerPath.data;
 
 			// init new compiler backend
 			{
@@ -1685,10 +1694,10 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		if ( preBuildFunc ) {
 			printf( "Running pre-build code...\n" );
 
-			const char *oldCWD = path_get_cwd();
+			String oldCWD = path_get_cwd( g_temp_storage );
 			path_set_cwd( context.inputFilePath.data );
 			defer {
-				path_set_cwd( oldCWD );
+				path_set_cwd( oldCWD.data );
 			};
 
 			preBuildFunc();
@@ -1716,7 +1725,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 			}
 
 			if ( config->binaryName.empty() ) {
-				config->binaryName = defaultBinaryName;
+				config->binaryName = defaultBinaryName.data;
 			}
 
 			{
@@ -1799,10 +1808,10 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		if ( postBuildFunc ) {
 			printf( "Running post-build code...\n" );
 
-			const char *oldCWD = path_get_cwd();
+			String oldCWD = path_get_cwd( g_temp_storage );
 			path_set_cwd( context.inputFilePath.data );
 			defer {
-				path_set_cwd( oldCWD );
+				path_set_cwd( oldCWD.data );
 			};
 
 			postBuildFunc();
@@ -1813,9 +1822,16 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 				QUIT_ERROR();
 			}
 
-			if ( options.generateCompilationDatabase && !WriteCompilationDatabase( &context ) ) {
+			if ( options.generateCompilationDatabase
+#if 0	// DM!!! put this back!
+				&& !WriteCompilationDatabase( &context )
+#endif
+			)
+			{
 				context.compilationDatabase.clear();
+#if 0
 				QUIT_ERROR();
+#endif
 			}
 		}
 	}

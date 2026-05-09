@@ -59,3 +59,11 @@ void* mem_temp_alloc( const u64 size_bytes, const u32 alignment ) {
 void mem_reset_temp_storage() {
 	linear_allocator_reset( g_temp_storage );
 }
+
+u64 mem_temp_tell() {
+	return linear_allocator_tell( g_temp_storage );
+}
+
+void mem_temp_rewind_to( const u64 pos ) {
+	linear_allocator_rewind_to( g_temp_storage, pos );
+}

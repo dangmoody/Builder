@@ -46,9 +46,11 @@ SOFTWARE.
 */
 
 // Returns true if 'a' is within an epsilon range to 'b', otherwise returns false.
+// TODO: DM: 08/05/2026: do this properly
 CORE_API bool8	float32_equals( const float32 a, const float32 b );
 
 // Returns true if 'a' is within an epsilon range to 'b', otherwise returns false.
+// TODO: DM: 08/05/2026: do this properly
 CORE_API bool8	float64_equals( const float64 a, const float64 b );
 
 // Returns whichever value is smallest.

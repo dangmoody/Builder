@@ -12,6 +12,7 @@
 #include "core/include/string_builder.h"
 #include "core/include/defer.h"
 #include "core/include/core_helpers.h"
+#include "core/include/paths.h"
 
 #include <Windows.h>
 
@@ -132,9 +133,7 @@ bool8 Win_GetWindowsSDK( LinearAllocator *allocator, windowsSDK_t *outSDK ) {
 		return false;
 	}
 
-	//outSDK->rootFolder = windowsSDKRoot;
-	string_init( &outSDK->rootFolder, allocator );
-	string_copy_from_c_string( &outSDK->rootFolder, windowsSDKRoot );
+	outSDK->rootFolder = string_set( allocator, windowsSDKRoot );
 
 	// get the latest version of the windows sdk
 	const char *windowsSDKFolder = temp_printf( "%sLib", windowsSDKRoot );
@@ -222,19 +221,11 @@ bool8 Win_GetWindowsSDK( LinearAllocator *allocator, windowsSDK_t *outSDK ) {
 
 	const char *versionStr = temp_printf( "%d.%d.%d.%d", outSDK->version.v0, outSDK->version.v1, outSDK->version.v2, outSDK->version.v3 );
 
-	string_init( &outSDK->ucrtInclude, allocator );
-	string_init( &outSDK->umInclude, allocator );
-	string_init( &outSDK->sharedInclude, allocator );
-
-	string_init( &outSDK->ucrtLibPath, allocator );
-	string_init( &outSDK->umLibPath, allocator );
-
-	string_printf( &outSDK->ucrtInclude,   "%sinclude\\%s\\ucrt",   windowsSDKRoot, versionStr );
-	string_printf( &outSDK->umInclude,     "%sinclude\\%s\\um",     windowsSDKRoot, versionStr );
-	string_printf( &outSDK->sharedInclude, "%sinclude\\%s\\shared", windowsSDKRoot, versionStr );
-
-	string_printf( &outSDK->ucrtLibPath, "%sLib\\%s\\ucrt\\x64", windowsSDKRoot, versionStr );
-	string_printf( &outSDK->umLibPath,   "%sLib\\%s\\um\\x64",   windowsSDKRoot, versionStr );
+	outSDK->ucrtInclude = path_join( allocator, windowsSDKRoot, "include", versionStr, "ucrt" );
+	outSDK->umInclude = path_join( allocator, windowsSDKRoot, "include", versionStr, "um" );
+	outSDK->sharedInclude = path_join( allocator, windowsSDKRoot, "include", versionStr, "shared" );
+	outSDK->ucrtLibPath = path_join( allocator, windowsSDKRoot, "Lib", versionStr, "ucrt", "x64" );
+	outSDK->umLibPath = path_join( allocator, windowsSDKRoot, "Lib", versionStr, "um", "x64" );
 
 	printf( "Using latest valid Windows SDK version that was found, which was: %s.\n", versionStr );
 
@@ -271,15 +262,12 @@ static void OnMSVCInstallFound( const FileInfo *fileInfo, void *userData ) {
 	foundMSVCInstallData_t *data = cast( foundMSVCInstallData_t *, userData );
 
 	msvcInstall_t install = {};
-	string_init( &install.rootFolder, data->allocator );
-	string_init( &install.includePath, data->allocator );
-	string_init( &install.libPath, data->allocator );
 
 	sscanf( fileInfo->filename, "%d.%d.%d", &install.version.v0, &install.version.v1, &install.version.v2 );
 
-	string_printf( &install.rootFolder,  "%s\\%s", data->rootFolder, fileInfo->filename );
-	string_printf( &install.includePath, "%s\\include", install.rootFolder.data );
-	string_printf( &install.libPath,     "%s\\lib\\x64", install.rootFolder.data );
+	install.rootFolder = path_join( data->allocator, data->rootFolder, fileInfo->filename );
+	install.includePath = path_join( data->allocator, install.rootFolder.data, "include" );
+	install.libPath = path_join( data->allocator, install.rootFolder.data, "lib", "x64" );
 
 	LogVerbose( "Found MSVC installation located at: \"%s\"\n", install.rootFolder.data );
 

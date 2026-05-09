@@ -130,12 +130,22 @@ String path_join_internal( LinearAllocator *allocator, const int count, ... ) {
 	return result;
 }
 
+// TODO: DM: 09/05/2026: this function probably wants to return a String
+// that way we can avoid the horrible StringBuilder hack at the end
 char *path_relative_path_to( const char *path_from, const char *path_to ) {
 	assert( path_from );
 	assert( path_to );
 
+	// TODO: DM: 09/05/2026: this wasnt needed on linux but is on windows
+	// why does windows require slashes to be "fixed"?
 	// path_from = path_fix_slashes( path_from );
 	// path_to   = path_fix_slashes( path_to );
+	String path_from2 = string_set( g_temp_storage, path_from );
+	String path_to2 = string_set( g_temp_storage, path_to );
+	path_fix_slashes( &path_from2 );
+	path_fix_slashes( &path_to2 );
+	path_from = path_from2.data;
+	path_to = path_to2.data;
 
 	u64 num_same_chars = 0;
 	u64 num_backs = 0;

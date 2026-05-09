@@ -81,10 +81,8 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const buildContext_t *contex
 	msvcState_t *msvcState = cast( msvcState_t *, linear_allocator_alloc( context->allocator, sizeof( msvcState_t ) ) );
 	new( msvcState ) msvcState_t;
 
-	//msvcState->compilerPath = compilerPath.c_str();
-	//msvcState->compilerVersion = compilerVersion.c_str();
-	string_copy_from_c_string( &msvcState->compilerPath, compilerPath.c_str() );
-	string_copy_from_c_string( &msvcState->compilerVersion, compilerVersion.c_str() );
+	msvcState->compilerPath = string_set( context->allocator, compilerPath.c_str() );
+	msvcState->compilerVersion = string_set( context->allocator, compilerVersion.c_str() );
 
 	backend->data = msvcState;
 
@@ -96,11 +94,11 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const buildContext_t *contex
 	msvcState->microsoftCoreLibPaths.push_back( context->winSDK.umLibPath.data );
 
 	if ( string_equals( compilerPath.c_str(), "cl" ) || string_equals( compilerPath.c_str(), "cl.exe" ) ) {
-		string_printf( &msvcState->compilerPath, "%s\\bin\\Hostx64\\x64\\cl", context->msvcInstall.rootFolder.data );
-		string_printf( &msvcState->linkerPath, "%s\\bin\\Hostx64\\x64\\link", context->msvcInstall.rootFolder.data );
+		msvcState->compilerPath = path_join( context->allocator, context->msvcInstall.rootFolder.data, "bin", "Hostx64", "x64", "cl" );
+		msvcState->linkerPath = path_join( context->allocator, context->msvcInstall.rootFolder.data, "bin", "Hostx64", "x64", "link" );
 	} else {
-		const char *compilerDir = path_remove_file_from_path( compilerPath.c_str() );
-		string_printf( &msvcState->linkerPath, "%s\\link", compilerDir );
+		msvcState->linkerPath = path_join( context->allocator, compilerPath.c_str(), "link" );
+		path_remove_file_from_path( &msvcState->linkerPath );
 	}
 
 	msvcState->microsoftCoreIncludes.push_back( context->msvcInstall.includePath.data );
@@ -127,8 +125,11 @@ static bool8 MSVC_CompileSourceFile(
 	assert( sourceFile );
 	assert( config );
 
-	const char *sourceFileNoPath = path_remove_path_from_file( sourceFile );
-	const char *sourceFileNoExtension = path_remove_file_extension( sourceFileNoPath );
+	unused( recordCompilation );	// DM!!! remove this when compilation DBs go back in!
+
+	String sourceFileNoPathAndExtension = string_set( g_temp_storage, sourceFile );
+	path_remove_path_from_file( &sourceFileNoPathAndExtension );
+	path_remove_file_extension( &sourceFileNoPathAndExtension );
 
 	msvcState_t *msvcState = cast( msvcState_t *, backend->data );
 
@@ -136,7 +137,7 @@ static bool8 MSVC_CompileSourceFile(
 
 	Array<const char *> finalArgs = cmdArchetype.baseArgs;
 
-	const char *intermediateFile = temp_printf( "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoExtension );
+	const char *intermediateFile = temp_printf( "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPathAndExtension.data );
 
 	// Fill up remaining arguments
 

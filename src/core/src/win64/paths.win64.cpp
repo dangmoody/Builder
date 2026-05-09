@@ -49,29 +49,33 @@ SOFTWARE.
 ================================================================================================
 */
 
-const char *path_app_path() {
-	char *app_full_path = cast( char *, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
-	GetModuleFileNameA( NULL, app_full_path, MAX_PATH );
+String path_app_path( LinearAllocator *allocator ) {
+	char app_full_path[MAX_PATH] = {};
+	DWORD length = GetModuleFileNameA( NULL, app_full_path, MAX_PATH );
 
-	return app_full_path;
+	return string_set( allocator, app_full_path, length );
 }
 
-const char *path_current_working_directory() {
-	char *cwd = cast( char *, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
+String path_get_cwd( LinearAllocator *allocator ) {
+	char cwd[MAX_PATH] = {};
 	DWORD length = GetCurrentDirectory( MAX_PATH, cwd );
-	cwd[length] = 0;
 
-	return cwd;
+	return string_set( allocator, cwd, length );
 }
 
-const char *path_absolute_path( const char *path ) {
+bool8 path_set_cwd( const char *path ) {
 	assert( path );
 
-	char *absolute_path = cast( char *, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
-	DWORD length = GetFullPathName( path, MAX_PATH, absolute_path, NULL );
-	absolute_path[length] = 0;
+	return cast( bool8, SetCurrentDirectory( path ) );
+}
 
-	return absolute_path;
+String path_absolute_path( LinearAllocator *allocator, const char *path ) {
+	assert( path );
+
+	char absolute_path[MAX_PATH] = {};
+	DWORD length = GetFullPathName( path, MAX_PATH, absolute_path, NULL );
+
+	return string_set( allocator, absolute_path, length );
 }
 
 bool8 path_is_absolute( const char *path ) {
@@ -85,17 +89,14 @@ bool8 path_is_absolute( const char *path ) {
 const char *path_canonicalize( const char *path ) {
 	assert( path );
 
-	const char *path_copy = path_fix_slashes( path );
+	String path_copy = string_set( g_temp_storage, path );
+	path_fix_slashes( &path_copy );
 
-	u64 max_path_length = ( strlen( path_copy ) + 1 ) * sizeof( char );
+	char *result = cast( char *, mem_temp_alloc( path_copy.count + 1 ) );
 
-	char *result = cast( char *, mem_temp_alloc( max_path_length ) );
-
-	BOOL success = PathCanonicalizeA( result, path_copy );
+	BOOL success = PathCanonicalizeA( result, path_copy.data );
 	assert( success );
 	unused( success );
-
-	result[max_path_length - 1] = 0;
 
 	if ( *result == '/' ) {
 		result++;
@@ -108,12 +109,6 @@ const char *path_canonicalize( const char *path ) {
 
 void path_fix_slashes( String *str ) {
 	return string_replace( str, '/', PATH_SEPARATOR );
-}
-
-bool8 path_set_current_directory( const char *path ) {
-	assert( path );
-
-	return cast( bool8, SetCurrentDirectory( path ) );
 }
 
 #endif // _WIN32

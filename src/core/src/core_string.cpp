@@ -182,7 +182,22 @@ bool8 string_contains( const String *str, const String *substring ) {
 	assert( str );
 	assert( substring );
 
-	return memmem( str->data, str->count, substring->data, substring->count ) != NULL;
+	if ( substring->count == 0 ) {
+		return true;
+	}
+
+	if ( substring->count > str->count ) {
+		return false;
+	}
+
+	u64 search_count = str->count - substring->count;
+	for ( u64 i = 0; i <= search_count; i++ ) {
+		if ( memcmp( str->data + i, substring->data, substring->count ) == 0 ) {
+			return true;
+		}
+	}
+
+	return false;
 }
 
 void string_replace( String* str, const char old_char, const char new_char ) {
@@ -214,15 +229,14 @@ bool8 string_find_from_right( const String *str, const char c, u64 *out_index ) 
 	assert( str );
 	assert( out_index );
 
-	char *pos = cast( char *, memrchr( str->data, c, str->count ) );
-
-	if ( !pos ) {
-		return false;
+	for ( u64 i = str->count; i > 0; i-- ) {
+		if ( str->data[i - 1] == c ) {
+			*out_index = i - 1;
+			return true;
+		}
 	}
 
-	*out_index = cast( u64, pos ) - cast( u64, str->data );
-
-	return true;
+	return false;
 }
 
 const char *temp_printf( const char *fmt, ... ) {

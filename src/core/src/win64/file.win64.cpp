@@ -271,27 +271,29 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 
 		dir_index += 1;
 
-		const char *search_path = NULL;
+		String search_path = {};
 		if ( string_ends_with( dir, "/" ) ) {
-			search_path = temp_printf( "%s*", dir );
+			search_path = string_printf( g_temp_storage, "%s*", dir );
 		} else {
 			search_path = path_join( g_temp_storage, dir, "*" );
 		}
 
 		WIN32_FIND_DATA find_data = {};
-		HANDLE handle = FindFirstFile( search_path, &find_data );
+		HANDLE handle = FindFirstFile( search_path.data, &find_data );
 
 		if ( handle == INVALID_HANDLE_VALUE ) {
 			return false;
 		}
 
 		while ( 1 ) {
+			String full_filename = path_join( g_temp_storage, dir, find_data.cFileName );
+
 			FileInfo file_info = {
 				.size_bytes			= ( trunc_cast( u64, find_data.nFileSizeHigh ) << 32 ) | find_data.nFileSizeLow,
 				.last_write_time	= ( trunc_cast( u64, find_data.ftLastWriteTime.dwHighDateTime ) << 32 ) | find_data.ftLastWriteTime.dwLowDateTime,
 				.is_directory		= cast( bool8, find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ),
 				.filename			= find_data.cFileName,
-				.full_filename		= path_join( g_temp_storage, dir, file_info.filename ),
+				.full_filename		= full_filename.data,
 			};
 
 			if ( file_info.is_directory ) {

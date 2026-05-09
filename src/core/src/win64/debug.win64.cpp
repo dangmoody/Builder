@@ -31,6 +31,7 @@ SOFTWARE.
 #include <debug.h>
 
 #include <core_array.inl>
+#include <core_string.h>
 #include <core_helpers.h>
 #include <linear_allocator.h>
 #include <temp_storage.h>
@@ -45,8 +46,8 @@ SOFTWARE.
 #include <string.h>
 #include <malloc.h>
 
-Array<const char *> get_callstack( LinearAllocator *allocator ) {
-	Array<const char *> callstack;
+Array<String> get_callstack( LinearAllocator *allocator ) {
+	Array<String> callstack;
 	callstack.init( allocator );
 
 	HANDLE process = GetCurrentProcess();
@@ -73,12 +74,9 @@ Array<const char *> get_callstack( LinearAllocator *allocator ) {
 
 		DWORD64 displacement = 0;
 		if ( SymFromAddr( process, address, &displacement, symbol ) ) {
-			u64 name_len = cast( u64, symbol->NameLen );
-			char *name = cast( char *, linear_allocator_alloc( allocator, name_len + 1 ) );
-			memcpy( name, symbol->Name, name_len + 1 );
-			callstack.add( name );
+			callstack.add( string_set( allocator, symbol->Name ) );
 		} else {
-			callstack.add( "???" );
+			callstack.add( string_set( allocator, "???" ) );
 		}
 	}
 

@@ -20,6 +20,9 @@ if %errorlevel% NEQ 0 (
 	exit /B %errorlevel%
 )
 
+copy /y 3rdparty\\core\\core.dll %binFolder%\\core.dll
+copy /y 3rdparty\\core\\core.pdb %binFolder%\\core.pdb
+
 popd
 popd
 

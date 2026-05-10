@@ -50,7 +50,7 @@ static const char *GetCompilerPath( const compilerFlagBits_t compiler ) {
 #ifdef _WIN32
 		case COMPILER_MSVC_FULL_PATH: {
 			msvcInstall_t msvcInstall = {};
-			if ( Win_GetMSVCInstall( &msvcInstall ) ) {
+			if ( Win_GetMSVCInstall( g_temp_storage, &msvcInstall ) ) {
 				return temp_printf( "%s\\bin\\Hostx64\\x64\\cl", msvcInstall.rootFolder.data );
 			}
 			return NULL;
@@ -289,7 +289,8 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 				case COMPILER_MSVC_FULL_PATH: {
 					msvcInstall_t msvcInstall = {};
 					TEMPER_CHECK_TRUE_M( Win_GetMSVCInstall( testScratch, &msvcInstall ), "Failed to find MSVC install for full-path compiler test.\n" );
-					args.add( temp_printf( "--msvc-full-path=%s\\bin\\Hostx64\\x64\\cl", msvcInstall.rootFolder.data ) );
+					String msvcFullPath = string_printf( testScratch, "--msvc-full-path=%s\\bin\\Hostx64\\x64\\cl", msvcInstall.rootFolder.data );
+					args.add( msvcFullPath.data );
 				} break;
 #endif
 			}
@@ -301,11 +302,11 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 		}
 
 		// linux requires the "./" prefix because without that it tries to run the subprocess from your PATH
-		const char *fullBinaryName = NULL;
+		String fullBinaryName = {};
 		if ( test.binaryFolder ) {
-			fullBinaryName = temp_printf( "./%s%c%s%s", test.binaryFolder, PATH_SEPARATOR, test.binaryName, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
+			fullBinaryName = string_printf( testScratch, "./%s%c%s%s", test.binaryFolder, PATH_SEPARATOR, test.binaryName, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
 		} else {
-			fullBinaryName = temp_printf( "./%s%s", test.binaryName, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
+			fullBinaryName = string_printf( testScratch, "./%s%s", test.binaryName, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
 		}
 
 		const char *dotBuilderFolder = ".builder";
@@ -326,18 +327,18 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 
 		// we only care that certain files and folders got generated
 		{
-			TEMPER_CHECK_TRUE( file_exists( fullBinaryName ) );
+			TEMPER_CHECK_TRUE( file_exists( fullBinaryName.data ) );
 			TEMPER_CHECK_TRUE( folder_exists( dotBuilderFolder ) );
 
-			const char *userConfigBuildDLLFilename = temp_printf( "%s%c%s%s", dotBuilderFolder, PATH_SEPARATOR, buildSourceFileWithoutExtension.data, GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
-			TEMPER_CHECK_TRUE( file_exists( userConfigBuildDLLFilename ) );
+			String userConfigBuildDLLFilename = string_printf( testScratch, "%s%c%s%s", dotBuilderFolder, PATH_SEPARATOR, buildSourceFileWithoutExtension.data, GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
+			TEMPER_CHECK_TRUE( file_exists( userConfigBuildDLLFilename.data ) );
 		}
 
 		// now run the program we just built
 		{
 			Array<const char *> args;
 			args.init( testScratch );
-			args.add( fullBinaryName );
+			args.add( fullBinaryName.data );
 
 			exitCode = RunProc( &args, NULL );
 
@@ -445,17 +446,21 @@ TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 	s32 exitCode = -1;
 
+	// Builder uses temp storage a lot internally
+	// so make our own temp storage for each test and free once were done
+	LinearAllocator *testScratch = linear_allocator_create( MEM_KILOBYTES( 64 ) );
+	defer { linear_allocator_destroy( testScratch ); };
+
 	// need to find where msbuild lives on windows
 #ifdef _WIN32
-	std::string msbuildInstallationPath;
+	String msbuildInstallationPath;
 
 	// detect where msbuild is stored
 	{
-		String vswhereStdout;
-		string_init( &vswhereStdout, g_temp_storage );
+		String vswhereStdout = {};
 
 		Array<const char *> args;
-		args.init( g_temp_storage );
+		args.init( testScratch );
 		args.add( "C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe" );
 		args.add( "-latest" );
 		args.add( "-products" );
@@ -468,8 +473,7 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Failed to run vswhere.exe properly.  Exit code actually returned %d.\n", exitCode );
 
 		// fail test if we cant find the tag in the output that were looking for
-		// DM!!! this lambda is duplicated! unify!
-		auto ParseTagString = []( const char *fileBuffer, const char *tag, std::string &outString ) -> bool8 {
+		auto ParseTagString = [testScratch]( const char *fileBuffer, const char *tag, String *outString ) -> bool8 {
 			const char *lineStart = strstr( fileBuffer, tag );
 			if ( !lineStart ) {
 				return false;
@@ -486,18 +490,20 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 			if ( !lineEnd ) lineEnd = strchr( lineStart, '\n' );
 			assert( lineEnd );
 
-			outString = std::string( lineStart, lineEnd );
+			u64 count = cast( u64, lineEnd ) - cast( u64, lineStart );
+
+			*outString = string_set( testScratch, lineStart, count );
 
 			return true;
 		};
-		TEMPER_CHECK_TRUE_M( ParseTagString( vswhereStdout.data, "installationPath:", msbuildInstallationPath ), "Failed to query for MSBuild installation path using vswhere.exe.\n" );
+		TEMPER_CHECK_TRUE_M( ParseTagString( vswhereStdout.data, "installationPath:", &msbuildInstallationPath ), "Failed to query for MSBuild installation path using vswhere.exe.\n" );
 	}
 #endif
 
 	// generate the solution
 	if ( exitCode == 0 ) {
 		Array<const char *> args;
-		args.init( g_temp_storage );
+		args.init( testScratch );
 		args.add( "test_generate_visual_studio_files/generate_solution.cpp" );
 
 		exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
@@ -513,9 +519,9 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 		String msbuildStdout;
 
 		Array<const char *> args;
-		args.init( g_temp_storage );
+		args.init( testScratch );
 #if defined( _WIN32 )
-		args.add( temp_printf( "%s%cMSBuild%cCurrent%cBin%cMSBuild.exe", msbuildInstallationPath.c_str(), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR ) );	// TODO(DM): query for this instead
+		args.add( temp_printf( "%s%cMSBuild%cCurrent%cBin%cMSBuild.exe", msbuildInstallationPath.data, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR ) );	// TODO(DM): query for this instead
 #elif defined( __linux__ )
 		args.add( "msbuild" );
 #endif
@@ -529,7 +535,7 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 	// run the program, make sure it returns the correct exit code
 	if ( exitCode == 0 ) {
 		Array<const char *> args;
-		args.init( g_temp_storage );
+		args.init( testScratch );
 		args.add( "test_generate_visual_studio_files/bin/debug/the-app.exe" );
 		exitCode = RunProc( &args, NULL );
 
@@ -539,6 +545,11 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 }
 
 TEMPER_TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
+	// Builder uses temp storage a lot internally
+	// so make our own temp storage for each test and free once were done
+	LinearAllocator *testScratch = linear_allocator_create( MEM_KILOBYTES( 64 ) );
+	defer { linear_allocator_destroy( testScratch ); };
+
 	const char *buildFile				= "test_generate_vscode_json_files/generate_vscode_json.cpp";
 	const char *dotBuilderFolder		= "test_generate_vscode_json_files/.builder";
 	const char *vsCodeFolder			= "test_generate_vscode_json_files/.vscode";
@@ -549,7 +560,7 @@ TEMPER_TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	// generate the VS Code JSON files
 	{
 		Array<const char *> args;
-		args.init( g_temp_storage );
+		args.init( testScratch );
 		args.add( buildFile );
 
 		s32 exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
@@ -623,9 +634,9 @@ TEMPER_TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	// cleanup
 	{
 		buildTestGeneratedFiles_t generatedFiles = {};
-		generatedFiles.fileExtensionsToDelete.init( g_temp_storage );
-		generatedFiles.files.init( g_temp_storage );
-		generatedFiles.folders.init( g_temp_storage );
+		generatedFiles.fileExtensionsToDelete.init( testScratch );
+		generatedFiles.files.init( testScratch );
+		generatedFiles.folders.init( testScratch );
 		generatedFiles.fileExtensionsToDelete.add( GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
 		generatedFiles.fileExtensionsToDelete.add( ".d" );
 		generatedFiles.fileExtensionsToDelete.add( ".o" );
@@ -649,6 +660,11 @@ TEMPER_TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 }
 
 TEMPER_TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
+	// Builder uses temp storage a lot internally
+	// so make our own temp storage for each test and free once were done
+	LinearAllocator *testScratch = linear_allocator_create( MEM_KILOBYTES( 64 ) );
+	defer { linear_allocator_destroy( testScratch ); };
+
 	const char *dotBuilderFolder = "test_generate_zed_json_files/.builder";
 	const char *tasksJSONPath    = "test_generate_zed_json_files/.zed/tasks.json";
 	const char *debugJSONPath    = "test_generate_zed_json_files/.zed/debug.json";
@@ -656,7 +672,7 @@ TEMPER_TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	// generate the Zed JSON files
 	{
 		Array<const char *> args;
-		args.init( g_temp_storage );
+		args.init( testScratch );
 		args.add( "test_generate_zed_json_files/generate_zed_json.cpp" );
 
 		s32 exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
@@ -709,9 +725,9 @@ TEMPER_TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 		// (rmdir requires an empty directory)
 		{
 			buildTestGeneratedFiles_t generatedFiles = {};
-			generatedFiles.fileExtensionsToDelete.init( g_temp_storage );
-			generatedFiles.files.init( g_temp_storage );
-			generatedFiles.folders.init( g_temp_storage );
+			generatedFiles.fileExtensionsToDelete.init( testScratch );
+			generatedFiles.files.init( testScratch );
+			generatedFiles.folders.init( testScratch );
 			generatedFiles.fileExtensionsToDelete.add( GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
 			generatedFiles.fileExtensionsToDelete.add( ".d" );
 			generatedFiles.fileExtensionsToDelete.add( ".o" );

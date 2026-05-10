@@ -24,6 +24,7 @@ REM We have to build builder before running tests so don't share functionality
 echo Copying libclang.dll to %binFolder%...
 copy /y clang\\bin\\libclang.dll %binFolder%\\libclang.dll
 copy /y 3rdparty\\core\\core.dll %binFolder%\\core.dll
+copy /y 3rdparty\\core\\core.pdb %binFolder%\\core.pdb
 
 popd
 popd

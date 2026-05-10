@@ -81,6 +81,8 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const buildContext_t *contex
 	msvcState_t *msvcState = cast( msvcState_t *, linear_allocator_alloc( context->allocator, sizeof( msvcState_t ) ) );
 	new( msvcState ) msvcState_t;
 
+	msvcState->args.init( g_temp_storage );
+
 	msvcState->compilerPath = string_set( context->allocator, compilerPath.c_str() );
 	msvcState->compilerVersion = string_set( context->allocator, compilerVersion.c_str() );
 
@@ -157,7 +159,7 @@ static bool8 MSVC_CompileSourceFile(
 		procFlags = PROC_FLAG_SHOW_ARGS;
 	}
 
-	String processStdout;
+	String processStdout = {};
 	s32 exitCode = RunProc( &finalArgs, NULL, procFlags, &processStdout );
 
 	// now parse the stdout
@@ -280,6 +282,9 @@ static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t *backend, const Array
 
 static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t *backend, const BuildConfig *config, compilationCommandArchetype_t &outCmdArchetype ) {
 	msvcState_t *msvcState = cast( msvcState_t *, backend->data );
+
+	outCmdArchetype.baseArgs.init( g_temp_storage );
+	outCmdArchetype.dependencyFlags.init( g_temp_storage );
 
 	const u64 definesCount = config->defines.size();
 	const u64 microsoftCoreIncludesCount = msvcState->microsoftCoreIncludes.size();

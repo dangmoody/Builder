@@ -171,11 +171,23 @@ bool8 string_ends_with( const String *str, const String *suffix ) {
 	return ( suffix->count <= str->count ) && ( memcmp( str->data + ( str->count - suffix->count ), suffix->data, suffix->count ) == 0 );
 }
 
+bool8 string_contains( const char *str, const char c ) {
+	assert( str );
+
+	return memchr( str, c, strlen( str ) ) != NULL;
+}
+
 bool8 string_contains( const char *str, const char *substring ) {
 	assert( str );
 	assert( substring );
 
 	return strstr( str, substring ) != NULL;
+}
+
+bool8 string_contains( const String *str, const char c ) {
+	assert( str );
+
+	return str->data && memchr( str->data, c, str->count ) != NULL;
 }
 
 bool8 string_contains( const String *str, const String *substring ) {

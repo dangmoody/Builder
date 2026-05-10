@@ -80,6 +80,7 @@ Process* process_create( LinearAllocator *allocator, Array<const char *> *args, 
 	const char *subprocess_name = ( *args )[0];
 
 	Process *process = cast( Process *, linear_allocator_alloc( allocator, sizeof( Process ) ) );
+	memset( process, 0, sizeof( Process ) );
 
 	SECURITY_ATTRIBUTES sec_attr = { sizeof( SECURITY_ATTRIBUTES ), NULL, TRUE };
 
@@ -110,6 +111,9 @@ Process* process_create( LinearAllocator *allocator, Array<const char *> *args, 
 
 		For ( u32, arg_index, 0, args->count ) {
 			combined_args_length += strlen( ( *args )[arg_index] );
+			if ( strchr( ( *args )[arg_index], ' ' ) ) {
+				combined_args_length += 2;	// quotes around args that contain spaces
+			}
 		}
 		combined_args_length += args->count - 1;	// one space between each argument
 		combined_args_length += 1;					// null terminator
@@ -121,8 +125,18 @@ Process* process_create( LinearAllocator *allocator, Array<const char *> *args, 
 
 			u64 arg_len = strlen( arg );
 
+			bool8 has_spaces = strchr( arg, ' ' ) != NULL;
+
+			if ( has_spaces ) {
+				combined_args[offset++] = '"';
+			}
+
 			strncpy( combined_args + offset, arg, arg_len * sizeof( char ) );
 			offset += arg_len;
+
+			if ( has_spaces ) {
+				combined_args[offset++] = '"';
+			}
 
 			combined_args[offset] = ' ';
 			offset += 1;
@@ -161,9 +175,7 @@ Process* process_create( LinearAllocator *allocator, Array<const char *> *args, 
 
 	if ( flags & PROCESS_FLAG_ASYNC ) {
 		process->event_stdout = CreateEvent( &sec_attr, 1, 1, NULL );
-		process->event_stderr = ( flags & PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR )
-			? process->event_stdout
-			: CreateEvent( &sec_attr, 1, 1, NULL );
+		process->event_stderr = ( flags & PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR ) ? process->event_stdout : CreateEvent( &sec_attr, 1, 1, NULL );
 	}
 
 	if ( !CreateProcess(
@@ -258,7 +270,7 @@ s32 process_join( Process* process ) {
 
 static u32 read_from_file_handle( HANDLE file_handle, HANDLE event, char *out_buffer, const u64 count ) {
 	assert( file_handle );
-	assert( event );
+	//assert( event );
 	assert( out_buffer );
 	assert( count );
 

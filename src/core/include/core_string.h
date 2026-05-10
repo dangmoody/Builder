@@ -80,7 +80,9 @@ CORE_API bool8		string_ends_with( const char *str, const char *suffix );
 CORE_API bool8		string_ends_with( const String *str, const String *suffix );
 
 // Returns true if string 'str' has EXACTLY the contents of 'substring' somewhere in it.  Case sensitive.
+CORE_API bool8		string_contains( const char *str, const char c );
 CORE_API bool8		string_contains( const char *str, const char *substring );
+CORE_API bool8		string_contains( const String *str, const char c );
 CORE_API bool8		string_contains( const String *str, const String *substring );
 
 // Replaces every occurrence of 'old_char' in 'str' with 'new_char'.

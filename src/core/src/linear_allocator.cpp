@@ -51,7 +51,7 @@ LinearAllocator *linear_allocator_create( const u64 reserved_bytes ) {
 
 		warning(
 			"LinearAllocator: specified reserved bytes (%llu) is not a multiple of the virtual memory page size (%u bytes).\n"
-			"The OS dictates that any virtual memory pages that get reserved will automatically be a multiple of %u, so the specified reserved bytes will be rounded up to %llu bytes."
+			"The OS dictates that any virtual memory pages that get reserved will automatically be a multiple of %u, so the specified reserved bytes will be rounded up to %llu bytes.\n"
 			, reserved_bytes, page_size, page_size, actual_reserved_bytes );
 	}
 

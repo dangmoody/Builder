@@ -270,9 +270,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 	const char *solutionFilename = temp_printf( "%s%c%s.sln", visualStudioProjectFilesPath, PATH_SEPARATOR, options->solution.name.c_str() );
 
 	// get relative path from visual studio to the input file
-	char *pathFromSolutionToInputFile = cast( char *, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
-	memset( pathFromSolutionToInputFile, 0, MAX_PATH * sizeof( char ) );
-	pathFromSolutionToInputFile = path_relative_path_to( visualStudioProjectFilesPath, context->inputFilePath.data );
+	const char *pathFromSolutionToInputFile = path_relative_path_to( visualStudioProjectFilesPath, context->inputFilePath.data );
 	assert( pathFromSolutionToInputFile != NULL && !string_equals( pathFromSolutionToInputFile, "" ) );
 
 	// give each project a guid
@@ -840,9 +838,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 					const char *to = temp_printf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, fullBinaryName );
 					//to = path_canonicalise( to );
 
-					char *pathFromSolutionToBinary = cast( char *, mem_temp_alloc( MAX_PATH * sizeof( char ) ) );
-					memset( pathFromSolutionToBinary, 0, MAX_PATH * sizeof( char ) );
-					pathFromSolutionToBinary = path_relative_path_to( from, to );
+					const char *pathFromSolutionToBinary = path_relative_path_to( from, to );
 
 					For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
 						const char *platform = options->solution.platforms[platformIndex].c_str();

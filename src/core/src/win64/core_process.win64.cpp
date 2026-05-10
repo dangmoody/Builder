@@ -110,8 +110,14 @@ Process* process_create( LinearAllocator *allocator, Array<const char *> *args, 
 		u64 combined_args_length = 0;
 
 		For ( u32, arg_index, 0, args->count ) {
-			combined_args_length += strlen( ( *args )[arg_index] );
-			if ( strchr( ( *args )[arg_index], ' ' ) ) {
+			const char *arg = ( *args )[arg_index];
+			u64 arg_len = strlen( arg );
+
+			combined_args_length += arg_len;
+
+			bool8 already_quoted = ( arg_len >= 2 ) && ( arg[0] == '"' ) && ( arg[arg_len - 1] == '"' );
+
+			if ( !already_quoted && strchr( arg, ' ' ) ) {
 				combined_args_length += 2;	// quotes around args that contain spaces
 			}
 		}
@@ -125,16 +131,28 @@ Process* process_create( LinearAllocator *allocator, Array<const char *> *args, 
 
 			u64 arg_len = strlen( arg );
 
-			bool8 has_spaces = strchr( arg, ' ' ) != NULL;
+			bool8 already_quoted = ( arg_len >= 2 ) && ( arg[0] == '"' ) && ( arg[arg_len - 1] == '"' );
+			bool8 needs_quotes = !already_quoted && strchr( arg, ' ' ) != NULL;
 
-			if ( has_spaces ) {
+			if ( needs_quotes ) {
 				combined_args[offset++] = '"';
 			}
 
 			strncpy( combined_args + offset, arg, arg_len * sizeof( char ) );
+
+			// CreateProcess doesnt like forward slashes
+			// make sure they are back slashes
+			if ( arg_index == 0 ) {
+				for ( u64 char_index = 0; char_index < arg_len; char_index++ ) {
+					if ( combined_args[offset + char_index] == '/' ) {
+						combined_args[offset + char_index] = '\\';
+					}
+				}
+			}
+
 			offset += arg_len;
 
-			if ( has_spaces ) {
+			if ( needs_quotes ) {
 				combined_args[offset++] = '"';
 			}
 

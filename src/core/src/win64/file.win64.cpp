@@ -275,7 +275,10 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 		if ( string_ends_with( dir, "/" ) ) {
 			search_path = string_printf( g_temp_storage, "%s*", dir );
 		} else {
-			search_path = path_join( g_temp_storage, dir, "*" );
+			// TODO: DM: 10/05/2026: really, this wants to be done via path_join
+			// but theres a few things that rely on this behaviour
+			// so changing this will cause side effects in various places/codebases that use core
+			search_path = string_printf( g_temp_storage, "%s%c*", dir, '/' );
 		}
 
 		WIN32_FIND_DATA find_data = {};
@@ -286,7 +289,10 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 		}
 
 		while ( 1 ) {
-			String full_filename = path_join( g_temp_storage, dir, find_data.cFileName );
+			// TODO: DM: 10/05/2026: really, this wants to be done via path_join
+			// but theres a few things that rely on this behaviour
+			// so changing this will cause side effects in various places/codebases that use core
+			String full_filename = string_printf( g_temp_storage, "%s/%s", dir, find_data.cFileName );
 
 			FileInfo file_info = {
 				.size_bytes			= ( trunc_cast( u64, find_data.nFileSizeHigh ) << 32 ) | find_data.nFileSizeLow,

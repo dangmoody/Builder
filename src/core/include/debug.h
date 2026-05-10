@@ -48,6 +48,13 @@ template<class T> struct Array;
 	#error Unrecognised platform!
 #endif
 
+#define debug_break_here_if( condition ) \
+	do { \
+		if ( ( condition ) ) { \
+			debug_break(); \
+		} \
+	} while ( 0 )
+
 #if defined( _WIN32 )
 	#define ERROR_CODE_FORMAT "0x%X"
 #elif defined( __linux__ )

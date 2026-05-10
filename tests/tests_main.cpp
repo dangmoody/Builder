@@ -511,6 +511,8 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 	}
 
+	mem_reset_temp_storage();
+
 	// DM: apparently msbuild isnt properly supported on linux so this isnt possible
 	// I'm not convinced by that answer, but all of my reading says so
 #ifdef _WIN32

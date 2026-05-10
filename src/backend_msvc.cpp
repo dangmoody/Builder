@@ -99,8 +99,9 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const buildContext_t *contex
 		msvcState->compilerPath = path_join( context->allocator, context->msvcInstall.rootFolder.data, "bin", "Hostx64", "x64", "cl" );
 		msvcState->linkerPath = path_join( context->allocator, context->msvcInstall.rootFolder.data, "bin", "Hostx64", "x64", "link" );
 	} else {
-		msvcState->linkerPath = path_join( context->allocator, compilerPath.c_str(), "link" );
-		path_remove_file_from_path( &msvcState->linkerPath );
+		String compilerDir = string_set( g_temp_storage, compilerPath.c_str() );
+		path_remove_file_from_path( &compilerDir );
+		msvcState->linkerPath = path_join( context->allocator, compilerDir.data, "link" );
 	}
 
 	msvcState->microsoftCoreIncludes.push_back( context->msvcInstall.includePath.data );
@@ -110,9 +111,10 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const buildContext_t *contex
 }
 
 static void MSVC_Shutdown( compilerBackend_t *backend ) {
-	unused( backend );
-	//mem_free( backend->data );
-	//backend->data = NULL;
+	msvcState_t *msvcState = cast( msvcState_t *, backend->data );
+
+	msvcState->~msvcState_t();
+	backend->data = NULL;
 }
 
 static bool8 MSVC_CompileSourceFile(

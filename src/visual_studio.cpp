@@ -83,8 +83,8 @@ static void VisualStudio_OnFoundSourceFile( const FileInfo *fileInfo, void *user
 			//	5. add the filename back on
 			//
 			// why? cant we just just fileInfo->full_filename and trim the root folder from it instead?
-			u64 tempPos = mem_temp_tell();
-			defer { mem_temp_rewind_to( tempPos ); };
+			//u64 tempPos = mem_temp_tell();
+			//defer { mem_temp_rewind_to( tempPos ); };
 
 			String folderInFilter = string_set( g_temp_storage, fileInfo->full_filename );
 			path_remove_file_from_path( &folderInFilter );

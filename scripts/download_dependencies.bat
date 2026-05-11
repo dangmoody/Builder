@@ -62,6 +62,7 @@ for %%f in ("..\\clang\\bin\\*") do (
     if /i "%%~nxf"=="clang-20.exe"      set "keep=1"
     if /i "%%~nxf"=="clang-cl.exe"      set "keep=1"
     if /i "%%~nxf"=="clang-cpp.exe"     set "keep=1"
+    if /i "%%~nxf"=="clang-tidy.exe"    set "keep=1"
     if /i "%%~nxf"=="lld.exe"           set "keep=1"
     if /i "%%~nxf"=="lld-link.exe"      set "keep=1"
     if /i "%%~nxf"=="ld.lld.exe"        set "keep=1"

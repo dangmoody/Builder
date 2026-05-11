@@ -62,6 +62,7 @@ find "${clangDir}/bin" -maxdepth 1 \( -type f -o -type l \) \
 	! -name 'clang-20'     \
 	! -name 'clang-cl'     \
 	! -name 'clang-cpp'    \
+	! -name 'clang-tidy'   \
 	! -name 'lld'          \
 	! -name 'lld-link'     \
 	! -name 'ld.lld'       \

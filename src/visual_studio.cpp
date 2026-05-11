@@ -83,9 +83,6 @@ static void VisualStudio_OnFoundSourceFile( const FileInfo *fileInfo, void *user
 			//	5. add the filename back on
 			//
 			// why? cant we just just fileInfo->full_filename and trim the root folder from it instead?
-			//u64 tempPos = mem_temp_tell();
-			//defer { mem_temp_rewind_to( tempPos ); };
-
 			String folderInFilter = string_set( g_temp_storage, fileInfo->full_filename );
 			path_remove_file_from_path( &folderInFilter );
 
@@ -320,11 +317,8 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 						// const char *sourceFilePath = path_remove_file_from_path( sourceFile );
 						String sourceFilePath = string_set( g_temp_storage, sourceFile );
-						path_remove_file_from_path( &sourceFilePath );
 
-						// DM!!! is this good enough?
-						// if ( sourceFilePath ) {
-						if ( PathHasSlash( sourceFilePath.data ) ) {
+						if ( path_remove_file_from_path( &sourceFilePath ) ) {
 							u64 sourceFilePathHash = hash_string( &sourceFilePath, 0 );
 
 							// TODO(DM): 27/02/2026: instead of this stupid duplicate checking we have here, use a hashmap instead
@@ -407,11 +401,8 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 		{
 			// const char *fullFolderPath = path_remove_file_from_path( project->name.c_str() );
 			String fullFolderPath = string_set( g_temp_storage, project->name.c_str() );
-			path_remove_file_from_path( &fullFolderPath );
 
-			// DM!!! is this good enough?
-			// if ( fullFolderPath ) {
-			if ( PathHasSlash( fullFolderPath.data ) ) {
+			if ( path_remove_file_from_path( &fullFolderPath ) ) {
 				u32 guidIndex = HASHMAP_INVALID_VALUE;
 				u32 guidParentIndex = HASHMAP_INVALID_VALUE;
 

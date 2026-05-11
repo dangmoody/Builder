@@ -229,10 +229,8 @@ static bool8 GCC_Init( compilerBackend_t *backend, const buildContext_t *context
 	ResolveCompilerAndLinkerPaths( clangState, context->allocator, compilerPath.c_str(), "gcc", "ld" );
 
 	String pathToCompiler = string_set( g_temp_storage, compilerPath.c_str() );
-	path_remove_file_from_path( &pathToCompiler );
 
-	// if ( pathToCompiler ) {
-	if ( PathHasSlash( pathToCompiler.data ) ) {
+	if ( path_remove_file_from_path( &pathToCompiler ) ) {
 		clangState->arPath = path_join( context->allocator, pathToCompiler.data, "ar" );
 	} else {
 		clangState->arPath = string_set( context->allocator, "ar" );

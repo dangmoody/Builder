@@ -824,7 +824,7 @@ TEMPER_TEST( ValidateCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 #endif
 
 int main( int argc, char **argv ) {
-	mem_init_temp_storage( MEM_KILOBYTES( 64 ) );
+	mem_init_temp_storage( MEM_KILOBYTES( 128 ) );
 	defer { mem_shutdown_temp_storage(); };
 
 	TEMPER_RUN( argc, argv );

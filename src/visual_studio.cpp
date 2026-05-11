@@ -49,11 +49,6 @@ SOFTWARE.
 #include <uuid/uuid.h>
 #endif
 
-#ifndef MAX_PATH
-	// Windows has the shortest filepaths - builder is cross platform, let's lock it down for all platforms to the min
-	#define MAX_PATH 260
-#endif
-
 
 // some project type guids are pre-determined by visual studio
 #define VISUAL_STUDIO_CPP_PROJECT_TYPE_GUID		"8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942"	// c++ project

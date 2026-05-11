@@ -61,40 +61,46 @@ static bool8 get_last_slash( String *path, u64 *out_last_slash_pos ) {
 ================================================================================================
 */
 
-void path_remove_file_from_path( String *path ) {
+bool8 path_remove_file_from_path( String *path ) {
 	u64 last_slash_pos = 0;
 	if ( !get_last_slash( path, &last_slash_pos ) ) {
-		return;
+		return false;
 	}
 
 	u64 file_length = path->count - last_slash_pos;
 
 	path->count -= file_length;
 	path->data[path->count] = 0;
+
+	return file_length > 0;
 }
 
-void path_remove_path_from_file( String *path ) {
+bool8 path_remove_path_from_file( String *path ) {
 	u64 last_slash_pos = 0;
 	if ( !get_last_slash( path, &last_slash_pos ) ) {
-		return;
+		return false;
+	} else {
+		last_slash_pos += 1;	// want to skip past the last slash
 	}
-
-	last_slash_pos += 1;	// want to skip past the last slash
 
 	path->data += last_slash_pos;
 	path->count -= last_slash_pos;
+
+	return last_slash_pos > 0;
 }
 
-void path_remove_file_extension( String *filename ) {
+bool8 path_remove_file_extension( String *filename ) {
 	u64 dot_pos = 0;
 	if ( !string_find_from_right( filename, '.', &dot_pos ) ) {
-		return;
+		return false;
 	}
 
-	u64 extension_length = filename->count - dot_pos;
+	u64 file_extension_length = filename->count - dot_pos;
 
-	filename->count -= extension_length;
+	filename->count -= file_extension_length;
 	filename->data[filename->count] = 0;
+
+	return file_extension_length > 0;
 }
 
 static String path_join_internalv( LinearAllocator *allocator, const int count, va_list args ) {

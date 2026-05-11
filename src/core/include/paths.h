@@ -63,14 +63,14 @@ CORE_API bool8				path_set_cwd( const char *path );
 // Returns the absolute path of 'file'.
 CORE_API String				path_absolute_path( LinearAllocator *allocator, const char *path );
 
-// Given a file path that also includes a filename, will remove the filename part, leaving just the path.
-CORE_API void				path_remove_file_from_path( String *path );
+// Returns true if the file part of a file path can be removed, leaving just the path, otherwise returns false.
+CORE_API bool8				path_remove_file_from_path( String *path );
 
-// Given a file path that also includes a filename, will remove the path part, leaving just the filename.
-CORE_API void				path_remove_path_from_file( String *path );
+// Returns true if the path part of a file path can be removed, leaving just the file name, otherwise returns false.
+CORE_API bool8				path_remove_path_from_file( String *path );
 
-// Returns the name of a file without its file extension, if there is one.
-CORE_API void				path_remove_file_extension( String *filename );
+// Returns true if the file extension could be removed from the filename, otherwise returns false.
+CORE_API bool8				path_remove_file_extension( String *filename );
 
 // On Windows:   Returns true if the path starts with a letter followed by a colon (for example: "C:"), otherwise returns false.
 // On Mac/Linux: Returns true if the path starts with two backslashes or a single forward slash, otherwise returns false.

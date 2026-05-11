@@ -633,9 +633,6 @@ bool8 NukeFolder( const char *folder, const bool8 deleteRootFolder, const bool8 
 	return result;
 }
 
-bool8 PathHasSlash( const char *str ) {
-	return string_contains( str, "/" ) || string_contains( str, "\\" );
-}
 
 const char *GetNextSlashInPath( const char *path ) {
 	const char *nextSlash = NULL;
@@ -1331,9 +1328,10 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	// the default binary folder is the same folder as the source file
 	// if the file doesnt have a path then assume its in the same path as the current working directory (where we are calling builder from)
 	{
-		if ( PathHasSlash( context.inputFile ) ) {
-			context.inputFilePath = string_set( context.allocator, context.inputFile );
-			path_remove_file_from_path( &context.inputFilePath );
+		String inputFilePath = string_set( g_temp_storage, context.inputFile );
+
+		if ( path_remove_file_from_path( &inputFilePath ) ) {
+			context.inputFilePath = inputFilePath;
 		} else {
 			context.inputFilePath = path_get_cwd( context.allocator );
 		}
@@ -1564,12 +1562,10 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 			compilerBackend.Shutdown( &compilerBackend );
 
-			String actualCompilerPath = {};
+			String actualCompilerPath = string_set( g_temp_storage, options.compilerPath.c_str() );
 			{
-				if ( PathHasSlash( options.compilerPath.c_str() ) && !path_is_absolute( options.compilerPath.c_str() ) ) {
+				if ( path_remove_file_from_path( &actualCompilerPath ) && !path_is_absolute( options.compilerPath.c_str() ) ) {
 					actualCompilerPath = path_join( g_temp_storage, context.inputFilePath.data, options.compilerPath.c_str() );
-				} else {
-					actualCompilerPath = string_set( g_temp_storage, options.compilerPath.c_str() );
 				}
 
 				if ( string_ends_with( actualCompilerPath.data, ".exe" ) ) {

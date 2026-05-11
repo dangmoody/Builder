@@ -167,13 +167,13 @@ static void ReadDependencyFile( const char *depFilename, std::vector<std::string
 }
 
 static void ResolveCompilerAndLinkerPaths( clangState_t *clangState, LinearAllocator *allocator, const char *compilerPath, const char *compilerName, const char *linkerName ) {
-	if ( PathHasSlash( compilerPath ) ) {
-		clangState->compilerPath = string_set( allocator, compilerPath );
-		clangState->linkerPath = string_set( allocator, linkerName );
+	String pathToCompiler = string_set( g_temp_storage, compilerPath );
+
+	if ( path_remove_file_from_path( &pathToCompiler ) ) {
+		clangState->compilerPath = path_join( allocator, pathToCompiler.data, compilerName );
+		clangState->linkerPath = path_join( allocator, pathToCompiler.data, linkerName );
 	} else {
-		// clangState->compilerPath = path_join( allocator, compilerPath, compilerName );
-		// clangState->linkerPath = path_join( allocator, compilerPath, linkerName );
-		clangState->compilerPath = string_set( allocator, compilerName );
+		clangState->compilerPath = string_set( allocator, compilerPath );
 		clangState->linkerPath = string_set( allocator, linkerName );
 	}
 }

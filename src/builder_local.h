@@ -138,8 +138,6 @@ u64			GetLastFileWriteTime( const char *filename );
 
 bool8		NukeFolder( const char *folder, const bool8 deleteRootFolder, const bool8 printDeletions );
 
-bool8		PathHasSlash( const char *str );
-
 const char	*GetNextSlashInPath( const char *path );
 
 bool8		FileIsSourceFile( const char *filename );

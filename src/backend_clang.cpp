@@ -257,8 +257,6 @@ static bool8 Clang_CompileSourceFile(
 	assert( backend );
 	assert( sourceFile );
 
-	unused( recordCompilation );	// DM!!! remove this when compilation DBs go back in!
-
 	clangState_t *clangState = cast( clangState_t *, backend->data );
 
 	String sourceFileNoPath = string_set( g_temp_storage, sourceFile );
@@ -301,10 +299,9 @@ static bool8 Clang_CompileSourceFile(
 		ReadDependencyFile( depFilename, clangState->includeDependencies );
 	}
 
-	// DM!!! put this back!
-	// if ( recordCompilation ) {
-	// 	RecordCompilationDatabaseEntry( buildContext, sourceFile, finalArgs );
-	// }
+	if ( recordCompilation ) {
+		RecordCompilationDatabaseEntry( buildContext, sourceFile, finalArgs );
+	}
 
 	return exitCode == 0;
 }

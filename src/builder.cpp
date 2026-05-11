@@ -924,18 +924,19 @@ static bool8 WriteIncludeDependenciesFile( buildContext_t *context ) {
 	return true;
 }
 
-// DM!!! put this back!
-#if 0
-void RecordCompilationDatabaseEntry(
-	buildContext_t *buildContext,
-	const char *sourceFileName,
-	const Array<const char *> &compilationCommandArray ) {
+void RecordCompilationDatabaseEntry( buildContext_t *buildContext, const char *sourceFileName, const Array<const char *> &compilationCommandArray ) {
+	u64 pos = mem_temp_tell();
+	defer { mem_temp_rewind_to( pos ); };
 
-	compilationDatabaseEntry_t entry;
-	entry.directory = path_absolute_path( buildContext->inputFilePath.data );
-	entry.file = path_absolute_path( sourceFileName );
+	String directory = path_absolute_path( g_temp_storage, buildContext->inputFilePath.data );
+	String file = path_absolute_path( g_temp_storage, sourceFileName );
+
+	compilationDatabaseEntry_t entry = {};
+	entry.directory = directory.data;
+	entry.file = file.data;
 
 	entry.arguments.reserve( compilationCommandArray.count );
+
 	For ( u64, argIndex, 0, compilationCommandArray.count ) {
 		const char *arg = compilationCommandArray[argIndex];
 		// The reason for this is because Core uses a thirdparty library under-the-hood in prcoess_create for subprocesses,
@@ -1024,9 +1025,15 @@ static void SanitizeCompilationDatabaseArgs( std::vector<std::string> &args ) {
 		// Paths not related to compiler-specific flags
 		if ( !rule ) {
 			if ( path_is_absolute( argPtr ) || FileIsSourceFile( argPtr ) || FileIsHeaderFile( argPtr ) ) {
+#if 0
 				std::string path = path_absolute_path( arg.c_str() );
 				FixCompilatiomDatabasePath( path );
 				arg = std::move( path );
+#else
+				String path = path_absolute_path( g_temp_storage, arg.c_str() );
+				string_replace( &path, '\\', '/' );
+				arg = path.data;
+#endif
 			}
 
 			continue;
@@ -1040,29 +1047,49 @@ static void SanitizeCompilationDatabaseArgs( std::vector<std::string> &args ) {
 
 		// Joined form
 		if ( ( ruleForms & JOINED ) && argLength > ruleLength && arg.compare( 0, ruleLength, ruleFlag ) == 0 ) {
+#if 0
 			std::string path = path_absolute_path( arg.substr( ruleLength ).c_str() );
 			if ( !path.empty() ) {
 				FixCompilatiomDatabasePath( path );
 				arg = ruleFlag + path;
 				handled = true;
 			}
+#else
+			String path = path_absolute_path( g_temp_storage, arg.c_str() );
+			string_replace( &path, '\\', '/' );
+			arg = path.data;
+#endif
 		}
 
 		// Colon form
 		if ( !handled && ( ruleForms & COLON ) && argLength > ruleLength && arg[ruleLength] == ':' ) {
+#if 0
 			std::string path = path_absolute_path( arg.substr( ruleLength + 1 ).c_str() );
 			FixCompilatiomDatabasePath( path );
 			arg = std::string( ruleFlag ) + ":" + path;
 			handled = true;
+#else
+			String path = path_absolute_path( g_temp_storage, arg.substr( ruleLength + 1 ).c_str() );
+			string_replace( &path, '\\', '/' );
+			arg = std::string( ruleFlag ) + ":" + path.data;
+			handled = true;
+#endif
 		}
 
 		// Separate form
 		if ( !handled && ( ruleForms & SEPARATE ) ) {
 			if ( argIndex + 1 < args.size() ) {
+#if 0
 				std::string &nextArg = args[++argIndex];
 				std::string path = path_absolute_path( nextArg.c_str() );
 				FixCompilatiomDatabasePath( path );
 				nextArg = std::move( path );
+#else
+				std::string &nextArg = args[++argIndex];
+				String path = path_absolute_path( g_temp_storage, nextArg.c_str() );
+				string_replace( &path, '\\', '/' );
+				nextArg = path.data;
+#endif
 			}
 		}
 	}
@@ -1136,7 +1163,6 @@ static bool WriteCompilationDatabase( buildContext_t *context ) {
 
 	return true;
 }
-#endif
 
 int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	float64 totalTimeStart = time_ms();
@@ -1822,16 +1848,9 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 				QUIT_ERROR();
 			}
 
-			if ( options.generateCompilationDatabase
-#if 0	// DM!!! put this back!
-				&& !WriteCompilationDatabase( &context )
-#endif
-			)
-			{
+			if ( options.generateCompilationDatabase && !WriteCompilationDatabase( &context ) ) {
 				context.compilationDatabase.clear();
-#if 0
 				QUIT_ERROR();
-#endif
 			}
 		}
 	}

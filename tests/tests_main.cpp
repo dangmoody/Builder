@@ -759,8 +759,6 @@ TEMPER_TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	}
 }
 
-// DM!!! put me back!
-#if 0
 // Validates the generated compile_commands.json by feeding it to clang-tidy.
 // If clang-tidy can successfully load the compilation database, it proves
 // the JSON is correctly formatted according to the specification.
@@ -821,7 +819,6 @@ TEMPER_TEST( ValidateCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 
 	TEMPER_CHECK_TRUE_M( isValid, "clang-tidy failed to load compile_commands.json - the file may be malformed\n" );
 }
-#endif
 
 int main( int argc, char **argv ) {
 	mem_init_temp_storage( MEM_KILOBYTES( 128 ) );

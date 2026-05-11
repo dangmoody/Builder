@@ -97,17 +97,10 @@ struct includeDependencies_t {
 };
 
 struct compilationDatabaseEntry_t {
-#if 0
 	std::vector<std::string>	arguments;
 	std::string					directory;
 	std::string					file;
 	std::string					outputFile;
-#else
-	std::vector<String>			arguments;
-	String						directory;
-	String						file;
-	String						outputFile;
-#endif
 };
 
 struct buildContext_t {
@@ -156,8 +149,7 @@ const char	*GetFileExtensionFromBinaryType( const BinaryType type );
 
 const char	*BuildConfig_GetFullBinaryName( const BuildConfig *config, LinearAllocator *allocator );
 
-// DM!!! put this back!
-// void		RecordCompilationDatabaseEntry( buildContext_t *buildContext, const char *sourceFileName, const Array<const char *> &compilationCommandArray );
+void		RecordCompilationDatabaseEntry( buildContext_t *buildContext, const char *sourceFileName, const Array<const char *> &compilationCommandArray );
 
 s32			RunProc( Array<const char *> *args, Array<const char *> *environmentVariables, const procFlags_t procFlags = 0, String *outStdout = NULL );
 

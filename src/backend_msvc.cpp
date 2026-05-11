@@ -129,8 +129,6 @@ static bool8 MSVC_CompileSourceFile(
 	assert( sourceFile );
 	assert( config );
 
-	unused( recordCompilation );	// DM!!! remove this when compilation DBs go back in!
-
 	String sourceFileNoPathAndExtension = string_set( g_temp_storage, sourceFile );
 	path_remove_path_from_file( &sourceFileNoPathAndExtension );
 	path_remove_file_extension( &sourceFileNoPathAndExtension );
@@ -208,10 +206,9 @@ static bool8 MSVC_CompileSourceFile(
 		}
 	}
 
-	// DM!!! put this back!
-	// if ( recordCompilation ) {
-	// 	RecordCompilationDatabaseEntry( buildContext, sourceFile, finalArgs );
-	// }
+	if ( recordCompilation ) {
+		RecordCompilationDatabaseEntry( buildContext, sourceFile, finalArgs );
+	}
 
 	return exitCode == 0;
 }

@@ -83,7 +83,7 @@ void fatal_error( const char *fmt, ... ) {
 }
 
 void dump_callstack() {
-	Array<String> callstack = get_callstack( g_temp_storage );
+	Array<String> callstack = get_callstack( mem_get_temp_storage() );
 
 	For ( u64, frame_index, 0, callstack.count ) {
 		printf( "[%" PRIu64 "]: %s\n", frame_index, callstack[frame_index].data );

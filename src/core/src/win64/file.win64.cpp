@@ -261,7 +261,7 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 	assert( visit_callback );
 
 	Array<const char *> directories;
-	directories.init( g_temp_storage );
+	directories.init( mem_get_temp_storage() );
 	directories.add( path );
 
 	u32 dir_index = 0;
@@ -273,12 +273,12 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 
 		String search_path = {};
 		if ( string_ends_with( dir, "/" ) ) {
-			search_path = string_printf( g_temp_storage, "%s*", dir );
+			search_path = string_printf( mem_get_temp_storage(), "%s*", dir );
 		} else {
 			// TODO: DM: 10/05/2026: really, this wants to be done via path_join
 			// but theres a few things that rely on this behaviour
 			// so changing this will cause side effects in various places/codebases that use core
-			search_path = string_printf( g_temp_storage, "%s%c*", dir, '/' );
+			search_path = string_printf( mem_get_temp_storage(), "%s%c*", dir, '/' );
 		}
 
 		WIN32_FIND_DATA find_data = {};
@@ -292,7 +292,7 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 			// TODO: DM: 10/05/2026: really, this wants to be done via path_join
 			// but theres a few things that rely on this behaviour
 			// so changing this will cause side effects in various places/codebases that use core
-			String full_filename = string_printf( g_temp_storage, "%s/%s", dir, find_data.cFileName );
+			String full_filename = string_printf( mem_get_temp_storage(), "%s/%s", dir, find_data.cFileName );
 
 			FileInfo file_info = {
 				.size_bytes			= ( trunc_cast( u64, find_data.nFileSizeHigh ) << 32 ) | find_data.nFileSizeLow,

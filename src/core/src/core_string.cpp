@@ -256,7 +256,7 @@ const char *temp_printf( const char *fmt, ... ) {
 
 	va_list args;
 	va_start( args, fmt );
-	String result = string_vprintf( g_temp_storage, fmt, args );
+	String result = string_vprintf( mem_get_temp_storage(), fmt, args );
 	va_end( args );
 
 	return result.data;

@@ -89,7 +89,7 @@ bool8 path_is_absolute( const char *path ) {
 const char *path_canonicalize( const char *path ) {
 	assert( path );
 
-	String path_copy = string_set( g_temp_storage, path );
+	String path_copy = string_set( mem_get_temp_storage(), path );
 	path_fix_slashes( &path_copy );
 
 	char *result = cast( char *, mem_temp_alloc( path_copy.count + 1 ) );

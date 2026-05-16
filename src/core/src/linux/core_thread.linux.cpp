@@ -34,6 +34,7 @@ SOFTWARE.
 #include <debug.h>
 #include <defer.h>
 #include <typecast.inl>
+#include <temp_storage.h>
 
 #include <pthread.h>
 #include <semaphore.h>
@@ -44,8 +45,8 @@ SOFTWARE.
 #include <malloc.h>
 
 struct ThreadBootstrapData {
-	ThreadFunc	thread_func;
-	void		*data;
+	ThreadFunc		thread_func;
+	void			*data;
 };
 
 static void *thread_bootstrap( void *data ) {
@@ -54,6 +55,9 @@ static void *thread_bootstrap( void *data ) {
 	ThreadBootstrapData *bootstrap_data = cast( ThreadBootstrapData *, data );
 
 	assert( bootstrap_data );
+
+	mem_init_temp_storage( MEM_KILOBYTES( 64 ) );	// DM!!! this needs to be parameterized
+	defer { mem_shutdown_temp_storage(); };
 
 	s32 exit_code = bootstrap_data->thread_func( bootstrap_data->data );
 

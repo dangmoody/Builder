@@ -41,7 +41,11 @@ SOFTWARE.
 ================================================================================================
 */
 
-LinearAllocator *g_temp_storage = NULL;
+static THREAD_LOCAL LinearAllocator *g_temp_storage = NULL;
+
+LinearAllocator *mem_get_temp_storage() {
+	return g_temp_storage;
+}
 
 void mem_init_temp_storage( const u64 size_bytes ) {
 	g_temp_storage = linear_allocator_create( size_bytes );

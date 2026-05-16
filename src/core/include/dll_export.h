@@ -49,3 +49,9 @@ SOFTWARE.
 		#define CORE_API
 	#endif
 #endif
+
+#if defined( __linux__ )
+	#define	THREAD_LOCAL	__thread
+#else
+	#define THREAD_LOCAL	__declspec( thread )
+#endif

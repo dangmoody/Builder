@@ -26,7 +26,6 @@ SOFTWARE.
 ===========================================================================
 */
 
-#include <linux/limits.h>
 #ifdef __linux__
 
 #include <paths.h>

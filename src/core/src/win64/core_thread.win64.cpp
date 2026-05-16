@@ -32,6 +32,8 @@ SOFTWARE.
 #include <debug.h>
 #include <typecast.inl>
 #include <core_helpers.h>
+#include <temp_storage.h>
+#include <defer.h>
 
 #include <Windows.h>
 
@@ -49,6 +51,9 @@ static DWORD thread_bootstrap( void *data ) {
 	ThreadBootstrapData *bootstrap_data = cast( ThreadBootstrapData *, data );
 
 	assert( bootstrap_data->thread_func );
+
+	mem_init_temp_storage( MEM_KILOBYTES( 64 ) );	// DM!!! this needs to be parameterized
+	defer { mem_shutdown_temp_storage(); };
 
 	s32 exit_code = bootstrap_data->thread_func( bootstrap_data->data );
 

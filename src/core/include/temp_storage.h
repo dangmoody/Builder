@@ -39,22 +39,22 @@ struct LinearAllocator;
 
 	Temp storage
 
-	You may know this as "Scratch".
+	Temporary linear allocator that exists as a global.  You may know this as "Scratch".
 
-	Temporary linear allocator that exists as a global.
+	Temp storage is thread-local, so every thread has their own instance of it.
 
 ================================================================================================
 */
 
-extern CORE_API LinearAllocator *g_temp_storage;
+CORE_API LinearAllocator	*mem_get_temp_storage();
 
-CORE_API void	mem_init_temp_storage( const u64 size_bytes );
-CORE_API void	mem_shutdown_temp_storage();
+CORE_API void				mem_init_temp_storage( const u64 size_bytes );
+CORE_API void				mem_shutdown_temp_storage();
 
-CORE_API void*	mem_temp_alloc( const u64 size_bytes, const u32 alignment = 8 );
+CORE_API void*				mem_temp_alloc( const u64 size_bytes, const u32 alignment = 8 );
 
-CORE_API void	mem_reset_temp_storage();
+CORE_API void				mem_reset_temp_storage();
 
-CORE_API u64	mem_temp_tell();
+CORE_API u64				mem_temp_tell();
 
-CORE_API void	mem_temp_rewind_to( const u64 pos );
+CORE_API void				mem_temp_rewind_to( const u64 pos );

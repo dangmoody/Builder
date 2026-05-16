@@ -34,6 +34,7 @@ SOFTWARE.
 #include <core_string.h>
 #include <string_builder.h>
 #include <core_math.h>
+#include <defer.h>
 
 #include <stdarg.h>
 #include <string.h>
@@ -140,8 +141,11 @@ const char *path_relative_path_to( const char *from, const char *to ) {
 	assert( from );
 	assert( to );
 
-	String from_str = string_set( g_temp_storage, from );
-	String to_str = string_set( g_temp_storage, to );
+	u64 pos = mem_temp_tell();
+	defer { mem_temp_rewind_to( pos ); };
+
+	String from_str = string_set( mem_get_temp_storage(), from );
+	String to_str = string_set( mem_get_temp_storage(), to );
 	path_fix_slashes( &from_str );
 	path_fix_slashes( &to_str );
 
@@ -212,7 +216,7 @@ const char *path_relative_path_to( const char *from, const char *to ) {
 	}
 
 	StringBuilder sb = {};
-	string_builder_init( &sb, g_temp_storage );
+	string_builder_init( &sb, mem_get_temp_storage() );
 
 	For ( u64, back_index, 0, num_backs ) {
 		bool8 is_last = ( back_index == num_backs - 1 );

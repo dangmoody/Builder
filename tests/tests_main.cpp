@@ -16,6 +16,18 @@
 #include "temper/temper.h"
 
 
+static void InitTestThread() {
+	mem_init_temp_storage( MEM_KILOBYTES( 64 ) );
+}
+
+static void ShutdownTestThread() {
+	mem_shutdown_temp_storage();
+}
+
+#define TEST( testName, runFlag )					TEMPER_TEST_C( testName, InitTestThread, ShutdownTestThread, runFlag )
+
+#define TEST_PARAMETRIC( testName, runFlag, ... )	TEMPER_TEST_PARAMETRIC_C( testName, InitTestThread, ShutdownTestThread, runFlag, __VA_ARGS__ )
+
 enum compilerFlagBits_t {
 	COMPILER_DEFAULT		= bit( 0 ),
 	COMPILER_CLANG			= bit( 1 ),
@@ -50,7 +62,7 @@ static const char *GetCompilerPath( const compilerFlagBits_t compiler ) {
 #ifdef _WIN32
 		case COMPILER_MSVC_FULL_PATH: {
 			msvcInstall_t msvcInstall = {};
-			if ( Win_GetMSVCInstall( g_temp_storage, &msvcInstall ) ) {
+			if ( Win_GetMSVCInstall( mem_get_temp_storage(), &msvcInstall) ) {
 				return temp_printf( "%s\\bin\\Hostx64\\x64\\cl", msvcInstall.rootFolder.data );
 			}
 			return NULL;
@@ -124,7 +136,7 @@ struct fileMatchesFilterTest_t {
 	bool8		expected;
 };
 
-TEMPER_TEST_PARAMETRIC( Test_FileMatchesFilter, TEMPER_FLAG_SHOULD_RUN, fileMatchesFilterTest_t test ) {
+TEST_PARAMETRIC( Test_FileMatchesFilter, TEMPER_FLAG_SHOULD_RUN, fileMatchesFilterTest_t test ) {
 	TEMPER_CHECK_TRUE_M( FileMatchesFilter( test.filename, test.filter ) == test.expected, "FileMatchesFilter( \"%s\", \"%s\" ): expected %s.\n", test.filename, test.filter, test.expected ? "true" : "false" );
 }
 
@@ -159,7 +171,7 @@ struct sourceFilesPatternTest_t {
 	u64							expectedCount;
 };
 
-TEMPER_TEST_PARAMETRIC( Test_GetSourceFilesMatchingPattern, TEMPER_FLAG_SHOULD_RUN, sourceFilesPatternTest_t test ) {
+TEST_PARAMETRIC( Test_GetSourceFilesMatchingPattern, TEMPER_FLAG_SHOULD_RUN, sourceFilesPatternTest_t test ) {
 	std::vector<std::string> files = GetSourceFilesMatchingPattern( test.basePath, test.pattern );
 
 	TEMPER_CHECK_TRUE_M( files.size() == test.expectedCount, "Expected %zu files, got %zu.\n", test.expectedCount, files.size() );
@@ -203,7 +215,7 @@ TEMPER_INVOKE_PARAMETRIC_TEST( Test_GetSourceFilesMatchingPattern, {
 } );
 
 
-TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
+TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 	printf( "Running test %s\n", test.rootDir );
 
 	TEMPER_CHECK_TRUE_M( test.rootDir, "A test MUST live in its own folder, you need to tell me what the \"root\" folder for this test is.\n" );
@@ -443,7 +455,7 @@ TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 	.binaryName			= "test_compilation_database_program",
 } );
 
-TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
+TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 	s32 exitCode = -1;
 
 	// Builder uses temp storage a lot internally
@@ -546,7 +558,7 @@ TEMPER_TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 #endif // _WIN32
 }
 
-TEMPER_TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
+TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	// Builder uses temp storage a lot internally
 	// so make our own temp storage for each test and free once were done
 	LinearAllocator *testScratch = linear_allocator_create( MEM_KILOBYTES( 64 ) );
@@ -661,7 +673,7 @@ TEMPER_TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	}
 }
 
-TEMPER_TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
+TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	// Builder uses temp storage a lot internally
 	// so make our own temp storage for each test and free once were done
 	LinearAllocator *testScratch = linear_allocator_create( MEM_KILOBYTES( 64 ) );
@@ -763,7 +775,7 @@ TEMPER_TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 // If clang-tidy can successfully load the compilation database, it proves
 // the JSON is correctly formatted according to the specification.
 // https://clang.llvm.org/docs/JSONCompilationDatabase.html
-TEMPER_TEST( ValidateCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
+TEST( ValidateCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 	const char *sourceFile = "tests/test_compilation_database/main.cpp";
 	const char *compileCommandsDir = "test_compilation_database";
 	const char *compileCommandsPath = "test_compilation_database/compile_commands.json";

@@ -167,7 +167,7 @@ static void ReadDependencyFile( const char *depFilename, std::vector<std::string
 }
 
 static void ResolveCompilerAndLinkerPaths( clangState_t *clangState, LinearAllocator *allocator, const char *compilerPath, const char *compilerName, const char *linkerName ) {
-	String pathToCompiler = string_set( g_temp_storage, compilerPath );
+	String pathToCompiler = string_set( mem_get_temp_storage(), compilerPath );
 
 	if ( path_remove_file_from_path( &pathToCompiler ) ) {
 		clangState->compilerPath = path_join( allocator, pathToCompiler.data, compilerName );
@@ -185,7 +185,7 @@ static bool8 Clang_Init( compilerBackend_t *backend, const buildContext_t *conte
 	new( backend->data ) clangState_t;
 
 	clangState_t *clangState = cast( clangState_t *, backend->data );
-	clangState->args.init( g_temp_storage );
+	clangState->args.init( mem_get_temp_storage() );
 
 	clangState->compilerVersion = string_set( context->allocator, compilerVersion.c_str() );
 
@@ -200,7 +200,7 @@ static bool8 Clang_Init( compilerBackend_t *backend, const buildContext_t *conte
 
 	ResolveCompilerAndLinkerPaths( clangState, context->allocator, compilerPath.c_str(), clangExe, linkerExe );
 
-	String pathToCompiler = string_set( g_temp_storage, compilerPath.c_str() );
+	String pathToCompiler = string_set( mem_get_temp_storage(), compilerPath.c_str() );
 	path_remove_file_from_path( &pathToCompiler );
 
 #if defined( _WIN32 )
@@ -222,13 +222,13 @@ static bool8 GCC_Init( compilerBackend_t *backend, const buildContext_t *context
 	new( backend->data ) clangState_t;
 
 	clangState_t *clangState = cast( clangState_t *, backend->data );
-	clangState->args.init( g_temp_storage );
+	clangState->args.init( mem_get_temp_storage() );
 
 	clangState->compilerVersion = string_set( context->allocator, compilerVersion.c_str() );
 
 	ResolveCompilerAndLinkerPaths( clangState, context->allocator, compilerPath.c_str(), "gcc", "ld" );
 
-	String pathToCompiler = string_set( g_temp_storage, compilerPath.c_str() );
+	String pathToCompiler = string_set( mem_get_temp_storage(), compilerPath.c_str() );
 
 	if ( path_remove_file_from_path( &pathToCompiler ) ) {
 		clangState->arPath = path_join( context->allocator, pathToCompiler.data, "ar" );
@@ -259,14 +259,14 @@ static bool8 Clang_CompileSourceFile(
 
 	clangState_t *clangState = cast( clangState_t *, backend->data );
 
-	String sourceFileNoPath = string_set( g_temp_storage, sourceFile );
+	String sourceFileNoPath = string_set( mem_get_temp_storage(), sourceFile );
 	path_remove_path_from_file( &sourceFileNoPath );
 
 	const char *depFilename = temp_printf( "%s%c%s.d", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPath.data );
 
 	Array<const char *> finalArgs = cmdArchetype.baseArgs;
 
-	String sourceFileNoPathAndExtension = string_copy( g_temp_storage, &sourceFileNoPath );
+	String sourceFileNoPathAndExtension = string_copy( mem_get_temp_storage(), &sourceFileNoPath );
 	path_remove_file_extension( &sourceFileNoPathAndExtension );
 
 	const char *intermediateFile = temp_printf( "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPathAndExtension.data );
@@ -313,7 +313,7 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 
 	clangState_t *clangState = cast( clangState_t *, backend->data );
 
-	const char *fullBinaryName = BuildConfig_GetFullBinaryName( config, g_temp_storage );
+	const char *fullBinaryName = BuildConfig_GetFullBinaryName( config, mem_get_temp_storage() );
 
 	Array<const char *> &args = clangState->args;
 	args.reserve(
@@ -490,7 +490,7 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		// or do we want to just do this by default on linux because its a really common thing that people do?
 #ifdef __linux__
 		if ( config->binaryType == BINARY_TYPE_EXE ) {
-			String fullBinaryPath = string_set( g_temp_storage, fullBinaryName );
+			String fullBinaryPath = string_set( mem_get_temp_storage(), fullBinaryName );
 			path_remove_file_from_path( &fullBinaryPath );
 
 			args.add( temp_printf( "-Wl,-rpath=%s", fullBinaryPath.data ) );
@@ -513,7 +513,7 @@ static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const Array<
 
 	clangState_t *clangState = cast( clangState_t *, backend->data );
 
-	const char *fullBinaryName = BuildConfig_GetFullBinaryName( config, g_temp_storage );
+	const char *fullBinaryName = BuildConfig_GetFullBinaryName( config, mem_get_temp_storage() );
 
 	Array<const char *> &args = clangState->args;
 	args.reserve(
@@ -587,7 +587,7 @@ static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const Array<
 		// or do we want to just do this by default on linux because its a really common thing that people do?
 #ifdef __linux__
 		if ( config->binaryType == BINARY_TYPE_EXE ) {
-			String fullBinaryPath = string_set( g_temp_storage, fullBinaryName );
+			String fullBinaryPath = string_set( mem_get_temp_storage(), fullBinaryName );
 			path_remove_file_from_path( &fullBinaryPath );
 
 			args.add( temp_printf( "-Wl,-rpath=%s", fullBinaryPath.data ) );
@@ -606,8 +606,8 @@ static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const Array<
 static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t *backend, const BuildConfig *config, compilationCommandArchetype_t &outCmdArchetype ) {
 	clangState_t *clangState = cast( clangState_t *, backend->data );
 
-	outCmdArchetype.baseArgs.init( g_temp_storage );
-	outCmdArchetype.dependencyFlags.init( g_temp_storage );
+	outCmdArchetype.baseArgs.init( mem_get_temp_storage() );
+	outCmdArchetype.dependencyFlags.init( mem_get_temp_storage() );
 
 	const char *compilerPath = clangState->compilerPath.data;
 
@@ -764,7 +764,7 @@ static String Clang_GetCompilerVersion( compilerBackend_t *backend ) {
 	u64 clangVersionCStrLength = strlen( clangVersionCStr );
 	defer { clang_disposeString( clangVersionString ); };
 
-	String result = string_set( g_temp_storage, clangVersionCStr, clangVersionCStrLength );
+	String result = string_set( mem_get_temp_storage(), clangVersionCStr, clangVersionCStrLength );
 
 	if ( string_starts_with( result.data, "clang version " ) ) {
 		u64 versionPrefixLength = strlen( "clang version " );
@@ -790,7 +790,7 @@ static String GCC_GetCompilerVersion( compilerBackend_t *backend ) {
 	const char *gccVersionPrefix = "gcc version ";
 
 	Array<const char *> args;
-	args.init( g_temp_storage );
+	args.init( mem_get_temp_storage() );
 	args.add( clangState->compilerPath.data );
 	args.add( "-v" );
 
@@ -807,7 +807,7 @@ static String GCC_GetCompilerVersion( compilerBackend_t *backend ) {
 
 		u64 versionLength = cast( u64, versionEnd ) - cast( u64, versionStart );
 
-		compilerVersion = string_set( g_temp_storage, versionStart, versionLength );
+		compilerVersion = string_set( mem_get_temp_storage(), versionStart, versionLength );
 	}
 
 	return compilerVersion;

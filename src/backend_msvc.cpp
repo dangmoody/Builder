@@ -81,7 +81,7 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const buildContext_t *contex
 	msvcState_t *msvcState = cast( msvcState_t *, linear_allocator_alloc( context->allocator, sizeof( msvcState_t ) ) );
 	new( msvcState ) msvcState_t;
 
-	msvcState->args.init( g_temp_storage );
+	msvcState->args.init( mem_get_temp_storage() );
 
 	msvcState->compilerPath = string_set( context->allocator, compilerPath.c_str() );
 	msvcState->compilerVersion = string_set( context->allocator, compilerVersion.c_str() );
@@ -99,7 +99,7 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const buildContext_t *contex
 		msvcState->compilerPath = path_join( context->allocator, context->msvcInstall.rootFolder.data, "bin", "Hostx64", "x64", "cl" );
 		msvcState->linkerPath = path_join( context->allocator, context->msvcInstall.rootFolder.data, "bin", "Hostx64", "x64", "link" );
 	} else {
-		String compilerDir = string_set( g_temp_storage, compilerPath.c_str() );
+		String compilerDir = string_set( mem_get_temp_storage(), compilerPath.c_str() );
 		path_remove_file_from_path( &compilerDir );
 		msvcState->linkerPath = path_join( context->allocator, compilerDir.data, "link" );
 	}
@@ -129,7 +129,7 @@ static bool8 MSVC_CompileSourceFile(
 	assert( sourceFile );
 	assert( config );
 
-	String sourceFileNoPathAndExtension = string_set( g_temp_storage, sourceFile );
+	String sourceFileNoPathAndExtension = string_set( mem_get_temp_storage(), sourceFile );
 	path_remove_path_from_file( &sourceFileNoPathAndExtension );
 	path_remove_file_extension( &sourceFileNoPathAndExtension );
 
@@ -217,7 +217,7 @@ static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t *backend, const Array
 	assert( backend );
 	assert( config );
 
-	const char *fullBinaryName = BuildConfig_GetFullBinaryName( config, g_temp_storage );
+	const char *fullBinaryName = BuildConfig_GetFullBinaryName( config, mem_get_temp_storage() );
 
 	msvcState_t *msvcState = cast( msvcState_t *, backend->data );
 	Array<const char *> &args = msvcState->args;
@@ -282,8 +282,8 @@ static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t *backend, const Array
 static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t *backend, const BuildConfig *config, compilationCommandArchetype_t &outCmdArchetype ) {
 	msvcState_t *msvcState = cast( msvcState_t *, backend->data );
 
-	outCmdArchetype.baseArgs.init( g_temp_storage );
-	outCmdArchetype.dependencyFlags.init( g_temp_storage );
+	outCmdArchetype.baseArgs.init( mem_get_temp_storage() );
+	outCmdArchetype.dependencyFlags.init( mem_get_temp_storage() );
 
 	const u64 definesCount = config->defines.size();
 	const u64 microsoftCoreIncludesCount = msvcState->microsoftCoreIncludes.size();
@@ -371,7 +371,7 @@ static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t *backe
 		// MSVC only allows one warning level to be set
 		if ( config->warningLevels.size() > 1 ) {
 			StringBuilder builder;
-			string_builder_init( &builder, g_temp_storage );
+			string_builder_init( &builder, mem_get_temp_storage() );
 
 			string_builder_appendf( &builder, "MSVC only allows ONE of the following warning levels to be set:\n" );
 

@@ -139,7 +139,7 @@ bool8 Win_GetWindowsSDK( LinearAllocator *allocator, windowsSDK_t *outSDK ) {
 	const char *windowsSDKFolder = temp_printf( "%sLib", windowsSDKRoot );
 
 	Array<windowsSDKVersion_t> versions;
-	versions.init( g_temp_storage );
+	versions.init( mem_get_temp_storage() );
 
 	if ( !file_get_all_files_in_folder( windowsSDKFolder, FILE_VISIT_FOLDERS, OnWindowsSDKVersionFound, &versions ) ) {
 		error( "Failed to query your Windows SDK root folder for the version of the Windows SDK that you asked for.  Do you definitely have at least one version of the Windows SDK installed?\n" );
@@ -156,7 +156,7 @@ bool8 Win_GetWindowsSDK( LinearAllocator *allocator, windowsSDK_t *outSDK ) {
 		windowsSDKVersion_t *version = &versions[versionIndex];
 
 		Array<const char *> missingFolders;
-		missingFolders.init( g_temp_storage );
+		missingFolders.init( mem_get_temp_storage() );
 		missingFolders.reserve( 5 );
 
 		// TODO(DM): 21/04/2026: rewind temp storage after we are done with this?
@@ -189,7 +189,7 @@ bool8 Win_GetWindowsSDK( LinearAllocator *allocator, windowsSDK_t *outSDK ) {
 		if ( missingFolders.count > 0 ) {
 			StringBuilder sb = {};
 			//defer { string_builder_destroy( &sb ); };
-			string_builder_init( &sb, g_temp_storage );
+			string_builder_init( &sb, mem_get_temp_storage() );
 			string_builder_appendf( &sb, "Version %d.%d.%d.%d of your Windows SDK installation is malformed because the following folders could not be found:\n", version->v0, version->v1, version->v2, version->v3 );
 			For ( u32, missingFolderIndex, 0, missingFolders.count ) {
 				string_builder_appendf( &sb, " - %s\n", missingFolders[missingFolderIndex] );
@@ -416,7 +416,7 @@ bool8 Win_GetMSVCInstall( LinearAllocator *allocator, msvcInstall_t *outInstall 
 		msvcInstall_t *install = &foundMSVCInstalls[versionIndex];
 
 		Array<const char *> missingFolders;
-		missingFolders.init( g_temp_storage );
+		missingFolders.init( mem_get_temp_storage() );
 		missingFolders.reserve( 2 );
 
 		if ( !folder_exists( install->includePath.data ) ) {
@@ -430,7 +430,7 @@ bool8 Win_GetMSVCInstall( LinearAllocator *allocator, msvcInstall_t *outInstall 
 		if ( missingFolders.count > 0 ) {
 			StringBuilder sb = {};
 			//defer { string_builder_destroy( &sb ); };
-			string_builder_init( &sb, g_temp_storage );
+			string_builder_init( &sb, mem_get_temp_storage() );
 			string_builder_appendf( &sb, "Version %d.%d.%d of your MSVC installation is malformed because the following folders could not be found:\n", install->version.v0, install->version.v1, install->version.v2 );
 			For ( u32, missingFolderIndex, 0, missingFolders.count ) {
 				string_builder_appendf( &sb, " - %s\n", missingFolders[missingFolderIndex] );

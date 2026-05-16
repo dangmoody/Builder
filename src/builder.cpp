@@ -309,7 +309,7 @@ s32 RunProc( Array<const char *> *args, Array<const char *> *environmentVariable
 		printf( "\n" );
 	}
 
-	Process *process = process_create( g_temp_storage, args, environmentVariables, PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
+	Process *process = process_create( mem_get_temp_storage(), args, environmentVariables, PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
 
 	if ( !process ) {
 		error(
@@ -331,7 +331,7 @@ s32 RunProc( Array<const char *> *args, Array<const char *> *environmentVariable
 
 	// show stdout
 	StringBuilder sb = {};
-	string_builder_init( &sb, g_temp_storage );
+	string_builder_init( &sb, mem_get_temp_storage() );
 
 	u64 bytesRead = 0;
 	char buffer[1024] = {};
@@ -346,7 +346,7 @@ s32 RunProc( Array<const char *> *args, Array<const char *> *environmentVariable
 	}
 
 	if ( outStdout ) {
-		*outStdout = string_set( g_temp_storage, string_builder_to_string( &sb ) );
+		*outStdout = string_set( mem_get_temp_storage(), string_builder_to_string( &sb ) );
 	}
 
 	s32 exitCode = process_join( process );
@@ -428,7 +428,7 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 	}
 
 	Array<const char *> intermediateFiles;
-	intermediateFiles.init( g_temp_storage );
+	intermediateFiles.init( mem_get_temp_storage() );
 	intermediateFiles.reserve( config->sourceFiles.size() );
 
 	// TODO(DM): 03/08/2025: this is kinda ugly
@@ -498,15 +498,15 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 	// make .o files for all compilation units
 	// TODO(DM): 14/06/2025: embarrassingly parallel
 	For ( u64, sourceFileIndex, 0, config->sourceFiles.size() ) {
-		String sourceFile = string_set( g_temp_storage, config->sourceFiles[sourceFileIndex].c_str(), config->sourceFiles[sourceFileIndex].size() );
+		String sourceFile = string_set( mem_get_temp_storage(), config->sourceFiles[sourceFileIndex].c_str(), config->sourceFiles[sourceFileIndex].size() );
 
-		String sourceFileNoPath = string_copy( g_temp_storage, &sourceFile );
+		String sourceFileNoPath = string_copy( mem_get_temp_storage(), &sourceFile );
 		path_remove_path_from_file( &sourceFileNoPath );
 
-		String sourceFileNoPathAndExtension = string_copy( g_temp_storage, &sourceFileNoPath );
+		String sourceFileNoPathAndExtension = string_copy( mem_get_temp_storage(), &sourceFileNoPath );
 		path_remove_file_extension( &sourceFileNoPathAndExtension );
 
-		String intermediateFilename = string_printf( g_temp_storage, "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPathAndExtension.data );
+		String intermediateFilename = string_printf( mem_get_temp_storage(), "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPathAndExtension.data );
 		intermediateFiles.add( intermediateFilename.data );
 
 		const char *depFilename = temp_printf( "%s%c%s.d", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPath.data );
@@ -539,7 +539,7 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 	{
 		bool8 doLinking = false;
 
-		const char *fullBinaryName = BuildConfig_GetFullBinaryName( config, g_temp_storage );
+		const char *fullBinaryName = BuildConfig_GetFullBinaryName( config, mem_get_temp_storage() );
 
 		u64 binaryFileLastWriteTime = 0;
 
@@ -599,7 +599,7 @@ bool8 NukeFolder( const char *folder, const bool8 deleteRootFolder, const bool8 
 	nukeContext_t nukeContext = {
 		.printDeletions = printDeletions,
 	};
-	nukeContext.subfolders.init( g_temp_storage );
+	nukeContext.subfolders.init( mem_get_temp_storage() );
 
 	FileVisitFlags visitFlags = FILE_VISIT_FILES | FILE_VISIT_RECURSIVE | FILE_VISIT_FOLDERS;
 
@@ -820,7 +820,7 @@ struct byteBuffer_t {
 static void ReadIncludeDependenciesFile( buildContext_t *context ) {
 	byteBuffer_t byteBuffer = {};
 	// DM!!! what allocator do we set here?
-	// byteBuffer.data.init( g_temp_storage );
+	// byteBuffer.data.init( mem_get_temp_storage() );
 
 	// there wont be an include dependencies file on the first build or if you nuked the binaries folder (for instance)
 	// so this is allowed to fail
@@ -877,7 +877,7 @@ static void ReadIncludeDependenciesFile( buildContext_t *context ) {
 
 static bool8 WriteIncludeDependenciesFile( buildContext_t *context ) {
 	byteBuffer_t byteBuffer = {};
-	byteBuffer.data.init( g_temp_storage );
+	byteBuffer.data.init( mem_get_temp_storage() );
 
 	auto ByteBuffer_Write_U32 = []( byteBuffer_t *buffer, const u32 x ) {
 		buffer->data.reserve( buffer->data.count + sizeof( u32 ) );
@@ -925,8 +925,8 @@ void RecordCompilationDatabaseEntry( buildContext_t *buildContext, const char *s
 	u64 pos = mem_temp_tell();
 	defer { mem_temp_rewind_to( pos ); };
 
-	String directory = path_absolute_path( g_temp_storage, buildContext->inputFilePath.data );
-	String file = path_absolute_path( g_temp_storage, sourceFileName );
+	String directory = path_absolute_path( mem_get_temp_storage(), buildContext->inputFilePath.data );
+	String file = path_absolute_path( mem_get_temp_storage(), sourceFileName );
 
 	compilationDatabaseEntry_t entry = {};
 	entry.directory = directory.data;
@@ -1027,7 +1027,7 @@ static void SanitizeCompilationDatabaseArgs( std::vector<std::string> &args ) {
 				FixCompilatiomDatabasePath( path );
 				arg = std::move( path );
 #else
-				String path = path_absolute_path( g_temp_storage, arg.c_str() );
+				String path = path_absolute_path( mem_get_temp_storage(), arg.c_str() );
 				string_replace( &path, '\\', '/' );
 				arg = path.data;
 #endif
@@ -1052,7 +1052,7 @@ static void SanitizeCompilationDatabaseArgs( std::vector<std::string> &args ) {
 				handled = true;
 			}
 #else
-			String path = path_absolute_path( g_temp_storage, arg.c_str() );
+			String path = path_absolute_path( mem_get_temp_storage(), arg.c_str() );
 			string_replace( &path, '\\', '/' );
 			arg = path.data;
 #endif
@@ -1066,7 +1066,7 @@ static void SanitizeCompilationDatabaseArgs( std::vector<std::string> &args ) {
 			arg = std::string( ruleFlag ) + ":" + path;
 			handled = true;
 #else
-			String path = path_absolute_path( g_temp_storage, arg.substr( ruleLength + 1 ).c_str() );
+			String path = path_absolute_path( mem_get_temp_storage(), arg.substr( ruleLength + 1 ).c_str() );
 			string_replace( &path, '\\', '/' );
 			arg = std::string( ruleFlag ) + ":" + path.data;
 			handled = true;
@@ -1083,7 +1083,7 @@ static void SanitizeCompilationDatabaseArgs( std::vector<std::string> &args ) {
 				nextArg = std::move( path );
 #else
 				std::string &nextArg = args[++argIndex];
-				String path = path_absolute_path( g_temp_storage, nextArg.c_str() );
+				String path = path_absolute_path( mem_get_temp_storage(), nextArg.c_str() );
 				string_replace( &path, '\\', '/' );
 				nextArg = path.data;
 #endif
@@ -1098,7 +1098,7 @@ static bool WriteCompilationDatabase( buildContext_t *context ) {
 	}
 
 	StringBuilder sb = {};
-	string_builder_init( &sb, g_temp_storage );
+	string_builder_init( &sb, mem_get_temp_storage() );
 
 	string_builder_appendf( &sb, "[\n" );
 
@@ -1173,7 +1173,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 	// TODO: DM: 07/05/2026: we only do this check of ownership because the tests also need to init temp storage
 	// I feel like there's a cleaner solution to this, just not sure what
-	bool8 ownsTempStorage = g_temp_storage == NULL;
+	bool8 ownsTempStorage = mem_get_temp_storage() == NULL;
 	if ( ownsTempStorage ) {
 		mem_init_temp_storage( MEM_MEGABYTES( 128 ) );
 	}
@@ -1328,7 +1328,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	// the default binary folder is the same folder as the source file
 	// if the file doesnt have a path then assume its in the same path as the current working directory (where we are calling builder from)
 	{
-		String inputFilePath = string_set( g_temp_storage, context.inputFile );
+		String inputFilePath = string_set( mem_get_temp_storage(), context.inputFile );
 
 		if ( path_remove_file_from_path( &inputFilePath ) ) {
 			context.inputFilePath = inputFilePath;
@@ -1350,13 +1350,13 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 	ReadIncludeDependenciesFile( &context );
 
-	String appPathOnly = path_app_path( g_temp_storage );
+	String appPathOnly = path_app_path( mem_get_temp_storage() );
 	path_remove_file_from_path( &appPathOnly );
 
 	// init default compiler backend (the version of clang that builder came with)
 	compilerBackend_t compilerBackend = {};
 	CreateCompilerBackend_Clang( &compilerBackend );
-	String defaultCompilerPath = path_join( g_temp_storage, appPathOnly.data, "..", "clang", "bin", "clang" );
+	String defaultCompilerPath = path_join( mem_get_temp_storage(), appPathOnly.data, "..", "clang", "bin", "clang" );
 	compilerBackend.Init( &compilerBackend, &context, defaultCompilerPath.data, std::string() );
 	defer {
 		compilerBackend.Shutdown( &compilerBackend );
@@ -1417,7 +1417,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 #endif
 		};
 
-		userConfigFullBinaryName = BuildConfig_GetFullBinaryName( &userConfigBuildConfig, g_temp_storage );
+		userConfigFullBinaryName = BuildConfig_GetFullBinaryName( &userConfigBuildConfig, mem_get_temp_storage() );
 
 		// Within build binary and check against the options checks for its existance, defaulting to false which is what the user config build wants for each option
 		// So just pass through nullptr when calling BuildBinary for the options build and it will work as expected
@@ -1491,9 +1491,9 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	std::vector<BuildConfig> configsToBuild;
 
 	Array<float64> configBuildTimes;
-	configBuildTimes.init( g_temp_storage );
+	configBuildTimes.init( mem_get_temp_storage() );
 	Array<buildResult_t> configBuildResults;
-	configBuildResults.init( g_temp_storage );
+	configBuildResults.init( mem_get_temp_storage() );
 
 	// if the user wants to generate a visual studio solution then only do that
 	if ( options.generateSolution && !isVisualStudioBuild ) {
@@ -1562,10 +1562,13 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 			compilerBackend.Shutdown( &compilerBackend );
 
-			String actualCompilerPath = string_set( g_temp_storage, options.compilerPath.c_str() );
+			String actualCompilerPath = {};
+			String pathToCompiler = string_set( mem_get_temp_storage(), options.compilerPath.c_str() );
 			{
-				if ( path_remove_file_from_path( &actualCompilerPath ) && !path_is_absolute( options.compilerPath.c_str() ) ) {
-					actualCompilerPath = path_join( g_temp_storage, context.inputFilePath.data, options.compilerPath.c_str() );
+				if ( path_remove_file_from_path( &pathToCompiler ) && !path_is_absolute( options.compilerPath.c_str() ) ) {
+					actualCompilerPath = path_join( mem_get_temp_storage(), context.inputFilePath.data, options.compilerPath.c_str() );
+				} else {
+					actualCompilerPath = string_set( mem_get_temp_storage(), options.compilerPath.c_str() );
 				}
 
 				if ( string_ends_with( actualCompilerPath.data, ".exe" ) ) {
@@ -1716,7 +1719,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		if ( preBuildFunc ) {
 			printf( "Running pre-build code...\n" );
 
-			String oldCWD = path_get_cwd( g_temp_storage );
+			String oldCWD = path_get_cwd( mem_get_temp_storage() );
 			path_set_cwd( context.inputFilePath.data );
 			defer {
 				path_set_cwd( oldCWD.data );
@@ -1830,7 +1833,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		if ( postBuildFunc ) {
 			printf( "Running post-build code...\n" );
 
-			String oldCWD = path_get_cwd( g_temp_storage );
+			String oldCWD = path_get_cwd( mem_get_temp_storage() );
 			path_set_cwd( context.inputFilePath.data );
 			defer {
 				path_set_cwd( oldCWD.data );
@@ -1860,7 +1863,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		};
 
 		Array<buildSummaryLine_t> buildSummaryLines;
-		buildSummaryLines.init( g_temp_storage );
+		buildSummaryLines.init( mem_get_temp_storage() );
 		buildSummaryLines.reserve( 4 + configsToBuild.size() );
 		buildSummaryLines.add( { "User config build",  userConfigBuildTimeMS, ( userConfigBuildResult == BUILD_RESULT_SKIPPED ) ? "(skipped)" : "" } );
 		buildSummaryLines.add( { "Compiler init time", compilerBackendInitTimeMS } );

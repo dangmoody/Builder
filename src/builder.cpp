@@ -580,10 +580,10 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 	}
 
 	// compile step
-	// subtract 1 from the number of CPU cores queried because the main thread exists
-	// if we spawn os_get_num_cpu_cores() threads then the OS scheduler kicks because it now has one thread spare
-	// this causes other threads to get blocked
-	u32 numCores = min( os_get_num_cpu_cores() - 1, 1 );
+	// subtract 1 from the number of CPU cores queried because the main thread already occupies one core
+	// spawning os_get_num_cpu_cores() threads would give us N+1 threads for N cores
+	// causing the OS scheduler to context-switch between them, adding unnecessary overhead
+	u32 numCores = max( os_get_num_cpu_cores() - 1, 1 );
 	u32 numThreads = min( numCores, trunc_cast( u32, config->sourceFiles.size() ) );
 
 	printf( "Compiling %" PRIu64 " files across %u threads.\n", config->sourceFiles.size(), numThreads );

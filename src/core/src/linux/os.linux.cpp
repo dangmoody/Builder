@@ -34,8 +34,13 @@ SOFTWARE.
 #include <unistd.h>
 
 u32	os_get_virtual_memory_page_size() {
-	long pageSize = sysconf( _SC_PAGESIZE );
-	return trunc_cast( u32, pageSize );
+	long page_size = sysconf( _SC_PAGESIZE );
+	return trunc_cast( u32, page_size );
+}
+
+u32 os_get_num_cpu_cores() {
+	long num_cores = sysconf( _SC_NPROCESSORS_ONLN );
+	return trunc_cast( u32, num_cores );
 }
 
 #endif // __linux__

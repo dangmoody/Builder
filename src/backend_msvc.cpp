@@ -46,11 +46,9 @@ struct msvcState_t {
 	String						compilerVersion;
 	String						linkerPath;
 
-	Array<const char *>			args;
-
 	// windows sdk includes, msvc includes, that kind of thing
-	std::vector<std::string>	microsoftCoreIncludes;
-	std::vector<std::string>	microsoftCoreLibPaths;
+	Array<const char *>			microsoftCoreIncludes;
+	Array<const char *>			microsoftCoreLibPaths;
 
 	std::vector<std::string>	includeDependencies;
 };
@@ -81,8 +79,6 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const buildContext_t *contex
 	msvcState_t *msvcState = cast( msvcState_t *, linear_allocator_alloc( context->allocator, sizeof( msvcState_t ) ) );
 	new( msvcState ) msvcState_t;
 
-	msvcState->args.init( mem_get_temp_storage() );
-
 	msvcState->compilerPath = string_set( context->allocator, compilerPath );
 
 	if ( compilerVersion ) {
@@ -91,24 +87,27 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const buildContext_t *contex
 
 	backend->data = msvcState;
 
-	msvcState->microsoftCoreIncludes.push_back( context->winSDK.ucrtInclude.data );
-	msvcState->microsoftCoreIncludes.push_back( context->winSDK.umInclude.data );
-	msvcState->microsoftCoreIncludes.push_back( context->winSDK.sharedInclude.data );
+	msvcState->microsoftCoreIncludes.init( context->allocator );
+	msvcState->microsoftCoreLibPaths.init( context->allocator );
 
-	msvcState->microsoftCoreLibPaths.push_back( context->winSDK.ucrtLibPath.data );
-	msvcState->microsoftCoreLibPaths.push_back( context->winSDK.umLibPath.data );
+	msvcState->microsoftCoreIncludes.add( context->winSDK.ucrtInclude.data );
+	msvcState->microsoftCoreIncludes.add( context->winSDK.umInclude.data );
+	msvcState->microsoftCoreIncludes.add( context->winSDK.sharedInclude.data );
 
-	if ( string_equals( compilerPath.c_str(), "cl" ) || string_equals( compilerPath.c_str(), "cl.exe" ) ) {
+	msvcState->microsoftCoreLibPaths.add( context->winSDK.ucrtLibPath.data );
+	msvcState->microsoftCoreLibPaths.add( context->winSDK.umLibPath.data );
+
+	if ( string_equals( compilerPath, "cl" ) || string_equals( compilerPath, "cl.exe" ) ) {
 		msvcState->compilerPath = path_join( context->allocator, context->msvcInstall.rootFolder.data, "bin", "Hostx64", "x64", "cl" );
 		msvcState->linkerPath = path_join( context->allocator, context->msvcInstall.rootFolder.data, "bin", "Hostx64", "x64", "link" );
 	} else {
-		String compilerDir = string_set( mem_get_temp_storage(), compilerPath.c_str() );
+		String compilerDir = string_set( mem_get_temp_storage(), compilerPath );
 		path_remove_file_from_path( &compilerDir );
 		msvcState->linkerPath = path_join( context->allocator, compilerDir.data, "link" );
 	}
 
-	msvcState->microsoftCoreIncludes.push_back( context->msvcInstall.includePath.data );
-	msvcState->microsoftCoreLibPaths.push_back( context->msvcInstall.libPath.data );
+	msvcState->microsoftCoreIncludes.add( context->msvcInstall.includePath.data );
+	msvcState->microsoftCoreLibPaths.add( context->msvcInstall.libPath.data );
 
 	return true;
 }
@@ -223,7 +222,8 @@ static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t *backend, const std::
 	const char *fullBinaryName = BuildConfig_GetFullBinaryName( config, mem_get_temp_storage() );
 
 	msvcState_t *msvcState = cast( msvcState_t *, backend->data );
-	Array<const char *> &args = msvcState->args;
+	Array<const char *> args;
+	args.init( mem_get_temp_storage() );
 	args.reserve(
 		1 +	// link
 		1 +	// /lib or /shared
@@ -231,12 +231,10 @@ static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t *backend, const std::
 		1 + // /NODEFAULTLIB
 		1 +	// /OUT:<name>
 		intermediateFiles.size() +
-		msvcState->microsoftCoreLibPaths.size() +
+		msvcState->microsoftCoreLibPaths.count +
 		config->additionalLibPaths.size() +
 		config->additionalLibs.size()
 	);
-
-	args.reset();
 
 	// TODO(DM): 30/04/2026: this is a repetition of the windows path of Clang_LinkIntermediateFiles
 	// so we need to start splitting backend files down by compiler and linker
@@ -263,8 +261,8 @@ static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t *backend, const std::
 		args.add( intermediateFiles[i].c_str() );
 	}
 
-	For ( u32, libPathIndex, 0, msvcState->microsoftCoreLibPaths.size() ) {
-		args.add( temp_printf( "/LIBPATH:%s", msvcState->microsoftCoreLibPaths[libPathIndex].c_str() ) );
+	For ( u32, libPathIndex, 0, msvcState->microsoftCoreLibPaths.count ) {
+		args.add( temp_printf( "/LIBPATH:%s", msvcState->microsoftCoreLibPaths[libPathIndex] ) );
 	}
 
 	For ( u32, libPathIndex, 0, config->additionalLibPaths.size() ) {
@@ -291,7 +289,7 @@ static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t *backe
 	outCmdArchetype.dependencyFlags.init( mem_get_temp_storage() );
 
 	const u64 definesCount = config->defines.size();
-	const u64 microsoftCoreIncludesCount = msvcState->microsoftCoreIncludes.size();
+	const u64 microsoftCoreIncludesCount = msvcState->microsoftCoreIncludes.count;
 	const u64 additionalIncludesCount = config->additionalIncludes.size();
 	const u64 ignoredWarningsCount = config->ignoreWarnings.size();
 	const u64 additionalArgsCount = config->additionalCompilerArguments.size();
@@ -348,7 +346,7 @@ static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t *backe
 
 	// Microsoft Core Includes
 	For ( u32, includeIndex, 0, microsoftCoreIncludesCount ) {
-		baseArgs.add( temp_printf( "/I%s", msvcState->microsoftCoreIncludes[includeIndex].c_str() ) );
+		baseArgs.add( temp_printf( "/I%s", msvcState->microsoftCoreIncludes[includeIndex] ) );
 	}
 
 	// Additional Includes
@@ -363,15 +361,7 @@ static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t *backe
 
 	// Warning Level
 	{
-		std::vector<std::string> allowedWarningLevels = {
-			"/W",
-			"/W0",
-			"/W1",
-			"/W2",
-			"/W3",
-			"/W4",
-			"/Wall",
-		};
+		static const char *allowedWarningLevels[] = { "/W", "/W0", "/W1", "/W2", "/W3", "/W4", "/Wall" };
 
 		// MSVC only allows one warning level to be set
 		if ( config->warningLevels.size() > 1 ) {
@@ -380,8 +370,8 @@ static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t *backe
 
 			string_builder_appendf( &builder, "MSVC only allows ONE of the following warning levels to be set:\n" );
 
-			For ( u64, allowedWarningLevelIndex, 0, allowedWarningLevels.size() ) {
-				string_builder_appendf( &builder, "%s, ", allowedWarningLevels[allowedWarningLevelIndex].c_str() );
+			For ( u64, allowedWarningLevelIndex, 0, count_of( allowedWarningLevels ) ) {
+				string_builder_appendf( &builder, "%s, ", allowedWarningLevels[allowedWarningLevelIndex] );
 			}
 
 			error( "%s\n", string_builder_to_string( &builder ) );
@@ -390,23 +380,23 @@ static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t *backe
 		}
 
 		For ( u64, warningLevelIndex, 0, config->warningLevels.size() ) {
-			const std::string &warningLevel = config->warningLevels[warningLevelIndex];
+			const char *warningLevel = config->warningLevels[warningLevelIndex].c_str();
 
 			bool8 found = false;
 
-			For ( u64, allowedWarningLevelIndex, 0, allowedWarningLevels.size() ) {
-				if ( allowedWarningLevels[allowedWarningLevelIndex] == warningLevel ) {	// TODO(DM): 14/06/2025: better to compare hashes here instead?
+			For ( u64, allowedWarningLevelIndex, 0, count_of( allowedWarningLevels ) ) {
+				if ( string_equals( allowedWarningLevels[allowedWarningLevelIndex], warningLevel ) ) {
 					found = true;
 					break;
 				}
 			}
 
 			if ( !found ) {
-				error( "\"%s\" is not allowed as a warning level.\n", warningLevel.c_str() );
+				error( "\"%s\" is not allowed as a warning level.\n", warningLevel );
 				return false;
 			}
 
-			baseArgs.add( warningLevel.c_str() );
+			baseArgs.add( warningLevel );
 		}
 	}
 

@@ -1,5 +1,7 @@
 v0.13.0, TBD:
 
+* Source files are now compiled in parallel across multiple threads.
+	* The number of threads spawned is whichever is smaller: the number of CPU cores (including hyperthreads) or the number of source files.
 * Release archives are now drastically smaller.
 	* The bundled Clang installation previously included the full LLVM toolchain: Fortran/MLIR tools, LLDB, dozens of standalone LLVM utilities, all static libraries, and development headers.  The vast majority of this was never used by Builder.
 * Visual Studio:

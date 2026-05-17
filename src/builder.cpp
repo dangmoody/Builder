@@ -427,8 +427,7 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 		config->OnPreBuild();
 	}
 
-	Array<const char *> intermediateFiles;
-	intermediateFiles.init( mem_get_temp_storage() );
+	std::vector<std::string> intermediateFiles;
 	intermediateFiles.reserve( config->sourceFiles.size() );
 
 	// TODO(DM): 03/08/2025: this is kinda ugly
@@ -498,6 +497,9 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 	// make .o files for all compilation units
 	// TODO(DM): 14/06/2025: embarrassingly parallel
 	For ( u64, sourceFileIndex, 0, config->sourceFiles.size() ) {
+		u64 marker = mem_temp_tell();
+		defer { mem_temp_rewind_to( marker ); };
+
 		String sourceFile = string_set( mem_get_temp_storage(), config->sourceFiles[sourceFileIndex].c_str(), config->sourceFiles[sourceFileIndex].size() );
 
 		String sourceFileNoPath = string_copy( mem_get_temp_storage(), &sourceFile );
@@ -507,7 +509,7 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 		path_remove_file_extension( &sourceFileNoPathAndExtension );
 
 		String intermediateFilename = string_printf( mem_get_temp_storage(), "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPathAndExtension.data );
-		intermediateFiles.add( intermediateFilename.data );
+		intermediateFiles.push_back( intermediateFilename.data );
 
 		const char *depFilename = temp_printf( "%s%c%s.d", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPath.data );
 
@@ -546,8 +548,8 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 		if ( !file_get_last_write_time( fullBinaryName, &binaryFileLastWriteTime ) ) {
 			doLinking = true;
 		} else {
-			For ( u64, intermediateFileIndex, 0, intermediateFiles.count ) {
-				u64 intermediateFileLastWriteTime = GetLastFileWriteTime( intermediateFiles[intermediateFileIndex] );
+			For ( u64, intermediateFileIndex, 0, intermediateFiles.size() ) {
+				u64 intermediateFileLastWriteTime = GetLastFileWriteTime( intermediateFiles[intermediateFileIndex].c_str() );
 
 				if ( intermediateFileLastWriteTime > binaryFileLastWriteTime ) {
 					doLinking = true;
@@ -1357,7 +1359,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	compilerBackend_t compilerBackend = {};
 	CreateCompilerBackend_Clang( &compilerBackend );
 	String defaultCompilerPath = path_join( mem_get_temp_storage(), appPathOnly.data, "..", "clang", "bin", "clang" );
-	compilerBackend.Init( &compilerBackend, &context, defaultCompilerPath.data, std::string() );
+	compilerBackend.Init( &compilerBackend, &context, defaultCompilerPath.data, NULL );
 	defer {
 		compilerBackend.Shutdown( &compilerBackend );
 	};

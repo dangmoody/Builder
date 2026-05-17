@@ -47,8 +47,6 @@ SOFTWARE.
 #include <clang-c/Index.h>
 
 struct clangState_t {
-	Array<const char *>			args;
-
 	std::vector<std::string>	includeDependencies;
 
 	// TODO(DM): 11/02/2026: remove these when eds command archetype changes get merged in
@@ -180,14 +178,15 @@ static void ResolveCompilerAndLinkerPaths( clangState_t *clangState, LinearAlloc
 
 //================================================================
 
-static bool8 Clang_Init( compilerBackend_t *backend, const buildContext_t *context, const std::string &compilerPath, const std::string &compilerVersion ) {
+static bool8 Clang_Init( compilerBackend_t *backend, const buildContext_t *context, const char *compilerPath, const char *compilerVersion ) {
 	backend->data = cast( clangState_t *, linear_allocator_alloc( context->allocator, sizeof( clangState_t ) ) );
 	new( backend->data ) clangState_t;
 
 	clangState_t *clangState = cast( clangState_t *, backend->data );
-	clangState->args.init( mem_get_temp_storage() );
 
-	clangState->compilerVersion = string_set( context->allocator, compilerVersion.c_str() );
+	if ( compilerVersion ) {
+		clangState->compilerVersion = string_set( context->allocator, compilerVersion );
+	}
 
 	const char *clangExe = "clang";
 #if defined( _WIN32 )
@@ -198,9 +197,9 @@ static bool8 Clang_Init( compilerBackend_t *backend, const buildContext_t *conte
 #error Unrecognised platform.
 #endif
 
-	ResolveCompilerAndLinkerPaths( clangState, context->allocator, compilerPath.c_str(), clangExe, linkerExe );
+	ResolveCompilerAndLinkerPaths( clangState, context->allocator, compilerPath, clangExe, linkerExe );
 
-	String pathToCompiler = string_set( mem_get_temp_storage(), compilerPath.c_str() );
+	String pathToCompiler = string_set( mem_get_temp_storage(), compilerPath );
 	path_remove_file_from_path( &pathToCompiler );
 
 #if defined( _WIN32 )
@@ -217,18 +216,19 @@ static bool8 Clang_Init( compilerBackend_t *backend, const buildContext_t *conte
 	return true;
 }
 
-static bool8 GCC_Init( compilerBackend_t *backend, const buildContext_t *context, const std::string &compilerPath, const std::string &compilerVersion ) {
+static bool8 GCC_Init( compilerBackend_t *backend, const buildContext_t *context, const char *compilerPath, const char *compilerVersion ) {
 	backend->data = cast( clangState_t *, linear_allocator_alloc( context->allocator, sizeof( clangState_t ) ) );
 	new( backend->data ) clangState_t;
 
 	clangState_t *clangState = cast( clangState_t *, backend->data );
-	clangState->args.init( mem_get_temp_storage() );
 
-	clangState->compilerVersion = string_set( context->allocator, compilerVersion.c_str() );
+	if ( compilerVersion ) {
+		clangState->compilerVersion = string_set( context->allocator, compilerVersion );
+	}
 
-	ResolveCompilerAndLinkerPaths( clangState, context->allocator, compilerPath.c_str(), "gcc", "ld" );
+	ResolveCompilerAndLinkerPaths( clangState, context->allocator, compilerPath, "gcc", "ld" );
 
-	String pathToCompiler = string_set( mem_get_temp_storage(), compilerPath.c_str() );
+	String pathToCompiler = string_set( mem_get_temp_storage(), compilerPath );
 
 	if ( path_remove_file_from_path( &pathToCompiler ) ) {
 		clangState->arPath = path_join( context->allocator, pathToCompiler.data, "ar" );
@@ -306,7 +306,7 @@ static bool8 Clang_CompileSourceFile(
 	return exitCode == 0;
 }
 
-static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Array<const char *> &intermediateFiles, BuildConfig *config, const BuilderOptions *options ) {
+static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const std::vector<std::string> &intermediateFiles, BuildConfig *config, const BuilderOptions *options ) {
 	assert( backend );
 	assert( config );
 	// assert( options );
@@ -315,7 +315,8 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 
 	const char *fullBinaryName = BuildConfig_GetFullBinaryName( config, mem_get_temp_storage() );
 
-	Array<const char *> &args = clangState->args;
+	Array<const char *> args;
+	args.init( mem_get_temp_storage() );
 	args.reserve(
 		1 + // lib.exe or link.exe
 		1 + // verbose flag
@@ -326,13 +327,11 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 		1 + // kernel32.lib
 		4 + // CRT libs (e.g. msvcrt, msvcprt, vcruntime, ucrt when -D_DLL and NOT -D_DEBUG)
 		3 + // /LIBPATH: ucrt, um, msvc
-		intermediateFiles.count +
+		intermediateFiles.size() +
 		config->additionalLibPaths.size() +
 		config->additionalLibs.size() +
 		config->additionalLinkerArguments.size()
 	);
-
-	args.reset();
 
 	// TODO(DM): 30/04/2026: this is a repetition of MSVC_LinkIntermediateFiles
 	// so we need to start splitting backend files down by compiler and linker
@@ -361,7 +360,9 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 
 	args.add( temp_printf( "/OUT:%s", fullBinaryName ) );
 
-	args.add_range( &intermediateFiles );
+	For ( u64, i, 0, intermediateFiles.size() ) {
+		args.add( intermediateFiles[i].c_str() );
+	}
 
 	args.add( temp_printf( "/LIBPATH:%s", clangState->winSDK.ucrtLibPath.data ) );
 	args.add( temp_printf( "/LIBPATH:%s", clangState->winSDK.umLibPath.data ) );
@@ -438,7 +439,9 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 			args.add( "-v" );
 		}
 
-		args.add_range( &intermediateFiles );
+		For ( u64, i, 0, intermediateFiles.size() ) {
+			args.add( intermediateFiles[i].c_str() );
+		}
 	} else {
 		args.add( clangState->compilerPath.data );
 
@@ -454,7 +457,9 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 			args.add( "-v" );
 		}
 
-		args.add_range( &intermediateFiles );
+		For ( u64, i, 0, intermediateFiles.size() ) {
+			args.add( intermediateFiles[i].c_str() );
+		}
 
 		For ( u32, libPathIndex, 0, config->additionalLibPaths.size() ) {
 			args.add( temp_printf( "-L%s", config->additionalLibPaths[libPathIndex].c_str() ) );
@@ -507,7 +512,7 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const Arra
 	return exitCode == 0;
 }
 
-static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const Array<const char *> &intermediateFiles, BuildConfig *config, const BuilderOptions *options ) {
+static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const std::vector<std::string> &intermediateFiles, BuildConfig *config, const BuilderOptions *options ) {
 	assert( backend );
 	assert( config );
 
@@ -515,7 +520,8 @@ static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const Array<
 
 	const char *fullBinaryName = BuildConfig_GetFullBinaryName( config, mem_get_temp_storage() );
 
-	Array<const char *> &args = clangState->args;
+	Array<const char *> args;
+	args.init( mem_get_temp_storage() );
 	args.reserve(
 		1 + // lld-link
 		1 + // verbose flag
@@ -524,13 +530,11 @@ static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const Array<
 		1 + // -g
 		1 + // -o
 		1 + // binary name
-		intermediateFiles.count +
+		intermediateFiles.size() +
 		config->additionalLibPaths.size() +
 		config->additionalLibs.size() +
 		config->additionalLinkerArguments.size()
 	);
-
-	args.reset();
 
 	// clang and gcc treat static libraries as just an archive of .o files
 	// so there is no real "link" step in this case, the .o files are just "archived" together
@@ -544,7 +548,9 @@ static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const Array<
 			args.add( "-v" );
 		}
 
-		args.add_range( &intermediateFiles );
+		For ( u64, i, 0, intermediateFiles.size() ) {
+			args.add( intermediateFiles[i].c_str() );
+		}
 	} else {
 		args.add( clangState->compilerPath.data );
 
@@ -564,7 +570,9 @@ static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const Array<
 			args.add( "-v" );
 		}
 
-		args.add_range( &intermediateFiles );
+		For ( u64, i, 0, intermediateFiles.size() ) {
+			args.add( intermediateFiles[i].c_str() );
+		}
 
 		For ( u32, libPathIndex, 0, config->additionalLibPaths.size() ) {
 			args.add( temp_printf( "-L%s", config->additionalLibPaths[libPathIndex].c_str() ) );
@@ -687,36 +695,28 @@ static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t *back
 
 	// Warning Level
 	{
-		std::vector<std::string> allowedWarningLevels = {
-			"-Wall",
-			"-Wextra",
-			"-Wpedantic",
-		};
+		// -Weverything is clang-only; gcc stops at -Wpedantic
+		static const char *allowedWarningLevels[] = { "-Wall", "-Wextra", "-Wpedantic", "-Weverything" };
+		const u64 numAllowedWarningLevels = isClang ? 4 : 3;
 
-		// gcc doesnt have this as a warning level but clang does
-		if ( isClang ) {
-			allowedWarningLevels.push_back( "-Weverything" );
-		}
-
-		//outArchetype.allowedWarningLevels.reserve( config->warningLevels.size() );
 		For ( u64, warningLevelIndex, 0, config->warningLevels.size() ) {
-			const std::string &warningLevel = config->warningLevels[warningLevelIndex];
+			const char *warningLevel = config->warningLevels[warningLevelIndex].c_str();
 
 			bool8 found = false;
 
-			For ( u64, allowedWarningLevelIndex, 0, allowedWarningLevels.size() ) {
-				if ( allowedWarningLevels[allowedWarningLevelIndex] == warningLevel ) {	// TODO(DM): 14/06/2025: better to compare hashes here instead?
+			For ( u64, allowedWarningLevelIndex, 0, numAllowedWarningLevels ) {
+				if ( strcmp( allowedWarningLevels[allowedWarningLevelIndex], warningLevel ) == 0 ) {
 					found = true;
 					break;
 				}
 			}
 
 			if ( !found ) {
-				error( "\"%s\" is not allowed as a warning level.\n", warningLevel.c_str() );
+				error( "\"%s\" is not allowed as a warning level.\n", warningLevel );
 				return false;
 			}
 
-			baseArgs.add( warningLevel.c_str() );
+			baseArgs.add( warningLevel );
 		}
 	}
 

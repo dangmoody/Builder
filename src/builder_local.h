@@ -77,10 +77,10 @@ struct compilationCommandArchetype_t {
 struct compilerBackend_t {
 	void	*data;
 
-	bool8	( *Init )( compilerBackend_t *backend, const buildContext_t *context, const std::string &compilerPath, const std::string &compilerVersion );
+	bool8	( *Init )( compilerBackend_t *backend, const buildContext_t *context, const char *compilerPath, const char *compilerVersion );
 	void	( *Shutdown )( compilerBackend_t *backend );
 	bool8	( *CompileSourceFile )( compilerBackend_t *backend, buildContext_t *buildContext, BuildConfig *config, compilationCommandArchetype_t &commandArchetype, const char *sourceFile, bool recordCompilation );
-	bool8	( *LinkIntermediateFiles )( compilerBackend_t *backend, const Array<const char *> &intermediateFiles, BuildConfig *config, const BuilderOptions *options );
+	bool8	( *LinkIntermediateFiles )( compilerBackend_t *backend, const std::vector<std::string> &intermediateFiles, BuildConfig *config, const BuilderOptions *options );
 	bool8	( *GetCompilationCommandArchetype )( const compilerBackend_t *backend, const BuildConfig *config, compilationCommandArchetype_t &outCmdArchetype );
 	void	( *GetIncludeDependenciesFromSourceFileBuild )( compilerBackend_t *backend, std::vector<std::string> &includeDependencies );
 	String	( *GetCompilerPath )( compilerBackend_t *backend );

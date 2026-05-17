@@ -77,14 +77,17 @@ static const char *OptimizationLevelToCompilerArg( const OptimizationLevel level
 // DM: I'm just straight lifting stuff from the code listing linked above - idc anymore
 // its ridiculous that Microsoft genuinely think this isnt a frankly retarded way of grabbing some simple information off your PC
 
-static bool8 MSVC_Init( compilerBackend_t *backend, const buildContext_t *context, const std::string &compilerPath, const std::string &compilerVersion ) {
+static bool8 MSVC_Init( compilerBackend_t *backend, const buildContext_t *context, const char *compilerPath, const char *compilerVersion ) {
 	msvcState_t *msvcState = cast( msvcState_t *, linear_allocator_alloc( context->allocator, sizeof( msvcState_t ) ) );
 	new( msvcState ) msvcState_t;
 
 	msvcState->args.init( mem_get_temp_storage() );
 
-	msvcState->compilerPath = string_set( context->allocator, compilerPath.c_str() );
-	msvcState->compilerVersion = string_set( context->allocator, compilerVersion.c_str() );
+	msvcState->compilerPath = string_set( context->allocator, compilerPath );
+
+	if ( compilerVersion ) {
+		msvcState->compilerVersion = string_set( context->allocator, compilerVersion );
+	}
 
 	backend->data = msvcState;
 
@@ -213,7 +216,7 @@ static bool8 MSVC_CompileSourceFile(
 	return exitCode == 0;
 }
 
-static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t *backend, const Array<const char *> &intermediateFiles, BuildConfig *config, const BuilderOptions *options ) {
+static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t *backend, const std::vector<std::string> &intermediateFiles, BuildConfig *config, const BuilderOptions *options ) {
 	assert( backend );
 	assert( config );
 
@@ -227,7 +230,7 @@ static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t *backend, const Array
 		1 +	// /DEBUG
 		1 + // /NODEFAULTLIB
 		1 +	// /OUT:<name>
-		intermediateFiles.count +
+		intermediateFiles.size() +
 		msvcState->microsoftCoreLibPaths.size() +
 		config->additionalLibPaths.size() +
 		config->additionalLibs.size()
@@ -256,7 +259,9 @@ static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t *backend, const Array
 
 	args.add( temp_printf( "/OUT:%s", fullBinaryName ) );
 
-	args.add_range( &intermediateFiles );
+	For ( u64, i, 0, intermediateFiles.size() ) {
+		args.add( intermediateFiles[i].c_str() );
+	}
 
 	For ( u32, libPathIndex, 0, msvcState->microsoftCoreLibPaths.size() ) {
 		args.add( temp_printf( "/LIBPATH:%s", msvcState->microsoftCoreLibPaths[libPathIndex].c_str() ) );

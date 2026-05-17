@@ -520,13 +520,11 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 			continue;
 		}
 
-		if ( !compilerBackend->CompileSourceFile( compilerBackend, context, config, cmdArchetype, sourceFile.data, generateCompilationDatabase ) ) {
+		std::vector<std::string> includeDependencies;
+		if ( !compilerBackend->CompileSourceFile( compilerBackend, context, config, cmdArchetype, sourceFile.data, generateCompilationDatabase, &includeDependencies ) ) {
 			error( "Compile failed.\n" );
 			return BUILD_RESULT_FAILED;
 		}
-
-		std::vector<std::string> includeDependencies;
-		compilerBackend->GetIncludeDependenciesFromSourceFileBuild( compilerBackend, includeDependencies );
 
 		if ( sourceFileHashmapIndex != HASHMAP_INVALID_VALUE ) {
 			context->sourceFileIncludeDependencies[sourceFileHashmapIndex].includeDependencies = includeDependencies;

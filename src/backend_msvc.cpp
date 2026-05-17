@@ -49,8 +49,6 @@ struct msvcState_t {
 	// windows sdk includes, msvc includes, that kind of thing
 	Array<const char *>			microsoftCoreIncludes;
 	Array<const char *>			microsoftCoreLibPaths;
-
-	std::vector<std::string>	includeDependencies;
 };
 
 //================================================================
@@ -125,7 +123,8 @@ static bool8 MSVC_CompileSourceFile(
 	BuildConfig *config,
 	compilationCommandArchetype_t &cmdArchetype,
 	const char *sourceFile,
-	bool recordCompilation )
+	bool recordCompilation,
+	std::vector<std::string> *outIncludeDependencies )
 {
 	assert( backend );
 	assert( sourceFile );
@@ -137,7 +136,6 @@ static bool8 MSVC_CompileSourceFile(
 
 	msvcState_t *msvcState = cast( msvcState_t *, backend->data );
 
-	msvcState->includeDependencies.clear();
 
 	Array<const char *> finalArgs = cmdArchetype.baseArgs;
 
@@ -199,7 +197,9 @@ static bool8 MSVC_CompileSourceFile(
 					bufferLine.erase( 0, 1 );
 				}
 
-				msvcState->includeDependencies.push_back( bufferLine );
+				if ( outIncludeDependencies ) {
+					outIncludeDependencies->push_back( bufferLine );
+				}
 			} else {
 				printf( "%s\n", bufferLine.c_str() );
 			}
@@ -419,12 +419,6 @@ static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t *backe
 	return true;
 }
 
-static void MSVC_GetIncludeDependenciesFromSourceFileBuild( compilerBackend_t *backend, std::vector<std::string> &outIncludeDependencies ) {
-	msvcState_t *msvcState = cast( msvcState_t *, backend->data );
-
-	outIncludeDependencies = msvcState->includeDependencies;
-}
-
 static String MSVC_GetCompilerPath( compilerBackend_t *backend ) {
 	msvcState_t *msvcState = cast( msvcState_t *, backend->data );
 
@@ -445,7 +439,6 @@ void CreateCompilerBackend_MSVC( compilerBackend_t *outBackend ) {
 		.CompileSourceFile							= MSVC_CompileSourceFile,
 		.LinkIntermediateFiles						= MSVC_LinkIntermediateFiles,
 		.GetCompilationCommandArchetype				= MSVC_GetCompilationCommandArchetype,
-		.GetIncludeDependenciesFromSourceFileBuild	= MSVC_GetIncludeDependenciesFromSourceFileBuild,
 		.GetCompilerPath							= MSVC_GetCompilerPath,
 		.GetCompilerVersion							= MSVC_GetCompilerVersion,
 	};

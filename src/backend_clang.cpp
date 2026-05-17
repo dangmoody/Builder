@@ -47,8 +47,6 @@ SOFTWARE.
 #include <clang-c/Index.h>
 
 struct clangState_t {
-	std::vector<std::string>	includeDependencies;
-
 	// TODO(DM): 11/02/2026: remove these when eds command archetype changes get merged in
 	String						compilerPath;
 	String						compilerVersion;
@@ -252,7 +250,8 @@ static bool8 Clang_CompileSourceFile(
 	BuildConfig *config,
 	compilationCommandArchetype_t &cmdArchetype,
 	const char *sourceFile,
-	bool recordCompilation )
+	bool recordCompilation,
+	std::vector<std::string> *outIncludeDependencies )
 {
 	assert( backend );
 	assert( sourceFile );
@@ -295,8 +294,8 @@ static bool8 Clang_CompileSourceFile(
 
 	s32 exitCode = RunProc( &finalArgs, NULL, procFlags );
 
-	if ( exitCode == 0 ) {
-		ReadDependencyFile( depFilename, clangState->includeDependencies );
+	if ( exitCode == 0 && outIncludeDependencies ) {
+		ReadDependencyFile( depFilename, *outIncludeDependencies );
 	}
 
 	if ( recordCompilation ) {
@@ -740,15 +739,6 @@ static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t *back
 	return true;
 }
 
-// only call this after compilation has finished successfully
-// parse the dependency file that we generated for every dependency thats in there
-// add those to a list - we need to put those in the .build_info file
-static void Clang_GetIncludeDependenciesFromSourceFileBuild( compilerBackend_t *backend, std::vector<std::string> &outIncludeDependencies ) {
-	clangState_t *clangState = cast( clangState_t *, backend->data );
-
-	outIncludeDependencies = clangState->includeDependencies;
-}
-
 static String Clang_GetCompilerPath( compilerBackend_t *backend ) {
 	clangState_t *clangState = cast( clangState_t *, backend->data );
 
@@ -821,7 +811,6 @@ void CreateCompilerBackend_Clang( compilerBackend_t *outBackend ) {
 		.CompileSourceFile							= Clang_CompileSourceFile,
 		.LinkIntermediateFiles						= Clang_LinkIntermediateFiles,
 		.GetCompilationCommandArchetype				= Clang_GetCompilationCommandArchetype,
-		.GetIncludeDependenciesFromSourceFileBuild	= Clang_GetIncludeDependenciesFromSourceFileBuild,
 		.GetCompilerPath							= Clang_GetCompilerPath,
 		.GetCompilerVersion							= Clang_GetCompilerVersion,
 	};
@@ -835,7 +824,6 @@ void CreateCompilerBackend_GCC( compilerBackend_t *outBackend ) {
 		.CompileSourceFile							= Clang_CompileSourceFile,
 		.LinkIntermediateFiles						= GCC_LinkIntermediateFiles,
 		.GetCompilationCommandArchetype				= Clang_GetCompilationCommandArchetype,
-		.GetIncludeDependenciesFromSourceFileBuild	= Clang_GetIncludeDependenciesFromSourceFileBuild,
 		.GetCompilerPath							= Clang_GetCompilerPath,
 		.GetCompilerVersion							= GCC_GetCompilerVersion,
 	};

@@ -79,7 +79,7 @@ struct compilerBackend_t {
 
 	bool8	( *Init )( compilerBackend_t *backend, const buildContext_t *context, const char *compilerPath, const char *compilerVersion );
 	void	( *Shutdown )( compilerBackend_t *backend );
-	bool8	( *CompileSourceFile )( compilerBackend_t *backend, buildContext_t *buildContext, BuildConfig *config, compilationCommandArchetype_t &commandArchetype, const char *sourceFile, bool recordCompilation, std::vector<std::string> *outIncludeDependencies );
+	bool8	( *CompileSourceFile )( compilerBackend_t *backend, buildContext_t *buildContext, BuildConfig *config, compilationCommandArchetype_t &commandArchetype, const char *sourceFile, bool recordCompilation, u64 sourceFileIndex, std::vector<std::string> *outIncludeDependencies );
 	bool8	( *LinkIntermediateFiles )( compilerBackend_t *backend, const std::vector<std::string> &intermediateFiles, BuildConfig *config, const BuilderOptions *options );
 	bool8	( *GetCompilationCommandArchetype )( const compilerBackend_t *backend, const BuildConfig *config, compilationCommandArchetype_t &outCmdArchetype );
 	String	( *GetCompilerPath )( compilerBackend_t *backend );
@@ -146,7 +146,7 @@ const char	*GetFileExtensionFromBinaryType( const BinaryType type );
 
 const char	*BuildConfig_GetFullBinaryName( const BuildConfig *config, LinearAllocator *allocator );
 
-void		RecordCompilationDatabaseEntry( buildContext_t *buildContext, const char *sourceFileName, const Array<const char *> &compilationCommandArray );
+void		RecordCompilationDatabaseEntry( buildContext_t *buildContext, const char *sourceFileName, const Array<const char *> &compilationCommandArray, u64 sourceFileIndex );
 
 s32			RunProc( Array<const char *> *args, Array<const char *> *environmentVariables, const procFlags_t procFlags = 0, String *outStdout = NULL );
 

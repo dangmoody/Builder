@@ -124,6 +124,7 @@ static bool8 MSVC_CompileSourceFile(
 	compilationCommandArchetype_t &cmdArchetype,
 	const char *sourceFile,
 	bool recordCompilation,
+	u64 sourceFileIndex,
 	std::vector<std::string> *outIncludeDependencies )
 {
 	assert( backend );
@@ -137,7 +138,9 @@ static bool8 MSVC_CompileSourceFile(
 	msvcState_t *msvcState = cast( msvcState_t *, backend->data );
 
 
-	Array<const char *> finalArgs = cmdArchetype.baseArgs;
+	Array<const char *> finalArgs;
+	finalArgs.init( mem_get_temp_storage() );
+	finalArgs.add_range( &cmdArchetype.baseArgs );
 
 	const char *intermediateFile = temp_printf( "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPathAndExtension.data );
 
@@ -209,7 +212,7 @@ static bool8 MSVC_CompileSourceFile(
 	}
 
 	if ( recordCompilation ) {
-		RecordCompilationDatabaseEntry( buildContext, sourceFile, finalArgs );
+		RecordCompilationDatabaseEntry( buildContext, sourceFile, finalArgs, sourceFileIndex );
 	}
 
 	return exitCode == 0;

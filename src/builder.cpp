@@ -48,6 +48,8 @@ SOFTWARE.
 #include "core/include/core_string.h"
 #include "core/include/hashmap.h"
 #include "core/include/defer.h"
+#include "core/include/core_thread.h"
+#include "core/include/os.h"
 
 #ifdef _WIN64
 #include <Shlwapi.h>
@@ -57,6 +59,7 @@ SOFTWARE.
 
 #include <stdio.h>
 #include <stdarg.h>
+#include <inttypes.h>
 
 /*
 =============================================================================
@@ -407,6 +410,100 @@ static s32 ShowUsage( const s32 exitCode ) {
 	return exitCode;
 }
 
+static bool8 ShouldRebuildSourceFile( const buildContext_t *context, const char *sourceFile, const char *intermediateFilename, const u32 sourceFileHashmapIndex ) {
+	if ( context->forceRebuild ) {
+		return true;
+	}
+
+	// if source file doesnt exist in hashmap then its a new file and we havent built this one before
+	if ( sourceFileHashmapIndex == HASHMAP_INVALID_VALUE ) {
+		return true;
+	}
+
+	// if the source file is newer than the intermediate file then we want to rebuild
+	u64 intermediateFileLastWriteTime = 0;
+	{
+		// if the .o file doesnt exist then assume we havent built this file yet
+		if ( !file_get_last_write_time( intermediateFilename, &intermediateFileLastWriteTime ) ) {
+			return true;
+		}
+
+		// if the .o file does exist but the source file was written to it more recently then we know we want to rebuild
+		if ( GetLastFileWriteTime( sourceFile ) > intermediateFileLastWriteTime ) {
+			return true;
+		}
+	}
+
+	// if the source file wasnt newer than the .o file then do the same timestamp check for all the files that this source file depends on
+	// just because the source file didnt change doesnt mean we dont want to recompile it
+	// what if one of the header files it relies on changed? we still want to recompile that file!
+	{
+		const std::vector<std::string> &includeDependencies = context->sourceFileIncludeDependencies[sourceFileHashmapIndex].includeDependencies;
+
+		For ( u64, dependencyIndex, 0, includeDependencies.size() ) {
+			if ( GetLastFileWriteTime( includeDependencies[dependencyIndex].c_str() ) > intermediateFileLastWriteTime ) {
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+struct compileJobPool_t {
+	compilerBackend_t				*compilerBackend;
+	buildContext_t					*context;
+	BuildConfig						*config;
+	compilationCommandArchetype_t	*cmdArchetype;
+	std::vector<std::string>		*intermediateFiles;
+	bool8							generateCompilationDatabase;
+	u32								numSourceFiles;
+	Atomic32						nextSourceFileIndex;
+	Atomic32						numFailed;
+};
+
+static s32 CompileJobThread( void *data ) {
+	compileJobPool_t *pool = cast( compileJobPool_t *, data );
+
+	while ( 1 ) {
+		u32 sourceFileIndex = atomic_increment( &pool->nextSourceFileIndex ) - 1;
+
+		if ( sourceFileIndex >= pool->numSourceFiles ) {
+			break;
+		}
+
+		u64 marker = mem_temp_tell();
+		defer { mem_temp_rewind_to( marker ); };
+
+		const char *sourceFile = pool->config->sourceFiles[sourceFileIndex].c_str();
+
+		String sourceFileNoPath = string_set( mem_get_temp_storage(), sourceFile );
+		path_remove_path_from_file( &sourceFileNoPath );
+
+		String sourceFileNoPathAndExtension = string_copy( mem_get_temp_storage(), &sourceFileNoPath );
+		path_remove_file_extension( &sourceFileNoPathAndExtension );
+
+		String intermediateFilename = string_printf( mem_get_temp_storage(), "%s%c%s.o", pool->config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPathAndExtension.data );
+		( *pool->intermediateFiles )[sourceFileIndex] = intermediateFilename.data;
+
+		u32 sourceFileHashmapIndex = hashmap_get_value( pool->context->sourceFileIndices, hash_string( sourceFile, 0 ) );
+
+		if ( !ShouldRebuildSourceFile( pool->context, sourceFile, intermediateFilename.data, sourceFileHashmapIndex ) ) {
+			continue;
+		}
+
+		std::vector<std::string> includeDependencies;
+		if ( !pool->compilerBackend->CompileSourceFile( pool->compilerBackend, pool->context, pool->config, *pool->cmdArchetype, sourceFile, pool->generateCompilationDatabase, sourceFileIndex, &includeDependencies ) ) {
+			atomic_increment( &pool->numFailed );
+			continue;
+		}
+
+		pool->context->sourceFileIncludeDependencies[sourceFileHashmapIndex].includeDependencies = std::move( includeDependencies );
+	}
+
+	return 0;
+}
+
 static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, compilerBackend_t *compilerBackend, const BuilderOptions *options ) {
 	// create binary folder
 	if ( !folder_create_if_it_doesnt_exist( config->binaryFolder.c_str() ) ) {
@@ -428,48 +525,7 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 	}
 
 	std::vector<std::string> intermediateFiles;
-	intermediateFiles.reserve( config->sourceFiles.size() );
-
-	// TODO(DM): 03/08/2025: this is kinda ugly
-	auto ShouldRebuildSourceFile = [context]( const char *sourceFile, const char *intermediateFilename, u32 sourceFileHashmapIndex ) -> bool8 {
-		if ( context->forceRebuild ) {
-			return true;
-		}
-
-		// if source file doesnt exist in hashmap then its a new file and we havent built this one before
-		if ( sourceFileHashmapIndex == HASHMAP_INVALID_VALUE ) {
-			return true;
-		}
-
-		// if the source file is newer than the intermediate file then we want to rebuild
-		u64 intermediateFileLastWriteTime = 0;
-		{
-			// if the .o file doesnt exist then assume we havent built this file yet
-			if ( !file_get_last_write_time( intermediateFilename, &intermediateFileLastWriteTime ) ) {
-				return true;
-			}
-
-			// if the .o file does exist but the source file was written to it more recently then we know we want to rebuild
-			if ( GetLastFileWriteTime( sourceFile ) > intermediateFileLastWriteTime ) {
-				return true;
-			}
-		}
-
-		// if the source file wasnt newer than the .o file then do the same timestamp check for all the files that this source file depends on
-		// just because the source file didnt change doesnt mean we dont want to recompile it
-		// what if one of the header files it relies on changed? we still want to recompile that file!
-		{
-			const std::vector<std::string> &includeDependencies = context->sourceFileIncludeDependencies[sourceFileHashmapIndex].includeDependencies;
-
-			For ( u64, dependencyIndex, 0, includeDependencies.size() ) {
-				if ( GetLastFileWriteTime( includeDependencies[dependencyIndex].c_str() ) > intermediateFileLastWriteTime ) {
-					return true;
-				}
-			}
-		}
-
-		return false;
-	};
+	intermediateFiles.resize( config->sourceFiles.size() );
 
 	// Process only once how the base compilation command should look like, fill up dep/output/source args later for each source file
 	compilationCommandArchetype_t cmdArchetype {};
@@ -490,47 +546,71 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 
 	bool8 generateCompilationDatabase = options && options->generateCompilationDatabase;
 	if ( generateCompilationDatabase ) {
-		context->compilationDatabase.reserve( config->sourceFiles.size() );
+		context->compilationDatabase.resize( config->sourceFiles.size() );
+	}
+
+	// ensure every source file has a slot in sourceFileIncludeDependencies before the compile loop runs
+	// this allows compile jobs to write their include dependencies by index with no contention
+	// the hashmap loaded from disk was sized for previously-seen files only
+	// so rebuild it with enough capacity for all current source files before adding any new entries
+	{
+		u64 totalCapacity = context->sourceFileIncludeDependencies.size() + config->sourceFiles.size();
+
+		Hashmap *freshHashmap = hashmap_create( context->allocator, trunc_cast( u32, totalCapacity ), 0.5f );
+
+		For ( u64, i, 0, context->sourceFileIncludeDependencies.size() ) {
+			u64 hash = hash_string( context->sourceFileIncludeDependencies[i].filename.c_str(), 0 );
+			hashmap_set_value( freshHashmap, hash, trunc_cast( u32, i ) );
+		}
+
+		context->sourceFileIndices = freshHashmap;
+	}
+
+	For ( u64, sourceFileIndex, 0, config->sourceFiles.size() ) {
+		const char *sourceFile = config->sourceFiles[sourceFileIndex].c_str();
+		u64 sourceFileHash = hash_string( sourceFile, 0 );
+
+		if ( hashmap_get_value( context->sourceFileIndices, sourceFileHash ) == HASHMAP_INVALID_VALUE ) {
+			u32 newIndex = trunc_cast( u32, context->sourceFileIncludeDependencies.size() );
+
+			context->sourceFileIncludeDependencies.push_back( { sourceFile, {} } );
+
+			hashmap_set_value( context->sourceFileIndices, sourceFileHash, newIndex );
+		}
 	}
 
 	// compile step
-	// make .o files for all compilation units
-	// TODO(DM): 14/06/2025: embarrassingly parallel
-	For ( u64, sourceFileIndex, 0, config->sourceFiles.size() ) {
-		u64 marker = mem_temp_tell();
-		defer { mem_temp_rewind_to( marker ); };
+	u32 numThreads = min( os_get_num_cpu_cores(), trunc_cast( u32, config->sourceFiles.size() ) );
 
-		String sourceFile = string_set( mem_get_temp_storage(), config->sourceFiles[sourceFileIndex].c_str(), config->sourceFiles[sourceFileIndex].size() );
+	printf( "Compiling %" PRIu64 " files across %u threads.\n", config->sourceFiles.size(), numThreads );
 
-		String sourceFileNoPath = string_copy( mem_get_temp_storage(), &sourceFile );
-		path_remove_path_from_file( &sourceFileNoPath );
+	compileJobPool_t pool = {
+		.compilerBackend				= compilerBackend,
+		.context						= context,
+		.config							= config,
+		.cmdArchetype					= &cmdArchetype,
+		.intermediateFiles				= &intermediateFiles,
+		.generateCompilationDatabase	= generateCompilationDatabase,
+		.numSourceFiles					= trunc_cast( u32, config->sourceFiles.size() ),
+		.nextSourceFileIndex			= { 0 },
+		.numFailed						= { 0 },
+	};
 
-		String sourceFileNoPathAndExtension = string_copy( mem_get_temp_storage(), &sourceFileNoPath );
-		path_remove_file_extension( &sourceFileNoPathAndExtension );
+	Array<Thread> threads;
+	threads.init( mem_get_temp_storage() );
+	threads.reserve( numThreads );
 
-		String intermediateFilename = string_printf( mem_get_temp_storage(), "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPathAndExtension.data );
-		intermediateFiles.push_back( intermediateFilename.data );
+	For ( u64, threadIndex, 0, numThreads ) {
+		threads.add( thread_create( CompileJobThread, &pool ) );
+	}
 
-		const char *depFilename = temp_printf( "%s%c%s.d", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPath.data );
+	For ( u64, threadIndex, 0, threads.count ) {
+		thread_wait( &threads[threadIndex] );
+	}
 
-		u32 sourceFileHashmapIndex = hashmap_get_value( context->sourceFileIndices, hash_string( sourceFile.data, 0 ) );
-
-		// only rebuild the .o file if the source file (or any of the files that source file depends on) was written to more recently or it doesnt exist
-		if ( !ShouldRebuildSourceFile( sourceFile.data, intermediateFilename.data, sourceFileHashmapIndex ) ) {
-			continue;
-		}
-
-		std::vector<std::string> includeDependencies;
-		if ( !compilerBackend->CompileSourceFile( compilerBackend, context, config, cmdArchetype, sourceFile.data, generateCompilationDatabase, &includeDependencies ) ) {
-			error( "Compile failed.\n" );
-			return BUILD_RESULT_FAILED;
-		}
-
-		if ( sourceFileHashmapIndex != HASHMAP_INVALID_VALUE ) {
-			context->sourceFileIncludeDependencies[sourceFileHashmapIndex].includeDependencies = includeDependencies;
-		} else {
-			context->sourceFileIncludeDependencies.push_back( { sourceFile.data, includeDependencies } );
-		}
+	if ( pool.numFailed.value > 0 ) {
+		error( "Compile failed.\n" );
+		return BUILD_RESULT_FAILED;
 	}
 
 	// link step
@@ -819,8 +899,6 @@ struct byteBuffer_t {
 
 static void ReadIncludeDependenciesFile( buildContext_t *context ) {
 	byteBuffer_t byteBuffer = {};
-	// DM!!! what allocator do we set here?
-	// byteBuffer.data.init( mem_get_temp_storage() );
 
 	// there wont be an include dependencies file on the first build or if you nuked the binaries folder (for instance)
 	// so this is allowed to fail
@@ -921,7 +999,7 @@ static bool8 WriteIncludeDependenciesFile( buildContext_t *context ) {
 	return true;
 }
 
-void RecordCompilationDatabaseEntry( buildContext_t *buildContext, const char *sourceFileName, const Array<const char *> &compilationCommandArray ) {
+void RecordCompilationDatabaseEntry( buildContext_t *buildContext, const char *sourceFileName, const Array<const char *> &compilationCommandArray, const u64 sourceFileIndex ) {
 	u64 pos = mem_temp_tell();
 	defer { mem_temp_rewind_to( pos ); };
 
@@ -945,7 +1023,7 @@ void RecordCompilationDatabaseEntry( buildContext_t *buildContext, const char *s
 		entry.arguments.emplace_back( arg );
 	}
 
-	buildContext->compilationDatabase.emplace_back( entry );
+	buildContext->compilationDatabase[sourceFileIndex] = entry;
 }
 
 enum flagArgumentFormBits_t {
@@ -1102,9 +1180,16 @@ static bool WriteCompilationDatabase( buildContext_t *context ) {
 
 	string_builder_appendf( &sb, "[\n" );
 
-	const u64 entriesCount = context->compilationDatabase.size();
-	For ( u64, i, 0, entriesCount ) {
-		compilationDatabaseEntry_t &entry = context->compilationDatabase[i];
+	std::vector<u64> validIndices;
+	For ( u64, i, 0, context->compilationDatabase.size() ) {
+		if ( !context->compilationDatabase[i].file.empty() ) {
+			validIndices.push_back( i );
+		}
+	}
+
+	const u64 validCount = validIndices.size();
+	For ( u64, validIndex, 0, validCount ) {
+		compilationDatabaseEntry_t &entry = context->compilationDatabase[validIndices[validIndex]];
 
 		FixCompilatiomDatabasePath( entry.directory );
 		FixCompilatiomDatabasePath( entry.file );
@@ -1138,7 +1223,7 @@ static bool WriteCompilationDatabase( buildContext_t *context ) {
 			&sb,
 			"    ]\n"
 			"  }%s\n",
-			( i + 1 < entriesCount ) ? "," : ""
+			( validIndex + 1 < validCount ) ? "," : ""
 		);
 	}
 

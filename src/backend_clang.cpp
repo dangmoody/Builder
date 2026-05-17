@@ -251,6 +251,7 @@ static bool8 Clang_CompileSourceFile(
 	compilationCommandArchetype_t &cmdArchetype,
 	const char *sourceFile,
 	bool recordCompilation,
+	u64 sourceFileIndex,
 	std::vector<std::string> *outIncludeDependencies )
 {
 	assert( backend );
@@ -263,7 +264,9 @@ static bool8 Clang_CompileSourceFile(
 
 	const char *depFilename = temp_printf( "%s%c%s.d", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPath.data );
 
-	Array<const char *> finalArgs = cmdArchetype.baseArgs;
+	Array<const char *> finalArgs;
+	finalArgs.init( mem_get_temp_storage() );
+	finalArgs.add_range( &cmdArchetype.baseArgs );
 
 	String sourceFileNoPathAndExtension = string_copy( mem_get_temp_storage(), &sourceFileNoPath );
 	path_remove_file_extension( &sourceFileNoPathAndExtension );
@@ -299,7 +302,7 @@ static bool8 Clang_CompileSourceFile(
 	}
 
 	if ( recordCompilation ) {
-		RecordCompilationDatabaseEntry( buildContext, sourceFile, finalArgs );
+		RecordCompilationDatabaseEntry( buildContext, sourceFile, finalArgs, sourceFileIndex );
 	}
 
 	return exitCode == 0;

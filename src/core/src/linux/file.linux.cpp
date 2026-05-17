@@ -204,7 +204,7 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 	assert( visit_callback );
 
 	Array<const char *> directories;
-	directories.init( g_temp_storage );
+	directories.init( mem_get_temp_storage() );
 	directories.add( path );
 
 	u32 dir_index = 0;
@@ -231,7 +231,7 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 				continue;
 			}
 
-			String full_filename = path_join( g_temp_storage, directory, entry->d_name );
+			String full_filename = path_join( mem_get_temp_storage(), directory, entry->d_name );
 
 			struct stat file_stat = {};
 			if ( stat( full_filename.data, &file_stat ) != 0 ) {

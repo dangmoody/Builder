@@ -103,8 +103,8 @@ String path_absolute_path( LinearAllocator *allocator, const char *path ) {
 	assert( allocator );
 	assert( path );
 
-	// u64 temp_pos = linear_allocator_tell( g_temp_storage );
-	// defer { linear_allocator_rewind_to( g_temp_storage, temp_pos ); };
+	// u64 temp_pos = linear_allocator_tell( mem_get_temp_storage() );
+	// defer { linear_allocator_rewind_to( mem_get_temp_storage(), temp_pos ); };
 
 	char path_copy[PATH_MAX] = {};
 	memcpy( path_copy, path, strlen( path ) );
@@ -128,8 +128,8 @@ bool8 path_is_absolute( const char *path ) {
 const char *path_canonicalize( const char *path ) {
 	assert( path );
 
-	u64 temp_pos = linear_allocator_tell( g_temp_storage );
-	defer { linear_allocator_rewind_to( g_temp_storage, temp_pos ); };
+	u64 temp_pos = linear_allocator_tell( mem_get_temp_storage() );
+	defer { linear_allocator_rewind_to( mem_get_temp_storage(), temp_pos ); };
 
 	char *path_copy = temp_c_string( path, PATH_MAX * sizeof( char ) );
 

@@ -81,7 +81,7 @@ CORE_API const char			*path_canonicalize( const char *path );
 // Make sure that any slashes found in 'path' are what the OS expects them to be.
 CORE_API void				path_fix_slashes( String *str );
 
-CORE_API const char			*path_relative_path_to( const char *from, const char *to );
+CORE_API const char			*path_relative_path_to( LinearAllocator *allocator, const char *from, const char *to );
 
 // DO NOT CALL THIS DIRECTLY.
 // CALL path_join INSTEAD.

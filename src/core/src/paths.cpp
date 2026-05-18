@@ -137,7 +137,7 @@ String path_join_internal( LinearAllocator *allocator, const int count, ... ) {
 	return result;
 }
 
-const char *path_relative_path_to( const char *from, const char *to ) {
+const char *path_relative_path_to( LinearAllocator *allocator, const char *from, const char *to ) {
 	assert( from );
 	assert( to );
 
@@ -216,7 +216,7 @@ const char *path_relative_path_to( const char *from, const char *to ) {
 	}
 
 	StringBuilder sb = {};
-	string_builder_init( &sb, mem_get_temp_storage() );
+	string_builder_init( &sb, allocator );
 
 	For ( u64, back_index, 0, num_backs ) {
 		bool8 is_last = ( back_index == num_backs - 1 );

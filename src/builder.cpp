@@ -1580,9 +1580,9 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	std::vector<BuildConfig> configsToBuild;
 
 	Array<float64> configBuildTimes;
-	configBuildTimes.init( mem_get_temp_storage() );
+	configBuildTimes.init( context.allocator );
 	Array<buildResult_t> configBuildResults;
-	configBuildResults.init( mem_get_temp_storage() );
+	configBuildResults.init( context.allocator );
 
 	// if the user wants to generate a visual studio solution then only do that
 	if ( options.generateSolution && !isVisualStudioBuild ) {

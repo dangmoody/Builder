@@ -262,7 +262,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 	const char *solutionFilename = temp_printf( "%s%c%s.sln", visualStudioProjectFilesPath, PATH_SEPARATOR, options->solution.name.c_str() );
 
 	// get relative path from visual studio to the input file
-	const char *pathFromSolutionToInputFile = path_relative_path_to( visualStudioProjectFilesPath, context->inputFilePath.data );
+	const char *pathFromSolutionToInputFile = path_relative_path_to( context->allocator, visualStudioProjectFilesPath, context->inputFilePath.data );
 	assert( pathFromSolutionToInputFile != NULL && !string_equals( pathFromSolutionToInputFile, "" ) );
 
 	// give each project a guid
@@ -345,8 +345,8 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 			// if the user didnt specify any file extensions for their files then use the defaults
 			if ( project->fileExtensions.size() == 0 ) {
-				u64 pos = linear_allocator_tell( mem_get_temp_storage() );
-				defer { linear_allocator_rewind_to( mem_get_temp_storage(), pos ); };
+				//u64 pos = linear_allocator_tell( mem_get_temp_storage() );
+				//defer { linear_allocator_rewind_to( mem_get_temp_storage(), pos ); };
 
 				StringBuilder sb = {};
 				string_builder_init( &sb, mem_get_temp_storage() );
@@ -568,7 +568,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 			printf( "Generating %s ... ", projectPath );
 
 			StringBuilder vcxprojContent = {};
-			string_builder_init( &vcxprojContent, mem_get_temp_storage() );
+			string_builder_init( &vcxprojContent, context->allocator );
 			// defer { string_builder_destroy( &vcxprojContent ); };
 
 			string_builder_appendf( &vcxprojContent, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
@@ -626,7 +626,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 #pragma clang diagnostic pop
 #else
 				// DM!!! need to make path_relative_path_to() return a String instead of a const char *
-				String pathFromSolutionToBinary = string_set( mem_get_temp_storage(), path_relative_path_to( from, to ) );
+				String pathFromSolutionToBinary = string_set( mem_get_temp_storage(), path_relative_path_to( mem_get_temp_storage(), from, to ) );
 				path_remove_file_from_path( &pathFromSolutionToBinary );
 #endif
 
@@ -726,14 +726,14 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 					// build command
 					string_builder_appendf( &vcxprojContent, "\t\t<NMakeBuildCommandLine>\"%s%c%s\" %s %s%s %s", appPath.data, PATH_SEPARATOR, BUILDER_PROGRAM_NAME, inputFileRelative.data, ARG_CONFIG, fullConfigName, ARG_VISUAL_STUDIO_BUILD );
 					For ( u32, argIndex, 0, config->additionalBuildArgs.size() ) {
-						string_builder_appendf( &vcxprojContent, "%s ", config->additionalBuildArgs[argIndex].c_str() );
+						string_builder_appendf( &vcxprojContent, " %s", config->additionalBuildArgs[argIndex].c_str() );
 					}
 					string_builder_appendf( &vcxprojContent, "</NMakeBuildCommandLine>\n" );
 
 					// rebuild command
 					string_builder_appendf( &vcxprojContent, "\t\t<NMakeReBuildCommandLine>\"%s%c%s\" %s %s%s %s", appPath.data, PATH_SEPARATOR, BUILDER_PROGRAM_NAME, inputFileRelative.data, ARG_CONFIG, fullConfigName, ARG_VISUAL_STUDIO_BUILD );
 					For ( u32, argIndex, 0, config->additionalBuildArgs.size() ) {
-						string_builder_appendf( &vcxprojContent, "%s ", config->additionalBuildArgs[argIndex].c_str() );
+						string_builder_appendf( &vcxprojContent, " %s", config->additionalBuildArgs[argIndex].c_str() );
 					}
 					string_builder_appendf( &vcxprojContent, "</NMakeReBuildCommandLine>\n" );
 
@@ -801,7 +801,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 			printf( "Generating %s ... ", projectPath );
 
 			StringBuilder vcxprojContent = {};
-			string_builder_init( &vcxprojContent, mem_get_temp_storage() );
+			string_builder_init( &vcxprojContent, context->allocator );
 			// defer { string_builder_destroy( &vcxprojContent ); };
 
 			string_builder_appendf( &vcxprojContent, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
@@ -822,7 +822,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 					const char *to = temp_printf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, fullBinaryName );
 					//to = path_canonicalise( to );
 
-					const char *pathFromSolutionToBinary = path_relative_path_to( from, to );
+					const char *pathFromSolutionToBinary = path_relative_path_to( mem_get_temp_storage(), from, to );
 
 					For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
 						const char *platform = options->solution.platforms[platformIndex].c_str();
@@ -864,7 +864,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 			printf( "Generating %s ... ", projectPath );
 
 			StringBuilder vcxprojContent = {};
-			string_builder_init( &vcxprojContent, mem_get_temp_storage() );
+			string_builder_init( &vcxprojContent, context->allocator );
 			// defer { string_builder_destroy( &vcxprojContent ); };
 
 			string_builder_appendf( &vcxprojContent, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
@@ -935,7 +935,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 		printf( "Generating %s ... ", solutionFilename );
 
 		StringBuilder slnContent = {};
-		string_builder_init( &slnContent, mem_get_temp_storage() );
+		string_builder_init( &slnContent, context->allocator );
 		// defer { string_builder_destroy( &slnContent ); };
 
 		string_builder_appendf( &slnContent, "\n" );

@@ -1,0 +1,53 @@
+{
+	// See https://go.microsoft.com/fwlink/?LinkId=733558
+	// for the documentation about the tasks.json format
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build debug",
+			"type": "shell",
+			"command": "${workspaceFolder}/scripts/build.sh",
+			"args": [
+				"debug"
+			],
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
+			"label": "Build release",
+			"type": "shell",
+			"command": "${workspaceFolder}/scripts/build.sh",
+			"args": [
+				"release"
+			],
+			"group": {
+				"kind": "build"
+			}
+		},
+		{
+			"label": "Build tests debug",
+			"type": "shell",
+			"command": "${workspaceFolder}/scripts/build_tests.sh",
+			"args": [
+				"debug"
+			],
+			"group": {
+				"kind": "build"
+			}
+		},
+		{
+			"label": "Build tests release",
+			"type": "shell",
+			"command": "${workspaceFolder}/scripts/build_tests.sh",
+			"args": [
+				"release"
+			],
+			"group": {
+				"kind": "build"
+			}
+		}
+	]
+}

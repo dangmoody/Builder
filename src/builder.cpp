@@ -1272,7 +1272,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		}
 	};
 
-	printf( "Builder v%d.%d.%d RC0\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+	printf( "Builder v%d.%d.%d RC1\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {};
 	context.allocator = linear_allocator_create( MEM_KILOBYTES( 128 ) );
@@ -1431,6 +1431,10 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		path_remove_file_extension( &inputFileNoExt );
 
 		context.includeDependenciesFilename = string_printf( context.allocator, "%s%c%s.include_dependencies", context.dotBuilderFolder.data, PATH_SEPARATOR, inputFileNoExt.data );
+
+		LogVerbose( "input file path                    : %s\n", inputFilePath.data );
+		LogVerbose( ".builder folder location           : %s\n", context.dotBuilderFolder.data );
+		LogVerbose( ".include_dependencies file location: %s\n", context.includeDependenciesFilename.data );
 	}
 
 	String defaultBinaryName = string_set( context.allocator, context.inputFile );

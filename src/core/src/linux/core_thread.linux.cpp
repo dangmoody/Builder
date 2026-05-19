@@ -48,6 +48,7 @@ SOFTWARE.
 struct ThreadBootstrapData {
 	ThreadFunc		thread_func;
 	void			*data;
+	u64				temp_storage_size;
 };
 
 static void *thread_bootstrap( void *data ) {
@@ -85,7 +86,7 @@ Thread		thread_create( ThreadFunc thread_func, void *data ) {
 	ThreadBootstrapData *bootstrap_data = cast( ThreadBootstrapData *, malloc( sizeof( ThreadBootstrapData ) ) );
 	bootstrap_data->thread_func = thread_func;
 	bootstrap_data->data = data;
-	bootstrap->temp_storage_size = mem_get_temp_storage()->reserved_bytes;
+	bootstrap_data->temp_storage_size = mem_get_temp_storage()->reserved_bytes;
 
 	if ( pthread_create( &thread_linux, &attribs, &thread_bootstrap, bootstrap_data ) != 0 ) {
 		int err = errno;

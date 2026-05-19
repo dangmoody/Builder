@@ -2,8 +2,7 @@
 
 pushd %~dp0
 
-builder ..\\..\\core\\build.cpp --config=core --force-rebuild
-:: builder ..\\..\\core\\build.cpp --config=core --release --force-rebuild
+builder ..\\..\\core\\build.cpp --config=core --release --force-rebuild
 
 echo Copying core include folder...
 robocopy /e ..\\..\\core\\include      ..\\src\\core\\include

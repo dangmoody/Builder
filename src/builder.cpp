@@ -87,9 +87,14 @@ enum buildResult_t {
 #define PRE_BUILD_FUNC_NAME				"OnPreBuild"
 #define POST_BUILD_FUNC_NAME			"OnPostBuild"
 
-#define QUIT_ERROR() \
-	debug_break(); \
-	return 1
+#ifdef _DEBUG
+	#define QUIT_ERROR() \
+		debug_break(); \
+		return 1
+#else
+	#define QUIT_ERROR() \
+		return 1
+#endif
 
 bool8 g_verbose = false;
 

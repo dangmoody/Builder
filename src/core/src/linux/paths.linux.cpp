@@ -74,8 +74,7 @@ String path_app_path( LinearAllocator *allocator ) {
 String path_get_cwd( LinearAllocator *allocator ) {
 	assert( allocator );
 
-	char temp[PATH_MAX] = {};
-	const char *cwd = getcwd( temp, PATH_MAX );
+	const char *cwd = getcwd( NULL, PATH_MAX );
 
 	if ( !cwd ) {
 		int err = errno;

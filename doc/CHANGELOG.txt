@@ -1,4 +1,4 @@
-v0.13.0, TBD:
+v0.13.0, 22/05/2026:
 
 * Source files are now compiled in parallel across multiple threads.
 	* The number of threads spawned is whichever is smaller: the number of CPU cores (including hyperthreads) or the number of source files.

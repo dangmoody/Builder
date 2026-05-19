@@ -6,7 +6,7 @@
 	{
 		"label": "Builder Tests - Debug",
 		"program": "${ZED_WORKTREE_ROOT}/bin/builder_tests_debug",
-		"cwd": "${ZED_WORKTREE_ROOT}/tests",
+		"cwd": "${ZED_WORKTREE_ROOT}",
 		"request": "launch",
 		"adapter": "CodeLLDB",
 		"build": "Build tests debug",
@@ -15,14 +15,14 @@
 	{
 		"label": "Builder Tests - Release",
 		"program": "${ZED_WORKTREE_ROOT}/bin/builder_tests",
-		"cwd": "${ZED_WORKTREE_ROOT}/tests",
+		"cwd": "${ZED_WORKTREE_ROOT}",
 		"request": "launch",
 		"adapter": "CodeLLDB",
 		"build": "Build tests release",
 	},
 
 	{
-		"label": "Builder Tests - Test_FileMatchesFilter",
+		"label": "Test_FileMatchesFilter",
 		"program": "${ZED_WORKTREE_ROOT}/bin/builder_tests_debug",
 		"args": ["-p", "-t", "Test_FileMatchesFilter"],
 		"cwd": "${ZED_WORKTREE_ROOT}",
@@ -32,7 +32,7 @@
 	},
 
 	{
-		"label": "Builder Tests - Test_GetSourceFilesMatchingPattern",
+		"label": "Test_GetSourceFilesMatchingPattern",
 		"program": "${ZED_WORKTREE_ROOT}/bin/builder_tests_debug",
 		"args": ["-p", "-t", "Test_GetSourceFilesMatchingPattern"],
 		"cwd": "${ZED_WORKTREE_ROOT}",
@@ -42,21 +42,21 @@
 	},
 
 	{
-		"label": "Builder - Debug - test_basic",
+		"label": "test_basic",
 		"program": "${ZED_WORKTREE_ROOT}/bin/builder_debug",
-		"args": ["test_basic/test_basic.cpp"],
-		"cwd": "${ZED_WORKTREE_ROOT}/tests",
+		"args": ["tests/test_basic/test_basic.cpp"],
+		"cwd": "${ZED_WORKTREE_ROOT}",
 		"request": "launch",
 		"adapter": "CodeLLDB",
 		"build": "Build debug",
 	},
 
 	{
-		"label": "Builder - Debug - test_set_builder_options",
+		"label": "test_set_builder_options",
 		"program": "${ZED_WORKTREE_ROOT}/bin/builder_debug",
-		"cwd": "${ZED_WORKTREE_ROOT}/tests",
+		"cwd": "${ZED_WORKTREE_ROOT}",
 		"args": [
-			"test_set_builder_options/test_set_builder_options.cpp",
+			"tests/test_set_builder_options/test_set_builder_options.cpp",
 			"--config=debug",
 		],
 		"request": "launch",
@@ -65,51 +65,51 @@
 	},
 
 	{
-		"label": "Builder - Debug - test_multiple_source_files",
+		"label": "test_multiple_source_files",
 		"program": "${ZED_WORKTREE_ROOT}/bin/builder_debug",
-		"cwd": "${ZED_WORKTREE_ROOT}/tests",
-		"args": ["test_multiple_source_files/build.cpp"],
+		"cwd": "${ZED_WORKTREE_ROOT}",
+		"args": ["tests/test_multiple_source_files/build.cpp"],
 		"request": "launch",
 		"adapter": "CodeLLDB",
 		"build": "Build debug",
 	},
 
 	{
-		"label": "Builder - Debug - test_multiple_source_files (MSVC)",
+		"label": "test_multiple_source_files (MSVC)",
 		"program": "${ZED_WORKTREE_ROOT}/bin/builder_debug",
-		"cwd": "${ZED_WORKTREE_ROOT}/tests",
-		"args": ["test_multiple_source_files/build.cpp", "--msvc"],
+		"cwd": "${ZED_WORKTREE_ROOT}",
+		"args": ["tests/test_multiple_source_files/build.cpp", "--msvc"],
 		"request": "launch",
 		"adapter": "CodeLLDB",
 		"build": "Build debug",
 	},
 
 	{
-		"label": "Builder - Debug - test_static_lib (GCC)",
+		"label": "test_static_lib (GCC)",
 		"program": "${ZED_WORKTREE_ROOT}/bin/builder_debug",
-		"cwd": "${ZED_WORKTREE_ROOT}/tests",
-		"args": ["test_static_lib/build.cpp", "--config=program", "--gcc"],
+		"cwd": "${ZED_WORKTREE_ROOT}",
+		"args": ["tests/test_static_lib/build.cpp", "--config=program", "--gcc"],
 		"request": "launch",
 		"adapter": "CodeLLDB",
 		"build": "Build debug",
 	},
 
 	{
-		"label": "Builder - Debug - test_dynamic_lib",
+		"label": "test_dynamic_lib",
 		"program": "${ZED_WORKTREE_ROOT}/bin/builder_debug",
-		"cwd": "${ZED_WORKTREE_ROOT}/tests",
-		"args": ["test_dynamic_lib/build.cpp", "--config=program"],
+		"cwd": "${ZED_WORKTREE_ROOT}",
+		"args": ["tests/test_dynamic_lib/build.cpp", "--config=program"],
 		"request": "launch",
 		"adapter": "CodeLLDB",
 		"build": "Build debug",
 	},
 
 	{
-		"label": "Builder - Debug - test_build_config_pre_post_build",
+		"label": "test_build_config_pre_post_build",
 		"program": "${ZED_WORKTREE_ROOT}/bin/builder_debug",
-		"cwd": "${ZED_WORKTREE_ROOT}/tests",
+		"cwd": "${ZED_WORKTREE_ROOT}",
 		"args": [
-			"test_build_config_pre_post_build/test_build_config_pre_post_build.cpp",
+			"tests/test_build_config_pre_post_build/test_build_config_pre_post_build.cpp",
 		],
 		"request": "launch",
 		"adapter": "CodeLLDB",
@@ -117,10 +117,10 @@
 	},
 
 	{
-		"label": "Builder - Debug - test_generate_visual_studio_files",
+		"label": "test_generate_visual_studio_files",
 		"program": "${ZED_WORKTREE_ROOT}/bin/builder_debug",
-		"cwd": "${ZED_WORKTREE_ROOT}/tests",
-		"args": ["test_generate_visual_studio_files/generate_solution.cpp"],
+		"cwd": "${ZED_WORKTREE_ROOT}",
+		"args": ["tests/test_generate_visual_studio_files/generate_solution.cpp"],
 		"request": "launch",
 		"adapter": "CodeLLDB",
 		"build": "Build debug",

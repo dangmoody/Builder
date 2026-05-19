@@ -1277,7 +1277,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		}
 	};
 
-	printf( "Builder v%d.%d.%d RC1\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+	printf( "Builder v%d.%d.%d RC6\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {};
 	context.allocator = linear_allocator_create( MEM_KILOBYTES( 128 ) );
@@ -1288,7 +1288,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		context.allocator = NULL;
 	};
 
-	// parse command line args
+	// init command line args
 	const char *inputConfigName = NULL;
 	u64 inputConfigNameHash = 0;
 
@@ -1299,19 +1299,17 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		// .argv = argv,
 	};
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wcast-qual"
-	// DM!!! this wants linear allocator, probably
-	// if it does then remove the free() call below too
-	args.argv = cast( char **, malloc( cast( u32, argc ) * sizeof( const char * ) ) );
+	args.argv = cast( char **, linear_allocator_alloc( context.allocator, cast( u32, argc ) * sizeof( const char * ) ) );
+
 	For ( s32, argIndex, 0, argc ) {
-		args.argv[argIndex] = cast( char *, argv[argIndex] );
+		u64 argLength = strlen( argv[argIndex] );
+
+		char *outArg = cast( char *, linear_allocator_alloc( context.allocator, argLength + 1 ) );
+		memcpy( outArg, argv[argIndex], argLength );
+		outArg[argLength] = 0;
+
+		args.argv[argIndex] = outArg;
 	}
-#pragma clang diagnostic pop
-	defer {
-		free( args.argv );
-		args.argv = NULL;
-	};
 
 	For ( s32, argIndex, firstArg, argc ) {
 		const char *arg = argv[argIndex];
@@ -1424,22 +1422,23 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	{
 		String inputFilePath = string_set( mem_get_temp_storage(), context.inputFile );
 
-		if ( path_remove_file_from_path( &inputFilePath ) ) {
-			context.inputFilePath = inputFilePath;
-		} else {
-			context.inputFilePath = path_get_cwd( context.allocator );
+		if ( !path_remove_file_from_path( &inputFilePath ) ) {
+			inputFilePath = path_get_cwd( mem_get_temp_storage() );
 		}
+
+		context.inputFilePath = string_copy( context.allocator, &inputFilePath );
 
 		context.dotBuilderFolder = path_join( context.allocator, context.inputFilePath.data, ".builder" );
 
-		String inputFileNoExt = string_set( context.allocator, context.inputFile );
-		path_remove_file_extension( &inputFileNoExt );
+		String inputFileStripped = string_set( context.allocator, context.inputFile );
+		path_remove_file_extension( &inputFileStripped );
+		path_remove_path_from_file( &inputFileStripped );
 
-		context.includeDependenciesFilename = string_printf( context.allocator, "%s%c%s.include_dependencies", context.dotBuilderFolder.data, PATH_SEPARATOR, inputFileNoExt.data );
+		context.includeDependenciesFilename = string_printf( context.allocator, "%s%c%s.include_dependencies", context.dotBuilderFolder.data, PATH_SEPARATOR, inputFileStripped.data );
 
-		LogVerbose( "input file path                    : %s\n", inputFilePath.data );
-		LogVerbose( ".builder folder location           : %s\n", context.dotBuilderFolder.data );
-		LogVerbose( ".include_dependencies file location: %s\n", context.includeDependenciesFilename.data );
+		LogVerbose( "input file path                  : %s\n", inputFilePath.data );
+		LogVerbose( ".builder folder location         : %s\n", context.dotBuilderFolder.data );
+		LogVerbose( "includedependencies file location: %s\n", context.includeDependenciesFilename.data );
 	}
 
 	String defaultBinaryName = string_set( context.allocator, context.inputFile );
@@ -1733,9 +1732,11 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		if ( options.configs.size() == 0 ) {
 			LogVerbose( "No BuildConfigs were found (either none were specified inside \"%s\" or that function was never defined), so Builder will now treat the input file specified at the command line as the source file you want to build.\n", SET_BUILDER_OPTIONS_FUNC_NAME );
 
+			String inputFileNoPath = string_set( mem_get_temp_storage(), context.inputFile );
+			path_remove_path_from_file( &inputFileNoPath );
+
 			BuildConfig config = {
-				.sourceFiles = { context.inputFile },
-				// .binaryName = defaultBinaryName
+				.sourceFiles = { inputFileNoPath.data },
 			};
 
 			options.configs.push_back( config );

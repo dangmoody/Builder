@@ -8,6 +8,7 @@ v0.13.0, TBD:
 	* Added VisualStudioConfig::runFromDirectory so you can control what directory project configs run from.
 	* Defaults to $(SolutionDir) if not set.
 	* The message about no file extensions being set is now only shown in verbose mode.
+* Fixed subtle bug where some source file paths wouldn't get resolved correctly.
 
 ----------------------------------------------------------------
 

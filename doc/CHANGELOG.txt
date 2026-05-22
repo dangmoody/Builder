@@ -1,12 +1,13 @@
 v0.13.0, 22/05/2026:
 
 * Source files are now compiled in parallel across multiple threads.
+	* This makes builds significantly faster.
 	* The number of threads spawned is whichever is smaller: the number of CPU cores (including hyperthreads) or the number of source files.
 * Release archives are now drastically smaller.
 	* The bundled Clang installation previously included the full LLVM toolchain: Fortran/MLIR tools, LLDB, dozens of standalone LLVM utilities, all static libraries, and development headers.  The vast majority of this was never used by Builder.
 * Visual Studio:
 	* Added VisualStudioConfig::runFromDirectory so you can control what directory project configs run from.
-	* Defaults to $(SolutionDir) if not set.
+		* Defaults to $(SolutionDir) if not set.
 	* The message about no file extensions being set is now only shown in verbose mode.
 * Fixed subtle bug where some source file paths wouldn't get resolved correctly.
 

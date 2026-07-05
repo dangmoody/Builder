@@ -563,13 +563,15 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 		// .vcxproj
 		{
+			u64 tempPos = mem_temp_tell();
+			defer { mem_temp_rewind_to( tempPos ); };
+
 			const char *projectPath = temp_printf( "%s%c%s.vcxproj", visualStudioProjectFilesPath, PATH_SEPARATOR, projectNameNoFolder.data );
 
 			printf( "Generating %s ... ", projectPath );
 
 			StringBuilder vcxprojContent = {};
-			string_builder_init( &vcxprojContent, context->allocator );
-			// defer { string_builder_destroy( &vcxprojContent ); };
+			string_builder_init( &vcxprojContent, mem_get_temp_storage() );
 
 			string_builder_appendf( &vcxprojContent, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
 			string_builder_appendf( &vcxprojContent, "<Project DefaultTargets=\"Build\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n" );
@@ -796,13 +798,15 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 		// .vcxproj.user
 		{
+			u64 tempPos = mem_temp_tell();
+			defer { mem_temp_rewind_to( tempPos ); };
+
 			const char *projectPath = temp_printf( "%s%c%s.vcxproj.user", visualStudioProjectFilesPath, PATH_SEPARATOR, projectNameNoFolder.data );
 
 			printf( "Generating %s ... ", projectPath );
 
 			StringBuilder vcxprojContent = {};
-			string_builder_init( &vcxprojContent, context->allocator );
-			// defer { string_builder_destroy( &vcxprojContent ); };
+			string_builder_init( &vcxprojContent, mem_get_temp_storage() );
 
 			string_builder_appendf( &vcxprojContent, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
 			string_builder_appendf( &vcxprojContent, "<Project ToolsVersion=\"Current\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n" );
@@ -859,13 +863,15 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 		// .vcxproj.filter
 		{
+			u64 tempPos = mem_temp_tell();
+			defer { mem_temp_rewind_to( tempPos ); };
+
 			const char *projectPath = temp_printf( "%s%c%s.vcxproj.filters", visualStudioProjectFilesPath, PATH_SEPARATOR, projectNameNoFolder.data );
 
 			printf( "Generating %s ... ", projectPath );
 
 			StringBuilder vcxprojContent = {};
-			string_builder_init( &vcxprojContent, context->allocator );
-			// defer { string_builder_destroy( &vcxprojContent ); };
+			string_builder_init( &vcxprojContent, mem_get_temp_storage() );
 
 			string_builder_appendf( &vcxprojContent, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
 			string_builder_appendf( &vcxprojContent, "<Project ToolsVersion=\"4.0\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n" );
@@ -932,11 +938,13 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 	// .sln
 	{
+		u64 tempPos = mem_temp_tell();
+		defer { mem_temp_rewind_to( tempPos ); };
+
 		printf( "Generating %s ... ", solutionFilename );
 
 		StringBuilder slnContent = {};
-		string_builder_init( &slnContent, context->allocator );
-		// defer { string_builder_destroy( &slnContent ); };
+		string_builder_init( &slnContent, mem_get_temp_storage() );
 
 		string_builder_appendf( &slnContent, "\n" );
 		string_builder_appendf( &slnContent, "Microsoft Visual Studio Solution File, Format Version 12.00\n" );

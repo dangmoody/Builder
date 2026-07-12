@@ -3,7 +3,7 @@
 
 Core
 
-Copyright (c) 2025 Dan Moody
+Copyright (c) 2025 - present Dan Moody
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -63,14 +63,14 @@ CORE_API bool8				path_set_cwd( const char *path );
 // Returns the absolute path of 'file'.
 CORE_API String				path_absolute_path( LinearAllocator *allocator, const char *path );
 
-// Returns true if the file part of a file path can be removed, leaving just the path, otherwise returns false.
-CORE_API bool8				path_remove_file_from_path( String *path );
+// If 'path' is a path with a filename, then returns just the path part with the filename part removed.  Otherwise returns the original string.
+CORE_API String				path_remove_file_from_path( const String *path );
 
-// Returns true if the path part of a file path can be removed, leaving just the file name, otherwise returns false.
-CORE_API bool8				path_remove_path_from_file( String *path );
+// If 'path' is a path with a filename, then returns just the filename part with the path part removed.  Otherwise returns the original string.
+CORE_API String				path_remove_path_from_file( const String *path );
 
-// Returns true if the file extension could be removed from the filename, otherwise returns false.
-CORE_API bool8				path_remove_file_extension( String *filename );
+// If 'filename' is a filename with a file extension then returns that filename without the file extension.  Otherwise returns the original filename.
+CORE_API String				path_remove_file_extension( const String *filename );
 
 // On Windows:   Returns true if the path starts with a letter followed by a colon (for example: "C:"), otherwise returns false.
 // On Mac/Linux: Returns true if the path starts with two backslashes or a single forward slash, otherwise returns false.
@@ -79,9 +79,9 @@ CORE_API bool8				path_is_absolute( const char *path );
 CORE_API const char			*path_canonicalize( const char *path );
 
 // Make sure that any slashes found in 'path' are what the OS expects them to be.
-CORE_API void				path_fix_slashes( String *str );
+CORE_API String				path_fix_slashes( LinearAllocator *allocator, String *str );
 
-CORE_API const char			*path_relative_path_to( LinearAllocator *allocator, const char *from, const char *to );
+CORE_API String				path_relative_path_to( LinearAllocator *allocator, const char *from, const char *to );
 
 // DO NOT CALL THIS DIRECTLY.
 // CALL path_join INSTEAD.

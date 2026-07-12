@@ -3,7 +3,7 @@
 
 Core
 
-Copyright (c) 2025 Dan Moody
+Copyright (c) 2025 - present Dan Moody
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -53,14 +53,14 @@ String path_app_path( LinearAllocator *allocator ) {
 	char app_full_path[MAX_PATH] = {};
 	DWORD length = GetModuleFileNameA( NULL, app_full_path, MAX_PATH );
 
-	return string_set( allocator, app_full_path, length );
+	return string_alloc( allocator, app_full_path, length );
 }
 
 String path_get_cwd( LinearAllocator *allocator ) {
 	char cwd[MAX_PATH] = {};
 	DWORD length = GetCurrentDirectory( MAX_PATH, cwd );
 
-	return string_set( allocator, cwd, length );
+	return string_alloc( allocator, cwd, length );
 }
 
 bool8 path_set_cwd( const char *path ) {
@@ -75,7 +75,7 @@ String path_absolute_path( LinearAllocator *allocator, const char *path ) {
 	char absolute_path[MAX_PATH] = {};
 	DWORD length = GetFullPathName( path, MAX_PATH, absolute_path, NULL );
 
-	return string_set( allocator, absolute_path, length );
+	return string_alloc( allocator, absolute_path, length );
 }
 
 bool8 path_is_absolute( const char *path ) {
@@ -89,8 +89,8 @@ bool8 path_is_absolute( const char *path ) {
 const char *path_canonicalize( const char *path ) {
 	assert( path );
 
-	String path_copy = string_set( mem_get_temp_storage(), path );
-	path_fix_slashes( &path_copy );
+	String path_copy = string_alloc( mem_get_temp_storage(), path );
+	path_fix_slashes( mem_get_temp_storage(), &path_copy );
 
 	char *result = cast( char *, mem_temp_alloc( path_copy.count + 1 ) );
 
@@ -107,8 +107,8 @@ const char *path_canonicalize( const char *path ) {
 	return result;
 }
 
-void path_fix_slashes( String *str ) {
-	return string_replace( str, '/', PATH_SEPARATOR );
+String path_fix_slashes( LinearAllocator *allocator, String *str ) {
+	return string_replace( allocator, str, '/', PATH_SEPARATOR );
 }
 
 #endif // _WIN32

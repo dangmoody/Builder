@@ -3,7 +3,7 @@
 
 Core
 
-Copyright (c) 2025 Dan Moody
+Copyright (c) 2025 - present Dan Moody
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -39,7 +39,9 @@ SOFTWARE.
 #include <stdarg.h>
 #include <string.h>
 
-static bool8 get_last_slash( String *path, u64 *out_last_slash_pos ) {
+static bool8 get_last_slash( const String *path, u64 *out_last_slash_pos ) {
+	assert( path );
+
 	u64 last_forward_slash = 0;
 	u64 last_back_slash = 0;
 
@@ -62,51 +64,54 @@ static bool8 get_last_slash( String *path, u64 *out_last_slash_pos ) {
 ================================================================================================
 */
 
-bool8 path_remove_file_from_path( String *path ) {
+String path_remove_file_from_path( const String *path ) {
+	assert( path );
+
 	u64 last_slash_pos = 0;
 	if ( !get_last_slash( path, &last_slash_pos ) ) {
-		return false;
+		return *path;
 	}
 
-	u64 file_length = path->count - last_slash_pos;
-
-	path->count -= file_length;
-	path->data[path->count] = 0;
-
-	return file_length > 0;
+	return String {
+		.data	= path->data,
+		.count	= last_slash_pos,
+	};
 }
 
-bool8 path_remove_path_from_file( String *path ) {
+String path_remove_path_from_file( const String *path ) {
+	assert( path );
+
 	u64 last_slash_pos = 0;
 	if ( !get_last_slash( path, &last_slash_pos ) ) {
-		return false;
-	} else {
-		last_slash_pos += 1;	// want to skip past the last slash
+		return *path;
 	}
 
-	path->data += last_slash_pos;
-	path->count -= last_slash_pos;
+	last_slash_pos += 1;
 
-	return last_slash_pos > 0;
+	return {
+		.data	= path->data + last_slash_pos,
+		.count	= path->count - last_slash_pos,
+	};
 }
 
-bool8 path_remove_file_extension( String *filename ) {
+String path_remove_file_extension( const String *filename ) {
+	assert( filename );
+
 	u64 dot_pos = 0;
 	if ( !string_find_from_right( filename, '.', &dot_pos ) ) {
-		return false;
+		return *filename;
 	}
 
-	u64 file_extension_length = filename->count - dot_pos;
-
-	filename->count -= file_extension_length;
-	filename->data[filename->count] = 0;
-
-	return file_extension_length > 0;
+	return {
+		.data	= filename->data,
+		.count	= dot_pos
+	};
 }
 
 static String path_join_internalv( LinearAllocator *allocator, const int count, va_list args ) {
-	StringBuilder builder = {};
-	string_builder_init( &builder, allocator );
+	assert( allocator );
+
+	StringBuilder builder = string_builder_create( allocator );
 
 	For ( int, arg_index, 0, count ) {
 		if ( arg_index > 0 ) {
@@ -129,6 +134,8 @@ static String path_join_internalv( LinearAllocator *allocator, const int count, 
 }
 
 String path_join_internal( LinearAllocator *allocator, const int count, ... ) {
+	assert( allocator );
+
 	va_list args;
 	va_start( args, count );
 	String result = path_join_internalv( allocator, count, args );
@@ -137,22 +144,22 @@ String path_join_internal( LinearAllocator *allocator, const int count, ... ) {
 	return result;
 }
 
-const char *path_relative_path_to( LinearAllocator *allocator, const char *from, const char *to ) {
+String path_relative_path_to( LinearAllocator *allocator, const char *from, const char *to ) {
 	assert( from );
 	assert( to );
 
 	u64 pos = mem_temp_tell();
 	defer { mem_temp_rewind_to( pos ); };
 
-	String from_str = string_set( mem_get_temp_storage(), from );
-	String to_str = string_set( mem_get_temp_storage(), to );
-	path_fix_slashes( &from_str );
-	path_fix_slashes( &to_str );
+	String from_str = string_set( from );
+	String to_str = string_set( to );
+	from_str = path_fix_slashes( mem_get_temp_storage(), &from_str );
+	to_str = path_fix_slashes( mem_get_temp_storage(), &to_str );
 
 	// determine the directory part of 'from'
 	// if the last path segment contains a dot then treat it as a filename and strip it
 	// otherwise treat the whole path as a directory and ensure it ends with a slash
-	const char *from_dir;
+	String from_dir;
 	{
 		u64 last_slash_pos = 0;
 		bool8 has_slash = string_find_from_right( &from_str, PATH_SEPARATOR, &last_slash_pos );
@@ -169,33 +176,35 @@ const char *path_relative_path_to( LinearAllocator *allocator, const char *from,
 		}
 
 		if ( last_segment_has_dot ) {
-			from_dir = temp_c_string( from_str.data, last_slash_pos + 1 );
+			// from_dir = {
+			// 	.data  = from_str.data,
+			// 	.count = last_slash_pos + 1,
+			// };
+			from_dir = string_set( from_str.data, last_slash_pos + 1 );
 		} else if ( from_str.data[from_str.count - 1] == PATH_SEPARATOR ) {
-			from_dir = from_str.data;
+			from_dir = from_str;
 		} else {
-			from_dir = temp_printf( "%s%c", from_str.data, PATH_SEPARATOR );
+			from_dir = string_printf( mem_get_temp_storage(), "%.*s%c", (int) from_str.count, from_str.data, PATH_SEPARATOR );
 		}
 	}
-
-	const char *to_c = to_str.data;
 
 	// walk both paths simultaneously, recording the end of the last complete
 	// segment that matched (i.e. right after a slash)
 	u64 common = 0;
 	u64 char_index = 0;
-	while ( from_dir[char_index] && to_c[char_index] && from_dir[char_index] == to_c[char_index] ) {
+	while ( char_index < from_dir.count && char_index < to_str.count && from_dir.data[char_index] == to_str.data[char_index] ) {
 		char_index++;
-		if ( from_dir[char_index - 1] == PATH_SEPARATOR ) {
+		if ( from_dir.data[char_index - 1] == PATH_SEPARATOR ) {
 			common = char_index;
 		}
 	}
 
 	// if one path ends exactly at a segment boundary in the other then include that boundary
-	if ( from_dir[char_index] == PATH_SEPARATOR && to_c[char_index] == '\0' ) {
+	if ( char_index < from_dir.count && from_dir.data[char_index] == PATH_SEPARATOR && char_index == to_str.count ) {
 		common = char_index;
-	} else if ( from_dir[char_index] == '\0' && to_c[char_index] == PATH_SEPARATOR ) {
+	} else if ( char_index == from_dir.count && char_index < to_str.count && to_str.data[char_index] == PATH_SEPARATOR ) {
 		common = char_index;
-	} else if ( from_dir[char_index] == '\0' && to_c[char_index] == '\0' ) {
+	} else if ( char_index == from_dir.count && char_index == to_str.count ) {
 		common = char_index;
 	}
 
@@ -203,32 +212,41 @@ const char *path_relative_path_to( LinearAllocator *allocator, const char *from,
 	// the character at 'common' is the boundary separator itself
 	// skip it so we don't count it as an extra level
 	u64 count_start = common;
-	if ( from_dir[count_start] == PATH_SEPARATOR ) {
+	if ( count_start < from_dir.count && from_dir.data[count_start] == PATH_SEPARATOR ) {
 		count_start++;
 	}
 
 	u64 num_backs = 0;
 
-	for ( u64 char_pos = count_start; from_dir[char_pos]; char_pos++ ) {
-		if ( from_dir[char_pos] == PATH_SEPARATOR ) {
+	for ( u64 char_pos = count_start; char_pos < from_dir.count; char_pos++ ) {
+		if ( from_dir.data[char_pos] == PATH_SEPARATOR ) {
 			num_backs++;
 		}
 	}
 
-	StringBuilder sb = {};
-	string_builder_init( &sb, allocator );
+	StringBuilder sb = string_builder_create( allocator );
+
+	u64 result_length = 0;
 
 	For ( u64, back_index, 0, num_backs ) {
 		bool8 is_last = ( back_index == num_backs - 1 );
 
-		if ( !is_last || to_c[common] != '\0' ) {
+		if ( !is_last || common < to_str.count ) {
 			string_builder_appendf( &sb, "..%c", PATH_SEPARATOR );
+			result_length += 3;
 		} else {
 			string_builder_appendf( &sb, ".." );
+			result_length += 2;
 		}
 	}
 
-	string_builder_appendf( &sb, "%s", to_c + common );
+	if ( common < to_str.count ) {
+		string_builder_appendf( &sb, "%.*s", (int) ( to_str.count - common ), to_str.data + common );
+		result_length += to_str.count - common;
+	}
 
-	return string_builder_to_string( &sb );
+	return {
+		.data  = cast( char *, string_builder_to_string( &sb ) ),
+		.count = result_length,
+	};
 }

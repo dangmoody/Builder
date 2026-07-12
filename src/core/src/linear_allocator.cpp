@@ -3,7 +3,7 @@
 
 Core
 
-Copyright (c) 2025 Dan Moody
+Copyright (c) 2025 - present Dan Moody
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -35,7 +35,6 @@ SOFTWARE.
 #include <debug.h>
 #include <os.h>
 
-#include <stdio.h>
 #include <malloc.h>
 #include <memory.h>
 

@@ -3,7 +3,7 @@
 
 Core
 
-Copyright (c) 2025 Dan Moody
+Copyright (c) 2025 - present Dan Moody
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -89,8 +89,17 @@ CORE_API s32			get_last_error_code();
 
 CORE_API void			set_console_text_color( const ConsoleTextColor color );
 
+// Prints the format string to the console.
+// %S is a special override that allows Core Strings to be printed (pass by value).
+CORE_API void			print( const char *fmt, ... );
+
+// Prints "WARNING: " followed by the specified format string to the console.
 CORE_API void			warning( const char *fmt, ... );
+
+// Prints "ERROR: " followed by the specified format string to the console.
 CORE_API void			error( const char *fmt, ... );
+
+// Prints "FATAL ERROR: " followed by the specified format string to the console, then crashes.
 CORE_API void			fatal_error( const char *fmt, ... );
 
 // do not call this one directly

@@ -179,7 +179,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 				// u64 pos = mem_temp_tell();
 				// defer { mem_temp_rewind_to( pos ); };
 
-				StringBuilder error = string_builder_create( mem_get_temp_storage() );
+				StringBuilder error = string_builder_create( context->allocator );
 				string_builder_appendf( &error, "None of your platform names are any of the Visual Studio recognized defaults:\n" );
 				For ( u64, platformIndex, 0, count_of( defaultPlatformNames ) ) {
 					string_builder_appendf( &error, "\t- %s\n", defaultPlatformNames[platformIndex] );
@@ -439,7 +439,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 			printf( "Generating %s ... ", projectPath );
 
-			StringBuilder vcxprojContent = string_builder_create( mem_get_temp_storage() );
+			StringBuilder vcxprojContent = string_builder_create( context->allocator );
 
 			string_builder_appendf( &vcxprojContent, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
 			string_builder_appendf( &vcxprojContent, "<Project DefaultTargets=\"Build\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n" );
@@ -659,7 +659,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 			printf( "Generating %s ... ", projectPath );
 
-			StringBuilder vcxprojContent = string_builder_create( mem_get_temp_storage() );
+			StringBuilder vcxprojContent = string_builder_create( context->allocator );
 
 			string_builder_appendf( &vcxprojContent, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
 			string_builder_appendf( &vcxprojContent, "<Project ToolsVersion=\"Current\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n" );
@@ -680,7 +680,6 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 					//to = path_canonicalise( to );
 
 					String pathFromSolutionToBinaryStr = path_relative_path_to( mem_get_temp_storage(), from, to );
-					const char *pathFromSolutionToBinary = pathFromSolutionToBinaryStr.data;
 
 					For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
 						const char *platform = options->solution.platforms[platformIndex].c_str();
@@ -689,7 +688,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 						string_builder_appendf( &vcxprojContent, "\t\t<DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>\n" );	// TODO(DM): do want to include the other debugger types?
 						string_builder_appendf( &vcxprojContent, "\t\t<LocalDebuggerDebuggerType>Auto</LocalDebuggerDebuggerType>\n" );
 						string_builder_appendf( &vcxprojContent, "\t\t<LocalDebuggerAttach>false</LocalDebuggerAttach>\n" );
-						string_builder_appendf( &vcxprojContent, "\t\t<LocalDebuggerCommand>%s</LocalDebuggerCommand>\n", pathFromSolutionToBinary );
+						string_builder_appendf( &vcxprojContent, "\t\t<LocalDebuggerCommand>%s</LocalDebuggerCommand>\n",  string_cstr( &pathFromSolutionToBinaryStr ) );
 						string_builder_appendf( &vcxprojContent, "\t\t<LocalDebuggerWorkingDirectory>%s</LocalDebuggerWorkingDirectory>\n", config->runFromDirectory.c_str() );
 
 						// if debugger arguments were specified, put those in
@@ -724,7 +723,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 			printf( "Generating %s ... ", projectPath );
 
-			StringBuilder vcxprojContent = string_builder_create( mem_get_temp_storage() );
+			StringBuilder vcxprojContent = string_builder_create( context->allocator );
 
 			string_builder_appendf( &vcxprojContent, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
 			string_builder_appendf( &vcxprojContent, "<Project ToolsVersion=\"4.0\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n" );
@@ -791,7 +790,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 		printf( "Generating %s ... ", solutionFilename );
 
-		StringBuilder slnContent = string_builder_create( mem_get_temp_storage() );
+		StringBuilder slnContent = string_builder_create( context->allocator );
 
 		string_builder_appendf( &slnContent, "\n" );
 		string_builder_appendf( &slnContent, "Microsoft Visual Studio Solution File, Format Version 12.00\n" );

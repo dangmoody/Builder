@@ -152,9 +152,9 @@ s32			RunProc( Array<const char *> *args, Array<const char *> *environmentVariab
 
 bool8		WriteStringBuilderToFile( StringBuilder *stringBuilder, const char *filename );
 
-bool8		FileMatchesFilter( const char *filename, const char *filter );
+bool8		PathMatchesFilter( const String* filename, const String* filter );
 
-std::vector<std::string> GetSourceFilesMatchingPattern( const char *basePath, const char *pattern );
+std::vector<std::string> GetSourceFilesMatchingPattern( const String* basePath, const String* folderPattern, const String* filePattern );
 
 bool8		GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *options );
 

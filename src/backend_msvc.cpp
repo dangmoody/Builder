@@ -77,10 +77,10 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const buildContext_t *contex
 	msvcState_t *msvcState = cast( msvcState_t *, linear_allocator_alloc( context->allocator, sizeof( msvcState_t ) ) );
 	new( msvcState ) msvcState_t;
 
-	msvcState->compilerPath = string_set( context->allocator, compilerPath );
+	msvcState->compilerPath = string_alloc( context->allocator, compilerPath, strlen( compilerPath ) + 1 );
 
 	if ( compilerVersion ) {
-		msvcState->compilerVersion = string_set( context->allocator, compilerVersion );
+		msvcState->compilerVersion = string_alloc( context->allocator, compilerVersion, strlen( compilerVersion ) + 1 );
 	}
 
 	backend->data = msvcState;
@@ -99,9 +99,9 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const buildContext_t *contex
 		msvcState->compilerPath = path_join( context->allocator, context->msvcInstall.rootFolder.data, "bin", "Hostx64", "x64", "cl" );
 		msvcState->linkerPath = path_join( context->allocator, context->msvcInstall.rootFolder.data, "bin", "Hostx64", "x64", "link" );
 	} else {
-		String compilerDir = string_set( mem_get_temp_storage(), compilerPath );
-		path_remove_file_from_path( &compilerDir );
-		msvcState->linkerPath = path_join( context->allocator, compilerDir.data, "link" );
+		String compilerDir = string_set( compilerPath );
+		compilerDir = path_remove_file_from_path( &compilerDir );
+		msvcState->linkerPath = path_join( context->allocator, string_cstr( &compilerDir ), "link" );
 	}
 
 	msvcState->microsoftCoreIncludes.add( context->msvcInstall.includePath.data );
@@ -131,9 +131,9 @@ static bool8 MSVC_CompileSourceFile(
 	assert( sourceFile );
 	assert( config );
 
-	String sourceFileNoPathAndExtension = string_set( mem_get_temp_storage(), sourceFile );
-	path_remove_path_from_file( &sourceFileNoPathAndExtension );
-	path_remove_file_extension( &sourceFileNoPathAndExtension );
+	String sourceFileNoPathAndExtension = string_set( sourceFile );
+	sourceFileNoPathAndExtension = path_remove_path_from_file( &sourceFileNoPathAndExtension );
+	sourceFileNoPathAndExtension = path_remove_file_extension( &sourceFileNoPathAndExtension );
 
 	msvcState_t *msvcState = cast( msvcState_t *, backend->data );
 
@@ -142,7 +142,7 @@ static bool8 MSVC_CompileSourceFile(
 	finalArgs.init( mem_get_temp_storage() );
 	finalArgs.add_range( &cmdArchetype.baseArgs );
 
-	const char *intermediateFile = temp_printf( "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPathAndExtension.data );
+	const char *intermediateFile = temp_printf( "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, string_cstr( &sourceFileNoPathAndExtension ) );
 
 	// Fill up remaining arguments
 
@@ -368,8 +368,7 @@ static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t *backe
 
 		// MSVC only allows one warning level to be set
 		if ( config->warningLevels.size() > 1 ) {
-			StringBuilder builder;
-			string_builder_init( &builder, mem_get_temp_storage() );
+			StringBuilder builder = string_builder_create( mem_get_temp_storage() );
 
 			string_builder_appendf( &builder, "MSVC only allows ONE of the following warning levels to be set:\n" );
 

@@ -133,7 +133,7 @@ bool8 Win_GetWindowsSDK( LinearAllocator *allocator, windowsSDK_t *outSDK ) {
 		return false;
 	}
 
-	outSDK->rootFolder = string_set( allocator, windowsSDKRoot );
+	outSDK->rootFolder = string_alloc( allocator, windowsSDKRoot, strlen( windowsSDKRoot ) + 1 );
 
 	// get the latest version of the windows sdk
 	const char *windowsSDKFolder = temp_printf( "%sLib", windowsSDKRoot );
@@ -187,9 +187,8 @@ bool8 Win_GetWindowsSDK( LinearAllocator *allocator, windowsSDK_t *outSDK ) {
 		}
 
 		if ( missingFolders.count > 0 ) {
-			StringBuilder sb = {};
+			StringBuilder sb = string_builder_create( mem_get_temp_storage() );
 			//defer { string_builder_destroy( &sb ); };
-			string_builder_init( &sb, mem_get_temp_storage() );
 			string_builder_appendf( &sb, "Version %d.%d.%d.%d of your Windows SDK installation is malformed because the following folders could not be found:\n", version->v0, version->v1, version->v2, version->v3 );
 			For ( u32, missingFolderIndex, 0, missingFolders.count ) {
 				string_builder_appendf( &sb, " - %s\n", missingFolders[missingFolderIndex] );
@@ -428,9 +427,8 @@ bool8 Win_GetMSVCInstall( LinearAllocator *allocator, msvcInstall_t *outInstall 
 		}
 
 		if ( missingFolders.count > 0 ) {
-			StringBuilder sb = {};
+			StringBuilder sb = string_builder_create( mem_get_temp_storage() );
 			//defer { string_builder_destroy( &sb ); };
-			string_builder_init( &sb, mem_get_temp_storage() );
 			string_builder_appendf( &sb, "Version %d.%d.%d of your MSVC installation is malformed because the following folders could not be found:\n", install->version.v0, install->version.v1, install->version.v2 );
 			For ( u32, missingFolderIndex, 0, missingFolders.count ) {
 				string_builder_appendf( &sb, " - %s\n", missingFolders[missingFolderIndex] );

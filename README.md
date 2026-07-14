@@ -1,7 +1,5 @@
 # Builder
 
-by Dan Moody.
-
 Configure C/C++ builds by writing C++ instead of learning a separate build language.
 
 **BUILDER IS NOT A COMPILER.** - it turns your build config into compiler arguments and calls the compiler.

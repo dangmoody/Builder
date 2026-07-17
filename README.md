@@ -233,6 +233,7 @@ BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArg
 		.projects  = {
 			{
 				.name    = "my-game",
+				.extraFiles = { "include/**/*.h" }, // these files show in the project
 				.configs = {
 					{ "debug",   config, {             }, {} },
 					{ "release", config, { "--release" }, {} },

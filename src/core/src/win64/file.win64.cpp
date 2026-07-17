@@ -260,20 +260,21 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 	assert( path );
 	assert( visit_callback );
 
-	String pathString = string_set( path );
-	if ( !string_ends_with( &pathString, '\\' ) && !string_ends_with( &pathString, '/' ) ) {
-		pathString = string_printf( mem_get_temp_storage(), "%s%c", pathString.data, PATH_SEPARATOR );
+	// AK: ideally we would take a String as a parameter, should we change this function and add a deprecated overload that does:
+	// bool8 file_get_all_files_in_folder( const char *path... ) { file_get_all_files_in_folder( string_set(path)... ) }
+	String path_string = string_set( path );
+	if ( !string_ends_with( &path_string, '\\' ) && !string_ends_with( &path_string, '/' ) ) {
+		path_string = string_printf( mem_get_temp_storage(), "%s%c", path_string.data, PATH_SEPARATOR );
 	}
 
 	Array<String> directories;
 	directories.init( mem_get_temp_storage() );
-	directories.add( pathString );
+	directories.add( path_string );
 
 	u32 dir_index = 0;
 
 	while ( dir_index < directories.count ) {
-		const String* dirString = &directories[dir_index];
-		const char* dir = string_cstr( dirString );
+		const char* dir = string_cstr( &directories[dir_index] );
 
 		dir_index += 1;
 
@@ -287,12 +288,16 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 		}
 
 		while ( 1 ) {
-			bool8 isDirectory = cast( bool8, find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY );
+			bool8 is_directory = cast( bool8, find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY );
 			// TODO: DM: 10/05/2026: really, this wants to be done via path_join
 			// but theres a few things that rely on this behaviour
 			// so changing this will cause side effects in various places/codebases that use core
+			// TODO: AK: 17/07/2026: currently we add a trailing slash to the end of all paths as
+			// the file globbing in builder relies on there not being new double slashes in the outputted
+			// path portion of the full filename, we should evaluate whether we want this or if it is just
+			// here because builder 'demanded' it (my bad gang)
 			String full_filename;
-			if ( isDirectory ) {
+			if ( is_directory ) {
 				full_filename = string_printf( mem_get_temp_storage(), "%s%s\\", dir, find_data.cFileName );
 			} else {
 				full_filename = string_printf( mem_get_temp_storage(), "%s%s", dir, find_data.cFileName );
@@ -301,7 +306,7 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 			FileInfo file_info = {
 				.size_bytes			= ( trunc_cast( u64, find_data.nFileSizeHigh ) << 32 ) | find_data.nFileSizeLow,
 				.last_write_time	= ( trunc_cast( u64, find_data.ftLastWriteTime.dwHighDateTime ) << 32 ) | find_data.ftLastWriteTime.dwLowDateTime,
-				.is_directory		= isDirectory,
+				.is_directory		= is_directory,
 				.filename			= find_data.cFileName,
 				.full_filename		= full_filename.data,
 			};
@@ -313,7 +318,7 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 					}
 
 					if ( visit_flags & FILE_VISIT_RECURSIVE ) {
-						directories.add( string_set( file_info.full_filename ) );
+						directories.add( full_filename );
 					}
 				}
 			} else if ( visit_flags & FILE_VISIT_FILES ) {

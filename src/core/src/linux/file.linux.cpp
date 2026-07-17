@@ -238,6 +238,10 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 			}
 			bool8 is_directory = entry->d_type == DT_DIR;
 
+			// TODO: AK: 17/07/2026: currently we add a trailing slash to the end of all paths as
+			// the file globbing in builder relies on there not being new double slashes in the outputted
+			// path portion of the full filename, we should evaluate whether we want this or if it is just
+			// here because builder 'demanded' it (my bad gang)
 			String full_filename;
 			if ( is_directory ) {
 				full_filename = string_printf( mem_get_temp_storage(), "%s%s/", directory, entry->d_name );

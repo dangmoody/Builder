@@ -851,7 +851,10 @@ struct sourceFileFindVisitorData_t {
 static void SourceFileVisitor( const FileInfo *fileInfo, void *userData ) {
 	sourceFileFindVisitorData_t *visitorData2 = cast( sourceFileFindVisitorData_t *, userData );
 
-	// should we sanity check basePath here?
+	// TODO: AK: 17/07/2026: currently we rely onthere not being new double slashes in the 
+	// path of the full filename, we should not do that and just have a proper standardisation
+	// step in the right places, also if file globbing can't support mismatching double slashes
+	// then that is probably a needed fix. We should add more tests that check the glob functionality.
 	String filename = string_set( fileInfo->filename );
 	
 	const u64 fullFilenameLen = strlen( fileInfo->full_filename );

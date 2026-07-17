@@ -3,7 +3,7 @@
 
 Core
 
-Copyright (c) 2025 Dan Moody
+Copyright (c) 2025 - present Dan Moody
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -37,7 +37,6 @@ SOFTWARE.
 #include <temp_storage.h>
 #include <defer.h>
 
-#include <stdio.h>
 #include <malloc.h>
 #include <errno.h>
 #include <execinfo.h>
@@ -74,7 +73,7 @@ Array<String> get_callstack( LinearAllocator *allocator ) {
 			}
 		}
 
-		String frame = string_set( allocator, name );
+		String frame = string_alloc( allocator, name );
 
 		free( demangled );
 		demangled = NULL;
@@ -99,7 +98,7 @@ void set_console_text_color( const ConsoleTextColor color ) {
 
 	assert( color_linux != NULL );
 
-	printf( "%s", color_linux );
+	print( "%s", color_linux );
 }
 
 s32 get_last_error_code() {

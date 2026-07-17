@@ -3,7 +3,7 @@
 
 Core
 
-Copyright (c) 2025 Dan Moody
+Copyright (c) 2025 - present Dan Moody
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -30,6 +30,8 @@ SOFTWARE.
 
 #include "int_types.h"
 #include "dll_export.h"
+
+struct String;
 
 /*
 ================================================================================================
@@ -96,13 +98,13 @@ CORE_API bool8	file_copy( const char *original_path, const char *new_path );
 CORE_API bool8	file_rename( const char *old_filename, const char *new_filename );
 
 // Convenience function to free any memory allocated through functions like "file_read_entire".
-CORE_API void	file_free_buffer( char **buffer );
+CORE_API void	file_free_buffer( String *buffer );
 
 // Opens the file, reads the entire contents, stores it in 'out_buffer', and stores the length of the file in 'out_file_length'.
 // Returns number of bytes read if successful, otherwise returns 0, the out buffer stays null, and out_file_length doesn't get written to.
 // Storing 'out_file_length' is optional.
 // Call "file_free_buffer()" to release the memory read into the out buffer.
-CORE_API bool8	file_read_entire( const char *filename, char **out_buffer, u64 *out_file_length = NULL );
+CORE_API bool8	file_read_entire( const char *filename, String *out_buffer );
 
 // Returns true if 'size' bytes was successfully read from the file starting from it's current offset and puts the result into 'out_data', otherwise returns false and the out buffer stays null.
 CORE_API bool8	file_read( File *file, const u64 size, void *out_data );

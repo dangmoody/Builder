@@ -3,7 +3,7 @@
 
 Core
 
-Copyright (c) 2025 Dan Moody
+Copyright (c) 2025 - present Dan Moody
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -30,6 +30,8 @@ SOFTWARE.
 
 #include <debug.h>
 
+#include "../stb_local.h"
+
 #include <core_array.inl>
 #include <core_string.h>
 #include <core_helpers.h>
@@ -44,7 +46,7 @@ SOFTWARE.
 
 #include <stdio.h>
 #include <string.h>
-#include <malloc.h>
+#include <malloc.h>	// alloca
 
 Array<String> get_callstack( LinearAllocator *allocator ) {
 	Array<String> callstack;
@@ -74,9 +76,9 @@ Array<String> get_callstack( LinearAllocator *allocator ) {
 
 		DWORD64 displacement = 0;
 		if ( SymFromAddr( process, address, &displacement, symbol ) ) {
-			callstack.add( string_set( allocator, symbol->Name ) );
+			callstack.add( string_alloc( allocator, symbol->Name ) );
 		} else {
-			callstack.add( string_set( allocator, "???" ) );
+			callstack.add( string_alloc( allocator, "???" ) );
 		}
 	}
 
@@ -115,18 +117,18 @@ void assert_internal( const char *file, const int line, const char *fmt, ... ) {
 	va_copy( args_copy, args );
 	defer { va_end( args_copy ); };
 
-	u64 length = cast( u64, vsnprintf( NULL, 0, fmt, args ) );
-	char *buffer = cast( char *, alloca( ( length + 1 ) * sizeof( char ) ) );
-	vsnprintf( buffer, length + 1, fmt, args_copy );
+	int length = stbsp_vsnprintf( NULL, 0, fmt, args );
+	char *buffer = cast( char *, alloca( length + 1 ) );
+	stbsp_vsnprintf( buffer, length + 1, fmt, args_copy );
 	buffer[length] = 0;
 
 	set_console_text_color( CONSOLE_TEXT_COLOR_RED );
 
-	printf( "ASSERT FAILURE: %s line %d: ", file, line );
+	print( "ASSERT FAILURE: %s line %d: ", file, line );
 
 	set_console_text_color( CONSOLE_TEXT_COLOR_YELLOW );
 
-	printf( "%s\n", buffer );
+	print( "%s\n", buffer );
 
 	set_console_text_color( CONSOLE_TEXT_COLOR_DEFAULT );
 

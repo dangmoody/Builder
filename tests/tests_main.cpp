@@ -1,5 +1,6 @@
 #include "../src/builder_local.h"
 
+#include <string>
 #include <debug.h>
 #include <core_array.inl>
 #include <typecast.inl>
@@ -131,27 +132,27 @@ static void GetAllGeneratedFiles( const FileInfo *fileInfo, void *data ) {
 
 
 struct fileMatchesFilterTest_t {
-	const char	*filename;
-	const char	*filter;
+	String filename;
+	String filter;
 	bool8		expected;
 };
 
 TEST_PARAMETRIC( Test_FileMatchesFilter, TEMPER_FLAG_SHOULD_RUN, fileMatchesFilterTest_t test ) {
-	TEMPER_CHECK_TRUE_M( FileMatchesFilter( test.filename, test.filter ) == test.expected, "FileMatchesFilter( \"%s\", \"%s\" ): expected %s.\n", test.filename, test.filter, test.expected ? "true" : "false" );
+	TEMPER_CHECK_TRUE_M( PathMatchesFilter( &test.filename, &test.filter ) == test.expected, "FileMatchesFilter( \"%s\", \"%s\" ): expected %s.\n", test.filename.data, test.filter.data, test.expected ? "true" : "false" );
 }
 
-TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { "main.cpp",          "main.cpp",     true  } );
-TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { "src/main.cpp",      "src/main.cpp", true  } );
-TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { "main.h",            "main.cpp",     false } );
-TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { "main.cpp",          "main.cpp.bak", false } );
-TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { "main.cpp",          "*.cpp",        true  } );
-TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { "main.h",            "*.cpp",        false } );
-TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { "src/main.cpp",      "src/*.cpp",    true  } );
-TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { "other/main.cpp",    "src/*.cpp",    false } );
-TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { "src/sub/other.cpp", "src/*.cpp",    false } );
-TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { "src/sub/other.cpp", "src/**/*.cpp", true  } );
-TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { "src/a/b/other.cpp", "src/**/*.cpp", true  } );
-TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { "src/main.cpp",      "src/**/*.cpp", true  } );
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { string_set( "main.cpp" ),          string_set( "main.cpp" ),     true  } );
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { string_set( "src/main.cpp" ),      string_set( "src/main.cpp" ), true  } );
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { string_set( "main.h" ),            string_set( "main.cpp" ),     false } );
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { string_set( "main.cpp" ),          string_set( "main.cpp.bak" ), false } );
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { string_set( "main.cpp" ),          string_set( "*.cpp" ),        true  } );
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { string_set( "main.h" ),            string_set( "*.cpp" ),        false } );
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { string_set( "src/main.cpp" ),      string_set( "src/*.cpp" ),    true  } );
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { string_set( "other/main.cpp" ),    string_set( "src/*.cpp" ),    false } );
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { string_set( "src/sub/other.cpp" ), string_set( "src/*.cpp" ),    false } );
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { string_set( "src/sub/other.cpp" ), string_set( "src/**/*.cpp" ), true  } );
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { string_set( "src/a/b/other.cpp" ), string_set( "src/**/*.cpp" ), true  } );
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_FileMatchesFilter, { string_set( "src/main.cpp" ),      string_set( "src/**/*.cpp" ), true  } );
 
 
 static bool SourceFileListContains( const std::vector<std::string> &files, const char *filename ) {
@@ -172,7 +173,23 @@ struct sourceFilesPatternTest_t {
 };
 
 TEST_PARAMETRIC( Test_GetSourceFilesMatchingPattern, TEMPER_FLAG_SHOULD_RUN, sourceFilesPatternTest_t test ) {
-	std::vector<std::string> files = GetSourceFilesMatchingPattern( test.basePath, test.pattern );
+	LinearAllocator* testScratch = linear_allocator_create(MEM_KILOBYTES(64));
+	defer{ linear_allocator_destroy(testScratch); };
+
+	String basePath = string_set( test.basePath );
+	String pattern = string_set( test.pattern );
+
+	if ( !string_ends_with(&basePath, '\\') && !string_ends_with(&basePath, '/') ) {
+		basePath = string_printf( testScratch, "%s%c", basePath.data, PATH_SEPARATOR );
+	}
+
+	u64 outIndex;
+	string_find_from_right( &pattern, '/', &outIndex );
+
+	String folderPattern = substring( test.pattern, basePath.count, 1 + outIndex - basePath.count );
+	String filePattern = substring( test.pattern, outIndex + 1, pattern.count - outIndex - 1 );
+
+	std::vector<std::string> files = GetSourceFilesMatchingPattern( &basePath, &folderPattern, &filePattern );
 
 	TEMPER_CHECK_TRUE_M( files.size() == test.expectedCount, "Expected %zu files, got %zu.\n", test.expectedCount, files.size() );
 
@@ -256,10 +273,12 @@ TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 	generatedFiles.fileExtensionsToDelete.add( ".d" );
 	generatedFiles.fileExtensionsToDelete.add( ".json" );
 
-	// String buildSourceFileWithoutExtension = string_set( testScratch, path_remove_file_extension( test.buildSourceFile ) );
-	String buildSourceFileWithoutExtension = string_set( testScratch, test.buildSourceFile );
-	path_remove_file_extension( &buildSourceFileWithoutExtension );
-
+	// @Aiden - We really need some Core strings sprinked throughout this whole file and the rest of the program
+	//			it feels cumbersome to work around the mismatches.
+	String buildSourceFileWithoutExtension = string_set( test.buildSourceFile );
+	buildSourceFileWithoutExtension = path_remove_file_extension( &buildSourceFileWithoutExtension );
+	buildSourceFileWithoutExtension = string_alloc( testScratch, test.buildSourceFile, buildSourceFileWithoutExtension.count + 1 );
+	buildSourceFileWithoutExtension.data[buildSourceFileWithoutExtension.count - 1] = '\0';
 	// binary name doesnt have to be set by users, but we need it
 	// this is the default
 	if ( !test.binaryName ) {
@@ -401,7 +420,7 @@ TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
 	.rootDir			= "test_dynamic_runtime_linking",
 	.buildSourceFile	= "test_dynamic_runtime_linking.cpp",
-	// .compilers			= COMPILER_DEFAULT,
+	//.compilers			= COMPILER_DEFAULT,
 } );
 
 TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, {
@@ -485,7 +504,7 @@ TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Failed to run vswhere.exe properly.  Exit code actually returned %d.\n", exitCode );
 
 		// fail test if we cant find the tag in the output that were looking for
-		auto ParseTagString = [testScratch]( const char *fileBuffer, const char *tag, String *outString ) -> bool8 {
+		auto ParseTagString = []( const char *fileBuffer, const char *tag, String *outString ) -> bool8 {
 			const char *lineStart = strstr( fileBuffer, tag );
 			if ( !lineStart ) {
 				return false;
@@ -504,7 +523,7 @@ TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 
 			u64 count = cast( u64, lineEnd ) - cast( u64, lineStart );
 
-			*outString = string_set( testScratch, lineStart, count );
+			*outString = string_set( lineStart, count );
 
 			return true;
 		};
@@ -535,7 +554,7 @@ TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 		Array<const char *> args;
 		args.init( testScratch );
 #if defined( _WIN32 )
-		args.add( temp_printf( "%s%cMSBuild%cCurrent%cBin%cMSBuild.exe", msbuildInstallationPath.data, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR ) );	// TODO(DM): query for this instead
+		args.add( temp_printf( "%s%cMSBuild%cCurrent%cBin%cMSBuild.exe", string_cstr( &msbuildInstallationPath ), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR ) );	// TODO(DM): query for this instead
 #elif defined( __linux__ )
 		args.add( "msbuild" );
 #endif
@@ -585,23 +604,22 @@ TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	{
 		TEMPER_CHECK_TRUE_M( file_exists( cppPropertiesJSONPath ), "c_cpp_properties.json was not generated at \"%s\".\n", cppPropertiesJSONPath );
 
-		char *content = NULL;
-		u64 contentLength = 0;
-		TEMPER_CHECK_TRUE_M( file_read_entire( cppPropertiesJSONPath, &content, &contentLength ), "Failed to read c_cpp_properties.json.\n" );
+		String content{};
+		TEMPER_CHECK_TRUE_M( file_read_entire( cppPropertiesJSONPath, &content ), "Failed to read c_cpp_properties.json.\n" );
 		defer { file_free_buffer( &content ); };
 
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"configurations\"" ),         "c_cpp_properties.json is missing \"configurations\" array.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"version\": 4" ),             "c_cpp_properties.json is missing \"version\": 4.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"name\": \"config\"" ),       "c_cpp_properties.json is missing config name.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"includePath\"" ),            "c_cpp_properties.json is missing \"includePath\".\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "${workspaceFolder}/include" ), "c_cpp_properties.json is missing include path.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"defines\"" ),                "c_cpp_properties.json is missing \"defines\".\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "MY_DEFINE=1" ),                "c_cpp_properties.json is missing define.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"cppStandard\": \"c++17\"" ), "c_cpp_properties.json is missing cppStandard.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"configurations\"" ),         "c_cpp_properties.json is missing \"configurations\" array.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"version\": 4" ),             "c_cpp_properties.json is missing \"version\": 4.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"name\": \"config\"" ),       "c_cpp_properties.json is missing config name.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"includePath\"" ),            "c_cpp_properties.json is missing \"includePath\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "${workspaceFolder}/include" ), "c_cpp_properties.json is missing include path.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"defines\"" ),                "c_cpp_properties.json is missing \"defines\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "MY_DEFINE=1" ),                "c_cpp_properties.json is missing define.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"cppStandard\": \"c++17\"" ), "c_cpp_properties.json is missing cppStandard.\n" );
 #if defined( _WIN32 )
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"windows-clang-x64\"" ),      "c_cpp_properties.json is missing intelliSenseMode.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"windows-clang-x64\"" ),      "c_cpp_properties.json is missing intelliSenseMode.\n" );
 #else
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"linux-clang-x64\"" ),        "c_cpp_properties.json is missing intelliSenseMode.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"linux-clang-x64\"" ),        "c_cpp_properties.json is missing intelliSenseMode.\n" );
 #endif
 	}
 
@@ -609,39 +627,37 @@ TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	{
 		TEMPER_CHECK_TRUE_M( file_exists( tasksJSONPath ), "tasks.json was not generated at \"%s\".\n", tasksJSONPath );
 
-		char *content = NULL;
-		u64 contentLength = 0;
-		TEMPER_CHECK_TRUE_M( file_read_entire( tasksJSONPath, &content, &contentLength ), "Failed to read tasks.json.\n" );
+		String content{};
+		TEMPER_CHECK_TRUE_M( file_read_entire( tasksJSONPath, &content ), "Failed to read tasks.json.\n" );
 		defer { file_free_buffer( &content ); };
 
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"version\"" ),              "tasks.json is missing \"version\".\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"tasks\"" ),                "tasks.json is missing \"tasks\" array.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"Build config\"" ),         "tasks.json is missing \"Build config\" task.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"--config=config\"" ),      "tasks.json is missing --config=config arg.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"--release\"" ),            "tasks.json is missing --release arg for second task.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "generate_vscode_json.cpp" ), "tasks.json is missing the build file arg.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"version\"" ),              "tasks.json is missing \"version\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"tasks\"" ),                "tasks.json is missing \"tasks\" array.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"Build config\"" ),         "tasks.json is missing \"Build config\" task.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"--config=config\"" ),      "tasks.json is missing --config=config arg.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"--release\"" ),            "tasks.json is missing --release arg for second task.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "generate_vscode_json.cpp" ), "tasks.json is missing the build file arg.\n" );
 	}
 
 	// launch.json
 	{
 		TEMPER_CHECK_TRUE_M( file_exists( launchJSONPath ), "launch.json was not generated at \"%s\".\n", launchJSONPath );
 
-		char *content = NULL;
-		u64 contentLength = 0;
-		TEMPER_CHECK_TRUE_M( file_read_entire( launchJSONPath, &content, &contentLength ), "Failed to read launch.json.\n" );
+		String content{};
+		TEMPER_CHECK_TRUE_M( file_read_entire( launchJSONPath, &content ), "Failed to read launch.json.\n" );
 		defer { file_free_buffer( &content ); };
 
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"version\"" ),                     "launch.json is missing \"version\".\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"configurations\"" ),              "launch.json is missing \"configurations\" array.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "bin/debug/test_app" ),              "launch.json is missing debug binary path.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "bin/release/test_app" ),            "launch.json is missing release binary path.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"request\": \"launch\"" ),         "launch.json is missing \"request\": \"launch\".\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"cwd\": \"${workspaceFolder}\"" ), "launch.json is missing default cwd.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"version\"" ),                     "launch.json is missing \"version\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"configurations\"" ),              "launch.json is missing \"configurations\" array.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "bin/debug/test_app" ),              "launch.json is missing debug binary path.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "bin/release/test_app" ),            "launch.json is missing release binary path.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"request\": \"launch\"" ),         "launch.json is missing \"request\": \"launch\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"cwd\": \"${workspaceFolder}\"" ), "launch.json is missing default cwd.\n" );
 #ifdef _WIN32
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"type\": \"cppvsdbg\"" ),          "launch.json is missing \"type\": \"cppvsdbg\" on Windows.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"type\": \"cppvsdbg\"" ),          "launch.json is missing \"type\": \"cppvsdbg\" on Windows.\n" );
 #else
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"type\": \"cppdbg\"" ),            "launch.json is missing \"type\": \"cppdbg\" on Linux.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"MIMode\": \"gdb\"" ),             "launch.json is missing \"MIMode\": \"gdb\" on Linux.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"type\": \"cppdbg\"" ),            "launch.json is missing \"type\": \"cppdbg\" on Linux.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"MIMode\": \"gdb\"" ),             "launch.json is missing \"MIMode\": \"gdb\" on Linux.\n" );
 #endif
 	}
 
@@ -697,40 +713,38 @@ TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	{
 		TEMPER_CHECK_TRUE_M( file_exists( tasksJSONPath ), "tasks.json was not generated at \"%s\".\n", tasksJSONPath );
 
-		char *content = NULL;
-		u64 contentLength = 0;
-		TEMPER_CHECK_TRUE_M( file_read_entire( tasksJSONPath, &content, &contentLength ), "Failed to read tasks.json.\n" );
+		String content{};
+		TEMPER_CHECK_TRUE_M( file_read_entire( tasksJSONPath, &content ), "Failed to read tasks.json.\n" );
 		defer { file_free_buffer( &content ); };
 
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"label\""             ), "tasks.json is missing \"label\".\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"Build config\""      ), "tasks.json is missing \"Build config\" task.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"command\""           ), "tasks.json is missing \"command\".\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"args\""              ), "tasks.json is missing \"args\" array.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"--config=config\""   ), "tasks.json is missing --config=config arg.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"--release\""         ), "tasks.json is missing --release arg for second task.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "generate_zed_json.cpp" ), "tasks.json is missing the build file arg.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"label\""             ), "tasks.json is missing \"label\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"Build config\""      ), "tasks.json is missing \"Build config\" task.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"command\""           ), "tasks.json is missing \"command\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"args\""              ), "tasks.json is missing \"args\" array.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"--config=config\""   ), "tasks.json is missing --config=config arg.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"--release\""         ), "tasks.json is missing --release arg for second task.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "generate_zed_json.cpp" ), "tasks.json is missing the build file arg.\n" );
 	}
 
 	// debug.json
 	{
 		TEMPER_CHECK_TRUE_M( file_exists( debugJSONPath ), "debug.json was not generated at \"%s\".\n", debugJSONPath );
 
-		char *content = NULL;
-		u64 contentLength = 0;
-		TEMPER_CHECK_TRUE_M( file_read_entire( debugJSONPath, &content, &contentLength ), "Failed to read debug.json.\n" );
+		String content{};
+		TEMPER_CHECK_TRUE_M( file_read_entire( debugJSONPath, &content ), "Failed to read debug.json.\n" );
 		defer { file_free_buffer( &content ); };
 
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"label\""                ), "debug.json is missing \"label\".\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"config (debug)\""       ), "debug.json is missing config (debug) binary label.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"config (release)\""     ), "debug.json is missing config (release) binary label.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"program\""              ), "debug.json is missing \"program\".\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "bin/debug/test_app"       ), "debug.json is missing debug binary path.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "bin/release/test_app"     ), "debug.json is missing release binary path.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"${ZED_WORKTREE_ROOT}\"" ), "debug.json is missing default cwd.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"adapter\""              ), "debug.json is missing \"adapter\".\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"CodeLLDB\""             ), "debug.json is missing \"CodeLLDB\" adapter.\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"request\""              ), "debug.json is missing \"request\".\n" );
-		TEMPER_CHECK_TRUE_M( string_contains( content, "\"launch\""               ), "debug.json is missing \"launch\" request.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"label\""                ), "debug.json is missing \"label\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"config (debug)\""       ), "debug.json is missing config (debug) binary label.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"config (release)\""     ), "debug.json is missing config (release) binary label.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"program\""              ), "debug.json is missing \"program\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "bin/debug/test_app"       ), "debug.json is missing debug binary path.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "bin/release/test_app"     ), "debug.json is missing release binary path.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"${ZED_WORKTREE_ROOT}\"" ), "debug.json is missing default cwd.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"adapter\""              ), "debug.json is missing \"adapter\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"CodeLLDB\""             ), "debug.json is missing \"CodeLLDB\" adapter.\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"request\""              ), "debug.json is missing \"request\".\n" );
+		TEMPER_CHECK_TRUE_M( string_contains( content.data, "\"launch\""               ), "debug.json is missing \"launch\" request.\n" );
 	}
 
 	// cleanup
@@ -782,14 +796,13 @@ TEST( ValidateCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 
 	TEMPER_CHECK_TRUE_M( file_exists( compileCommandsPath ), "compile_commands.json does not exist at %s\n", compileCommandsPath );
 
-	char *content = NULL;
-	u64 contentLength = 0;
-	file_read_entire( compileCommandsPath, &content, &contentLength );
+	String content{};
+	file_read_entire( compileCommandsPath, &content );
 	defer { file_free_buffer( &content ); };
 
 	// Count occurrences of "file": which indicates individual entries
 	u64 entriesCount = 0;
-	const char *ptr = content;
+	const char *ptr = content.data;
 	while ( ( ptr = strstr( ptr, "\"file\":" ) ) != NULL ) {
 		entriesCount++;
 		ptr++;

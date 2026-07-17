@@ -196,8 +196,7 @@ static const char *BuildConfig_ToString( const BuildConfig *config, LinearAlloca
 		}
 	};
 
-	StringBuilder builder = {};
-	string_builder_init( &builder, allocator );
+	StringBuilder builder = string_builder_create( allocator );
 
 	auto PrintCStringArray = [&builder]( const char *name, const std::vector<const char *> &array ) {
 		string_builder_appendf( &builder, "\t%s: { ", name );
@@ -271,8 +270,7 @@ static const char *BuildConfig_ToString( const BuildConfig *config, LinearAlloca
 const char *BuildConfig_GetFullBinaryName( const BuildConfig *config, LinearAllocator *allocator ) {
 	assert( !config->binaryName.empty() );
 
-	StringBuilder sb = {};
-	string_builder_init( &sb, allocator );
+	StringBuilder sb = string_builder_create( allocator );
 
 	if ( !config->binaryFolder.empty() ) {
 		string_builder_appendf( &sb, "%s%c", config->binaryFolder.c_str(), PATH_SEPARATOR );
@@ -338,8 +336,7 @@ s32 RunProc( Array<const char *> *args, Array<const char *> *environmentVariable
 	};
 
 	// show stdout
-	StringBuilder sb = {};
-	string_builder_init( &sb, mem_get_temp_storage() );
+	StringBuilder sb = string_builder_create( mem_get_temp_storage() );
 
 	u64 bytesRead = 0;
 	char buffer[1024] = {};
@@ -354,7 +351,7 @@ s32 RunProc( Array<const char *> *args, Array<const char *> *environmentVariable
 	}
 
 	if ( outStdout ) {
-		*outStdout = string_set( mem_get_temp_storage(), string_builder_to_string( &sb ) );
+		*outStdout = string_set( string_builder_to_string( &sb ) );
 	}
 
 	s32 exitCode = process_join( process );
@@ -482,13 +479,12 @@ static s32 CompileJobThread( void *data ) {
 
 		const char *sourceFile = pool->config->sourceFiles[sourceFileIndex].c_str();
 
-		String sourceFileNoPath = string_set( mem_get_temp_storage(), sourceFile );
-		path_remove_path_from_file( &sourceFileNoPath );
+		String sourceFileNoPath = string_set( sourceFile );
+		sourceFileNoPath = path_remove_path_from_file( &sourceFileNoPath );
 
-		String sourceFileNoPathAndExtension = string_copy( mem_get_temp_storage(), &sourceFileNoPath );
-		path_remove_file_extension( &sourceFileNoPathAndExtension );
+		String sourceFileNoPathAndExtension = path_remove_file_extension( &sourceFileNoPath );
 
-		String intermediateFilename = string_printf( mem_get_temp_storage(), "%s%c%s.o", pool->config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPathAndExtension.data );
+		String intermediateFilename = string_printf( mem_get_temp_storage(), "%s%c%s.o", pool->config->intermediateFolder.c_str(), PATH_SEPARATOR, string_cstr( &sourceFileNoPathAndExtension ) );
 		( *pool->intermediateFiles )[sourceFileIndex] = intermediateFilename.data;
 
 		u32 sourceFileHashmapIndex = hashmap_get_value( pool->context->sourceFileIndices, hash_string( sourceFile, 0 ) );
@@ -741,149 +737,252 @@ const char *GetNextSlashInPath( const char *path ) {
 	return nextSlash;
 }
 
-bool8 FileMatchesFilter( const char *filename, const char *filter ) {
-	const char *filenameCopy = filename;
-	const char *filterCopy = filter;
+static bool8 FileMatchesFilter( const String *filename, const String *filter ) {
+	if ( filter->count == 0 ) {
+		return false;
+	}
 
-	// two separate backup slots:
-	//	single-star - cannot cross '/', falls through to double-star on failure
-	//	double-star - may cross '/', used as the outer fallback
-	const char *filenameBackupSingle = NULL;
-	const char *filterBackupSingle   = NULL;
-	const char *filenameBackupDouble = NULL;
-	const char *filterBackupDouble   = NULL;
+	u64 afterLastWildcard = 0;
+	u64 filterIndex = 0;
+	For (u64, filenameIndex, 0, filename->count ) {
+		// there are more characters that haven't been matched 
+		if ( filterIndex == filter->count ) {
+			return false;
+		}
 
-	while ( *filenameCopy ) {
-		if ( *filterCopy == '*' ) {
-			if ( *( filterCopy + 1 ) == '*' ) {
-				// "**/" - try zero path components first (skip "*/"), then fall through to greedy
-				if ( *( filterCopy + 2 ) == '/' ) {
-					if ( FileMatchesFilter( filenameCopy, filterCopy + 3 ) ) {
-						return true;
-					}
-				}
-
-				// "**" greedy backup: crosses path separators
-				filenameBackupDouble = filenameCopy;
-				filterBackupDouble = ( filterCopy += 2 );
-				filenameBackupSingle = NULL;
-				filterBackupSingle = NULL;
-			} else {
-				// Single "*" greedy backup
-				// does not cross path separators
-				filenameBackupSingle = filenameCopy;
-				filterBackupSingle = ++filterCopy;
+		// keep consuming wildcards to reach next match
+		while ( filter->data[filterIndex] == '*' ) {
+			afterLastWildcard = ++filterIndex;
+			if ( filterIndex == filter->count ) {
+				return true; // rest of the characters are matched via wildcard
 			}
-		} else if ( *filenameCopy == *filterCopy ) {
-			filenameCopy++;
-			filterCopy++;
-		} else {
-			// mismatch - try single-star expansion first (but stop at '/'), then double-star
-			if ( filenameBackupSingle && *filenameBackupSingle != '/' ) {
-				filenameCopy = ++filenameBackupSingle;
-				filterCopy = filterBackupSingle;
-			} else if ( filenameBackupDouble ) {
-				filenameBackupSingle = NULL;
-				filterBackupSingle = NULL;
-				filenameCopy = ++filenameBackupDouble;
-				filterCopy = filterBackupDouble;
-			} else {
-				return false;
-			}
+		}
+ 
+		// consume match resetting if match fails
+		if ( filter->data[filterIndex++] != filename->data[filenameIndex] ) {
+			filterIndex = afterLastWildcard;
 		}
 	}
 
-	return *filterCopy == 0;
+	// since we consumed all characters in match and filename it's a match
+	return filterIndex == filter->count;
+}
+
+bool8 PathMatchesFilter( const String *path, const String *pathFilter) {
+	// simplest case where we have no glob pattern for folders at all
+	if ( path->count == 0 && pathFilter->count == 0 ) {
+		return true;
+	}
+
+	bool8 inRecursiveGlob = false;
+	u64 afterLastSlash = 0;
+	u64 filterIndex = 0;
+	u64 pathIndex = 0;
+	while ( filterIndex < pathFilter->count ) {
+		if ( pathFilter->data[filterIndex] == '/' || pathFilter->data[filterIndex] == '\\' ) {
+			// check if we must consume one folder (aka '/*/' )
+			// or if we have begun a recursive glob (2 or more wildcards)
+			u64 distance = filterIndex - afterLastSlash;
+			if ( distance == 2 ) {
+				inRecursiveGlob = true;
+			} else if ( distance == 1 ) {
+				if ( pathIndex == path->count ) {
+					return false; // no more folders to consume
+				}
+				while ( pathIndex < path->count && path->data[pathIndex] != '/' && path->data[pathIndex] != '\\' ) {
+					++pathIndex;
+				}
+				if ( pathIndex < path->count ) {
+					++pathIndex;
+				}
+			}
+
+			afterLastSlash = ++filterIndex;
+		} else if ( pathFilter->data[filterIndex++] != '*' ) {
+			// if there isn't a wildcard or slash we must find next folder that matches the user's pattern
+			// we get each section by advancing to next slash or end of string
+			while ( filterIndex < pathFilter->count && pathFilter->data[filterIndex] != '/' && pathFilter->data[filterIndex] != '\\' ) {
+				++filterIndex;
+			}
+			String pattern = substring( pathFilter->data, afterLastSlash, filterIndex - afterLastSlash );
+
+			bool8 foundMatch = false;
+			while ( pathIndex < path->count ) {				
+				u64 folderStart = pathIndex;	
+				while ( pathIndex < path->count && path->data[pathIndex] != '/' && path->data[pathIndex] != '\\' ) {
+					++pathIndex;
+				}
+				
+				// check for match in this section
+				String folder = substring( path->data, folderStart, pathIndex - folderStart );
+				if ( pathIndex < path->count ) {
+					++pathIndex; // go past the next slash after grabbing folder
+				}
+				if ( FileMatchesFilter( &folder, &pattern ) ) {
+					foundMatch = true;
+					break;
+				} else if ( !inRecursiveGlob ) {
+					return false;
+				}
+			}
+
+			// there was SOME folder to match and we didn't match it
+			if ( !foundMatch ) {
+				return false;
+			}
+
+			// if we have reached the end then we actually matched everything and we are done
+			inRecursiveGlob = (pathIndex == path->count && filterIndex == pathFilter->count);
+		}
+	}
+	
+	// if we finished parsing filter and were in recursive glob then
+	// we can match anything remaining in the path 
+	return inRecursiveGlob;
 }
 
 struct sourceFileFindVisitorData_t {
 	std::vector<std::string>	sourceFiles;
-	const char					*searchFilter;
+	const String					*searchFilter;
+	const String					*folderFilter;
+	const String					*basePath;
 };
 
 static void SourceFileVisitor( const FileInfo *fileInfo, void *userData ) {
 	sourceFileFindVisitorData_t *visitorData2 = cast( sourceFileFindVisitorData_t *, userData );
 
-	// const char *filename = NULL;
-	// if ( string_contains( visitorData2->searchFilter, "/" ) || string_contains( visitorData2->searchFilter, "\\" ) ) {
-	// 	filename = fileInfo->full_filename;
-	// } else {
-	// 	filename = fileInfo->filename;
-	// }
+	// TODO: AK: 17/07/2026: currently we rely onthere not being new double slashes in the 
+	// path of the full filename, we should not do that and just have a proper standardisation
+	// step in the right places, also if file globbing can't support mismatching double slashes
+	// then that is probably a needed fix. We should add more tests that check the glob functionality.
+	String filename = string_set( fileInfo->filename );
+	
+	const u64 fullFilenameLen = strlen( fileInfo->full_filename );
+	const u64 basePathLen = visitorData2->basePath->count;
+	if ( fullFilenameLen < basePathLen + filename.count ) { // maybe this should happen if they use ../../src/ or similar - where should we handle this?
+		fatal_error( "Source file \"%s\" is shorter than base path \"%s\".  This should never happen.\n", fileInfo->full_filename, visitorData2->basePath);
+		return;
+	}
 
-	if ( FileMatchesFilter( fileInfo->full_filename/*filename*/, visitorData2->searchFilter ) ) {
+	// specifically the part of the path that needs to match the folder filter
+	String pathToCheck = substring( fileInfo->full_filename, basePathLen, fullFilenameLen - basePathLen - filename.count );
+
+	// match filename first as will generally be cheaper since only accounting for * not **
+	bool8 fileMatches = FileMatchesFilter( &filename, visitorData2->searchFilter );
+
+	if ( fileMatches && PathMatchesFilter( &pathToCheck, visitorData2->folderFilter ) ) {
 		LogVerbose( " - Found \"%s\"\n", fileInfo->full_filename );
 		visitorData2->sourceFiles.push_back( fileInfo->full_filename );
 	}
 }
 
-std::vector<std::string> GetSourceFilesMatchingPattern( const char *basePath, const char *pattern ) {
+std::vector<std::string> GetSourceFilesMatchingPattern( const String *basePath, const String *folderPattern, const String *filePattern ) {
 	sourceFileFindVisitorData_t visitorData = {};
-	visitorData.searchFilter = pattern;
+	visitorData.searchFilter = filePattern;
+	visitorData.folderFilter = folderPattern;
+	visitorData.basePath = basePath;
 
-	bool8 recursive = string_contains( pattern, "**" );
+	FileVisitFlags visitFlags = FILE_VISIT_FILES;
+	if ( folderPattern->count ) {
+		visitFlags |= FILE_VISIT_RECURSIVE;
+	}
 
-	FileVisitFlags visitFlags = FILE_VISIT_RECURSIVE | FILE_VISIT_FILES;
-
-	if ( !file_get_all_files_in_folder( basePath, visitFlags, SourceFileVisitor, &visitorData ) ) {
-		fatal_error( "Failed to get source file(s) \"%s\".  This should never happen.\n", pattern );
+	if ( !file_get_all_files_in_folder( basePath->data, visitFlags, SourceFileVisitor, &visitorData ) ) {
+		fatal_error( "Failed to get source file(s) \"%s%s\".  This should never happen.\n", folderPattern, filePattern);
 	}
 
 	return visitorData.sourceFiles;
 }
 
-static std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContext_t *context, const BuildConfig *config ) {
+static std::vector<std::string> GetAllSourceFiles( const String *inputFilePath, const std::vector<std::string>& sourceFiles ) {
 	std::vector<std::string> allSourceFiles;
 
-	For ( u64, sourceFileIndex, 0, config->sourceFiles.size() ) {
-		const char *sourceFile = config->sourceFiles[sourceFileIndex].c_str();
+	For ( u64, sourceFileIndex, 0, sourceFiles.size() ) {
+		const char *rawSourceFile = sourceFiles[sourceFileIndex].c_str();
 
-		// only glob if the filename has a wildcard
-		if ( string_contains( sourceFile, "*" ) ) {
-			LogVerbose( "About to glob all source files found under user-specified pattern \"%s\" to the list of source files to build with:\n" );
+		// normalise to an absolute path so wildcards, duplicate slashes, and
+		// relative paths all resolve consistently against the build input dir
+		// at this point we could also do some checks for duplication if we wanted to protect the user against this
+		String sourceFile;
+		if ( path_is_absolute( rawSourceFile ) ) {
+			sourceFile = path_absolute_path( mem_get_temp_storage(), rawSourceFile );
+		} else {
+#if defined(__linux__)
+			// AK: I hate every part of this, but unlike windows the glob pattern is not handled fine being in path_absolute_path
+			String rawFile = string_set( rawSourceFile );
 
-			// TODO(DM): 02/10/2025: needing this is (probably) a hack
-			// re-evaluate this
-			const char *basePath = NULL;//context->inputFilePath.data;
-			const char *pattern = NULL;
-			bool8 inputFileIsSameAsSourceFile = string_equals( sourceFile, context->inputFile );
-			if ( inputFileIsSameAsSourceFile ) {
-				pattern = context->inputFile;
-				basePath = context->inputFilePath.data;
-			} else {
-				pattern = temp_printf( "%s%c%s", context->inputFilePath.data, '/', sourceFile );
-
-				// basePath must be the directory before the first wildcard
-				const char *firstStar = strchr( pattern, '*' );
-				u64 baseLen = cast( u64, firstStar ) - cast( u64, pattern );
-				while ( baseLen > 0 && pattern[baseLen - 1] != '/' && pattern[baseLen - 1] != '\\' ) {
-					baseLen--;
+			// seperate glob and forward from path before it
+			String pathBeforeFirstGlob = {};
+			For ( u64, rawFileChar, 0, rawFile.count ) {
+				if ( rawFile.data[rawFileChar] == '*' ) {
+					while ( rawFileChar-- != 0 ) { // will exit after processing 0
+						if ( rawFile.data[rawFileChar] == '/' || rawFile.data[rawFileChar] == '\\' ) {
+							pathBeforeFirstGlob = string_set( rawFile.data, rawFileChar );
+							rawFile = substring( rawFile.data, rawFileChar + 1, rawFile.count - rawFileChar );
+							break;
+						}
+					}
+					break;
 				}
-
-				// remove trailing slash if found
-				if ( baseLen > 0 ) {
-					baseLen--;
-				}
-
-				char *trimmedBasePath = cast( char *, mem_temp_alloc( ( baseLen + 1 ) * sizeof( char ) ) );
-				memcpy( trimmedBasePath, pattern, baseLen );
-				trimmedBasePath[baseLen] = '\0';
-
-				basePath = trimmedBasePath;
 			}
 
-			std::vector<std::string> matches = GetSourceFilesMatchingPattern( basePath, pattern );
+			// only calculate the absolute path on the glob-free portion
+			const char *pathPortion;
+			if ( pathBeforeFirstGlob.count != 0 ) {
+				pathPortion = temp_printf( "%s%c%s", inputFilePath->data, '/', string_cstr( &pathBeforeFirstGlob ) );
+			} else {
+				pathPortion = inputFilePath->data;
+			}
+			sourceFile = path_absolute_path( mem_get_temp_storage(), pathPortion );
+
+			// now combine the two and we have the same result...
+			sourceFile = string_printf( mem_get_temp_storage(), "%s%c%s", string_cstr( &sourceFile ), '/', string_cstr( &rawFile ) );
+
+#else
+			const char *joined = temp_printf( "%s%c%s", inputFilePath->data, '/', rawSourceFile );
+			sourceFile = path_absolute_path( mem_get_temp_storage(), joined );
+#endif
+		}
+
+		// only glob if the filename has a wildcard
+		if ( string_contains( &sourceFile, '*' ) ) {
+			LogVerbose( "About to glob all source files found under user-specified pattern \"%s\" to the list of source files to build with:\n", rawSourceFile);
+
+			// basePath must be the directory before the first wildcard
+			u64 baseLen;
+			string_find_from_left(&sourceFile, '*', &baseLen);
+			while ( baseLen > 0 && sourceFile.data[baseLen - 1] != '/' && sourceFile.data[baseLen - 1] != '\\' ) {
+				baseLen--;
+			}
+
+			// null terminate for api functions
+			String basePath = string_alloc( mem_get_temp_storage(), sourceFile.data, baseLen + 1 );
+			basePath.data[baseLen] = '\0';
+			basePath.count = baseLen;
+
+			u64 fileStart = sourceFile.count;
+			while ( fileStart > 0 && sourceFile.data[fileStart - 1] != '/' && sourceFile.data[fileStart - 1] != '\\' ) {
+				fileStart--;
+			}
+			String fileFilter = substring( sourceFile.data, fileStart, sourceFile.count - fileStart );
+			String folderFilter = substring( sourceFile.data, baseLen, sourceFile.count - fileFilter.count - baseLen);
+			
+			std::vector<std::string> matches = GetSourceFilesMatchingPattern( &basePath, &folderFilter, &fileFilter );
 
 			allSourceFiles.insert( allSourceFiles.end(), matches.begin(), matches.end() );
 		} else {
 			// otherwise its a single file, so we can just get it
-			LogVerbose( "Adding source file \"%s\" to the list of source files to build with (no glob).\n" );
+			LogVerbose( "Adding source file \"%s\" to the list of source files to build with (no glob).\n", rawSourceFile);
 
-			allSourceFiles.push_back( temp_printf( "%s%c%s", context->inputFilePath.data, '/', sourceFile ) );
+			allSourceFiles.push_back( string_cstr( &sourceFile ) );
 		}
 	}
 
 	return allSourceFiles;
+}
+
+static inline std::vector<std::string> BuildConfig_GetAllSourceFiles( const buildContext_t *context, const BuildConfig *config ) {
+	return GetAllSourceFiles( &context->inputFilePath, config->sourceFiles );
 }
 
 static void AddBuildConfigAndDependenciesUnique( buildContext_t *context, const BuildConfig *config, std::vector<BuildConfig> &outConfigs ) {
@@ -911,10 +1010,14 @@ static void ReadIncludeDependenciesFile( buildContext_t *context ) {
 
 	// there wont be an include dependencies file on the first build or if you nuked the binaries folder (for instance)
 	// so this is allowed to fail
-	if ( !file_read_entire( context->includeDependenciesFilename.data, cast( char **, &byteBuffer.data.data ), &byteBuffer.data.count ) ) {
+	String includeDependenciesFileBuffer = {};
+	if ( !file_read_entire( context->includeDependenciesFilename.data, &includeDependenciesFileBuffer ) ) {
 		context->sourceFileIndices = hashmap_create( context->allocator, 1, 1.0f );
 		return;
 	}
+
+	byteBuffer.data.data = cast( u8 *, includeDependenciesFileBuffer.data );
+	byteBuffer.data.count = includeDependenciesFileBuffer.count;
 
 	auto ByteBuffer_Read_U32 = []( byteBuffer_t *buffer ) -> u32 {
 #pragma clang diagnostic push
@@ -1115,8 +1218,8 @@ static void SanitizeCompilationDatabaseArgs( std::vector<std::string> &args ) {
 				arg = std::move( path );
 #else
 				String path = path_absolute_path( mem_get_temp_storage(), arg.c_str() );
-				string_replace( &path, '\\', '/' );
-				arg = path.data;
+				path = string_replace( mem_get_temp_storage(), &path, '\\', '/' );
+				arg = string_cstr( &path );
 #endif
 			}
 
@@ -1140,8 +1243,8 @@ static void SanitizeCompilationDatabaseArgs( std::vector<std::string> &args ) {
 			}
 #else
 			String path = path_absolute_path( mem_get_temp_storage(), arg.c_str() );
-			string_replace( &path, '\\', '/' );
-			arg = path.data;
+			path = string_replace( mem_get_temp_storage(), &path, '\\', '/' );
+			arg = string_cstr( &path );
 #endif
 		}
 
@@ -1154,8 +1257,8 @@ static void SanitizeCompilationDatabaseArgs( std::vector<std::string> &args ) {
 			handled = true;
 #else
 			String path = path_absolute_path( mem_get_temp_storage(), arg.substr( ruleLength + 1 ).c_str() );
-			string_replace( &path, '\\', '/' );
-			arg = std::string( ruleFlag ) + ":" + path.data;
+			path = string_replace( mem_get_temp_storage(), &path, '\\', '/' );
+			arg = std::string( ruleFlag ) + ":" + string_cstr( &path );
 			handled = true;
 #endif
 		}
@@ -1171,8 +1274,8 @@ static void SanitizeCompilationDatabaseArgs( std::vector<std::string> &args ) {
 #else
 				std::string &nextArg = args[++argIndex];
 				String path = path_absolute_path( mem_get_temp_storage(), nextArg.c_str() );
-				string_replace( &path, '\\', '/' );
-				nextArg = path.data;
+				path = string_replace( mem_get_temp_storage(), &path, '\\', '/' );
+				nextArg = string_cstr( &path );
 #endif
 			}
 		}
@@ -1184,8 +1287,7 @@ static bool WriteCompilationDatabase( buildContext_t *context ) {
 		return true;
 	}
 
-	StringBuilder sb = {};
-	string_builder_init( &sb, mem_get_temp_storage() );
+	StringBuilder sb = string_builder_create( mem_get_temp_storage() );
 
 	string_builder_appendf( &sb, "[\n" );
 
@@ -1420,35 +1522,46 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	// the default binary folder is the same folder as the source file
 	// if the file doesnt have a path then assume its in the same path as the current working directory (where we are calling builder from)
 	{
-		String inputFilePath = string_set( mem_get_temp_storage(), context.inputFile );
+		String inputFileStr = string_set( context.inputFile );
+		String inputFilePath = path_remove_file_from_path( &inputFileStr );
 
-		if ( !path_remove_file_from_path( &inputFilePath ) ) {
+		if ( inputFilePath.count == inputFileStr.count ) {
+			// the input file has no path part, so assume it lives in the current working directory
 			inputFilePath = path_get_cwd( mem_get_temp_storage() );
 		}
 
-		context.inputFilePath = string_copy( context.allocator, &inputFilePath );
+		context.inputFilePath = string_alloc( context.allocator, inputFilePath.data, inputFilePath.count + 1 );
+		context.inputFilePath.data[inputFilePath.count] = '\0';
+		context.inputFilePath.count = inputFilePath.count;
 
 		context.dotBuilderFolder = path_join( context.allocator, context.inputFilePath.data, ".builder" );
 
-		String inputFileStripped = string_set( context.allocator, context.inputFile );
-		path_remove_file_extension( &inputFileStripped );
-		path_remove_path_from_file( &inputFileStripped );
+		String inputFileStripped = string_set( context.inputFile );
+		inputFileStripped = path_remove_file_extension( &inputFileStripped );
+		inputFileStripped = path_remove_path_from_file( &inputFileStripped );
 
-		context.includeDependenciesFilename = string_printf( context.allocator, "%s%c%s.include_dependencies", context.dotBuilderFolder.data, PATH_SEPARATOR, inputFileStripped.data );
+		context.includeDependenciesFilename = string_printf( context.allocator, "%s%c%s.include_dependencies", context.dotBuilderFolder.data, PATH_SEPARATOR, string_cstr( &inputFileStripped ) );
 
-		LogVerbose( "input file path                  : %s\n", inputFilePath.data );
+		LogVerbose( "input file path                  : %s\n", context.inputFilePath.data );
 		LogVerbose( ".builder folder location         : %s\n", context.dotBuilderFolder.data );
 		LogVerbose( "includedependencies file location: %s\n", context.includeDependenciesFilename.data );
 	}
 
-	String defaultBinaryName = string_set( context.allocator, context.inputFile );
-	path_remove_path_from_file( &defaultBinaryName );
-	path_remove_file_extension( &defaultBinaryName );
+	String defaultBinaryNameView = string_set( context.inputFile );
+	defaultBinaryNameView = path_remove_path_from_file( &defaultBinaryNameView );
+	defaultBinaryNameView = path_remove_file_extension( &defaultBinaryNameView );
+
+	String defaultBinaryName = string_alloc( context.allocator, defaultBinaryNameView.data, defaultBinaryNameView.count + 1 );
+	defaultBinaryName.data[defaultBinaryNameView.count] = '\0';
+	defaultBinaryName.count = defaultBinaryNameView.count;
 
 	ReadIncludeDependenciesFile( &context );
 
 	String appPathOnly = path_app_path( mem_get_temp_storage() );
-	path_remove_file_from_path( &appPathOnly );
+	appPathOnly = path_remove_file_from_path( &appPathOnly );
+	appPathOnly = string_alloc( mem_get_temp_storage(), appPathOnly.data, appPathOnly.count + 1 );
+	appPathOnly.data[appPathOnly.count - 1] = '\0';
+	appPathOnly.count -= 1;
 
 	// init default compiler backend (the version of clang that builder came with)
 	compilerBackend_t compilerBackend = {};
@@ -1608,6 +1721,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 		// make sure BuilderOptions::configs and configs from visual studio match
 		// we will need this list later for validation
+		// at the same time grab the list of files we are adding to the solution
 		options.configs.clear();
 		For ( u64, projectIndex, 0, options.solution.projects.size() ) {
 			VisualStudioProject *project = &options.solution.projects[projectIndex];
@@ -1615,7 +1729,12 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 			For ( u64, configIndex, 0, project->configs.size() ) {
 				VisualStudioConfig *config = &project->configs[configIndex];
 
+				config->options.sourceFiles = BuildConfig_GetAllSourceFiles( &context, &config->options );
 				AddBuildConfigAndDependenciesUnique( &context, &config->options, options.configs );
+			}
+
+			if ( !project->extraFiles.empty() ) {
+				project->extraFiles = GetAllSourceFiles( &context.inputFilePath, project->extraFiles );
 			}
 		}
 
@@ -1660,16 +1779,20 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 			compilerBackend.Shutdown( &compilerBackend );
 
 			String actualCompilerPath = {};
-			String pathToCompiler = string_set( mem_get_temp_storage(), options.compilerPath.c_str() );
+			String compilerPathView = string_set( options.compilerPath.c_str() );
 			{
-				if ( path_remove_file_from_path( &pathToCompiler ) && !path_is_absolute( options.compilerPath.c_str() ) ) {
+				String pathToCompiler = path_remove_file_from_path( &compilerPathView );
+				if ( pathToCompiler.count != compilerPathView.count && !path_is_absolute( options.compilerPath.c_str() ) ) {
 					actualCompilerPath = path_join( mem_get_temp_storage(), context.inputFilePath.data, options.compilerPath.c_str() );
 				} else {
-					actualCompilerPath = string_set( mem_get_temp_storage(), options.compilerPath.c_str() );
+					actualCompilerPath = string_set( options.compilerPath.c_str() );
 				}
 
 				if ( string_ends_with( actualCompilerPath.data, ".exe" ) ) {
-					path_remove_file_extension( &actualCompilerPath );
+					actualCompilerPath = path_remove_file_extension( &actualCompilerPath );
+					actualCompilerPath = string_alloc( mem_get_temp_storage(), actualCompilerPath.data, actualCompilerPath.count + 1 );
+					actualCompilerPath.data[actualCompilerPath.count - 1] = '\0';
+					actualCompilerPath.count -= 1;
 				}
 			}
 
@@ -1732,8 +1855,8 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		if ( options.configs.size() == 0 ) {
 			LogVerbose( "No BuildConfigs were found (either none were specified inside \"%s\" or that function was never defined), so Builder will now treat the input file specified at the command line as the source file you want to build.\n", SET_BUILDER_OPTIONS_FUNC_NAME );
 
-			String inputFileNoPath = string_set( mem_get_temp_storage(), context.inputFile );
-			path_remove_path_from_file( &inputFileNoPath );
+			String inputFileNoPath = string_set( context.inputFile );
+			inputFileNoPath = path_remove_path_from_file( &inputFileNoPath );
 
 			BuildConfig config = {
 				.sourceFiles = { inputFileNoPath.data },

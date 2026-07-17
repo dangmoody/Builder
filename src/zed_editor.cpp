@@ -64,9 +64,8 @@ bool8 GenerateZedJSONFiles( buildContext_t *context, BuilderOptions *options ) {
 
 		printf( "Generating %s ... ", tasksJSONFilename );
 
-		StringBuilder tasksJSONContent = {};
+		StringBuilder tasksJSONContent = string_builder_create( mem_get_temp_storage() );
 
-		string_builder_init( &tasksJSONContent, mem_get_temp_storage() );
 		// defer { string_builder_destroy( &tasksJSONContent ); };
 
 		string_builder_appendf( &tasksJSONContent, "// Project tasks configuration. See https://zed.dev/docs/tasks for documentation.\n" );
@@ -129,12 +128,12 @@ bool8 GenerateZedJSONFiles( buildContext_t *context, BuilderOptions *options ) {
 
 				const char *fullBinaryName = BuildConfig_GetFullBinaryName( config, mem_get_temp_storage() );
 
-				String zedDebugConfigBinaryName = string_set( mem_get_temp_storage(), fullBinaryName );
-				string_replace( &zedDebugConfigBinaryName, '\\', '/' );
+				String zedDebugConfigBinaryName = string_set( fullBinaryName );
+				zedDebugConfigBinaryName = string_replace( mem_get_temp_storage(), &zedDebugConfigBinaryName, '\\', '/' );
 
 				ZedDebugConfig debugConfig = {
 					.label		= temp_printf( "Debug %s", config->name.c_str() ),
-					.binaryName	= temp_printf( "${ZED_WORKTREE_ROOT}/%s", zedDebugConfigBinaryName.data ),
+					.binaryName	= temp_printf( "${ZED_WORKTREE_ROOT}/%s", string_cstr( &zedDebugConfigBinaryName ) ),
 					.cwd		= "${ZED_WORKTREE_ROOT}",
 					.adapter	= ZED_DEBUGGER_ADAPTER_CODELLDB,
 					.request	= ZED_DEBUGGER_REQUEST_LAUNCH,
@@ -148,9 +147,8 @@ bool8 GenerateZedJSONFiles( buildContext_t *context, BuilderOptions *options ) {
 
 		printf( "Generating %s ... ", debugJSONFilename );
 
-		StringBuilder debugJSONContent = {};
+		StringBuilder debugJSONContent = string_builder_create( mem_get_temp_storage() );
 
-		string_builder_init( &debugJSONContent, mem_get_temp_storage() );
 		// defer { string_builder_destroy( &debugJSONContent ); };
 
 		string_builder_appendf( &debugJSONContent, "// Project-local debug tasks.\n" );

@@ -3,7 +3,7 @@
 
 Core
 
-Copyright (c) 2025 Dan Moody
+Copyright (c) 2025 - present Dan Moody
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -31,6 +31,7 @@ SOFTWARE.
 
 #include <typecast.inl>
 #include <debug.h>
+#include <core_string.h>
 
 #include <malloc.h>
 #include <string.h>
@@ -43,14 +44,18 @@ SOFTWARE.
 ================================================================================================
 */
 
-void file_free_buffer( char **buffer ) {
-	free( *buffer );
-	*buffer = NULL;
+void file_free_buffer( String *buffer ) {
+	assert( buffer );
+
+	free( buffer->data );
+	buffer->data = NULL;
+
+	buffer->count = 0;
 }
 
-bool8 file_read_entire( const char *filename, char **outBuffer, u64 *out_file_length ) {
+bool8 file_read_entire( const char *filename, String *out_buffer ) {
 	assert( filename );
-	assert( !*outBuffer && "Specified out-buffer MUST be null because this function news it." );
+	assert( out_buffer );
 
 	u64 file_size = 0;
 	if ( !file_get_size( filename, &file_size ) ) {
@@ -71,11 +76,8 @@ bool8 file_read_entire( const char *filename, char **outBuffer, u64 *out_file_le
 
 	temp[file_size] = 0;
 
-	*outBuffer = temp;
-
-	if ( out_file_length ) {
-		*out_file_length = file_size;
-	}
+	out_buffer->data = temp;
+	out_buffer->count = file_size;
 
 	return read;
 }

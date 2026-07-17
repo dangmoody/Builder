@@ -3,7 +3,7 @@
 
 Core
 
-Copyright (c) 2025 Dan Moody
+Copyright (c) 2025 - present Dan Moody
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -32,7 +32,8 @@ SOFTWARE.
 #include <debug.h>
 #include <typecast.inl>
 
-#include <stdio.h>
+#include "stb_local.h"
+
 #include <stdarg.h>
 #include <memory.h>
 #include <string.h>
@@ -45,13 +46,14 @@ SOFTWARE.
 ================================================================================================
 */
 
-void string_builder_init( StringBuilder *builder, LinearAllocator *allocator ) {
-	assert( builder );
+StringBuilder string_builder_create( LinearAllocator *allocator ) {
 	assert( allocator );
 
-	builder->allocator = allocator;
-	builder->head = NULL;
-	builder->tail = NULL;
+	return {
+		.allocator	= allocator,
+		.head		= NULL,
+		.tail		= NULL,
+	};
 }
 
 void string_builder_appendf( StringBuilder *builder, const char *fmt, ... ) {
@@ -67,10 +69,10 @@ void string_builder_appendf( StringBuilder *builder, const char *fmt, ... ) {
 	va_list args_copy;
 	va_copy( args_copy, args );
 
-	buffer->length = trunc_cast( u32, vsnprintf( NULL, 0, fmt, args ) );
+	buffer->length = trunc_cast( u32, stbsp_vsnprintf( NULL, 0, fmt, args ) );
 
-	buffer->data = cast( char *, linear_allocator_alloc( builder->allocator, ( buffer->length + 1 ) * sizeof( char ), 1 ) );
-	vsnprintf( buffer->data, buffer->length + 1, fmt, args_copy );
+	buffer->data = cast( char *, linear_allocator_alloc( builder->allocator, buffer->length + 1, 1 ) );
+	stbsp_vsnprintf( buffer->data, cast( int, buffer->length + 1 ), fmt, args_copy );
 	va_end( args_copy );
 	buffer->data[buffer->length] = 0;
 

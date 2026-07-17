@@ -3,7 +3,7 @@
 
 Core
 
-Copyright (c) 2025 Dan Moody
+Copyright (c) 2025 - present Dan Moody
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -68,7 +68,7 @@ struct StringBuilder {
 	StringBuilderBuffer	*tail;
 };
 
-CORE_API void			string_builder_init( StringBuilder *builder, LinearAllocator *allocator );
+CORE_API StringBuilder	string_builder_create( LinearAllocator *allocator );
 
 CORE_API void			string_builder_appendf( StringBuilder *builder, const char *fmt, ... );
 

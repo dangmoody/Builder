@@ -3,7 +3,7 @@
 
 Core
 
-Copyright (c) 2025 Dan Moody
+Copyright (c) 2025 - present Dan Moody
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -33,7 +33,8 @@ SOFTWARE.
 #include <core_helpers.h>
 #include <linear_allocator.h>
 
-#include <stdio.h>
+#include "stb_local.h"
+
 #include <stdarg.h>
 #include <string.h>
 
@@ -46,14 +47,13 @@ static String string_vprintf( LinearAllocator *allocator, const char *fmt, va_li
 	va_list args_copy;
 	va_copy( args_copy, args );
 
-	int length = vsnprintf( NULL, 0, fmt, args );
+	int length = stbsp_vsnprintf( NULL, 0, fmt, args );
 	assert( length >= 0 );
 
-	result.count = cast( u64, length );
+	result.count = trunc_cast( u64, length );
 
 	result.data = cast( char *, linear_allocator_alloc( allocator, result.count + 1 ) );
-	vsnprintf( result.data, result.count + 1, fmt, args_copy );
-	result.data[result.count] = 0;
+	stbsp_vsnprintf( result.data, length + 1, fmt, args_copy );
 
 	va_end( args_copy );
 
@@ -68,24 +68,47 @@ static String string_vprintf( LinearAllocator *allocator, const char *fmt, va_li
 ================================================================================================
 */
 
-String string_set( LinearAllocator *allocator, const char *str ) {
+String string_set( const char *str ) {
+	assert( str );
+
+	return string_set( str, strlen( str ) );
+}
+
+String string_set( const char *str, const u64 count ) {
+	assert( str );
+
+	return String {
+		.data	= cast( char *, str ),
+		.count	= count,
+	};
+}
+
+String substring( const char *str, const u64 offset, const u64 count ) {
+	assert( str );
+
+	return String {
+		.data	= cast( char *, str ) + offset,
+		.count	= count,
+	};
+}
+
+String string_alloc( LinearAllocator *allocator, const char *str ) {
 	assert( allocator );
 	assert( str );
 
-	return string_set( allocator, str, strlen( str ) );
+	return string_alloc( allocator, str, strlen( str ) );
 }
 
-String string_set( LinearAllocator *allocator, const char *str, const u64 length ) {
+String string_alloc( LinearAllocator *allocator, const char *str, const u64 length ) {
 	assert( allocator );
 	assert( str );
 
 	String result = {
-		.data	= cast( char *, linear_allocator_alloc( allocator, length + 1 ) ),
+		.data	= cast( char *, linear_allocator_alloc( allocator, length ) ),
 		.count	= length,
 	};
 
 	memcpy( result.data, str, length );
-	result.data[length] = 0;
 
 	return result;
 }
@@ -106,7 +129,7 @@ String string_copy( LinearAllocator *allocator, const String *src ) {
 	assert( allocator );
 	assert( src );
 
-	return string_set( allocator, src->data, src->count );
+	return string_alloc( allocator, src->data, src->count );
 }
 
 bool8 string_equals( const char *lhs, const char *rhs ) {
@@ -212,14 +235,19 @@ bool8 string_contains( const String *str, const String *substring ) {
 	return false;
 }
 
-void string_replace( String* str, const char old_char, const char new_char ) {
+String string_replace( LinearAllocator *allocator, String* str, const char old_char, const char new_char ) {
 	assert( str );
+	assert( str->data );
 
-	For ( u64, char_index, 0, str->count ) {
-		if ( str->data[char_index] == old_char ) {
-			str->data[char_index] = new_char;
+	String result = string_copy( allocator, str );
+
+	For ( u64, char_index, 0, result.count ) {
+		if ( result.data[char_index] == old_char ) {
+			result.data[char_index] = new_char;
 		}
 	}
+
+	return result;
 }
 
 bool8 string_find_from_left( const String *str, const char c, u64 *out_index ) {
@@ -249,6 +277,12 @@ bool8 string_find_from_right( const String *str, const char c, u64 *out_index ) 
 	}
 
 	return false;
+}
+
+const char *string_cstr( const String *str ) {
+	assert( str );
+
+	return temp_c_string( str->data, str->count );
 }
 
 const char *temp_printf( const char *fmt, ... ) {

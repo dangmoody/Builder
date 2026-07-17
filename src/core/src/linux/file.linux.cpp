@@ -3,7 +3,7 @@
 
 Core
 
-Copyright (c) 2025 Dan Moody
+Copyright (c) 2025 - present Dan Moody
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -43,8 +43,7 @@ SOFTWARE.
 #include <sys/types.h>
 #include <dirent.h>
 #include <errno.h>
-
-#include <stdio.h>
+#include <cstdio>
 
 /*
 ================================================================================================
@@ -111,14 +110,14 @@ bool8 file_copy( const char *original_path, const char *new_path ) {
 	assert( original_path );
 	assert( new_path );
 
-	char *buffer = NULL;
+	String buffer = {};
 	if ( !file_read_entire( original_path, &buffer ) ) {
 		return false;
 	}
 
 	defer { file_free_buffer( &buffer ); };
 
-	if ( !file_write_entire( new_path, buffer, strlen( buffer ) ) ) {
+	if ( !file_write_entire( new_path, buffer.data, buffer.count ) ) {
 		return false;
 	}
 
@@ -203,14 +202,21 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 	assert( path );
 	assert( visit_callback );
 
-	Array<const char *> directories;
+	// AK: ideally we would take a String as a parameter, should we change this function and add a deprecated overload that does:
+	// bool8 file_get_all_files_in_folder( const char *path... ) { file_get_all_files_in_folder( string_set(path)... ) }
+	String path_string = string_set( path );
+	if ( !string_ends_with( &path_string, '\\' ) && !string_ends_with( &path_string, '/' ) ) {
+		path_string = string_printf( mem_get_temp_storage(), "%s%c", path_string.data, PATH_SEPARATOR );
+	}
+
+	Array<String> directories;
 	directories.init( mem_get_temp_storage() );
-	directories.add( path );
+	directories.add( path_string );
 
 	u32 dir_index = 0;
 
 	while ( dir_index < directories.count ) {
-		const char *directory = directories[dir_index];
+		const char *directory = string_cstr( &directories[dir_index] );
 
 		//printf( "Scanning directory \"%s\"\n", directory );
 
@@ -221,7 +227,7 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 
 		if ( !dir ) {
 			int err = errno;
-			printf( "Can't open dir \"%s\": %s\n", directory, strerror( err ) );
+			print( "Can't open dir \"%s\": %s\n", directory, strerror( err ) );
 			return false;
 		}
 
@@ -230,8 +236,18 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 			if ( string_equals( entry->d_name, "." ) || string_equals( entry->d_name, ".." ) ) {
 				continue;
 			}
+			bool8 is_directory = entry->d_type == DT_DIR;
 
-			String full_filename = path_join( mem_get_temp_storage(), directory, entry->d_name );
+			// TODO: AK: 17/07/2026: currently we add a trailing slash to the end of all paths as
+			// the file globbing in builder relies on there not being new double slashes in the outputted
+			// path portion of the full filename, we should evaluate whether we want this or if it is just
+			// here because builder 'demanded' it (my bad gang)
+			String full_filename;
+			if ( is_directory ) {
+				full_filename = string_printf( mem_get_temp_storage(), "%s%s/", directory, entry->d_name );
+			} else {
+				full_filename = string_printf( mem_get_temp_storage(), "%s%s", directory, entry->d_name );
+			}
 
 			struct stat file_stat = {};
 			if ( stat( full_filename.data, &file_stat ) != 0 ) {
@@ -243,7 +259,7 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 			FileInfo file_info = {
 				.size_bytes			= trunc_cast( u64, file_stat.st_size ),
 				.last_write_time	= trunc_cast( u64, file_stat.st_mtime ),
-				.is_directory		= S_ISDIR( file_stat.st_mode ),
+				.is_directory		= is_directory,
 				.filename			= entry->d_name,
 				.full_filename		= full_filename.data,
 			};
@@ -254,7 +270,7 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 				}
 
 				if ( visit_flags & FILE_VISIT_RECURSIVE ) {
-					directories.add( full_filename.data );
+					directories.add( full_filename );
 				}
 			} else if ( visit_flags & FILE_VISIT_FILES ) {
 				visit_callback( &file_info, user_data );

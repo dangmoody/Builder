@@ -3,7 +3,7 @@
 
 Core
 
-Copyright (c) 2025 Dan Moody
+Copyright (c) 2025 - present Dan Moody
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -39,7 +39,6 @@ SOFTWARE.
 #include <defer.h>
 #include <linear_allocator.h>
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -68,7 +67,7 @@ String path_app_path( LinearAllocator *allocator ) {
 		return {};
 	}
 
-	return string_set( allocator, app_path, trunc_cast( u64, length ) );
+	return string_alloc( allocator, app_path, trunc_cast( u64, length ) );
 }
 
 String path_get_cwd( LinearAllocator *allocator ) {
@@ -82,7 +81,7 @@ String path_get_cwd( LinearAllocator *allocator ) {
 		return {};
 	}
 
-	return string_set( allocator, cwd );
+	return string_alloc( allocator, cwd, strlen( cwd ) );
 }
 
 bool8 path_set_cwd( const char *path ) {
@@ -90,7 +89,7 @@ bool8 path_set_cwd( const char *path ) {
 
 	if ( chdir( path ) != 0 ) {
 		int err = errno;
-		fatal_error( "Failed to set current directory: %s.\n", strerror( err ) );
+		fatal_error( "Failed to set current directory to \"%s\": %s.\n", path, strerror( err ) );
 
 		return false;
 	}
@@ -102,9 +101,6 @@ String path_absolute_path( LinearAllocator *allocator, const char *path ) {
 	assert( allocator );
 	assert( path );
 
-	// u64 temp_pos = linear_allocator_tell( mem_get_temp_storage() );
-	// defer { linear_allocator_rewind_to( mem_get_temp_storage(), temp_pos ); };
-
 	char path_copy[PATH_MAX] = {};
 	memcpy( path_copy, path, strlen( path ) );
 	const char *result = realpath( path_copy, NULL );
@@ -115,7 +111,7 @@ String path_absolute_path( LinearAllocator *allocator, const char *path ) {
 		return {};
 	}
 
-	return string_set( allocator, result );
+	return string_alloc( allocator, result, strlen( result ) );
 }
 
 bool8 path_is_absolute( const char *path ) {
@@ -143,8 +139,8 @@ const char *path_canonicalize( const char *path ) {
 	return result;
 }
 
-void path_fix_slashes( String *str ) {
-	return string_replace( str, '\\', PATH_SEPARATOR );
+String path_fix_slashes( LinearAllocator *allocator, String *str ) {
+	return string_replace( allocator, str, '\\', PATH_SEPARATOR );
 }
 
 #endif // __linux__

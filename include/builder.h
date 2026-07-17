@@ -209,17 +209,12 @@ struct VisualStudioProject {
 	// You must define at least one of these to make Visual Studio happy.
 	std::vector<VisualStudioConfig>	configs;
 
-	// All the files that are in these folders (based on 'fileExtensions') will be included in your project.
-	// This is a separate list to the build options as you likely want the superset of all files in your Solution, but may conditionally exclude a subset of files based on config/target etc.
-	// The folders you include here are relative to your build script.
-	// This list must NOT contain any search filters.
-	// If you do not fill this in and leave it empty, then Builder will try to take the code folders inside VisualStudioConfig::options::sourceFiles and use those instead.
-	std::vector<std::string>		codeFolders;
 
-	// All files that have any of these extensions (based on 'codeFolders') will be included in your project.
-	// These must NOT start with a dot.  Only the extension is required (Examples: cpp, h, inl).
-	// If you do not fill this in and leave it empty, then the following default file extensions will be used: c, cpp, cc, cxx, h, hpp, inl
-	std::vector<std::string>		fileExtensions;
+	// Any additional files that you want to include in your project.
+	// For example your build config may declare "./src/**/*.cpp" but you might also want "./src/**/*.h" in your project.
+	// Any files/paths you add to this will be made relative to the .cpp file you passed in via the command line.
+	// Also supports wildcards.
+	std::vector<std::string>		extraFiles;
 
 	// The name of the project as it shows in Visual Studio.
 	std::string						name;

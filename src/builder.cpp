@@ -1379,7 +1379,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		}
 	};
 
-	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+	printf( "Builder v%d.%d.%d RC0\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {};
 	context.allocator = linear_allocator_create( MEM_KILOBYTES( 128 ) );

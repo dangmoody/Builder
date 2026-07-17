@@ -507,7 +507,7 @@ v0.1.0, 11/10/2024:
 * Add --config=<config> command line argument which lets you specify your own configs.
 	* BuilderOptions::config gets set to this, so you can use it to configure your builds based off config.
 * Add on_pre_build( BuilderOptions* ) and on_post_build( BuilderOptions* ), which run just before and just after your build, respectively.
-* Add Visual Studio Solution and Project generation.
+* Add Visual Studio solution and project generation.
 	* This is done by using the entry point set_visual_studio_options( VisualStudioOptions* ).
 * Expose all optimisation levels that Clang provides via BuilderOptions, instead of just a boolean toggling them on/off.
 * Detect if a specific version of Clang is installed.  If it's not, then download and install it automatically.

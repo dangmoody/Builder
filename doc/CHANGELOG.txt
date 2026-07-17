@@ -1,3 +1,15 @@
+v0.13.1, <RELEASE DATE HERE>:
+
+* Visual Studio:
+	* Replaced VisualStudioProject::codeFolders and fileExtensions with VisualStudioProject::extraFiles.
+		* Project files are now populated directly from your BuildConfig's source files (which already support glob patterns), so you no longer need to separately declare code folders or file extensions.
+		* Use extraFiles to add any additional files you want in the project (e.g. headers) via glob patterns, relative to your build script.
+		* NOTE: This is a breaking change.  If you were using codeFolders/fileExtensions, switch to extraFiles.
+	* Fixed a crash when generating Visual Studio solutions.
+* Fixed several bugs in file globbing so more patterns (e.g. recursive "**" folder matches) are now matched correctly.
+
+----------------------------------------------------------------
+
 v0.13.0, 22/05/2026:
 
 * Source files are now compiled in parallel across multiple threads.
@@ -290,7 +302,7 @@ v0.6.4, 07/04/2025:
 
 v0.6.3, 08/03/2025:
 
-* Old Visual Studio files now get deleted when generating a Solution.
+* Old Visual Studio files now get deleted when generating a solution.
 	* If a user renamed a project, for example, then the project under the old name would get kept around causing subtle storage bloat.  This change fixes that.
 
 ----------------------------------------------------------------
@@ -422,10 +434,10 @@ v0.4.0, 18/12/2024:
 * Added error logging for all file operations.
 	* Some users have reported errors coming from Builder when it attempts to create the binary folder they specify, for instance, but it works fine on others and the problem isn't obvious yet.  We need more logging.
 * Made some improvements for Visual Studio support:
-	* The user-requested the Visual Studio Solution path is now created for you automatically.
+	* The user-requested the Visual Studio solution path is now created for you automatically.
 	* Header files and .inl files are now added to the solution.
 	* Add all files in subfolders, recursively.
-	* Changed the way you tell Builder what files to add to your Visual Studio Solution:
+	* Changed the way you tell Builder what files to add to your Visual Studio solution:
 		* VisualStudioProject::source_files has been replaced for VisualStudioProject::code_folders and VisualStudioProject::file_extensions.
 		* VisualStudioProject::code_folders tells Builder what folders your code lives in (without any search filters).
 		* VisualStudioProject::file_extensions tells Builder what file types you want to include in your project (across any of the folders inside VisualStudioProject::code_folders).

@@ -1,4 +1,4 @@
-v0.13.1, <RELEASE DATE HERE>:
+v0.13.1, 24/07/2026:
 
 * Visual Studio:
 	* Replaced VisualStudioProject::codeFolders and fileExtensions with VisualStudioProject::extraFiles (thanks @aiden-knight!).

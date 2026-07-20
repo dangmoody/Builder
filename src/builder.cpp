@@ -745,7 +745,7 @@ static bool8 FileMatchesFilter( const String *filename, const String *filter ) {
 	u64 afterLastWildcard = 0;
 	u64 filterIndex = 0;
 	For (u64, filenameIndex, 0, filename->count ) {
-		// there are more characters that haven't been matched 
+		// there are more characters that haven't been matched
 		if ( filterIndex == filter->count ) {
 			return false;
 		}

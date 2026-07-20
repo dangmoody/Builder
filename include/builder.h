@@ -173,10 +173,10 @@ struct BuildConfig {
 	bool						warningsAsErrors;
 
 	// This function runs just before this BuildConfig gets built.
-	void						( *OnPreBuild )();
+	void						( *OnPreBuild )( BuildConfig *config );
 
 	// This function runs just after this BuildConfig gets built.
-	void						( *OnPostBuild )();
+	void						( *OnPostBuild )( BuildConfig *config );
 };
 
 struct VisualStudioConfig {

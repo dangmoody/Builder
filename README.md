@@ -157,14 +157,14 @@ BUILDER_CALLBACK void OnPreBuild() {}
 // this happens after EVERY build step
 BUILDER_CALLBACK void OnPostBuild() {}
 
-static void PreBuild() {
+static void PreBuild( BuildConfig *config ) {
 	FILE *buildInfoHeader = fopen( "src/generated/build_info.h", "w" );
 	fprintf( buildInfoHeader, "#pragma once\n" );
 	fprintf( buildInfoHeader, "#define BUILD_TIMESTAMP %lldLL\n", (long long) time( NULL ) );
 	fclose( buildInfoHeader );
 }
 
-static void PostBuild() {
+static void PostBuild( BuildConfig *config ) {
 #ifdef _WIN32
 	system( "copy bin\\engine.dll bin\\game\\" );
 #else

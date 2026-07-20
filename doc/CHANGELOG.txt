@@ -7,6 +7,8 @@ v0.13.1, <RELEASE DATE HERE>:
 		* NOTE: This is a breaking change.  If you were using codeFolders/fileExtensions, switch to extraFiles.
 	* Fixed a crash when generating Visual Studio solutions.
 * Fixed several bugs in file globbing so more patterns are now matched correctly.
+* BuildConfig::OnPreBuild and BuildConfig::OnPostBuild now receive the BuildConfig * they're building.
+	* NOTE: This is a breaking change.  Update your callback signatures to `void ( BuildConfig *config )`.
 
 ----------------------------------------------------------------
 

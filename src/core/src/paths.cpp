@@ -148,9 +148,6 @@ String path_relative_path_to( LinearAllocator *allocator, const char *from, cons
 	assert( from );
 	assert( to );
 
-	u64 pos = mem_temp_tell();
-	defer { mem_temp_rewind_to( pos ); };
-
 	String from_str = string_set( from );
 	String to_str = string_set( to );
 	from_str = path_fix_slashes( mem_get_temp_storage(), &from_str );

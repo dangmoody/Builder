@@ -48,6 +48,8 @@ struct Array {
 	void			add_range( const T *ptr, const u64 count );
 	void			add_range( const Array<T> *array );
 
+	void			swap_remove_at( const u64 index );
+
 	void			reserve( const u64 new_alloced );
 
 	void			resize( const u64 count );

@@ -86,6 +86,15 @@ void Array<T>::add_range( const Array<T> *array ) {
 }
 
 template<class T>
+void Array<T>::swap_remove_at( const u64 index ) {
+	T temp = data[count - 1];
+	data[count - 1] = data[index];
+	data[index] = temp;
+
+	count -= 1;
+}
+
+template<class T>
 void Array<T>::reserve( const u64 new_alloced ) {
 	if ( new_alloced > alloced ) {
 		alloced = next_power_of_2_up( new_alloced );

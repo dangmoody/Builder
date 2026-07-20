@@ -757,7 +757,7 @@ static bool8 FileMatchesFilter( const String *filename, const String *filter ) {
 				return true; // rest of the characters are matched via wildcard
 			}
 		}
- 
+
 		// consume match resetting if match fails
 		if ( filter->data[filterIndex++] != filename->data[filenameIndex] ) {
 			filterIndex = afterLastWildcard;
@@ -807,12 +807,12 @@ bool8 PathMatchesFilter( const String *path, const String *pathFilter) {
 			String pattern = substring( pathFilter->data, afterLastSlash, filterIndex - afterLastSlash );
 
 			bool8 foundMatch = false;
-			while ( pathIndex < path->count ) {				
-				u64 folderStart = pathIndex;	
+			while ( pathIndex < path->count ) {
+				u64 folderStart = pathIndex;
 				while ( pathIndex < path->count && path->data[pathIndex] != '/' && path->data[pathIndex] != '\\' ) {
 					++pathIndex;
 				}
-				
+
 				// check for match in this section
 				String folder = substring( path->data, folderStart, pathIndex - folderStart );
 				if ( pathIndex < path->count ) {
@@ -835,9 +835,9 @@ bool8 PathMatchesFilter( const String *path, const String *pathFilter) {
 			inRecursiveGlob = (pathIndex == path->count && filterIndex == pathFilter->count);
 		}
 	}
-	
+
 	// if we finished parsing filter and were in recursive glob then
-	// we can match anything remaining in the path 
+	// we can match anything remaining in the path
 	return inRecursiveGlob;
 }
 
@@ -851,12 +851,12 @@ struct sourceFileFindVisitorData_t {
 static void SourceFileVisitor( const FileInfo *fileInfo, void *userData ) {
 	sourceFileFindVisitorData_t *visitorData2 = cast( sourceFileFindVisitorData_t *, userData );
 
-	// TODO: AK: 17/07/2026: currently we rely onthere not being new double slashes in the 
+	// TODO: AK: 17/07/2026: currently we rely onthere not being new double slashes in the
 	// path of the full filename, we should not do that and just have a proper standardisation
 	// step in the right places, also if file globbing can't support mismatching double slashes
 	// then that is probably a needed fix. We should add more tests that check the glob functionality.
 	String filename = string_set( fileInfo->filename );
-	
+
 	const u64 fullFilenameLen = strlen( fileInfo->full_filename );
 	const u64 basePathLen = visitorData2->basePath->count;
 	if ( fullFilenameLen < basePathLen + filename.count ) { // maybe this should happen if they use ../../src/ or similar - where should we handle this?
@@ -966,7 +966,7 @@ static std::vector<std::string> GetAllSourceFiles( const String *inputFilePath, 
 			}
 			String fileFilter = substring( sourceFile.data, fileStart, sourceFile.count - fileStart );
 			String folderFilter = substring( sourceFile.data, baseLen, sourceFile.count - fileFilter.count - baseLen);
-			
+
 			std::vector<std::string> matches = GetSourceFilesMatchingPattern( &basePath, &folderFilter, &fileFilter );
 
 			allSourceFiles.insert( allSourceFiles.end(), matches.begin(), matches.end() );

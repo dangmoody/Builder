@@ -1,7 +1,7 @@
 v0.13.1, <RELEASE DATE HERE>:
 
 * Visual Studio:
-	* Replaced VisualStudioProject::codeFolders and fileExtensions with VisualStudioProject::extraFiles.
+	* Replaced VisualStudioProject::codeFolders and fileExtensions with VisualStudioProject::extraFiles (thanks @aiden-knight!).
 		* Project files are now populated directly from your BuildConfig's source files (which already support glob patterns), so you no longer need to separately declare code folders or file extensions.
 		* Use extraFiles to add any additional files you want in the project (e.g. headers) via glob patterns, relative to your build script.
 		* This is a breaking change.  If you were using codeFolders/fileExtensions, switch to extraFiles.

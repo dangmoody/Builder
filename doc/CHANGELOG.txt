@@ -6,7 +6,7 @@ v0.13.1, <RELEASE DATE HERE>:
 		* Use extraFiles to add any additional files you want in the project (e.g. headers) via glob patterns, relative to your build script.
 		* NOTE: This is a breaking change.  If you were using codeFolders/fileExtensions, switch to extraFiles.
 	* Fixed a crash when generating Visual Studio solutions.
-* Fixed several bugs in file globbing so more patterns (e.g. recursive "**" folder matches) are now matched correctly.
+* Fixed several bugs in file globbing so more patterns are now matched correctly.
 
 ----------------------------------------------------------------
 

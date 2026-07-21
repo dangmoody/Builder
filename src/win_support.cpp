@@ -188,7 +188,6 @@ bool8 Win_GetWindowsSDK( linearAllocator_t *allocator, windowsSDK_t *outSDK ) {
 
 		if ( missingFolders.count > 0 ) {
 			stringBuilder_t sb = SB_Create( Mem_GetTempStorage() );
-			//defer { string_builder_destroy( &sb ); };
 			SB_Appendf( &sb, "Version %d.%d.%d.%d of your Windows SDK installation is malformed because the following folders could not be found:\n", version->v0, version->v1, version->v2, version->v3 );
 			For ( u32, missingFolderIndex, 0, missingFolders.count ) {
 				SB_Appendf( &sb, " - %s\n", missingFolders[missingFolderIndex] );
@@ -428,7 +427,6 @@ bool8 Win_GetMSVCInstall( linearAllocator_t *allocator, msvcInstall_t *outInstal
 
 		if ( missingFolders.count > 0 ) {
 			stringBuilder_t sb = SB_Create( Mem_GetTempStorage() );
-			//defer { string_builder_destroy( &sb ); };
 			SB_Appendf( &sb, "Version %d.%d.%d of your MSVC installation is malformed because the following folders could not be found:\n", install->version.v0, install->version.v1, install->version.v2 );
 			For ( u32, missingFolderIndex, 0, missingFolders.count ) {
 				SB_Appendf( &sb, " - %s\n", missingFolders[missingFolderIndex] );

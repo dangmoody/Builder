@@ -283,7 +283,6 @@ s32 Proc_Join( process_t* process ) {
 
 static u32 Proc_ReadFromFileHandle( HANDLE fileHandle, HANDLE event, char *outBuffer, const u64 count ) {
 	Assert( fileHandle );
-	//Assert( event );
 	Assert( outBuffer );
 	Assert( count );
 

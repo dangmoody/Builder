@@ -140,12 +140,6 @@ bool8 FS_CreateFolderIfItDoesntExist( const char *path ) {
 
 		u64 pathLen = strlen( path );
 
-		// dont process trailing slash if one exists
-		// otherwise we will get duplicate results for sub-dirs to parse
-		//if ( path[pathLen - 1] == '/' ) {
-		//	pathLen--;
-		//}
-
 		for ( u64 i = 0; i <= pathLen; i++ ) {
 #if defined( __linux__ )
 			if ( path[i] != '/' && path[i] != '\0') {

@@ -172,7 +172,6 @@ bool8 FS_GetAllFilesInFolder( const char *path, const fileVisitFlags_t visitFlag
 	Assert( visitCallback );
 
 	// AK: ideally we would take a string_t as a parameter, should we change this function and add a deprecated overload that does:
-	// bool8 FS_GetAllFilesInFolder( const char *path... ) { FS_GetAllFilesInFolder( String_Set(path)... ) }
 	string_t pathString = String_Set( path );
 	if ( !String_EndsWith( &pathString, '\\' ) && !String_EndsWith( &pathString, '/' ) ) {
 		pathString = String_Printf( Mem_GetTempStorage(), "%s%c", pathString.data, PATH_SEPARATOR );
@@ -186,8 +185,6 @@ bool8 FS_GetAllFilesInFolder( const char *path, const fileVisitFlags_t visitFlag
 
 	while ( dirIndex < directories.count ) {
 		const char *directory = String_Cstr( &directories[dirIndex] );
-
-		//printf( "Scanning directory \"%s\"\n", directory );
 
 		DIR *dir = opendir( directory );
 		defer { closedir( dir ); };

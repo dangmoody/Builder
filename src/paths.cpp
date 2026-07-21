@@ -175,10 +175,6 @@ string_t Path_RelativePathTo( linearAllocator_t *allocator, const char *from, co
 		}
 
 		if ( lastSegmentHasDot ) {
-			// fromDir = {
-			// 	.data  = fromStr.data,
-			// 	.count = lastSlashPos + 1,
-			// };
 			fromDir = String_Set( fromStr.data, lastSlashPos + 1 );
 		} else if ( fromStr.data[fromStr.count - 1] == PATH_SEPARATOR ) {
 			fromDir = fromStr;

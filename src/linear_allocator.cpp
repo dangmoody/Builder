@@ -47,12 +47,6 @@ linearAllocator_t *Mem_AllocatorCreate( const u64 reservedBytes ) {
 
 	if ( actualReservedBytes % pageSize != 0 ) {
 		actualReservedBytes = AlignUp( actualReservedBytes, pageSize );
-
-		// Warning(
-		// 	"linearAllocator_t: specified reserved bytes (%llu) is not a multiple of the virtual memory page size (%u bytes).\n"
-		// 	"The OS dictates that any virtual memory pages that get reserved will automatically be a multiple of %u, so the specified reserved bytes will be rounded up to %llu bytes.\n"
-		// 	, reservedBytes, pageSize, pageSize, actualReservedBytes
-		// );
 	}
 
 	// TODO: DM: 29/12/2025: alloc the whole allocator plus its entire arena in one virtual alloc call

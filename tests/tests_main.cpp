@@ -351,9 +351,6 @@ TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 		} else {
 			// if there is no binary folder specified then binaries get made in the same folder as the build source file
 			TEMPER_CHECK_TRUE( FS_GetAllFilesInFolder( "./", FILE_VISIT_FILES, GetAllGeneratedFiles, &generatedFiles ) );
-
-			// if there is no binary folder specified then an intermediate folder gets made in the same folder as the build source file
-			// TEMPER_CHECK_TRUE( FS_GetAllFilesInFolder( "intermediate", true, true, GetAllGeneratedFiles, &generatedFiles ) );
 		}
 
 		// we only care that certain files and folders got generated

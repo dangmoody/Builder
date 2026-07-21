@@ -104,7 +104,6 @@ process_t	*Proc_Create( linearAllocator_t *allocator, array_t<const char *> *arg
 		if ( posix_spawn_file_actions_destroy( &spawnActions ) != 0 ) {
 			int err = errno;
 			FatalError( "Failed to destroy posix_spawn_file_actions_t for subprocess %s: %s\n", subprocessName, strerror( err ) );
-			// return NULL;
 		}
 	};
 

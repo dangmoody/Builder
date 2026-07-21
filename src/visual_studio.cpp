@@ -175,9 +175,6 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 			}
 
 			if ( !foundDefaultPlatformName ) {
-				// u64 pos = Mem_TempTell();
-				// defer { Mem_TempRewindTo( pos ); };
-
 				stringBuilder_t error = SB_Create( context->allocator );
 				SB_Appendf( &error, "None of your platform names are any of the Visual Studio recognized defaults:\n" );
 				For ( u64, platformIndex, 0, COUNT_OF( defaultPlatformNames ) ) {
@@ -198,7 +195,6 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 	} else {
 		visualStudioProjectFilesPath = context->inputFilePath.data;
 	}
-	//visualStudioProjectFilesPath = path_canonicalise( visualStudioProjectFilesPath );
 
 	// delete old VS files if they exist
 	// but keep the root because we're about to re-populate it
@@ -575,7 +571,6 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 					string_t inputFileRelative = Path_Join( Mem_GetTempStorage(), pathFromSolutionToInputFile, inputFileNoPath.data );
 
-					// const char *appPath = Path_RemoveFileFromPath( Path_AppPath() );
 					string_t appPath = Path_AppPath( Mem_GetTempStorage() );
 					appPath = Path_RemoveFileFromPath( &appPath );
 					const char *appPathCStr = String_Cstr( &appPath );
@@ -676,7 +671,6 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 					const char *from = visualStudioProjectFilesPath;
 					const char *to = TempPrintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, fullBinaryName );
-					//to = path_canonicalise( to );
 
 					string_t pathFromSolutionToBinaryStr = Path_RelativePathTo( Mem_GetTempStorage(), from, to );
 
@@ -801,7 +795,6 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 		For ( u64, projectIndex, 0, options->solution.projects.size() ) {
 			VisualStudioProject *project = &options->solution.projects[projectIndex];
 
-			// const char *projectName = Path_RemovePathFromFile( project->name.c_str() );
 			string_t projectNameStr = String_Set( project->name.c_str() );
 			string_t projectName = Path_RemovePathFromFile( &projectNameStr );
 
@@ -876,14 +869,6 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 				}
 				SB_Appendf( &slnContent, "\tEndGlobalSection\n" );
 			}
-
-			//const char* solutionGUID = CreateVisualStudioGuid();
-
-			//// we need to tell visual studio what the GUID of the solution is, apparently
-			//// and we also need to do it in this really roundabout way...for some reason
-			//SB_Appendf( &slnContent, "\tGlobalSection(ExtensibilityGlobals) = postSolution\n" );
-			//SB_Appendf( &slnContent, "\t\tSolutionGuid = {%s}\n", solutionGUID );
-			//SB_Appendf( &slnContent, "\tEndGlobalSection\n" );
 		}
 		SB_Appendf( &slnContent, "EndGlobal\n" );
 

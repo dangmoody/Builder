@@ -56,10 +56,6 @@ static file_t FS_OpenFileInternal( const char *filename, const DWORD openFlags, 
 	DWORD flagsAndAttribs = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED;
 
 	HANDLE handle = CreateFileA( filename, openFlags, fileShareFlags, NULL, creationDisposition, flagsAndAttribs, NULL );
-	//Assertf( handle != INVALID_HANDLE_VALUE, "Failed to create/open file \"%s\": 0x%X", filename, GetLastError() );
-
-	// TODO: DM: allow setting a logging level for the file system? verbose logging?
-	//printf( "%s last error: 0x%08X\n", __FUNCTION__, GetLastError() );
 
 	return { Cast( u64, handle ), 0 };
 }
@@ -99,8 +95,6 @@ bool8 FS_CloseFile( file_t *file ) {
 
 	BOOL result = CloseHandle( handle );
 
-	//printf( "%s() last error: 0x%08X\n", __FUNCTION__, GetLastError() );
-
 	file->handle = INVALID_FILE_HANDLE;
 
 	return Cast( bool8, result );
@@ -131,13 +125,11 @@ bool8 FS_ReadFile( file_t *file, const u64 offset, const u64 size, void *outData
 		result = GetOverlappedResult( handle, &overlapped, &bytesRead, TRUE );
 		if ( !result ) {
 			lastError = GetLastError();
-			//Assertf( result, "Failed to read from file 0x%x.", GetLastError() );
 			return 0;
 		}
 	}
 
 	if ( !result || bytesRead != bytesToRead ) {
-		//Assertf( result, "Failed to read all required data from file 0x%x.", GetLastError() );
 		return 0;
 	}
 
@@ -170,13 +162,11 @@ bool8 FS_WriteFile( file_t *file, const void *data, const u64 offset, const u64 
 		result = GetOverlappedResult( handle, &overlapped, &bytesWritten, TRUE );
 		if ( !result ) {
 			lastError = GetLastError();
-			//Assertf( result, "Failed to write to file 0x%x.", GetLastError() );
 			return 0;
 		}
 	}
 
 	if ( !result || bytesWritten != bytesToWrite ) {
-		//Assertf( result, "Failed to write all required data to file 0x%x.", GetLastError() );
 		return 0;
 	}
 
@@ -185,7 +175,6 @@ bool8 FS_WriteFile( file_t *file, const void *data, const u64 offset, const u64 
 
 bool8 FS_DeleteFile( const char *filename ) {
 	BOOL result = DeleteFile( filename );
-	//Assertf( result, "Failed to delete file %s: 0x%x.", filename, GetLastError() );
 	return Cast( bool8, result );
 }
 
@@ -240,7 +229,6 @@ bool8 FS_GetAllFilesInFolder( const char *path, const fileVisitFlags_t visitFlag
 	Assert( visitCallback );
 
 	// AK: ideally we would take a string_t as a parameter, should we change this function and add a deprecated overload that does:
-	// bool8 FS_GetAllFilesInFolder( const char *path... ) { FS_GetAllFilesInFolder( String_Set(path)... ) }
 	string_t pathString = String_Set( path );
 	if ( !String_EndsWith( &pathString, '\\' ) && !String_EndsWith( &pathString, '/' ) ) {
 		pathString = String_Printf( Mem_GetTempStorage(), "%s%c", pathString.data, PATH_SEPARATOR );

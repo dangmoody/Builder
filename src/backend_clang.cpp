@@ -144,7 +144,6 @@ static void ReadDependencyFile( const char *depFilename, std::vector<std::string
 
 		current = dependencyEnd + 1;
 
-		//while ( *current == PATH_SEPARATOR ) {
 		while ( *current == '\\' ) {
 			current += 1;
 		}
@@ -312,7 +311,6 @@ static bool8 Clang_CompileSourceFile(
 static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const std::vector<std::string> &intermediateFiles, BuildConfig *config, const BuilderOptions *options ) {
 	Assert( backend );
 	Assert( config );
-	// Assert( options );
 
 	clangState_t *clangState = Cast( clangState_t *, backend->data );
 
@@ -340,7 +338,6 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const std:
 	// so we need to start splitting backend files down by compiler and linker
 	// and then unify the linker codepaths on windows when calling either clang or msvc
 #ifdef _WIN32
-	//args.Add( clangState->linkerPath.data );
 	if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
 		args.Add( TempPrintf( "%s\\bin\\Hostx64\\x64\\lib", clangState->msvcInstall.rootFolder.data ) );
 	} else {
@@ -581,11 +578,6 @@ static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const std::v
 			args.Add( TempPrintf( "-L%s", config->additionalLibPaths[libPathIndex].c_str() ) );
 		}
 
-// #ifdef _WIN32
-// 		args.Add( TempPrintf( "-L%s", clangState->winSDK.ucrtLibPath.data ) );
-// 		args.Add( TempPrintf( "-L%s", clangState->winSDK.umLibPath.data ) );
-// #endif
-
 		For ( u32, libIndex, 0, config->additionalLibs.size() ) {
 			args.Add( TempPrintf( "-l%s", config->additionalLibs[libIndex].c_str() ) );
 		}
@@ -623,9 +615,6 @@ static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t *back
 	const char *compilerPath = clangState->compilerPath.data;
 
 	bool8 isClang = String_EndsWith( compilerPath, "clang" ) || String_EndsWith( compilerPath, "clang++" );
-
-	// Not used originally but leaving here for clarity
-	//bool8 isGCC = String_EndsWith( backend->compilerPath.data, "gcc" ) || String_EndsWith( backend->compilerPath.data, "g++" ); not used
 
 	const u64 definesCount = config->defines.size();
 	const u64 additionalIncludesCount = config->additionalIncludes.size();
@@ -678,13 +667,6 @@ static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t *back
 	For ( u32, defineIndex, 0, definesCount ) {
 		baseArgs.Add( TempPrintf( "-D%s", config->defines[defineIndex].c_str() ) );
 	}
-
-// #ifdef _WIN32
-// 	// windows SDK includes
-// 	baseArgs.Add( TempPrintf( "-isystem%s", clangState->winSDK.ucrtInclude.data ) );
-// 	baseArgs.Add( TempPrintf( "-isystem%s", clangState->winSDK.umInclude.data ) );
-// 	baseArgs.Add( TempPrintf( "-isystem%s", clangState->winSDK.sharedInclude.data ) );
-// #endif
 
 	// Additional Includes
 	For ( u32, includeIndex, 0, additionalIncludesCount ) {

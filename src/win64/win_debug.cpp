@@ -48,52 +48,52 @@ SOFTWARE.
 #include <string.h>
 #include <malloc.h>	// alloca
 
-void set_console_text_color( const ConsoleTextColor color ) {
+void SetConsoleTextColor( const ConsoleTextColor color ) {
 	HANDLE handle = GetStdHandle( STD_OUTPUT_HANDLE );
 
-	WORD color_code = 0;
+	WORD colorCode = 0;
 
 	switch ( color ) {
-		case CONSOLE_TEXT_COLOR_DEFAULT:		color_code = 0x07; break;
-		case CONSOLE_TEXT_COLOR_RED:			color_code = 0x0C; break;
-		case CONSOLE_TEXT_COLOR_YELLOW:			color_code = 0x0E; break;
-		case CONSOLE_TEXT_COLOR_BLUE:			color_code = 0x01; break;
-		case CONSOLE_TEXT_COLOR_BRIGHT_BLUE:	color_code = 0x09; break;
-		case CONSOLE_TEXT_COLOR_LIGHT_GRAY:		color_code = 0x07; break;
+		case CONSOLE_TEXT_COLOR_DEFAULT:		colorCode = 0x07; break;
+		case CONSOLE_TEXT_COLOR_RED:			colorCode = 0x0C; break;
+		case CONSOLE_TEXT_COLOR_YELLOW:			colorCode = 0x0E; break;
+		case CONSOLE_TEXT_COLOR_BLUE:			colorCode = 0x01; break;
+		case CONSOLE_TEXT_COLOR_BRIGHT_BLUE:	colorCode = 0x09; break;
+		case CONSOLE_TEXT_COLOR_LIGHT_GRAY:		colorCode = 0x07; break;
 	}
 
-	assert( color_code != 0 );
+	Assert( colorCode != 0 );
 
-	SetConsoleTextAttribute( handle, color_code );
+	SetConsoleTextAttribute( handle, colorCode );
 }
 
-s32 get_last_error_code() {
-	return trunc_cast( s32, GetLastError() );
+s32 GetLastErrorCode() {
+	return TruncCast( s32, GetLastError() );
 }
 
-void assert_internal( const char *file, const int line, const char *fmt, ... ) {
+void AssertInternal( const char *file, const int line, const char *fmt, ... ) {
 	va_list args;
 	va_start( args, fmt );
 	defer { va_end( args ); };
 
-	va_list args_copy;
-	va_copy( args_copy, args );
-	defer { va_end( args_copy ); };
+	va_list argsCopy;
+	va_copy( argsCopy, args );
+	defer { va_end( argsCopy ); };
 
 	int length = stbsp_vsnprintf( NULL, 0, fmt, args );
-	char *buffer = cast( char *, alloca( length + 1 ) );
-	stbsp_vsnprintf( buffer, length + 1, fmt, args_copy );
+	char *buffer = Cast( char *, alloca( length + 1 ) );
+	stbsp_vsnprintf( buffer, length + 1, fmt, argsCopy );
 	buffer[length] = 0;
 
-	set_console_text_color( CONSOLE_TEXT_COLOR_RED );
+	SetConsoleTextColor( CONSOLE_TEXT_COLOR_RED );
 
 	print( "ASSERT FAILURE: %s line %d: ", file, line );
 
-	set_console_text_color( CONSOLE_TEXT_COLOR_YELLOW );
+	SetConsoleTextColor( CONSOLE_TEXT_COLOR_YELLOW );
 
 	print( "%s\n", buffer );
 
-	set_console_text_color( CONSOLE_TEXT_COLOR_DEFAULT );
+	SetConsoleTextColor( CONSOLE_TEXT_COLOR_DEFAULT );
 
 	// TODO: DM: when we eventually figure out what the X11/wayland/XCB equivalents to these are...
 	// move the code above into debug.cpp and then make it call a function like "dialog_box_internal()", or something

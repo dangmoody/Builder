@@ -33,7 +33,7 @@ SOFTWARE.
 /*
 ================================================================================================
 
-	Library
+	library_t
 
 	Loading and unloading dynamic libraries (.dll files on Windows, .so files on Linux) as well
 	as getting symbols from them.
@@ -41,16 +41,16 @@ SOFTWARE.
 ================================================================================================
 */
 
-struct Library {
+struct library_t {
 	void			*ptr;
 };
 
 // Loads a dynamic library.
-Library	Library_Load( const char *name );
+library_t	Library_Load( const char *name );
 
 // Attempts to unload a dynamic library and returns true if successful, otherwise returns false.
-bool8		Library_Unload( Library *library );
+bool8		Library_Unload( library_t *library );
 
 // Returns the symbol as a pointer from the dynamic library.
 // If the symbol can't be found then returns NULL.
-void		*Library_GetSymbol( const Library library, const char *symbolName );
+void		*Library_GetSymbol( const library_t library, const char *symbolName );

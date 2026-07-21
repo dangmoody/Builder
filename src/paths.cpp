@@ -28,7 +28,6 @@ SOFTWARE.
 
 #include "paths.h"
 
-#include "helpers.h"
 #include "temp_storage.h"
 #include "typecast.h"
 #include "string.h"
@@ -39,8 +38,8 @@ SOFTWARE.
 #include <stdarg.h>
 #include <string.h>
 
-static bool8 Path_GetLastSlash( const String *path, u64 *outLastSlashPos ) {
-	assert( path );
+static bool8 Path_GetLastSlash( const string_t *path, u64 *outLastSlashPos ) {
+	Assert( path );
 
 	u64 lastForwardSlash = 0;
 	u64 lastBackSlash = 0;
@@ -64,22 +63,22 @@ static bool8 Path_GetLastSlash( const String *path, u64 *outLastSlashPos ) {
 ================================================================================================
 */
 
-String Path_RemoveFileFromPath( const String *path ) {
-	assert( path );
+string_t Path_RemoveFileFromPath( const string_t *path ) {
+	Assert( path );
 
 	u64 lastSlashPos = 0;
 	if ( !Path_GetLastSlash( path, &lastSlashPos ) ) {
 		return *path;
 	}
 
-	return String {
+	return string_t {
 		.data	= path->data,
 		.count	= lastSlashPos,
 	};
 }
 
-String Path_RemovePathFromFile( const String *path ) {
-	assert( path );
+string_t Path_RemovePathFromFile( const string_t *path ) {
+	Assert( path );
 
 	u64 lastSlashPos = 0;
 	if ( !Path_GetLastSlash( path, &lastSlashPos ) ) {
@@ -94,8 +93,8 @@ String Path_RemovePathFromFile( const String *path ) {
 	};
 }
 
-String Path_RemoveFileExtension( const String *filename ) {
-	assert( filename );
+string_t Path_RemoveFileExtension( const string_t *filename ) {
+	Assert( filename );
 
 	u64 dotPos = 0;
 	if ( !String_FindFromRight( filename, '.', &dotPos ) ) {
@@ -108,10 +107,10 @@ String Path_RemoveFileExtension( const String *filename ) {
 	};
 }
 
-static String Path_JoinInternalV( LinearAllocator *allocator, const int count, va_list args ) {
-	assert( allocator );
+static string_t Path_JoinInternalV( linearAllocator_t *allocator, const int count, va_list args ) {
+	Assert( allocator );
 
-	StringBuilder builder = SB_Create( allocator );
+	stringBuilder_t builder = SB_Create( allocator );
 
 	For ( int, argIndex, 0, count ) {
 		if ( argIndex > 0 ) {
@@ -125,41 +124,41 @@ static String Path_JoinInternalV( LinearAllocator *allocator, const int count, v
 
 	const char *finalPath = SB_ToString( &builder );
 
-	String str = {
-		.data	= cast( char *, finalPath ),
+	string_t str = {
+		.data	= Cast( char *, finalPath ),
 		.count	= strlen( finalPath ),
 	};
 
 	return str;
 }
 
-String Path_JoinInternal( LinearAllocator *allocator, const int count, ... ) {
-	assert( allocator );
+string_t Path_JoinInternal( linearAllocator_t *allocator, const int count, ... ) {
+	Assert( allocator );
 
 	va_list args;
 	va_start( args, count );
-	String result = Path_JoinInternalV( allocator, count, args );
+	string_t result = Path_JoinInternalV( allocator, count, args );
 	va_end( args );
 
 	return result;
 }
 
-String Path_RelativePathTo( LinearAllocator *allocator, const char *from, const char *to ) {
-	assert( from );
-	assert( to );
+string_t Path_RelativePathTo( linearAllocator_t *allocator, const char *from, const char *to ) {
+	Assert( from );
+	Assert( to );
 
 	u64 pos = Mem_TempTell();
 	defer { Mem_TempRewindTo( pos ); };
 
-	String fromStr = String_Set( from );
-	String toStr = String_Set( to );
+	string_t fromStr = String_Set( from );
+	string_t toStr = String_Set( to );
 	fromStr = Path_FixSlashes( Mem_GetTempStorage(), &fromStr );
 	toStr = Path_FixSlashes( Mem_GetTempStorage(), &toStr );
 
 	// determine the directory part of 'from'
 	// if the last path segment contains a dot then treat it as a filename and strip it
 	// otherwise treat the whole path as a directory and ensure it ends with a slash
-	String fromDir;
+	string_t fromDir;
 	{
 		u64 lastSlashPos = 0;
 		bool8 hasSlash = String_FindFromRight( &fromStr, PATH_SEPARATOR, &lastSlashPos );
@@ -224,7 +223,7 @@ String Path_RelativePathTo( LinearAllocator *allocator, const char *from, const 
 		}
 	}
 
-	StringBuilder sb = SB_Create( allocator );
+	stringBuilder_t sb = SB_Create( allocator );
 
 	u64 resultLength = 0;
 
@@ -246,7 +245,7 @@ String Path_RelativePathTo( LinearAllocator *allocator, const char *from, const 
 	}
 
 	return {
-		.data  = cast( char *, SB_ToString( &sb ) ),
+		.data  = Cast( char *, SB_ToString( &sb ) ),
 		.count = resultLength,
 	};
 }

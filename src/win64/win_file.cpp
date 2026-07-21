@@ -50,24 +50,24 @@ SOFTWARE.
 */
 
 static file_t FS_OpenFileInternal( const char *filename, const DWORD openFlags, const DWORD creationDisposition ) {
-	assert( filename );
+	Assert( filename );
 
 	DWORD fileShareFlags = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
 	DWORD flagsAndAttribs = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED;
 
 	HANDLE handle = CreateFileA( filename, openFlags, fileShareFlags, NULL, creationDisposition, flagsAndAttribs, NULL );
-	//assertf( handle != INVALID_HANDLE_VALUE, "Failed to create/open file \"%s\": 0x%X", filename, GetLastError() );
+	//Assertf( handle != INVALID_HANDLE_VALUE, "Failed to create/open file \"%s\": 0x%X", filename, GetLastError() );
 
 	// TODO: DM: allow setting a logging level for the file system? verbose logging?
 	//printf( "%s last error: 0x%08X\n", __FUNCTION__, GetLastError() );
 
-	return { cast( u64, handle ), 0 };
+	return { Cast( u64, handle ), 0 };
 }
 
 //================================================================
 
 file_t FS_OpenFile( const char *filename, const fileOpenFlags_t openFlags ) {
-	assert( filename );
+	Assert( filename );
 
 	DWORD openFlagsWin = 0;
 	if ( openFlags & FILE_OPEN_READ )  openFlagsWin |= GENERIC_READ;
@@ -77,7 +77,7 @@ file_t FS_OpenFile( const char *filename, const fileOpenFlags_t openFlags ) {
 }
 
 file_t FS_OpenOrCreateFile( const char *filename, const bool8 keepExistingContent ) {
-	assert( filename );
+	Assert( filename );
 
 	DWORD creationDisposition = ( keepExistingContent ) ? CREATE_NEW : CREATE_ALWAYS;
 
@@ -92,10 +92,10 @@ file_t FS_OpenOrCreateFile( const char *filename, const bool8 keepExistingConten
 }
 
 bool8 FS_CloseFile( file_t *file ) {
-	assert( file );
-	assert( file->handle != INVALID_FILE_HANDLE );
+	Assert( file );
+	Assert( file->handle != INVALID_FILE_HANDLE );
 
-	HANDLE handle = cast( HANDLE, file->handle );
+	HANDLE handle = Cast( HANDLE, file->handle );
 
 	BOOL result = CloseHandle( handle );
 
@@ -103,25 +103,25 @@ bool8 FS_CloseFile( file_t *file ) {
 
 	file->handle = INVALID_FILE_HANDLE;
 
-	return cast( bool8, result );
+	return Cast( bool8, result );
 }
 
 bool8 FS_ReadFile( file_t *file, const u64 offset, const u64 size, void *outData ) {
-	assert( file && file->handle != INVALID_FILE_HANDLE );
-	assert( outData );
+	Assert( file && file->handle != INVALID_FILE_HANDLE );
+	Assert( outData );
 
 	if ( size == 0 ) {
 		return 0;
 	}
 
-	HANDLE handle = cast( HANDLE, file->handle );
+	HANDLE handle = Cast( HANDLE, file->handle );
 
 	DWORD bytesRead = 0;
-	DWORD bytesToRead = cast( DWORD, size );
+	DWORD bytesToRead = Cast( DWORD, size );
 
 	OVERLAPPED overlapped = {};
-	overlapped.Offset = cast( DWORD, offset >> 0 ) & 0xFFFFFFFF;
-	overlapped.OffsetHigh = cast( DWORD, offset >> 32 ) & 0xFFFFFFFF;
+	overlapped.Offset = Cast( DWORD, offset >> 0 ) & 0xFFFFFFFF;
+	overlapped.OffsetHigh = Cast( DWORD, offset >> 32 ) & 0xFFFFFFFF;
 
 	BOOL result = ReadFile( handle, outData, bytesToRead, &bytesRead, &overlapped );
 
@@ -131,13 +131,13 @@ bool8 FS_ReadFile( file_t *file, const u64 offset, const u64 size, void *outData
 		result = GetOverlappedResult( handle, &overlapped, &bytesRead, TRUE );
 		if ( !result ) {
 			lastError = GetLastError();
-			//assertf( result, "Failed to read from file 0x%x.", GetLastError() );
+			//Assertf( result, "Failed to read from file 0x%x.", GetLastError() );
 			return 0;
 		}
 	}
 
 	if ( !result || bytesRead != bytesToRead ) {
-		//assertf( result, "Failed to read all required data from file 0x%x.", GetLastError() );
+		//Assertf( result, "Failed to read all required data from file 0x%x.", GetLastError() );
 		return 0;
 	}
 
@@ -145,24 +145,24 @@ bool8 FS_ReadFile( file_t *file, const u64 offset, const u64 size, void *outData
 }
 
 bool8 FS_WriteFile( file_t *file, const void *data, const u64 offset, const u64 size ) {
-	assert( file );
-	assert( file->handle );
-	assert( data );
+	Assert( file );
+	Assert( file->handle );
+	Assert( data );
 
 	if ( size == 0 ) {
 		return false;
 	}
 
-	HANDLE handle = cast( HANDLE, file->handle );
+	HANDLE handle = Cast( HANDLE, file->handle );
 
 	DWORD bytesWritten = 0;
-	DWORD bytesToWrite = cast( DWORD, size );
+	DWORD bytesToWrite = Cast( DWORD, size );
 
 	OVERLAPPED overlapped = {};
-	overlapped.Offset = cast( DWORD, offset >> 0 ) & 0xFFFFFFFF;
-	overlapped.OffsetHigh = cast( DWORD, offset >> 32 ) & 0xFFFFFFFF;
+	overlapped.Offset = Cast( DWORD, offset >> 0 ) & 0xFFFFFFFF;
+	overlapped.OffsetHigh = Cast( DWORD, offset >> 32 ) & 0xFFFFFFFF;
 
-	BOOL result = WriteFile( handle, cast( const char *, data ), bytesToWrite, &bytesWritten, &overlapped );
+	BOOL result = WriteFile( handle, Cast( const char *, data ), bytesToWrite, &bytesWritten, &overlapped );
 
 	DWORD lastError = GetLastError();
 
@@ -170,13 +170,13 @@ bool8 FS_WriteFile( file_t *file, const void *data, const u64 offset, const u64 
 		result = GetOverlappedResult( handle, &overlapped, &bytesWritten, TRUE );
 		if ( !result ) {
 			lastError = GetLastError();
-			//assertf( result, "Failed to write to file 0x%x.", GetLastError() );
+			//Assertf( result, "Failed to write to file 0x%x.", GetLastError() );
 			return 0;
 		}
 	}
 
 	if ( !result || bytesWritten != bytesToWrite ) {
-		//assertf( result, "Failed to write all required data to file 0x%x.", GetLastError() );
+		//Assertf( result, "Failed to write all required data to file 0x%x.", GetLastError() );
 		return 0;
 	}
 
@@ -185,13 +185,13 @@ bool8 FS_WriteFile( file_t *file, const void *data, const u64 offset, const u64 
 
 bool8 FS_DeleteFile( const char *filename ) {
 	BOOL result = DeleteFile( filename );
-	//assertf( result, "Failed to delete file %s: 0x%x.", filename, GetLastError() );
-	return cast( bool8, result );
+	//Assertf( result, "Failed to delete file %s: 0x%x.", filename, GetLastError() );
+	return Cast( bool8, result );
 }
 
 bool8 FS_GetFileSize( const char *filename, u64 *outSize ) {
-	assert( filename );
-	assert( outSize );
+	Assert( filename );
+	Assert( outSize );
 
 	file_t file = FS_OpenFileInternal( filename, 0, OPEN_EXISTING );
 
@@ -203,18 +203,18 @@ bool8 FS_GetFileSize( const char *filename, u64 *outSize ) {
 
 	LARGE_INTEGER largeInt = {};
 
-	if ( !GetFileSizeEx( cast( HANDLE, file.handle ), &largeInt ) ) {
+	if ( !GetFileSizeEx( Cast( HANDLE, file.handle ), &largeInt ) ) {
 		return false;
 	}
 
-	*outSize = cast( u64, largeInt.QuadPart );
+	*outSize = Cast( u64, largeInt.QuadPart );
 
 	return true;
 }
 
 bool8 FS_GetFileLastWriteTime( const char *filename, u64 *outLastWriteTime ) {
-	assert( filename );
-	assert( outLastWriteTime );
+	Assert( filename );
+	Assert( outLastWriteTime );
 
 	file_t file = FS_OpenFileInternal( filename, 0, OPEN_EXISTING );
 
@@ -226,38 +226,38 @@ bool8 FS_GetFileLastWriteTime( const char *filename, u64 *outLastWriteTime ) {
 
 	FILETIME lastWriteTime = {};
 
-	if ( !GetFileTime( cast( HANDLE, file.handle ), NULL, NULL, &lastWriteTime ) ) {
+	if ( !GetFileTime( Cast( HANDLE, file.handle ), NULL, NULL, &lastWriteTime ) ) {
 		return false;
 	}
 
-	*outLastWriteTime = ( cast( u64, lastWriteTime.dwHighDateTime ) << 32 ) | lastWriteTime.dwLowDateTime;
+	*outLastWriteTime = ( Cast( u64, lastWriteTime.dwHighDateTime ) << 32 ) | lastWriteTime.dwLowDateTime;
 
 	return true;
 }
 
 bool8 FS_GetAllFilesInFolder( const char *path, const fileVisitFlags_t visitFlags, fileVisitCallback_t visitCallback, void *userData ) {
-	assert( path );
-	assert( visitCallback );
+	Assert( path );
+	Assert( visitCallback );
 
-	// AK: ideally we would take a String as a parameter, should we change this function and add a deprecated overload that does:
+	// AK: ideally we would take a string_t as a parameter, should we change this function and add a deprecated overload that does:
 	// bool8 FS_GetAllFilesInFolder( const char *path... ) { FS_GetAllFilesInFolder( String_Set(path)... ) }
-	String pathString = String_Set( path );
+	string_t pathString = String_Set( path );
 	if ( !String_EndsWith( &pathString, '\\' ) && !String_EndsWith( &pathString, '/' ) ) {
 		pathString = String_Printf( Mem_GetTempStorage(), "%s%c", pathString.data, PATH_SEPARATOR );
 	}
 
-	Array<String> directories;
+	array_t<string_t> directories;
 	directories.Init( Mem_GetTempStorage() );
 	directories.Add( pathString );
 
-	u32 dir_index = 0;
+	u32 dirIndex = 0;
 
-	while ( dir_index < directories.count ) {
-		const char* dir = String_Cstr( &directories[dir_index] );
+	while ( dirIndex < directories.count ) {
+		const char* dir = String_Cstr( &directories[dirIndex] );
 
-		dir_index += 1;
+		dirIndex += 1;
 
-		String searchPath = String_Printf( Mem_GetTempStorage(), "%s*", dir );
+		string_t searchPath = String_Printf( Mem_GetTempStorage(), "%s*", dir );
 
 		WIN32_FIND_DATA findData = {};
 		HANDLE handle = FindFirstFile( searchPath.data, &findData );
@@ -267,7 +267,7 @@ bool8 FS_GetAllFilesInFolder( const char *path, const fileVisitFlags_t visitFlag
 		}
 
 		while ( 1 ) {
-			bool8 isDirectory = cast( bool8, findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY );
+			bool8 isDirectory = Cast( bool8, findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY );
 			// TODO: DM: 10/05/2026: really, this wants to be done via path_join
 			// but theres a few things that rely on this behaviour
 			// so changing this will cause side effects in various places/codebases that use core
@@ -275,7 +275,7 @@ bool8 FS_GetAllFilesInFolder( const char *path, const fileVisitFlags_t visitFlag
 			// the file globbing in builder relies on there not being new double slashes in the outputted
 			// path portion of the full filename, we should evaluate whether we want this or if it is just
 			// here because builder 'demanded' it (my bad gang)
-			String fullFilename;
+			string_t fullFilename;
 			if ( isDirectory ) {
 				fullFilename = String_Printf( Mem_GetTempStorage(), "%s%s\\", dir, findData.cFileName );
 			} else {
@@ -283,8 +283,8 @@ bool8 FS_GetAllFilesInFolder( const char *path, const fileVisitFlags_t visitFlag
 			}
 
 			fileInfo_t fileInfo = {
-				.sizeBytes			= ( trunc_cast( u64, findData.nFileSizeHigh ) << 32 ) | findData.nFileSizeLow,
-				.lastWriteTime	= ( trunc_cast( u64, findData.ftLastWriteTime.dwHighDateTime ) << 32 ) | findData.ftLastWriteTime.dwLowDateTime,
+				.sizeBytes			= ( TruncCast( u64, findData.nFileSizeHigh ) << 32 ) | findData.nFileSizeLow,
+				.lastWriteTime	= ( TruncCast( u64, findData.ftLastWriteTime.dwHighDateTime ) << 32 ) | findData.ftLastWriteTime.dwLowDateTime,
 				.isDirectory		= isDirectory,
 				.filename			= findData.cFileName,
 				.fullFilename		= fullFilename.data,
@@ -318,13 +318,13 @@ bool8 FS_GetAllFilesInFolder( const char *path, const fileVisitFlags_t visitFlag
 }
 
 bool8 FS_FileExists( const char *filename ) {
-	assert( filename );
+	Assert( filename );
 
 	return GetFileAttributes( filename ) != INVALID_FILE_ATTRIBUTES;
 }
 
 bool8 FS_CreateFolderInternal( const char *path ) {
-	assert( path );
+	Assert( path );
 
 	if ( FS_FolderExists( path ) ) {
 		return true;
@@ -333,15 +333,15 @@ bool8 FS_CreateFolderInternal( const char *path ) {
 	SECURITY_ATTRIBUTES attributes = {};
 	attributes.nLength = sizeof( SECURITY_ATTRIBUTES );
 
-	bool8 result = cast( bool8, CreateDirectoryA( path, &attributes ) );
+	bool8 result = Cast( bool8, CreateDirectoryA( path, &attributes ) );
 
 	return result;
 }
 
 bool8 FS_DeleteFolder( const char *path ) {
-	assert( path );
+	Assert( path );
 
-	bool8 result = cast( bool8, RemoveDirectoryA( path ) );
+	bool8 result = Cast( bool8, RemoveDirectoryA( path ) );
 
 	if ( !result ) {
 		error( "Failed to delete folder path \"%s\": 0x%X.\n", path, GetLastError() );
@@ -351,7 +351,7 @@ bool8 FS_DeleteFolder( const char *path ) {
 }
 
 bool8 FS_FolderExists( const char *path ) {
-	assert( path );
+	Assert( path );
 
 	DWORD attribs = GetFileAttributes( path );
 

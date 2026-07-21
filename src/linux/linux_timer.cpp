@@ -28,9 +28,9 @@ SOFTWARE.
 
 #ifdef __linux__
 
-#include <timer.h>
+#include "../timer.h"
 
-#include <typecast.inl>
+#include "../typecast.h"
 
 #include <time.h>
 
@@ -48,25 +48,25 @@ s64 Time_Cycles( void ) {
 	struct timespec now;
 	clock_gettime( CLOCK_MONOTONIC, &now );
 
-	int64_t clocks = cast( int64_t, now.tv_sec * 1000000000 + now.tv_nsec );
+	int64_t clocks = Cast( int64_t, now.tv_sec * 1000000000 + now.tv_nsec );
 
 	return clocks;
 }
 
 float64 Time_Seconds( void ) {
-	return cast( float64, Time_Cycles() / 1000000000.0 );
+	return Cast( float64, Time_Cycles() / 1000000000.0 );
 }
 
-float64 Time_Ms( void ) {
-	return cast( float64, Time_Cycles() / 1000000.0 );
+float64 Time_MS( void ) {
+	return Cast( float64, Time_Cycles() / 1000000.0 );
 }
 
-float64 Time_Us( void ) {
-	return cast( float64, Time_Cycles() / 1000.0 );
+float64 Time_US( void ) {
+	return Cast( float64, Time_Cycles() / 1000.0 );
 }
 
-float64 Time_Ns( void ) {
-	return cast( float64, Time_Cycles() );
+float64 Time_NS( void ) {
+	return Cast( float64, Time_Cycles() );
 }
 
 #endif // __linux__

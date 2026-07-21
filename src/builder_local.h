@@ -58,32 +58,38 @@ SOFTWARE.
 
 struct buildContext_t;
 
-struct Hashmap;
-struct StringBuilder;
-struct LinearAllocator;
+struct hashmap_t;
+struct stringBuilder_t;
+struct linearAllocator_t;
+
+
+// memory conversion helpers
+#define MEM_KILOBYTES( x )	( Cast( u64, (x) ) * 1000 )
+#define MEM_MEGABYTES( x )	( MEM_KILOBYTES( x ) * 1000 )
+#define MEM_GIGABYTES( x )	( MEM_MEGABYTES( x ) * 1000 )
 
 enum procFlagBits_t {
-	PROC_FLAG_SHOW_ARGS		= bit( 0 ),
-	PROC_FLAG_SHOW_STDOUT	= bit( 1 ),
+	PROC_FLAG_SHOW_ARGS		= BIT( 0 ),
+	PROC_FLAG_SHOW_STDOUT	= BIT( 1 ),
 };
 typedef u32 procFlags_t;
 
 struct compilationCommandArchetype_t {
-	Array<const char *>	baseArgs;
-	Array<const char *>	dependencyFlags;
-	const char			*outputFlag = nullptr;
+	array_t<const char *>	baseArgs;
+	array_t<const char *>	dependencyFlags;
+	const char				*outputFlag = nullptr;
 };
 
 struct compilerBackend_t {
-	void	*data;
+	void		*data;
 
-	bool8	( *Init )( compilerBackend_t *backend, const buildContext_t *context, const char *compilerPath, const char *compilerVersion );
-	void	( *Shutdown )( compilerBackend_t *backend );
-	bool8	( *CompileSourceFile )( compilerBackend_t *backend, buildContext_t *buildContext, BuildConfig *config, compilationCommandArchetype_t &commandArchetype, const char *sourceFile, bool recordCompilation, u64 sourceFileIndex, std::vector<std::string> *outIncludeDependencies );
-	bool8	( *LinkIntermediateFiles )( compilerBackend_t *backend, const std::vector<std::string> &intermediateFiles, BuildConfig *config, const BuilderOptions *options );
-	bool8	( *GetCompilationCommandArchetype )( const compilerBackend_t *backend, const BuildConfig *config, compilationCommandArchetype_t &outCmdArchetype );
-	String	( *GetCompilerPath )( compilerBackend_t *backend );
-	String	( *GetCompilerVersion )( compilerBackend_t *backend );
+	bool8		( *Init )( compilerBackend_t *backend, const buildContext_t *context, const char *compilerPath, const char *compilerVersion );
+	void		( *Shutdown )( compilerBackend_t *backend );
+	bool8		( *CompileSourceFile )( compilerBackend_t *backend, buildContext_t *buildContext, BuildConfig *config, compilationCommandArchetype_t &commandArchetype, const char *sourceFile, bool recordCompilation, u64 sourceFileIndex, std::vector<std::string> *outIncludeDependencies );
+	bool8		( *LinkIntermediateFiles )( compilerBackend_t *backend, const std::vector<std::string> &intermediateFiles, BuildConfig *config, const BuilderOptions *options );
+	bool8		( *GetCompilationCommandArchetype )( const compilerBackend_t *backend, const BuildConfig *config, compilationCommandArchetype_t &outCmdArchetype );
+	string_t	( *GetCompilerPath )( compilerBackend_t *backend );
+	string_t	( *GetCompilerVersion )( compilerBackend_t *backend );
 };
 
 void	CreateCompilerBackend_Clang( compilerBackend_t *outBackend );
@@ -103,16 +109,16 @@ struct compilationDatabaseEntry_t {
 };
 
 struct buildContext_t {
-	LinearAllocator							*allocator;
+	linearAllocator_t							*allocator;
 
-	Hashmap									*configIndices;
-	Hashmap									*sourceFileIndices;
+	hashmap_t									*configIndices;
+	hashmap_t									*sourceFileIndices;
 	std::vector<includeDependencies_t>		sourceFileIncludeDependencies;
 
 	const char								*inputFile;
-	String									inputFilePath;
-	String									dotBuilderFolder;
-	String									includeDependenciesFilename;
+	string_t									inputFilePath;
+	string_t									dotBuilderFolder;
+	string_t									includeDependenciesFilename;
 
 	bool8									forceRebuild;
 	bool8									consolidateCompilerArgs;
@@ -144,27 +150,23 @@ bool8		FileIsHeaderFile( const char *filename );
 
 const char	*GetFileExtensionFromBinaryType( const BinaryType type );
 
-const char	*BuildConfig_GetFullBinaryName( const BuildConfig *config, LinearAllocator *allocator );
+const char	*BuildConfig_GetFullBinaryName( const BuildConfig *config, linearAllocator_t *allocator );
 
-void		RecordCompilationDatabaseEntry( buildContext_t *buildContext, const char *sourceFileName, const Array<const char *> &compilationCommandArray, u64 sourceFileIndex );
+void		RecordCompilationDatabaseEntry( buildContext_t *buildContext, const char *sourceFileName, const array_t<const char *> &compilationCommandArray, u64 sourceFileIndex );
 
-s32			RunProc( Array<const char *> *args, Array<const char *> *environmentVariables, const procFlags_t procFlags = 0, String *outStdout = NULL );
+s32			RunProc( array_t<const char *> *args, array_t<const char *> *environmentVariables, const procFlags_t procFlags = 0, string_t *outStdout = NULL );
 
-bool8		WriteStringBuilderToFile( StringBuilder *stringBuilder, const char *filename );
+bool8		WriteStringBuilderToFile( stringBuilder_t *stringBuilder, const char *filename );
 
-bool8		PathMatchesFilter( const String* filename, const String* filter );
+bool8		PathMatchesFilter( const string_t* filename, const string_t* filter );
 
-std::vector<std::string> GetSourceFilesMatchingPattern( const String* basePath, const String* folderPattern, const String* filePattern );
+std::vector<std::string> GetSourceFilesMatchingPattern( const string_t* basePath, const string_t* folderPattern, const string_t* filePattern );
 
 bool8		GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *options );
 
 bool8		GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options );
 
 bool8		GenerateZedJSONFiles( buildContext_t *context, BuilderOptions *options );
-
-inline u64 minull( const u64 x, const u64 y ) {
-	return ( x < y ) ? x : y;
-}
 
 inline const char *LanguageVersionToString( const LanguageVersion version ) {
 	switch ( version ) {

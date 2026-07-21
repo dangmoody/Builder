@@ -33,24 +33,24 @@ SOFTWARE.
 
 #include <Windows.h>
 
-void *VirtualReserve( const u64 size_bytes ) {
-	assert( size_bytes > 0 );
+void *Mem_VirtualReserve( const u64 sizeBytes ) {
+	Assert( sizeBytes > 0 );
 
-	return VirtualAlloc( NULL, size_bytes, MEM_RESERVE, PAGE_NOACCESS );
+	return VirtualAlloc( NULL, sizeBytes, MEM_RESERVE, PAGE_NOACCESS );
 }
 
-void *VirtualCommit( void *ptr, const u64 size_bytes ) {
-	assert( ptr );
-	assert( size_bytes > 0 );
+void *Mem_VirtualCommit( void *ptr, const u64 sizeBytes ) {
+	Assert( ptr );
+	Assert( sizeBytes > 0 );
 
-	return VirtualAlloc( ptr, size_bytes, MEM_COMMIT, PAGE_READWRITE );
+	return VirtualAlloc( ptr, sizeBytes, MEM_COMMIT, PAGE_READWRITE );
 }
 
-void VirtualDecommit( void *ptr, const u64 size_bytes ) {
-	VirtualFree( ptr, size_bytes, MEM_DECOMMIT );
+void Mem_VirtualDecommit( void *ptr, const u64 sizeBytes ) {
+	VirtualFree( ptr, sizeBytes, MEM_DECOMMIT );
 }
 
-void VirtualFree( void *ptr ) {
+void Mem_VirtualFree( void *ptr ) {
 	VirtualFree( ptr, 0, MEM_RELEASE );
 }
 

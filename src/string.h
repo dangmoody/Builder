@@ -30,17 +30,17 @@ SOFTWARE.
 
 #include "int_types.h"
 
-struct LinearAllocator;
+struct linearAllocator_t;
 
 /*
 ================================================================================================
 
-	String
+	string_t
 
 	Container type used to hold a contiguous block of text.
 
 	Core Strings are not null-terminated.  They are string views into string data and cannot be
-	appended or resized (like how std::strings can).  If you want to do that, use StringBuilder.
+	appended or resized (like how std::strings can).  If you want to do that, use stringBuilder_t.
 
 	Core Strings do not own the memory that they hold.  They are either read only strings or
 	the memory was given to them from some memory allocation call.
@@ -51,75 +51,75 @@ struct LinearAllocator;
 	Strings that are allocated are still string views, but their characters can be mutated
 	directly.
 
-	A String's count reflects the number of characters that are logically part of the string,
-	and the underlying data buffer may extend beyond the count (e.g. when a String is a
+	A string_t's count reflects the number of characters that are logically part of the string,
+	and the underlying data buffer may extend beyond the count (e.g. when a string_t is a
 	substring of a larger allocation).  Do not use `data` directly.
 
 ================================================================================================
 */
 
-struct String {
+struct string_t {
 	char	*data;
 	u64		count;
 };
 
 // Sets the contents of the string to the specified string literal.
 // This string will not own the data it holds.
-String		String_Set( const char *str );
-String		String_Set( const char *str, const u64 count );
+string_t		String_Set( const char *str );
+string_t		String_Set( const char *str, const u64 count );
 
 // Sets the contents of the string to the range of specified string literal.
 // This string will not own the data it holds.
-String		String_Substring( const char *str, const u64 offset, const u64 count );
+string_t		String_Substring( const char *str, const u64 offset, const u64 count );
 
 // Allocates a copy of the null-terminated C string 'str' using 'allocator'.
 // This string will hold the data it holds.
-String		String_Alloc( LinearAllocator *allocator, const char *str );
+string_t		String_Alloc( linearAllocator_t *allocator, const char *str );
 
 // Allocates a copy of the first 'length' characters of 'str' using 'allocator'.
 // // This string will hold the data it holds.
-String		String_Alloc( LinearAllocator *allocator, const char *str, const u64 length );
+string_t		String_Alloc( linearAllocator_t *allocator, const char *str, const u64 length );
 
 // Allocates a printf-formatted string using 'allocator'.
-String		String_Printf( LinearAllocator *allocator, const char *fmt, ... );
+string_t		String_Printf( linearAllocator_t *allocator, const char *fmt, ... );
 
 // Allocates a copy of 'src' using 'allocator'.
-String		String_Copy( LinearAllocator *allocator, const String *src );
+string_t		String_Copy( linearAllocator_t *allocator, const string_t *src );
 
 // Returns true if the contents of string 'lhs' are EXACTLY the same as the contents of string 'rhs'.  Case sensitive.
 bool8		String_Equals( const char *lhs, const char *rhs );
-bool8		String_Equals( const String *lhs, const String *rhs );
+bool8		String_Equals( const string_t *lhs, const string_t *rhs );
 
 // Returns true if the first characters of string 'str' are EXACTLY the same as string 'prefix'.  Case sensitive.
 bool8		String_StartsWith( const char *str, const char *prefix );
-bool8		String_StartsWith( const String *str, const String *prefix );
+bool8		String_StartsWith( const string_t *str, const string_t *prefix );
 
 // Returns true if the last character of 'str' is the value of 'end'.  Case sensitive.
 bool8		String_EndsWith( const char *str, const char end );
-bool8		String_EndsWith( const String *str, const char end );
+bool8		String_EndsWith( const string_t *str, const char end );
 
 // Returns true if the last characters of 'str' are EXACTLY the same as string 'suffix'.  Case sensitive.
 bool8		String_EndsWith( const char *str, const char *suffix );
-bool8		String_EndsWith( const String *str, const String *suffix );
+bool8		String_EndsWith( const string_t *str, const string_t *suffix );
 
 // Returns true if string 'str' has EXACTLY the contents of 'substring' somewhere in it.  Case sensitive.
 bool8		String_Contains( const char *str, const char c );
 bool8		String_Contains( const char *str, const char *substring );
-bool8		String_Contains( const String *str, const char c );
-bool8		String_Contains( const String *str, const String *substring );
+bool8		String_Contains( const string_t *str, const char c );
+bool8		String_Contains( const string_t *str, const string_t *substring );
 
 // Replaces every occurrence of 'oldChar' in 'str' with 'newChar'.
-String		String_Replace( LinearAllocator *allocator, String *str, const char oldChar, const char newChar );
+string_t		String_Replace( linearAllocator_t *allocator, string_t *str, const char oldChar, const char newChar );
 
 // Returns true if character 'c' is found in 'str', searching left to right, and sets 'outIndex' to the position of the first occurrence.  Returns false if 'c' cannot be found.
-bool8		String_FindFromLeft( const String *str, const char c, u64 *outIndex );
+bool8		String_FindFromLeft( const string_t *str, const char c, u64 *outIndex );
 
 // Returns true if character 'c' is found in 'str', searching right to left, and sets 'outIndex' to the position of the last occurrence.  Returns false if 'c' cannot be found.
-bool8		String_FindFromRight( const String *str, const char c, u64 *outIndex );
+bool8		String_FindFromRight( const string_t *str, const char c, u64 *outIndex );
 
 // Returns a null-terminated copy of 'str' allocated on temp storage, truncated to 'str->count'.
-// Use this to safely pass a String as a '%s' argument to printf.
-const char	*String_Cstr( const String *str );
+// Use this to safely pass a string_t as a '%s' argument to printf.
+const char	*String_Cstr( const string_t *str );
 
 // Returns a printf-formatted string with the given format string and var args that's been allocated via temp storage.
 const char	*TempPrintf( const char *fmt, ... );

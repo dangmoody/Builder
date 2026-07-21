@@ -9,7 +9,7 @@
 #include "../src/helpers.h"
 #include "../src/temp_storage.h"
 
-#define TEMPERDEV_ASSERT assert
+#define TEMPERDEV_ASSERT Assert
 #define TEMPER_IMPLEMENTATION
 #include "../src/file.h"
 #include "../src/string.h"
@@ -31,11 +31,11 @@ static void ShutdownTestThread() {
 #define TEST_PARAMETRIC( testName, runFlag, ... )	TEMPER_TEST_PARAMETRIC_C( testName, InitTestThread, ShutdownTestThread, runFlag, __VA_ARGS__ )
 
 enum compilerFlagBits_t {
-	COMPILER_DEFAULT		= bit( 0 ),
-	COMPILER_CLANG			= bit( 1 ),
-	COMPILER_GCC			= bit( 2 ),
-	COMPILER_MSVC_SHORT		= bit( 3 ),
-	COMPILER_MSVC_FULL_PATH	= bit( 4 ),
+	COMPILER_DEFAULT		= BIT( 0 ),
+	COMPILER_CLANG			= BIT( 1 ),
+	COMPILER_GCC			= BIT( 2 ),
+	COMPILER_MSVC_SHORT		= BIT( 3 ),
+	COMPILER_MSVC_FULL_PATH	= BIT( 4 ),
 
 	COMPILER_ALL			= COMPILER_DEFAULT | COMPILER_CLANG | COMPILER_GCC | COMPILER_MSVC_SHORT | COMPILER_MSVC_FULL_PATH
 };
@@ -93,12 +93,12 @@ static const char *GetCompilerVersion( const compilerFlagBits_t compiler ) {
 #pragma clang diagnostic pop
 
 struct buildTestGeneratedFiles_t {
-	Array<const char *>	folders;
-	Array<const char *>	files;
-	Array<const char *>	fileExtensionsToDelete;
+	array_t<const char *>	folders;
+	array_t<const char *>	files;
+	array_t<const char *>	fileExtensionsToDelete;
 };
 
-static void GetAllGeneratedFiles( const FileInfo *fileInfo, void *data ) {
+static void GetAllGeneratedFiles( const fileInfo_t *fileInfo, void *data ) {
 	buildTestGeneratedFiles_t *generatedFiles = cast( buildTestGeneratedFiles_t *, data );
 
 	if ( fileInfo->isDirectory ) {
@@ -133,8 +133,8 @@ static void GetAllGeneratedFiles( const FileInfo *fileInfo, void *data ) {
 
 
 struct fileMatchesFilterTest_t {
-	String filename;
-	String filter;
+	string_t filename;
+	string_t filter;
 	bool8		expected;
 };
 
@@ -174,11 +174,11 @@ struct sourceFilesPatternTest_t {
 };
 
 TEST_PARAMETRIC( Test_GetSourceFilesMatchingPattern, TEMPER_FLAG_SHOULD_RUN, sourceFilesPatternTest_t test ) {
-	LinearAllocator* testScratch = Mem_AllocatorCreate(MEM_KILOBYTES(64));
+	linearAllocator_t* testScratch = Mem_AllocatorCreate(MEM_KILOBYTES(64));
 	defer{ Mem_AllocatorDestroy(testScratch); };
 
-	String basePath = String_Set( test.basePath );
-	String pattern = String_Set( test.pattern );
+	string_t basePath = String_Set( test.basePath );
+	string_t pattern = String_Set( test.pattern );
 
 	if ( !String_EndsWith(&basePath, '\\') && !String_EndsWith(&basePath, '/') ) {
 		basePath = String_Printf( testScratch, "%s%c", basePath.data, PATH_SEPARATOR );
@@ -187,8 +187,8 @@ TEST_PARAMETRIC( Test_GetSourceFilesMatchingPattern, TEMPER_FLAG_SHOULD_RUN, sou
 	u64 outIndex;
 	String_FindFromRight( &pattern, '/', &outIndex );
 
-	String folderPattern = String_Substring( test.pattern, basePath.count, 1 + outIndex - basePath.count );
-	String filePattern = String_Substring( test.pattern, outIndex + 1, pattern.count - outIndex - 1 );
+	string_t folderPattern = String_Substring( test.pattern, basePath.count, 1 + outIndex - basePath.count );
+	string_t filePattern = String_Substring( test.pattern, outIndex + 1, pattern.count - outIndex - 1 );
 
 	std::vector<std::string> files = GetSourceFilesMatchingPattern( &basePath, &folderPattern, &filePattern );
 
@@ -240,14 +240,14 @@ TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 
 	// Builder uses temp storage a lot internally
 	// so make our own temp storage for each test and free once were done
-	LinearAllocator *testScratch = Mem_AllocatorCreate( MEM_KILOBYTES( 64 ) );
+	linearAllocator_t *testScratch = Mem_AllocatorCreate( MEM_KILOBYTES( 64 ) );
 	defer { Mem_AllocatorDestroy( testScratch ); };
 
 	// move ourselves to the root folder of that test
 	// run the test from that folder
 	// then come back when were done
 
-	String oldCWD = Path_GetCwd( testScratch );
+	string_t oldCWD = Path_GetCwd( testScratch );
 
 	TEMPER_CHECK_TRUE_M( Path_SetCwd( test.rootDir ), "Failed to cd into the test folder \"%s\": %s.\n", test.rootDir, strerror( errno ) );
 	defer { TEMPER_CHECK_TRUE_M( Path_SetCwd( String_Cstr( &oldCWD ) ), "Failed to cd back out of the test folder: %s.\n", strerror( errno ) ); };
@@ -276,7 +276,7 @@ TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 
 	// @Aiden - We really need some Core strings sprinked throughout this whole file and the rest of the program
 	//			it feels cumbersome to work around the mismatches.
-	String buildSourceFileWithoutExtension = String_Set( test.buildSourceFile );
+	string_t buildSourceFileWithoutExtension = String_Set( test.buildSourceFile );
 	buildSourceFileWithoutExtension = Path_RemoveFileExtension( &buildSourceFileWithoutExtension );
 	buildSourceFileWithoutExtension = String_Alloc( testScratch, test.buildSourceFile, buildSourceFileWithoutExtension.count + 1 );
 	buildSourceFileWithoutExtension.data[buildSourceFileWithoutExtension.count - 1] = '\0';
@@ -287,7 +287,7 @@ TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 	}
 
 	For ( u32, compilerIndex, 0, COMPILER_ALL ) {
-		compilerFlagBits_t compiler = cast( compilerFlagBits_t, bit( compilerIndex ) );
+		compilerFlagBits_t compiler = cast( compilerFlagBits_t, BIT( compilerIndex ) );
 
 #ifdef __linux__
 		if ( compiler == COMPILER_MSVC_SHORT || compiler == COMPILER_MSVC_FULL_PATH ) {
@@ -303,7 +303,7 @@ TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 
 		// test doing the actual build
 		{
-			Array<const char *> args;
+			array_t<const char *> args;
 			args.Init( testScratch );
 			args.Add( test.buildSourceFile );
 
@@ -321,20 +321,20 @@ TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 				case COMPILER_MSVC_FULL_PATH: {
 					msvcInstall_t msvcInstall = {};
 					TEMPER_CHECK_TRUE_M( Win_GetMSVCInstall( testScratch, &msvcInstall ), "Failed to find MSVC install for full-path compiler test.\n" );
-					String msvcFullPath = String_Printf( testScratch, "--msvc-full-path=%s\\bin\\Hostx64\\x64\\cl", msvcInstall.rootFolder.data );
+					string_t msvcFullPath = String_Printf( testScratch, "--msvc-full-path=%s\\bin\\Hostx64\\x64\\cl", msvcInstall.rootFolder.data );
 					args.Add( msvcFullPath.data );
 				} break;
 #endif
 			}
 #pragma clang diagnostic pop
 
-			exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
+			exitCode = BuilderMain( 0, TruncCast( int, args.count ), args.data );
 
 			TEMPER_CHECK_TRUE_M( exitCode == 0, "BuilderMain() actually returned %d.\n", exitCode );
 		}
 
 		// linux requires the "./" prefix because without that it tries to run the subprocess from your PATH
-		String fullBinaryName = {};
+		string_t fullBinaryName = {};
 		if ( test.binaryFolder ) {
 			fullBinaryName = String_Printf( testScratch, "./%s%c%s%s", test.binaryFolder, PATH_SEPARATOR, test.binaryName, GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
 		} else {
@@ -362,13 +362,13 @@ TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 			TEMPER_CHECK_TRUE( FS_FileExists( fullBinaryName.data ) );
 			TEMPER_CHECK_TRUE( FS_FolderExists( dotBuilderFolder ) );
 
-			String userConfigBuildDLLFilename = String_Printf( testScratch, "%s%c%s%s", dotBuilderFolder, PATH_SEPARATOR, buildSourceFileWithoutExtension.data, GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
+			string_t userConfigBuildDLLFilename = String_Printf( testScratch, "%s%c%s%s", dotBuilderFolder, PATH_SEPARATOR, buildSourceFileWithoutExtension.data, GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
 			TEMPER_CHECK_TRUE( FS_FileExists( userConfigBuildDLLFilename.data ) );
 		}
 
 		// now run the program we just built
 		{
-			Array<const char *> args;
+			array_t<const char *> args;
 			args.Init( testScratch );
 			args.Add( fullBinaryName.data );
 
@@ -480,18 +480,18 @@ TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 
 	// Builder uses temp storage a lot internally
 	// so make our own temp storage for each test and free once were done
-	LinearAllocator *testScratch = Mem_AllocatorCreate( MEM_KILOBYTES( 64 ) );
+	linearAllocator_t *testScratch = Mem_AllocatorCreate( MEM_KILOBYTES( 64 ) );
 	defer { Mem_AllocatorDestroy( testScratch ); };
 
 	// need to find where msbuild lives on windows
 #ifdef _WIN32
-	String msbuildInstallationPath;
+	string_t msbuildInstallationPath;
 
 	// detect where msbuild is stored
 	{
-		String vswhereStdout = {};
+		string_t vswhereStdout = {};
 
-		Array<const char *> args;
+		array_t<const char *> args;
 		args.Init( testScratch );
 		args.Add( "C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe" );
 		args.Add( "-latest" );
@@ -505,7 +505,7 @@ TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Failed to run vswhere.exe properly.  Exit code actually returned %d.\n", exitCode );
 
 		// fail test if we cant find the tag in the output that were looking for
-		auto ParseTagString = []( const char *fileBuffer, const char *tag, String *outString ) -> bool8 {
+		auto ParseTagString = []( const char *fileBuffer, const char *tag, string_t *outString ) -> bool8 {
 			const char *lineStart = strstr( fileBuffer, tag );
 			if ( !lineStart ) {
 				return false;
@@ -520,7 +520,7 @@ TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 			const char *lineEnd = NULL;
 			if ( !lineEnd ) lineEnd = strchr( lineStart, '\r' );
 			if ( !lineEnd ) lineEnd = strchr( lineStart, '\n' );
-			assert( lineEnd );
+			Assert( lineEnd );
 
 			u64 count = cast( u64, lineEnd ) - cast( u64, lineStart );
 
@@ -534,11 +534,11 @@ TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 
 	// generate the solution
 	if ( exitCode == 0 ) {
-		Array<const char *> args;
+		array_t<const char *> args;
 		args.Init( testScratch );
 		args.Add( "test_generate_visual_studio_files/generate_solution.cpp" );
 
-		exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
+		exitCode = BuilderMain( 0, TruncCast( int, args.count ), args.data );
 
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "Exit code actually returned %d.\n", exitCode );
 	}
@@ -550,9 +550,9 @@ TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 #ifdef _WIN32
 	// build the app project in the solution via msbuild
 	if ( exitCode == 0 ) {
-		String msbuildStdout;
+		string_t msbuildStdout;
 
-		Array<const char *> args;
+		array_t<const char *> args;
 		args.Init( testScratch );
 #if defined( _WIN32 )
 		args.Add( TempPrintf( "%s%cMSBuild%cCurrent%cBin%cMSBuild.exe", String_Cstr( &msbuildInstallationPath ), PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR, PATH_SEPARATOR ) );	// TODO(DM): query for this instead
@@ -568,7 +568,7 @@ TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 
 	// run the program, make sure it returns the correct exit code
 	if ( exitCode == 0 ) {
-		Array<const char *> args;
+		array_t<const char *> args;
 		args.Init( testScratch );
 		args.Add( "test_generate_visual_studio_files/bin/debug/the-app.exe" );
 		exitCode = RunProc( &args, NULL );
@@ -581,7 +581,7 @@ TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	// Builder uses temp storage a lot internally
 	// so make our own temp storage for each test and free once were done
-	LinearAllocator *testScratch = Mem_AllocatorCreate( MEM_KILOBYTES( 64 ) );
+	linearAllocator_t *testScratch = Mem_AllocatorCreate( MEM_KILOBYTES( 64 ) );
 	defer { Mem_AllocatorDestroy( testScratch ); };
 
 	const char *buildFile				= "test_generate_vscode_json_files/generate_vscode_json.cpp";
@@ -593,11 +593,11 @@ TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 
 	// generate the VS Code JSON files
 	{
-		Array<const char *> args;
+		array_t<const char *> args;
 		args.Init( testScratch );
 		args.Add( buildFile );
 
-		s32 exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
+		s32 exitCode = BuilderMain( 0, TruncCast( int, args.count ), args.data );
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "BuilderMain() returned %d.\n", exitCode );
 	}
 
@@ -605,7 +605,7 @@ TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	{
 		TEMPER_CHECK_TRUE_M( FS_FileExists( cppPropertiesJSONPath ), "c_cpp_properties.json was not generated at \"%s\".\n", cppPropertiesJSONPath );
 
-		String content{};
+		string_t content{};
 		TEMPER_CHECK_TRUE_M( FS_ReadEntireFile( cppPropertiesJSONPath, &content ), "Failed to read c_cpp_properties.json.\n" );
 		defer { FS_FreeFileBuffer( &content ); };
 
@@ -628,7 +628,7 @@ TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	{
 		TEMPER_CHECK_TRUE_M( FS_FileExists( tasksJSONPath ), "tasks.json was not generated at \"%s\".\n", tasksJSONPath );
 
-		String content{};
+		string_t content{};
 		TEMPER_CHECK_TRUE_M( FS_ReadEntireFile( tasksJSONPath, &content ), "Failed to read tasks.json.\n" );
 		defer { FS_FreeFileBuffer( &content ); };
 
@@ -644,7 +644,7 @@ TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	{
 		TEMPER_CHECK_TRUE_M( FS_FileExists( launchJSONPath ), "launch.json was not generated at \"%s\".\n", launchJSONPath );
 
-		String content{};
+		string_t content{};
 		TEMPER_CHECK_TRUE_M( FS_ReadEntireFile( launchJSONPath, &content ), "Failed to read launch.json.\n" );
 		defer { FS_FreeFileBuffer( &content ); };
 
@@ -693,7 +693,7 @@ TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	// Builder uses temp storage a lot internally
 	// so make our own temp storage for each test and free once were done
-	LinearAllocator *testScratch = Mem_AllocatorCreate( MEM_KILOBYTES( 64 ) );
+	linearAllocator_t *testScratch = Mem_AllocatorCreate( MEM_KILOBYTES( 64 ) );
 	defer { Mem_AllocatorDestroy( testScratch ); };
 
 	const char *dotBuilderFolder = "test_generate_zed_json_files/.builder";
@@ -702,11 +702,11 @@ TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 
 	// generate the Zed JSON files
 	{
-		Array<const char *> args;
+		array_t<const char *> args;
 		args.Init( testScratch );
 		args.Add( "test_generate_zed_json_files/generate_zed_json.cpp" );
 
-		s32 exitCode = BuilderMain( 0, trunc_cast( int, args.count ), args.data );
+		s32 exitCode = BuilderMain( 0, TruncCast( int, args.count ), args.data );
 		TEMPER_CHECK_TRUE_M( exitCode == 0, "BuilderMain() returned %d.\n", exitCode );
 	}
 
@@ -714,7 +714,7 @@ TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	{
 		TEMPER_CHECK_TRUE_M( FS_FileExists( tasksJSONPath ), "tasks.json was not generated at \"%s\".\n", tasksJSONPath );
 
-		String content{};
+		string_t content{};
 		TEMPER_CHECK_TRUE_M( FS_ReadEntireFile( tasksJSONPath, &content ), "Failed to read tasks.json.\n" );
 		defer { FS_FreeFileBuffer( &content ); };
 
@@ -731,7 +731,7 @@ TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	{
 		TEMPER_CHECK_TRUE_M( FS_FileExists( debugJSONPath ), "debug.json was not generated at \"%s\".\n", debugJSONPath );
 
-		String content{};
+		string_t content{};
 		TEMPER_CHECK_TRUE_M( FS_ReadEntireFile( debugJSONPath, &content ), "Failed to read debug.json.\n" );
 		defer { FS_FreeFileBuffer( &content ); };
 
@@ -797,7 +797,7 @@ TEST( ValidateCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 
 	TEMPER_CHECK_TRUE_M( FS_FileExists( compileCommandsPath ), "compile_commands.json does not exist at %s\n", compileCommandsPath );
 
-	String content{};
+	string_t content{};
 	FS_ReadEntireFile( compileCommandsPath, &content );
 	defer { FS_FreeFileBuffer( &content ); };
 
@@ -818,17 +818,17 @@ TEST( ValidateCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 	// If the compile_commands.json is malformed, clang-tidy will fail with an error like:
 	//     "Error while trying to load a compilation database"
 
-	LinearAllocator *testScratch = Mem_AllocatorCreate( MEM_KILOBYTES( 1 ) );
+	linearAllocator_t *testScratch = Mem_AllocatorCreate( MEM_KILOBYTES( 1 ) );
 	defer { Mem_AllocatorDestroy( testScratch ); };
 
-	Array<const char *> args;
+	array_t<const char *> args;
 	args.Init( testScratch );
 	args.Add( "../clang/bin/clang-tidy" );
 	args.Add( sourceFile );
 	args.Add( TempPrintf( "-p=%s", compileCommandsDir ) );
 	args.Add( "--checks=-*" );  // Disable all checks - we only want to test DB loading
 
-	String stdoutOutput = {};
+	string_t stdoutOutput = {};
 	s32 exitCode = RunProc( &args, NULL, 0, &stdoutOutput );
 	bool isValid = true;
 	// Check for specific error messages that indicate database problems
@@ -855,7 +855,7 @@ int main( int argc, char **argv ) {
 	int exitCode = TEMPER_GET_EXIT_CODE();
 
 	if ( exitCode != 0 ) {
-		debug_break();
+		DebugBreak();
 	}
 
 	return exitCode;

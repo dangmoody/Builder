@@ -40,7 +40,6 @@ SOFTWARE.
 #include "hash.h"
 #include "hashmap.h"
 #include "debug.h"
-#include "helpers.h"
 #include "defer.h"
 
 #if defined( _WIN32 )
@@ -56,7 +55,7 @@ SOFTWARE.
 
 struct visualStudioFileFilter_t {
 	const char* filePath;
-	String fileFilter;
+	string_t fileFilter;
 };
 
 // data layout comes from: https://learn.microsoft.com/en-us/windows/win32/api/guiddef/ns-guiddef-guid
@@ -65,12 +64,12 @@ static const char *CreateVisualStudioGuid() {
 #if defined( _WIN32 )
 	GUID guid;
 	HRESULT hr = CoCreateGuid( &guid );
-	assert( hr == S_OK );
+	Assert( hr == S_OK );
 
 	return TempPrintf( "%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X", guid.Data1, guid.Data2, guid.Data3, guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3], guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7] );
 #elif defined( __linux__ )
 	const u64 guidStringLength = 37;
-	char *guidString = cast( char *, Mem_TempAlloc( guidStringLength * sizeof( char ) ) );
+	char *guidString = Cast( char *, Mem_TempAlloc( guidStringLength * sizeof( char ) ) );
 
 	uuid_t uuid;
 	uuid_generate( uuid );
@@ -81,12 +80,12 @@ static const char *CreateVisualStudioGuid() {
 }
 
 struct visualStudioNukeContext_t {
-	Array<const char *>	fileExtensionsToCheck;
-	String				dotVSFolder;
+	array_t<const char *>	fileExtensionsToCheck;
+	string_t				dotVSFolder;
 };
 
 static void VS_DeleteOldProjectFilesCallback( const fileInfo_t *fileInfo, void *userData ) {
-	visualStudioNukeContext_t *nukeContext = cast( visualStudioNukeContext_t *, userData );
+	visualStudioNukeContext_t *nukeContext = Cast( visualStudioNukeContext_t *, userData );
 
 	if ( fileInfo->isDirectory && String_Equals( fileInfo->filename, ".vs" ) ) {
 		// TODO: DM: 09/05/2026: not sure we want to store this in temp storage
@@ -110,22 +109,22 @@ static void VS_DeleteOldProjectFilesCallback( const fileInfo_t *fileInfo, void *
 #pragma clang diagnostic ignored "-Wunreachable-code"
 
 bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *options ) {
-	assert( context );
-	assert( context->inputFile );
-	assert( context->inputFilePath.data );
-	assert( options );
+	Assert( context );
+	Assert( context->inputFile );
+	Assert( context->inputFilePath.data );
+	Assert( options );
 
-	Array<char *> projectFolders;
+	array_t<char *> projectFolders;
 	projectFolders.Init( Mem_GetTempStorage() );
 
-	Hashmap *projectFolderIndices = HM_Create( Mem_GetTempStorage(), 1 );
+	hashmap_t *projectFolderIndices = HM_Create( Mem_GetTempStorage(), 1 );
 
 	struct guidParentMapping_t {
 		u64	guidIndex;
 		u64	guidParentIndex;
 	};
 
-	Array<guidParentMapping_t> guidParentMappings;
+	array_t<guidParentMapping_t> guidParentMappings;
 	guidParentMappings.Init( Mem_GetTempStorage() );
 
 	// validate the solution
@@ -165,7 +164,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 			For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
 				const char *platform = options->solution.platforms[platformIndex].c_str();
 
-				For ( u64, defaultPlatformIndex, 0, count_of( defaultPlatformNames ) ) {
+				For ( u64, defaultPlatformIndex, 0, COUNT_OF( defaultPlatformNames ) ) {
 					const char *defaultPlatformName = defaultPlatformNames[defaultPlatformIndex];
 
 					if ( String_Equals( platform, defaultPlatformName ) ) {
@@ -179,9 +178,9 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 				// u64 pos = Mem_TempTell();
 				// defer { Mem_TempRewindTo( pos ); };
 
-				StringBuilder error = SB_Create( context->allocator );
+				stringBuilder_t error = SB_Create( context->allocator );
 				SB_Appendf( &error, "None of your platform names are any of the Visual Studio recognized defaults:\n" );
-				For ( u64, platformIndex, 0, count_of( defaultPlatformNames ) ) {
+				For ( u64, platformIndex, 0, COUNT_OF( defaultPlatformNames ) ) {
 					SB_Appendf( &error, "\t- %s\n", defaultPlatformNames[platformIndex] );
 				}
 				SB_Appendf( &error, "Visual Studio relies on those specific names in order to generate fields like \"Executable Path\" properly (for example).\n" );
@@ -221,12 +220,12 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 	const char *solutionFilename = TempPrintf( "%s%c%s.sln", visualStudioProjectFilesPath, PATH_SEPARATOR, options->solution.name.c_str() );
 
 	// get relative path from visual studio to the input file
-	String pathFromSolutionToInputFileStr = Path_RelativePathTo( context->allocator, visualStudioProjectFilesPath, context->inputFilePath.data );
+	string_t pathFromSolutionToInputFileStr = Path_RelativePathTo( context->allocator, visualStudioProjectFilesPath, context->inputFilePath.data );
 	const char *pathFromSolutionToInputFile = pathFromSolutionToInputFileStr.data;
-	assert( pathFromSolutionToInputFile != NULL && !String_Equals( pathFromSolutionToInputFile, "" ) );
+	Assert( pathFromSolutionToInputFile != NULL && !String_Equals( pathFromSolutionToInputFile, "" ) );
 
 	// give each project a guid
-	Array<const char *> projectGuids;
+	array_t<const char *> projectGuids;
 	projectGuids.Init( Mem_GetTempStorage() );
 	projectGuids.Resize( options->solution.projects.size() );
 
@@ -235,7 +234,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 	}
 
 	if ( !FS_CreateFolderIfItDoesntExist( visualStudioProjectFilesPath ) ) {
-		s32 errorCode = get_last_error_code();
+		s32 errorCode = GetLastErrorCode();
 		error( "Failed to create the Visual Studio Solution folder.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
 
 		return false;
@@ -286,8 +285,8 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 		// for example a project with the name "projects/games/shooter" means the user wants a project called "shooter" inside a folder called "games", which is in turn inside a folder called "projects"
 		// so split the string between slashes, and create project folders for each unique folder name that we find
 		{
-			String projectNamePath = String_Set( project->name.c_str() );
-			String fullFolderPath = Path_RemoveFileFromPath( &projectNamePath );
+			string_t projectNamePath = String_Set( project->name.c_str() );
+			string_t fullFolderPath = Path_RemoveFileFromPath( &projectNamePath );
 
 			if ( fullFolderPath.count != projectNamePath.count ) {
 				u32 guidIndex = HASHMAP_INVALID_VALUE;
@@ -304,9 +303,9 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 					}
 
 					// make a string from that the start and the end
-					u64 folderNameLength = cast( u64, folderEnd ) - cast( u64, folderStart );
+					u64 folderNameLength = Cast( u64, folderEnd ) - Cast( u64, folderStart );
 
-					char *folderName = cast( char *, Mem_TempAlloc( ( folderNameLength + 1 ) * sizeof( char ) ) );
+					char *folderName = Cast( char *, Mem_TempAlloc( ( folderNameLength + 1 ) * sizeof( char ) ) );
 					strncpy( folderName, folderStart, folderNameLength * sizeof( char ) );
 					folderName[folderNameLength] = 0;
 
@@ -319,7 +318,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 						projectFolders.Add( folderName );
 						projectGuids.Add( CreateVisualStudioGuid() );
 
-						guidIndex = trunc_cast( u32, projectGuids.count - 1 );
+						guidIndex = TruncCast( u32, projectGuids.count - 1 );
 
 						LogVerbose( "%u = %s (parent = %u)\n", guidIndex, folderName, guidParentIndex );
 
@@ -349,19 +348,19 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 		// get all the files that the project will know about
 		// the arrays in here get referred to multiple times throughout generating the files for the project
-		Array<visualStudioFileFilter_t> sourceFiles;
+		array_t<visualStudioFileFilter_t> sourceFiles;
 		sourceFiles.Init( Mem_GetTempStorage() );
-		Array<visualStudioFileFilter_t> headerFiles;
+		array_t<visualStudioFileFilter_t> headerFiles;
 		headerFiles.Init( Mem_GetTempStorage() );
-		Array<visualStudioFileFilter_t> otherFiles;
+		array_t<visualStudioFileFilter_t> otherFiles;
 		otherFiles.Init( Mem_GetTempStorage() );
 
-		Array<String> filterPaths;
+		array_t<string_t> filterPaths;
 		filterPaths.Init( Mem_GetTempStorage() );
 
 		// we have ./src/foo/bar.cpp and need both src/foo for folderInFilter and src/foo/bar.cpp for filenameAndPathFromRoot
 		{
-			auto AddFileUnique = [context, &filterPaths]( Array<visualStudioFileFilter_t>& fileArray, const char* file ) {
+			auto AddFileUnique = [context, &filterPaths]( array_t<visualStudioFileFilter_t>& fileArray, const char* file ) {
 				u64 fileIndex = 0;
 				for ( ; fileIndex < fileArray.count; ++fileIndex ) {
 					if ( String_Equals( fileArray[fileIndex].filePath, file ) ) {
@@ -370,12 +369,12 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 				}
 
 				if ( fileIndex == fileArray.count ) {
-					String pathFromBuildConfigToFile = Path_RelativePathTo( Mem_GetTempStorage(), context->inputFilePath.data, file );
+					string_t pathFromBuildConfigToFile = Path_RelativePathTo( Mem_GetTempStorage(), context->inputFilePath.data, file );
 
 					// If we have gone past a drive root then we definitely don't want to include this in the filters in a regular way
 					// We could do some extra thing here when there is a lot of ..\\..\\..\\ etc. but for now it's fine
 					if ( String_Contains( &pathFromBuildConfigToFile, ':' ) ) {
-						fileArray.Add({ file, String() });
+						fileArray.Add({ file, string_t() });
 					} else {
 						u64 lastSeparator;
 						String_FindFromRight(&pathFromBuildConfigToFile, PATH_SEPARATOR, &lastSeparator);
@@ -427,8 +426,8 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 			}
 		}
 
-		String projectNameStr = String_Set( project->name.c_str() );
-		String projectNameNoFolder = Path_RemovePathFromFile( &projectNameStr );
+		string_t projectNameStr = String_Set( project->name.c_str() );
+		string_t projectNameNoFolder = Path_RemovePathFromFile( &projectNameStr );
 
 		// .vcxproj
 		{
@@ -439,7 +438,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 			printf( "Generating %s ... ", projectPath );
 
-			StringBuilder vcxprojContent = SB_Create( context->allocator );
+			stringBuilder_t vcxprojContent = SB_Create( context->allocator );
 
 			SB_Appendf( &vcxprojContent, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
 			SB_Appendf( &vcxprojContent, "<Project DefaultTargets=\"Build\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n" );
@@ -484,7 +483,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 				const char *from = visualStudioProjectFilesPath;
 				const char *to = TempPrintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, fullBinaryName );
 
-				String pathFromSolutionToBinary = Path_RelativePathTo( Mem_GetTempStorage(), from, to );
+				string_t pathFromSolutionToBinary = Path_RelativePathTo( Mem_GetTempStorage(), from, to );
 				pathFromSolutionToBinary = Path_RemoveFileFromPath( &pathFromSolutionToBinary );
 
 				For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
@@ -571,13 +570,13 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 					const char *fullConfigName = config->options.name.c_str();
 
-					String inputFileNoPathStr = String_Set( context->inputFile );
-					String inputFileNoPath = Path_RemovePathFromFile( &inputFileNoPathStr );
+					string_t inputFileNoPathStr = String_Set( context->inputFile );
+					string_t inputFileNoPath = Path_RemovePathFromFile( &inputFileNoPathStr );
 
-					String inputFileRelative = path_join( Mem_GetTempStorage(), pathFromSolutionToInputFile, inputFileNoPath.data );
+					string_t inputFileRelative = path_join( Mem_GetTempStorage(), pathFromSolutionToInputFile, inputFileNoPath.data );
 
 					// const char *appPath = Path_RemoveFileFromPath( Path_AppPath() );
-					String appPath = Path_AppPath( Mem_GetTempStorage() );
+					string_t appPath = Path_AppPath( Mem_GetTempStorage() );
 					appPath = Path_RemoveFileFromPath( &appPath );
 					const char *appPathCStr = String_Cstr( &appPath );
 
@@ -616,7 +615,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 			// tell visual studio what files we have in this project
 			// this is typically done via a filter (E.G: src/*.cpp)
 			{
-				auto WriteFilterFilesToVcxproj = []( StringBuilder *stringBuilder, const Array<visualStudioFileFilter_t>& files, const char* tag) {
+				auto WriteFilterFilesToVcxproj = []( stringBuilder_t *stringBuilder, const array_t<visualStudioFileFilter_t>& files, const char* tag) {
 					if ( files.count == 0 ) {
 						return;
 					}
@@ -659,7 +658,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 			printf( "Generating %s ... ", projectPath );
 
-			StringBuilder vcxprojContent = SB_Create( context->allocator );
+			stringBuilder_t vcxprojContent = SB_Create( context->allocator );
 
 			SB_Appendf( &vcxprojContent, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
 			SB_Appendf( &vcxprojContent, "<Project ToolsVersion=\"Current\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n" );
@@ -679,7 +678,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 					const char *to = TempPrintf( "%s%c%s", context->inputFilePath.data, PATH_SEPARATOR, fullBinaryName );
 					//to = path_canonicalise( to );
 
-					String pathFromSolutionToBinaryStr = Path_RelativePathTo( Mem_GetTempStorage(), from, to );
+					string_t pathFromSolutionToBinaryStr = Path_RelativePathTo( Mem_GetTempStorage(), from, to );
 
 					For ( u64, platformIndex, 0, options->solution.platforms.size() ) {
 						const char *platform = options->solution.platforms[platformIndex].c_str();
@@ -723,7 +722,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 			printf( "Generating %s ... ", projectPath );
 
-			StringBuilder vcxprojContent = SB_Create( context->allocator );
+			stringBuilder_t vcxprojContent = SB_Create( context->allocator );
 
 			SB_Appendf( &vcxprojContent, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
 			SB_Appendf( &vcxprojContent, "<Project ToolsVersion=\"4.0\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n" );
@@ -732,7 +731,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 			// write all filter guids
 			For ( u64, filterPathIndex, 0, filterPaths.count ) {
-				String filterPath = Path_FixSlashes( Mem_GetTempStorage(), &filterPaths[filterPathIndex]);
+				string_t filterPath = Path_FixSlashes( Mem_GetTempStorage(), &filterPaths[filterPathIndex]);
 
 				const char *guid = CreateVisualStudioGuid();
 
@@ -746,7 +745,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 			// now put all files in the filter
 			// visual studio requires that we list each file by type
 			{
-				auto WriteFileFilters = []( StringBuilder *stringBuilder, const Array<visualStudioFileFilter_t> &fileFilters, const char *tag ) {
+				auto WriteFileFilters = []( stringBuilder_t *stringBuilder, const array_t<visualStudioFileFilter_t> &fileFilters, const char *tag ) {
 					if ( fileFilters.count == 0 ) {
 						return;
 					}
@@ -790,7 +789,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 		printf( "Generating %s ... ", solutionFilename );
 
-		StringBuilder slnContent = SB_Create( context->allocator );
+		stringBuilder_t slnContent = SB_Create( context->allocator );
 
 		SB_Appendf( &slnContent, "\n" );
 		SB_Appendf( &slnContent, "Microsoft Visual Studio Solution File, Format Version 12.00\n" );
@@ -803,8 +802,8 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 			VisualStudioProject *project = &options->solution.projects[projectIndex];
 
 			// const char *projectName = Path_RemovePathFromFile( project->name.c_str() );
-			String projectNameStr = String_Set( project->name.c_str() );
-			String projectName = Path_RemovePathFromFile( &projectNameStr );
+			string_t projectNameStr = String_Set( project->name.c_str() );
+			string_t projectName = Path_RemovePathFromFile( &projectNameStr );
 
 			SB_Appendf( &slnContent, "Project(\"{%s}\") = \"%s\", \"%s.vcxproj\", \"{%s}\"\n", VISUAL_STUDIO_CPP_PROJECT_TYPE_GUID, projectName.data, projectName.data, projectGuids[projectIndex] );
 			SB_Appendf( &slnContent, "EndProject\n" );

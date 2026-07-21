@@ -45,7 +45,7 @@ SOFTWARE.
 #endif
 
 template<class T>
-void Array<T>::Init( LinearAllocator *alloc ) {
+void array_t<T>::Init( linearAllocator_t *alloc ) {
 	allocator = alloc;
 	data = NULL;
 	count = 0;
@@ -53,7 +53,7 @@ void Array<T>::Init( LinearAllocator *alloc ) {
 }
 
 template<class T>
-void Array<T>::Zero() {
+void array_t<T>::Zero() {
 	allocator = NULL;
 	data = NULL;
 	count = 0;
@@ -62,35 +62,35 @@ void Array<T>::Zero() {
 
 
 template<class T>
-void Array<T>::Reset() {
+void array_t<T>::Reset() {
 	count = 0;
 }
 
 template<class T>
-void Array<T>::Add( const T &element ) {
+void array_t<T>::Add( const T &element ) {
 	AddRange( &element, 1 );
 }
 
 template<class T>
-void Array<T>::AddRange( const T *ptr, const u64 numItems ) {
+void array_t<T>::AddRange( const T *ptr, const u64 numItems ) {
 	Reserve( count + numItems );
 	memcpy( data + count, ptr, numItems * sizeof( T ) );
 	count += numItems;
 }
 
 template<class T>
-void Array<T>::AddRange( const Array<T> *array ) {
+void array_t<T>::AddRange( const array_t<T> *array ) {
 	if ( array->count > 0 ) {
 		AddRange( array->data, array->count );
 	}
 }
 
 template<class T>
-void Array<T>::Reserve( const u64 newAlloced ) {
+void array_t<T>::Reserve( const u64 newAlloced ) {
 	if ( newAlloced > alloced ) {
 		alloced = NextPowerOf2Up( newAlloced );
 
-		T *newData = cast( T*, Mem_AllocatorAlloc( allocator, alloced * sizeof( T ) ) );
+		T *newData = Cast( T*, Mem_AllocatorAlloc( allocator, alloced * sizeof( T ) ) );
 		if ( count > 0 ) {
 			memcpy( newData, data, count * sizeof( T ) );
 		}
@@ -99,20 +99,20 @@ void Array<T>::Reserve( const u64 newAlloced ) {
 }
 
 template<class T>
-void Array<T>::Resize( const u64 newCount ) {
+void array_t<T>::Resize( const u64 newCount ) {
 	Reserve( newCount );
 	this->count = newCount;
 }
 
 template<class T>
-T& Array<T>::operator[]( const u64 index ) {
-	assert( index < count );
+T& array_t<T>::operator[]( const u64 index ) {
+	Assert( index < count );
 	return data[index];
 }
 
 template<class T>
-const T& Array<T>::operator[]( const u64 index ) const {
-	assert( index < count );
+const T& array_t<T>::operator[]( const u64 index ) const {
+	Assert( index < count );
 	return data[index];
 }
 

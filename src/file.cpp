@@ -44,8 +44,8 @@ SOFTWARE.
 ================================================================================================
 */
 
-void FS_FreeFileBuffer( String *buffer ) {
-	assert( buffer );
+void FS_FreeFileBuffer( string_t *buffer ) {
+	Assert( buffer );
 
 	free( buffer->data );
 	buffer->data = NULL;
@@ -53,9 +53,9 @@ void FS_FreeFileBuffer( String *buffer ) {
 	buffer->count = 0;
 }
 
-bool8 FS_ReadEntireFile( const char *filename, String *outBuffer ) {
-	assert( filename );
-	assert( outBuffer );
+bool8 FS_ReadEntireFile( const char *filename, string_t *outBuffer ) {
+	Assert( filename );
+	Assert( outBuffer );
 
 	u64 fileSize = 0;
 	if ( !FS_GetFileSize( filename, &fileSize ) ) {
@@ -68,7 +68,7 @@ bool8 FS_ReadEntireFile( const char *filename, String *outBuffer ) {
 		return 0;
 	}
 
-	char *temp = cast( char *, malloc( fileSize + 1 ) );
+	char *temp = Cast( char *, malloc( fileSize + 1 ) );
 
 	bool8 read = FS_ReadFile( &file, 0, fileSize, temp );
 
@@ -93,8 +93,8 @@ bool8 FS_ReadFile( file_t *file, const u64 size, void *outData ) {
 }
 
 bool8 FS_WriteEntireFile( const char *filename, const void *data, const u64 size ) {
-	assert( filename );
-	assert( data );
+	Assert( filename );
+	Assert( data );
 
 	file_t file = FS_OpenOrCreateFile( filename );
 
@@ -128,7 +128,7 @@ bool8 FS_WriteFile( file_t *file, const char *data ) {
 }
 
 bool8 FS_CreateFolderIfItDoesntExist( const char *path ) {
-	assert( path );
+	Assert( path );
 
 	if ( FS_FolderExists( path ) ) {
 		return true;

@@ -40,79 +40,79 @@ SOFTWARE.
 
 #include <malloc.h>
 
-struct ThreadBootstrapData {
-	ThreadFunc	thread_func;
+struct threadBootstrapData_t {
+	ThreadFunc	threadFunc;
 	void		*data;
-	u64			temp_storage_size;
+	u64			tempStorageSize;
 };
 
 static DWORD Thread_Bootstrap( void *data ) {
-	assert( data );
+	Assert( data );
 
-	ThreadBootstrapData *bootstrap_data = cast( ThreadBootstrapData *, data );
+	threadBootstrapData_t *bootstrapData = Cast( threadBootstrapData_t *, data );
 
-	assert( bootstrap_data->thread_func );
+	Assert( bootstrapData->threadFunc );
 
-	Mem_InitTempStorage( bootstrap_data->temp_storage_size );
+	Mem_InitTempStorage( bootstrapData->tempStorageSize );
 	defer { Mem_ShutdownTempStorage(); };
 
-	s32 exit_code = bootstrap_data->thread_func( bootstrap_data->data );
+	s32 exitCode = bootstrapData->threadFunc( bootstrapData->data );
 
-	free( bootstrap_data );
-	bootstrap_data = NULL;
+	free( bootstrapData );
+	bootstrapData = NULL;
 
-	DWORD exit_code_dword = cast( DWORD, exit_code );
+	DWORD exitCodeDword = Cast( DWORD, exitCode );
 
-	return exit_code_dword;
+	return exitCodeDword;
 }
 
-Thread Thread_Create( ThreadFunc thread_func, void *data ) {
-	assert( thread_func );
+thread_t Thread_Create( ThreadFunc threadFunc, void *data ) {
+	Assert( threadFunc );
 
 	// bootstrap data cant be local
 	// could go out of scope by the time the thread actually fires
 	// TODO: DM: 24/03/2026: do we just pass allocator here so people can specify what allocator this goes on to?
 	// if NULL allocator then just malloc?
-	ThreadBootstrapData *bootstrap = cast( ThreadBootstrapData *, malloc( sizeof( ThreadBootstrapData ) ) );
-	bootstrap->thread_func = thread_func;
+	threadBootstrapData_t *bootstrap = Cast( threadBootstrapData_t *, malloc( sizeof( threadBootstrapData_t ) ) );
+	bootstrap->threadFunc = threadFunc;
 	bootstrap->data = data;
-	bootstrap->temp_storage_size = Mem_GetTempStorage()->reservedBytes;
+	bootstrap->tempStorageSize = Mem_GetTempStorage()->reservedBytes;
 
-	DWORD creation_flags = 0;
+	DWORD creationFlags = 0;
 
-	HANDLE handle = CreateThread( NULL, 0, Thread_Bootstrap, bootstrap, creation_flags, NULL );
+	HANDLE handle = CreateThread( NULL, 0, Thread_Bootstrap, bootstrap, creationFlags, NULL );
 
 	return { handle };
 }
 
-void Thread_Destroy( Thread *thread ) {
-	assert( thread );
-	assert( thread->ptr );
+void Thread_Destroy( thread_t *thread ) {
+	Assert( thread );
+	Assert( thread->ptr );
 
-	CloseHandle( cast( HANDLE, thread->ptr ) );
+	CloseHandle( Cast( HANDLE, thread->ptr ) );
 	thread->ptr = NULL;
 }
 
-s32 Thread_Wait( Thread *thread ) {
-	assert( thread );
-	assert( thread->ptr );
+s32 Thread_Wait( thread_t *thread ) {
+	Assert( thread );
+	Assert( thread->ptr );
 
-	HANDLE handle = cast( HANDLE, thread->ptr );
+	HANDLE handle = Cast( HANDLE, thread->ptr );
 
 	DWORD result = WaitForSingleObject( handle, INFINITE );
 
-	assert( result != WAIT_FAILED );
-	unused( result );
+	Assert( result != WAIT_FAILED );
+	UNUSED( result );
 
-	DWORD exit_code = S32_MAX;
-	if ( !GetExitCodeThread( handle, &exit_code ) ) {
+	DWORD exitCode = S32_MAX;
+	if ( !GetExitCodeThread( handle, &exitCode ) ) {
 		// TODO: DM: 24/03/2026: handle errors etc.
 	}
 
-	return trunc_cast( s32, exit_code );
+	return TruncCast( s32, exitCode );
 }
 
-u32	Thread_AtomicIncrement( Atomic32 *atomic ) {
+u32	Thread_AtomicIncrement( atomic32_t *atomic ) {
 	return InterlockedIncrement( &atomic->value );
 }
 

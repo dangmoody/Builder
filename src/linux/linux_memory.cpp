@@ -34,25 +34,25 @@ SOFTWARE.
 
 #include <sys/mman.h>
 
-void	*VirtualReserve( const u64 size_bytes ) {
-	return mmap( NULL, size_bytes, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0 );
+void	*Mem_VirtualReserve( const u64 sizeBytes ) {
+	return mmap( NULL, sizeBytes, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0 );
 }
 
-void	*VirtualCommit( void *ptr, const u64 size_bytes ) {
-	if ( mprotect( ptr, size_bytes, PROT_READ | PROT_WRITE ) == -1 ) {
+void	*Mem_VirtualCommit( void *ptr, const u64 sizeBytes ) {
+	if ( mprotect( ptr, sizeBytes, PROT_READ | PROT_WRITE ) == -1 ) {
 		return NULL;
 	}
 
 	return ptr;	// TODO: DM: 21/03/2026: is that correct?
 }
 
-void	VirtualDecommit( void *ptr, const u64 size_bytes ) {
-	if ( madvise( ptr, size_bytes, MADV_DONTNEED ) == -1 ) {
+void	Mem_VirtualDecommit( void *ptr, const u64 sizeBytes ) {
+	if ( madvise( ptr, sizeBytes, MADV_DONTNEED ) == -1 ) {
 		// TODO: DM: 21/03/2026: handle error
 	}
 }
 
-void	VirtualFree( void *ptr ) {
+void	Mem_VirtualFree( void *ptr ) {
 	// TODO: DM: 21/03/2026: is -1 OK here?
 	if ( munmap( ptr, 0 ) == -1 ) {
 		// TODO: DM: 21/03/2026: handle error

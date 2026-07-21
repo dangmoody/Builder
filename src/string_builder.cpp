@@ -41,13 +41,13 @@ SOFTWARE.
 /*
 ================================================================================================
 
-	String Builder
+	string_t Builder
 
 ================================================================================================
 */
 
-StringBuilder SB_Create( LinearAllocator *allocator ) {
-	assert( allocator );
+stringBuilder_t SB_Create( linearAllocator_t *allocator ) {
+	Assert( allocator );
 
 	return {
 		.allocator	= allocator,
@@ -56,23 +56,23 @@ StringBuilder SB_Create( LinearAllocator *allocator ) {
 	};
 }
 
-void SB_Appendf( StringBuilder *builder, const char *fmt, ... ) {
-	assert( builder );
-	assert( fmt );
+void SB_Appendf( stringBuilder_t *builder, const char *fmt, ... ) {
+	Assert( builder );
+	Assert( fmt );
 
 	va_list args;
 	va_start( args, fmt );
 
-	StringBuilderBuffer *buffer = cast( StringBuilderBuffer *, Mem_AllocatorAlloc( builder->allocator, sizeof( StringBuilderBuffer ) ) );
-	memset( buffer, 0, sizeof( StringBuilderBuffer ) );
+	stringBuilderBuffer_t *buffer = Cast( stringBuilderBuffer_t *, Mem_AllocatorAlloc( builder->allocator, sizeof( stringBuilderBuffer_t ) ) );
+	memset( buffer, 0, sizeof( stringBuilderBuffer_t ) );
 
 	va_list argsCopy;
 	va_copy( argsCopy, args );
 
-	buffer->length = trunc_cast( u32, stbsp_vsnprintf( NULL, 0, fmt, args ) );
+	buffer->length = TruncCast( u32, stbsp_vsnprintf( NULL, 0, fmt, args ) );
 
-	buffer->data = cast( char *, Mem_AllocatorAlloc( builder->allocator, buffer->length + 1, 1 ) );
-	stbsp_vsnprintf( buffer->data, cast( int, buffer->length + 1 ), fmt, argsCopy );
+	buffer->data = Cast( char *, Mem_AllocatorAlloc( builder->allocator, buffer->length + 1, 1 ) );
+	stbsp_vsnprintf( buffer->data, Cast( int, buffer->length + 1 ), fmt, argsCopy );
 	va_end( argsCopy );
 	buffer->data[buffer->length] = 0;
 
@@ -89,12 +89,12 @@ void SB_Appendf( StringBuilder *builder, const char *fmt, ... ) {
 	va_end( args );
 }
 
-const char *SB_ToString( StringBuilder *builder ) {
+const char *SB_ToString( stringBuilder_t *builder ) {
 	char *result = NULL;
 	u64 totalLength = 0;
 	u64 offset = 0;
 
-	StringBuilderBuffer *current = builder->head;
+	stringBuilderBuffer_t *current = builder->head;
 
 	if ( !current ) {
 		return NULL;
@@ -108,7 +108,7 @@ const char *SB_ToString( StringBuilder *builder ) {
 
 	totalLength += 1;
 
-	result = cast( char *, Mem_AllocatorAlloc( builder->allocator, totalLength * sizeof( char ), 1 ) );
+	result = Cast( char *, Mem_AllocatorAlloc( builder->allocator, totalLength * sizeof( char ), 1 ) );
 
 	current = builder->head;
 

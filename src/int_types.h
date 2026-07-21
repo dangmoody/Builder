@@ -76,4 +76,17 @@ typedef u8			bool8;
 #define FLOAT64_MAX	DBL_MAX
 
 // returns bit position 'x'
-#define bit( x )	( 1ULL << (x) )
+#define BIT( x )	( 1ULL << (x) )
+
+// returns number of elements in static array
+#define COUNT_OF( x )					( sizeof( (x) ) / sizeof( (x)[0] ) )
+
+// use this to avoid compiler warning about unused variable if you need to keep it
+#define UNUSED( x )						( (void) (x) )
+
+// for loop helper macro
+// DM: these exist because I'm getting bored of typing the whole thing out every time and it feels like boiler-plate
+#define For( Type, it, start, count )	for ( Type it = (start); it < (count); it++ )
+
+// reverse for loop helper macro
+#define RFor( Type, it, start, count )	for ( Type it = (count); it-- > (start); )

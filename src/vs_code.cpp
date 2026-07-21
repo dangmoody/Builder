@@ -33,7 +33,6 @@ SOFTWARE.
 #include "paths.h"
 #include "string.h"
 #include "debug.h"
-#include "helpers.h"
 #include "temp_storage.h"
 
 bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options ) {
@@ -64,7 +63,7 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 
 		printf( "Generating %s ... ", cppPropertiesJSONFilename );
 
-		StringBuilder cppPropertiesJSONContent = SB_Create( Mem_GetTempStorage() );
+		stringBuilder_t cppPropertiesJSONContent = SB_Create( Mem_GetTempStorage() );
 
 		// defer { string_builder_destroy( &cppPropertiesJSONContent ); };
 
@@ -185,7 +184,7 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 
 		printf( "Generating %s ... ", tasksJSONFilename );
 
-		StringBuilder tasksJSONContent = SB_Create( Mem_GetTempStorage() );
+		stringBuilder_t tasksJSONContent = SB_Create( Mem_GetTempStorage() );
 
 		// defer { string_builder_destroy( &tasksJSONContent ); };
 
@@ -271,7 +270,7 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 
 		printf( "Generating %s ... ", launchJSONFilename );
 
-		StringBuilder launchJSONContent = SB_Create( Mem_GetTempStorage() );
+		stringBuilder_t launchJSONContent = SB_Create( Mem_GetTempStorage() );
 
 		// defer { string_builder_destroy( &launchJSONContent ); };
 

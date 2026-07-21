@@ -38,21 +38,21 @@ SOFTWARE.
 /*
 ================================================================================================
 
-	Library
+	library_t
 
 ================================================================================================
 */
 
-Library Library_Load( const char *name ) {
-	assert( name );
+library_t Library_Load( const char *name ) {
+	Assert( name );
 
 	return { LoadLibraryA( name ) };
 }
 
-bool8 Library_Unload( Library *library ) {
-	assert( library && library->ptr );
+bool8 Library_Unload( library_t *library ) {
+	Assert( library && library->ptr );
 
-	if ( !FreeLibrary( cast( HMODULE, library->ptr ) ) ) {
+	if ( !FreeLibrary( Cast( HMODULE, library->ptr ) ) ) {
 		return false;
 	}
 
@@ -61,13 +61,13 @@ bool8 Library_Unload( Library *library ) {
 	return true;
 }
 
-void* Library_GetSymbol( const Library library, const char *symbol_name ) {
-	assert( library.ptr );
-	assert( symbol_name );
+void* Library_GetSymbol( const library_t library, const char *symbolName ) {
+	Assert( library.ptr );
+	Assert( symbolName );
 
-	FARPROC symbol = GetProcAddress( cast( HMODULE, library.ptr ), symbol_name );
+	FARPROC symbol = GetProcAddress( Cast( HMODULE, library.ptr ), symbolName );
 
-	return cast( void *, symbol );
+	return Cast( void *, symbol );
 }
 
 #endif // _WIN32

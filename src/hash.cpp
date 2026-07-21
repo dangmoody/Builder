@@ -29,15 +29,14 @@ SOFTWARE.
 #include "hash.h"
 
 #include "typecast.h"
-#include "helpers.h"
 #include "linear_allocator.h"
 #include "string.h"
 #include "debug.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
-#define XXH_ASSUME assert
-#define XXH_ASSERT assert
+#define XXH_ASSUME Assert
+#define XXH_ASSERT Assert
 #include "xxhash/xxhash.c"
 #pragma clang diagnostic pop
 
@@ -50,19 +49,19 @@ SOFTWARE.
 */
 
 u64 Hash64( const void *data, const u64 length, const u64 seed ) {
-	assert( data );
+	Assert( data );
 
 	return XXH64( data, length, seed );
 }
 
 u64 HashString( const char *string, const u64 seed ) {
-	assert( string );
+	Assert( string );
 
 	return Hash64( string, strlen( string ), seed );
 }
 
-u64 HashString( const String *string, const u64 seed ) {
-	assert( string );
+u64 HashString( const string_t *string, const u64 seed ) {
+	Assert( string );
 
 	return Hash64( string->data, string->count, seed );
 }

@@ -33,7 +33,7 @@ SOFTWARE.
 /*
 ================================================================================================
 
-	Thread
+	thread_t
 
 	OS-agnostic functions for creating, scheduling, and destroying threads and semaphores.
 
@@ -42,24 +42,24 @@ SOFTWARE.
 ================================================================================================
 */
 
-struct Thread {
+struct thread_t {
 	void	*ptr;
 };
 
-struct Atomic32 {
+struct atomic32_t {
 	volatile u32	value;
 };
 
 typedef s32 ( *ThreadFunc )( void *data );
 
 // Creates and immediately executes a thread that runs 'threadFunc' with 'data' passed through.
-Thread		Thread_Create( ThreadFunc threadFunc, void *data );
+thread_t		Thread_Create( ThreadFunc threadFunc, void *data );
 
 // Waits for the thread to stop running, then destroys it.
-void		Thread_Destroy( Thread *thread );
+void		Thread_Destroy( thread_t *thread );
 
 // Waits for the thread to stop running, returning the exit code when it finished.
-s32			Thread_Wait( Thread *thread );
+s32			Thread_Wait( thread_t *thread );
 
 // Performs an atomic increment.
-u32			Thread_AtomicIncrement( Atomic32 *atomic );
+u32			Thread_AtomicIncrement( atomic32_t *atomic );

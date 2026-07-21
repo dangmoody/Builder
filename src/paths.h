@@ -30,8 +30,8 @@ SOFTWARE.
 
 #include "int_types.h"
 
-struct LinearAllocator;
-struct String;
+struct linearAllocator_t;
+struct string_t;
 
 /*
 ================================================================================================
@@ -51,38 +51,38 @@ struct String;
 #endif
 
 // Returns the absolute path of where the current program is running from.
-String				Path_AppPath( LinearAllocator *allocator );
+string_t				Path_AppPath( linearAllocator_t *allocator );
 
 // Returns the path that your program is currently running from.
-String				Path_GetCwd( LinearAllocator *allocator );
+string_t				Path_GetCwd( linearAllocator_t *allocator );
 
 // Sets the current working directory (cwd) that the program will run from to the specified path.
 bool8				Path_SetCwd( const char *path );
 
 // Returns the absolute path of 'file'.
-String				Path_AbsolutePath( LinearAllocator *allocator, const char *path );
+string_t				Path_AbsolutePath( linearAllocator_t *allocator, const char *path );
 
 // If 'path' is a path with a filename, then returns just the path part with the filename part removed.  Otherwise returns the original string.
-String				Path_RemoveFileFromPath( const String *path );
+string_t				Path_RemoveFileFromPath( const string_t *path );
 
 // If 'path' is a path with a filename, then returns just the filename part with the path part removed.  Otherwise returns the original string.
-String				Path_RemovePathFromFile( const String *path );
+string_t				Path_RemovePathFromFile( const string_t *path );
 
 // If 'filename' is a filename with a file extension then returns that filename without the file extension.  Otherwise returns the original filename.
-String				Path_RemoveFileExtension( const String *filename );
+string_t				Path_RemoveFileExtension( const string_t *filename );
 
 // On Windows:   Returns true if the path starts with a letter followed by a colon (for example: "C:"), otherwise returns false.
 // On Mac/Linux: Returns true if the path starts with two backslashes or a single forward slash, otherwise returns false.
 bool8				Path_IsAbsolute( const char *path );
 
 // Make sure that any slashes found in 'path' are what the OS expects them to be.
-String				Path_FixSlashes( LinearAllocator *allocator, String *str );
+string_t				Path_FixSlashes( linearAllocator_t *allocator, string_t *str );
 
-String				Path_RelativePathTo( LinearAllocator *allocator, const char *from, const char *to );
+string_t				Path_RelativePathTo( linearAllocator_t *allocator, const char *from, const char *to );
 
 // DO NOT CALL THIS DIRECTLY.
 // CALL path_join INSTEAD.
-String				Path_JoinInternal( LinearAllocator *allocator, const int count, ... );
+string_t				Path_JoinInternal( linearAllocator_t *allocator, const int count, ... );
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wc++98-compat"

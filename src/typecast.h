@@ -40,8 +40,8 @@ SOFTWARE.
 */
 
 // Call these ones!
-#define cast( Type, x )				(Type) (x)
-#define trunc_cast( Type, x )		TruncCastInternal<Type>( (x) )
+#define Cast( Type, x )				(Type) (x)
+#define TruncCast( Type, x )		TruncCastInternal<Type>( (x) )
 
 
 #pragma clang diagnostic push
@@ -54,35 +54,35 @@ SOFTWARE.
 // USE THE MACROS ABOVE!
 template<class OutType, class InType>
 OutType TruncCastInternal( const InType in ) {
-	//bool8 isInputFloatingPoint = cast( InType, 0.5 ) != 0;
-	bool8 isOutputFloatingPoint = cast( OutType, 0.5 ) != 0;
+	//bool8 isInputFloatingPoint = Cast( InType, 0.5 ) != 0;
+	bool8 isOutputFloatingPoint = Cast( OutType, 0.5 ) != 0;
 
-	bool8 isInputSigned = cast( InType, -1 ) < 0;
-	bool8 isOutputSigned = cast( OutType, -1 ) < 0;
+	bool8 isInputSigned = Cast( InType, -1 ) < 0;
+	bool8 isOutputSigned = Cast( OutType, -1 ) < 0;
 
 	OutType minOutputValue = 0;
 	OutType maxOutputValue = 0;
 
 	if ( isOutputFloatingPoint ) {
-		minOutputValue = cast( OutType, -FLOAT32_MAX );
-		maxOutputValue = cast( OutType, FLOAT32_MAX );
+		minOutputValue = Cast( OutType, -FLOAT32_MAX );
+		maxOutputValue = Cast( OutType, FLOAT32_MAX );
 	} else {
 		if ( isOutputSigned ) {
-			maxOutputValue = cast( OutType, ( 1ULL << ( sizeof( OutType ) * 8 - 1 ) ) - 1 );
-			minOutputValue = cast( OutType, -maxOutputValue - 1 );
+			maxOutputValue = Cast( OutType, ( 1ULL << ( sizeof( OutType ) * 8 - 1 ) ) - 1 );
+			minOutputValue = Cast( OutType, -maxOutputValue - 1 );
 		} else {
 			minOutputValue = 0;
-			maxOutputValue = cast( OutType, ~0 );
+			maxOutputValue = Cast( OutType, ~0 );
 		}
 	}
 
 	if ( isInputSigned ) {
-		assert( in >= cast( OutType, minOutputValue ) );
+		Assert( in >= Cast( OutType, minOutputValue ) );
 	}
 
-	assert( in <= cast( OutType, maxOutputValue ) );
+	Assert( in <= Cast( OutType, maxOutputValue ) );
 
-	return cast( OutType, in );
+	return Cast( OutType, in );
 }
 
 #pragma clang diagnostic pop

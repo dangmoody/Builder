@@ -45,15 +45,15 @@ SOFTWARE.
 */
 
 u32 OS_GetVirtualMemoryPageSize() {
-	SYSTEM_INFO sys_info = {};
-	GetSystemInfo( &sys_info );
-	return sys_info.dwPageSize;
+	SYSTEM_INFO sysInfo = {};
+	GetSystemInfo( &sysInfo );
+	return sysInfo.dwPageSize;
 }
 
 u32 OS_GetNumCpuCores() {
-	SYSTEM_INFO sys_info = {};
-	GetSystemInfo( &sys_info );
-	return sys_info.dwNumberOfProcessors;
+	SYSTEM_INFO sysInfo = {};
+	GetSystemInfo( &sysInfo );
+	return sysInfo.dwNumberOfProcessors;
 }
 
 #endif // _WIN32

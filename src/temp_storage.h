@@ -30,7 +30,7 @@ SOFTWARE.
 
 #include "int_types.h"
 
-struct LinearAllocator;
+struct linearAllocator_t;
 
 
 /*
@@ -45,7 +45,7 @@ struct LinearAllocator;
 ================================================================================================
 */
 
-LinearAllocator	*Mem_GetTempStorage();
+linearAllocator_t	*Mem_GetTempStorage();
 
 void				Mem_InitTempStorage( const u64 sizeBytes );
 void				Mem_ShutdownTempStorage();

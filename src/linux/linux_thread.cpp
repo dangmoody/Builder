@@ -28,14 +28,13 @@ SOFTWARE.
 
 #ifdef __linux__
 
-#include <core_thread.h>
+#include "../thread.h"
 
-#include <core_helpers.h>
-#include <debug.h>
-#include <defer.h>
-#include <typecast.inl>
-#include <temp_storage.h>
-#include <linear_allocator.h>
+#include "../debug.h"
+#include "../defer.h"
+#include "../typecast.h"
+#include "../temp_storage.h"
+#include "../linear_allocator.h"
 
 #include <pthread.h>
 #include <errno.h>
@@ -43,89 +42,89 @@ SOFTWARE.
 #include <string.h>
 #include <malloc.h>
 
-struct ThreadBootstrapData {
-	ThreadFunc		thread_func;
+struct threadBootstrapData_t {
+	ThreadFunc		threadFunc;
 	void			*data;
-	u64				temp_storage_size;
+	u64				tempStorageSize;
 };
 
 static void *Thread_Bootstrap( void *data ) {
-	assert( data );
+	Assert( data );
 
-	ThreadBootstrapData *bootstrap_data = cast( ThreadBootstrapData *, data );
+	threadBootstrapData_t *bootstrapData = Cast( threadBootstrapData_t *, data );
 
-	assert( bootstrap_data );
+	Assert( bootstrapData );
 
-	Mem_InitTempStorage( bootstrap_data->temp_storage_size );
+	Mem_InitTempStorage( bootstrapData->tempStorageSize );
 	defer { Mem_ShutdownTempStorage(); };
 
-	s32 exit_code = bootstrap_data->thread_func( bootstrap_data->data );
+	s32 exitCode = bootstrapData->threadFunc( bootstrapData->data );
 
-	free( bootstrap_data );
-	bootstrap_data = NULL;
+	free( bootstrapData );
+	bootstrapData = NULL;
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wint-to-pointer-cast"
-	s32 *exit_code_ptr = cast( s32 *, exit_code );
+	s32 *exitCodePtr = Cast( s32 *, exitCode );
 #pragma clang diagnostic pop
 
-	return cast( void *, exit_code_ptr );
+	return Cast( void *, exitCodePtr );
 }
 
-Thread		Thread_Create( ThreadFunc thread_func, void *data ) {
-	assert( thread_func );
+thread_t		Thread_Create( ThreadFunc threadFunc, void *data ) {
+	Assert( threadFunc );
 
-	pthread_t thread_linux;
+	pthread_t threadLinux;
 
 	pthread_attr_t attribs = {};
 	pthread_attr_init( &attribs );
 	defer { pthread_attr_destroy( &attribs ); };
 
-	ThreadBootstrapData *bootstrap_data = cast( ThreadBootstrapData *, malloc( sizeof( ThreadBootstrapData ) ) );
-	bootstrap_data->thread_func = thread_func;
-	bootstrap_data->data = data;
-	bootstrap_data->temp_storage_size = Mem_GetTempStorage()->reservedBytes;
+	threadBootstrapData_t *bootstrapData = Cast( threadBootstrapData_t *, malloc( sizeof( threadBootstrapData_t ) ) );
+	bootstrapData->threadFunc = threadFunc;
+	bootstrapData->data = data;
+	bootstrapData->tempStorageSize = Mem_GetTempStorage()->reservedBytes;
 
-	if ( pthread_create( &thread_linux, &attribs, &Thread_Bootstrap, bootstrap_data ) != 0 ) {
+	if ( pthread_create( &threadLinux, &attribs, &Thread_Bootstrap, bootstrapData ) != 0 ) {
 		int err = errno;
-		fatal_error( "Failed to create thread: %s\n", strerror( err ) );
+		FatalError( "Failed to create thread: %s\n", strerror( err ) );
 
 		return { NULL };
 	}
 
-	return { cast( void *, thread_linux ) };
+	return { Cast( void *, threadLinux ) };
 }
 
-void		Thread_Destroy( Thread *thread ) {
-	pthread_t pthread_linux = cast( pthread_t, thread->ptr );
+void		Thread_Destroy( thread_t *thread ) {
+	pthread_t pthreadLinux = Cast( pthread_t, thread->ptr );
 
-	if ( pthread_linux ) {
-		if ( pthread_detach( pthread_linux ) != 0 ) {
+	if ( pthreadLinux ) {
+		if ( pthread_detach( pthreadLinux ) != 0 ) {
 			int err = errno;
-			fatal_error( "Failed to detach thread: %s\n", strerror( err ) );
+			FatalError( "Failed to detach thread: %s\n", strerror( err ) );
 		}
 
 		thread->ptr = NULL;
 	}
 }
 
-s32		Thread_Wait( Thread *thread ) {
-	pthread_t pthread_linux = cast( pthread_t, thread->ptr );
+s32		Thread_Wait( thread_t *thread ) {
+	pthread_t pthreadLinux = Cast( pthread_t, thread->ptr );
 
-	s32 *exit_code_ptr;
+	s32 *exitCodePtr;
 
-	if ( pthread_join( pthread_linux, cast( void **, &exit_code_ptr ) ) != 0 ) {
+	if ( pthread_join( pthreadLinux, Cast( void **, &exitCodePtr ) ) != 0 ) {
 		int err = errno;
-		fatal_error( "Failed to join thread: %s\n", strerror( err ) );
+		FatalError( "Failed to join thread: %s\n", strerror( err ) );
 
 		return -1;
 	}
 
 	thread->ptr = NULL;
 
-	s64 exit_code_2 = cast( s64, exit_code_ptr );
+	s64 exitCode2 = Cast( s64, exitCodePtr );
 
-	return trunc_cast( s32, exit_code_2 );
+	return TruncCast( s32, exitCode2 );
 }
 
 #pragma clang diagnostic push
@@ -134,8 +133,8 @@ s32		Thread_Wait( Thread *thread ) {
 // so we need them?
 #pragma clang diagnostic ignored "-Watomic-implicit-seq-cst"
 
-u32		Thread_AtomicIncrement( Atomic32 *atomic ) {
-	assert( atomic );
+u32		Thread_AtomicIncrement( atomic32_t *atomic ) {
+	Assert( atomic );
 	return __sync_add_and_fetch( &atomic->value, 1 );
 }
 

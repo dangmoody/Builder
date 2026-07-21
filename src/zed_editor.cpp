@@ -33,7 +33,6 @@ SOFTWARE.
 #include "file.h"
 #include "debug.h"
 #include "string_builder.h"
-#include "helpers.h"
 #include "temp_storage.h"
 
 bool8 GenerateZedJSONFiles( buildContext_t *context, BuilderOptions *options ) {
@@ -64,7 +63,7 @@ bool8 GenerateZedJSONFiles( buildContext_t *context, BuilderOptions *options ) {
 
 		printf( "Generating %s ... ", tasksJSONFilename );
 
-		StringBuilder tasksJSONContent = SB_Create( Mem_GetTempStorage() );
+		stringBuilder_t tasksJSONContent = SB_Create( Mem_GetTempStorage() );
 
 		// defer { string_builder_destroy( &tasksJSONContent ); };
 
@@ -128,7 +127,7 @@ bool8 GenerateZedJSONFiles( buildContext_t *context, BuilderOptions *options ) {
 
 				const char *fullBinaryName = BuildConfig_GetFullBinaryName( config, Mem_GetTempStorage() );
 
-				String zedDebugConfigBinaryName = String_Set( fullBinaryName );
+				string_t zedDebugConfigBinaryName = String_Set( fullBinaryName );
 				zedDebugConfigBinaryName = String_Replace( Mem_GetTempStorage(), &zedDebugConfigBinaryName, '\\', '/' );
 
 				ZedDebugConfig debugConfig = {
@@ -147,7 +146,7 @@ bool8 GenerateZedJSONFiles( buildContext_t *context, BuilderOptions *options ) {
 
 		printf( "Generating %s ... ", debugJSONFilename );
 
-		StringBuilder debugJSONContent = SB_Create( Mem_GetTempStorage() );
+		stringBuilder_t debugJSONContent = SB_Create( Mem_GetTempStorage() );
 
 		// defer { string_builder_destroy( &debugJSONContent ); };
 

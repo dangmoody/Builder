@@ -38,10 +38,10 @@ s64		Time_Cycles( void );
 float64	Time_Seconds( void );
 
 // returns a timestamp in milliseconds
-float64	Time_Ms( void );
+float64	Time_MS( void );
 
 // returns a timestamp in microseconds
-float64	Time_Us( void );
+float64	Time_US( void );
 
 // returns a timestamp in nanoseconds
-float64	Time_Ns( void );
+float64	Time_NS( void );

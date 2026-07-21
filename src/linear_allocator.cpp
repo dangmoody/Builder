@@ -29,7 +29,6 @@ SOFTWARE.
 #include "linear_allocator.h"
 
 #include "typecast.h"
-#include "helpers.h"
 #include "memory.h"
 #include "math.h"
 #include "debug.h"
@@ -39,8 +38,8 @@ SOFTWARE.
 #include <malloc.h>
 #include <memory.h>
 
-LinearAllocator *Mem_AllocatorCreate( const u64 reservedBytes ) {
-	assert( reservedBytes );
+linearAllocator_t *Mem_AllocatorCreate( const u64 reservedBytes ) {
+	Assert( reservedBytes );
 
 	u32 pageSize = OS_GetVirtualMemoryPageSize();
 
@@ -50,45 +49,45 @@ LinearAllocator *Mem_AllocatorCreate( const u64 reservedBytes ) {
 		actualReservedBytes = AlignUp( actualReservedBytes, pageSize );
 
 		// warning(
-		// 	"LinearAllocator: specified reserved bytes (%llu) is not a multiple of the virtual memory page size (%u bytes).\n"
+		// 	"linearAllocator_t: specified reserved bytes (%llu) is not a multiple of the virtual memory page size (%u bytes).\n"
 		// 	"The OS dictates that any virtual memory pages that get reserved will automatically be a multiple of %u, so the specified reserved bytes will be rounded up to %llu bytes.\n"
 		// 	, reservedBytes, pageSize, pageSize, actualReservedBytes
 		// );
 	}
 
 	// TODO: DM: 29/12/2025: alloc the whole allocator plus its entire arena in one virtual alloc call
-	LinearAllocator *allocator = cast( LinearAllocator *, malloc( sizeof( LinearAllocator ) ) );
-	memset( allocator, 0, sizeof( LinearAllocator ) );
-	allocator->ptr = cast( u8 *, VirtualReserve( actualReservedBytes ) );
+	linearAllocator_t *allocator = Cast( linearAllocator_t *, malloc( sizeof( linearAllocator_t ) ) );
+	memset( allocator, 0, sizeof( linearAllocator_t ) );
+	allocator->ptr = Cast( u8 *, Mem_VirtualReserve( actualReservedBytes ) );
 	allocator->reservedBytes = actualReservedBytes;
 	allocator->virtualMemoryPageSize = pageSize;
 
 	return allocator;
 }
 
-void Mem_AllocatorDestroy( LinearAllocator *allocator ) {
-	assert( allocator );
+void Mem_AllocatorDestroy( linearAllocator_t *allocator ) {
+	Assert( allocator );
 
-	VirtualFree( allocator->ptr );
+	Mem_VirtualFree( allocator->ptr );
 
 	free( allocator );
 	allocator = NULL;
 }
 
-void* Mem_AllocatorAlloc( LinearAllocator *allocator, const u64 sizeBytes, const u32 alignment ) {
-	assert( allocator );
-	assert( sizeBytes );
+void* Mem_AllocatorAlloc( linearAllocator_t *allocator, const u64 sizeBytes, const u32 alignment ) {
+	Assert( allocator );
+	Assert( sizeBytes );
 
 	allocator->offset = AlignUp( allocator->offset, alignment );
 
 	if ( allocator->offset >= allocator->comittedBytes || allocator->offset + sizeBytes > allocator->comittedBytes ) {
 		u64 newComittedBytes = AlignUp( allocator->offset + sizeBytes, allocator->virtualMemoryPageSize );
 
-		assert( newComittedBytes <= allocator->reservedBytes );
+		Assert( newComittedBytes <= allocator->reservedBytes );
 
-		void *result = VirtualCommit( allocator->ptr + allocator->comittedBytes, newComittedBytes - allocator->comittedBytes );
-		assert( result );
-		unused( result );
+		void *result = Mem_VirtualCommit( allocator->ptr + allocator->comittedBytes, newComittedBytes - allocator->comittedBytes );
+		Assert( result );
+		UNUSED( result );
 
 		allocator->comittedBytes = newComittedBytes;
 	}
@@ -100,18 +99,18 @@ void* Mem_AllocatorAlloc( LinearAllocator *allocator, const u64 sizeBytes, const
 	return ptr;
 }
 
-void Mem_AllocatorReset( LinearAllocator *allocator ) {
+void Mem_AllocatorReset( linearAllocator_t *allocator ) {
 	allocator->offset = 0;
 }
 
-u64 Mem_AllocatorTell( LinearAllocator *allocator ) {
+u64 Mem_AllocatorTell( linearAllocator_t *allocator ) {
 	return allocator->offset;
 }
 
-void Mem_AllocatorRewindTo( LinearAllocator *allocator, const u64 offset ) {
+void Mem_AllocatorRewindTo( linearAllocator_t *allocator, const u64 offset ) {
 	allocator->offset = offset;
 }
 
-void Mem_AllocatorRewindBy( LinearAllocator *allocator, const u64 bytes ) {
+void Mem_AllocatorRewindBy( linearAllocator_t *allocator, const u64 bytes ) {
 	allocator->offset -= bytes;
 }

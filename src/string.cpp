@@ -30,7 +30,6 @@ SOFTWARE.
 #include "debug.h"
 #include "typecast.h"
 #include "temp_storage.h"
-#include "helpers.h"
 #include "linear_allocator.h"
 
 #include "stb_local.h"
@@ -38,21 +37,21 @@ SOFTWARE.
 #include <stdarg.h>
 #include <string.h>
 
-static String String_Vprintf( LinearAllocator *allocator, const char *fmt, va_list args ) {
-	assert( allocator );
-	assert( fmt );
+static string_t String_Vprintf( linearAllocator_t *allocator, const char *fmt, va_list args ) {
+	Assert( allocator );
+	Assert( fmt );
 
-	String result;
+	string_t result;
 
 	va_list argsCopy;
 	va_copy( argsCopy, args );
 
 	int length = stbsp_vsnprintf( NULL, 0, fmt, args );
-	assert( length >= 0 );
+	Assert( length >= 0 );
 
-	result.count = trunc_cast( u64, length );
+	result.count = TruncCast( u64, length );
 
-	result.data = cast( char *, Mem_AllocatorAlloc( allocator, result.count + 1 ) );
+	result.data = Cast( char *, Mem_AllocatorAlloc( allocator, result.count + 1 ) );
 	stbsp_vsnprintf( result.data, length + 1, fmt, argsCopy );
 
 	va_end( argsCopy );
@@ -63,48 +62,48 @@ static String String_Vprintf( LinearAllocator *allocator, const char *fmt, va_li
 /*
 ================================================================================================
 
-	String
+	string_t
 
 ================================================================================================
 */
 
-String String_Set( const char *str ) {
-	assert( str );
+string_t String_Set( const char *str ) {
+	Assert( str );
 
 	return String_Set( str, strlen( str ) );
 }
 
-String String_Set( const char *str, const u64 count ) {
-	assert( str );
+string_t String_Set( const char *str, const u64 count ) {
+	Assert( str );
 
-	return String {
-		.data	= cast( char *, str ),
+	return string_t {
+		.data	= Cast( char *, str ),
 		.count	= count,
 	};
 }
 
-String String_Substring( const char *str, const u64 offset, const u64 count ) {
-	assert( str );
+string_t String_Substring( const char *str, const u64 offset, const u64 count ) {
+	Assert( str );
 
-	return String {
-		.data	= cast( char *, str ) + offset,
+	return string_t {
+		.data	= Cast( char *, str ) + offset,
 		.count	= count,
 	};
 }
 
-String String_Alloc( LinearAllocator *allocator, const char *str ) {
-	assert( allocator );
-	assert( str );
+string_t String_Alloc( linearAllocator_t *allocator, const char *str ) {
+	Assert( allocator );
+	Assert( str );
 
 	return String_Alloc( allocator, str, strlen( str ) );
 }
 
-String String_Alloc( LinearAllocator *allocator, const char *str, const u64 length ) {
-	assert( allocator );
-	assert( str );
+string_t String_Alloc( linearAllocator_t *allocator, const char *str, const u64 length ) {
+	Assert( allocator );
+	Assert( str );
 
-	String result = {
-		.data	= cast( char *, Mem_AllocatorAlloc( allocator, length ) ),
+	string_t result = {
+		.data	= Cast( char *, Mem_AllocatorAlloc( allocator, length ) ),
 		.count	= length,
 	};
 
@@ -113,28 +112,28 @@ String String_Alloc( LinearAllocator *allocator, const char *str, const u64 leng
 	return result;
 }
 
-String String_Printf( LinearAllocator *allocator, const char *fmt, ... ) {
-	assert( allocator );
-	assert( fmt );
+string_t String_Printf( linearAllocator_t *allocator, const char *fmt, ... ) {
+	Assert( allocator );
+	Assert( fmt );
 
 	va_list args;
 	va_start( args, fmt );
-	String result = String_Vprintf( allocator, fmt, args );
+	string_t result = String_Vprintf( allocator, fmt, args );
 	va_end( args );
 
 	return result;
 }
 
-String String_Copy( LinearAllocator *allocator, const String *src ) {
-	assert( allocator );
-	assert( src );
+string_t String_Copy( linearAllocator_t *allocator, const string_t *src ) {
+	Assert( allocator );
+	Assert( src );
 
 	return String_Alloc( allocator, src->data, src->count );
 }
 
 bool8 String_Equals( const char *lhs, const char *rhs ) {
-	assert( lhs );
-	assert( rhs );
+	Assert( lhs );
+	Assert( rhs );
 
 	u64 lhsLen = strlen( lhs );
 	u64 rhsLen = strlen( rhs );
@@ -142,29 +141,29 @@ bool8 String_Equals( const char *lhs, const char *rhs ) {
 	return ( lhsLen == rhsLen ) && memcmp( lhs, rhs, lhsLen ) == 0;
 }
 
-bool8 String_Equals( const String *lhs, const String *rhs ) {
-	assert( lhs );
-	assert( rhs );
+bool8 String_Equals( const string_t *lhs, const string_t *rhs ) {
+	Assert( lhs );
+	Assert( rhs );
 
 	return ( lhs->count == rhs->count ) && ( memcmp( lhs->data, rhs->data, lhs->count ) == 0 );
 }
 
 bool8 String_StartsWith( const char *str, const char *prefix ) {
-	assert( str );
-	assert( prefix );
+	Assert( str );
+	Assert( prefix );
 
 	return strncmp( str, prefix, strlen( prefix ) ) == 0;
 }
 
-bool8 String_StartsWith( const String *str, const String *prefix ) {
-	assert( str );
-	assert( prefix );
+bool8 String_StartsWith( const string_t *str, const string_t *prefix ) {
+	Assert( str );
+	Assert( prefix );
 
 	return ( prefix->count <= str->count ) && ( memcmp( str->data, prefix->data, prefix->count ) == 0 );
 }
 
 bool8 String_EndsWith( const char *str, const char end ) {
-	assert( str );
+	Assert( str );
 
 	u64 len = strlen( str );
 
@@ -172,8 +171,8 @@ bool8 String_EndsWith( const char *str, const char end ) {
 }
 
 bool8 String_EndsWith( const char *str, const char *suffix ) {
-	assert( str );
-	assert( suffix );
+	Assert( str );
+	Assert( suffix );
 
 	u64 len = strlen( str );
 	u64 suffixLength = strlen( suffix );
@@ -181,41 +180,41 @@ bool8 String_EndsWith( const char *str, const char *suffix ) {
 	return ( suffixLength <= len ) && ( memcmp( str + len - suffixLength, suffix, suffixLength ) == 0 );
 }
 
-bool8 String_EndsWith( const String *str, const char end ) {
-	assert( str );
+bool8 String_EndsWith( const string_t *str, const char end ) {
+	Assert( str );
 
 	return ( str->count > 0 ) && ( str->data[str->count - 1] == end );
 }
 
-bool8 String_EndsWith( const String *str, const String *suffix ) {
-	assert( str );
-	assert( suffix );
+bool8 String_EndsWith( const string_t *str, const string_t *suffix ) {
+	Assert( str );
+	Assert( suffix );
 
 	return ( suffix->count <= str->count ) && ( memcmp( str->data + ( str->count - suffix->count ), suffix->data, suffix->count ) == 0 );
 }
 
 bool8 String_Contains( const char *str, const char c ) {
-	assert( str );
+	Assert( str );
 
 	return memchr( str, c, strlen( str ) ) != NULL;
 }
 
 bool8 String_Contains( const char *str, const char *substring ) {
-	assert( str );
-	assert( substring );
+	Assert( str );
+	Assert( substring );
 
 	return strstr( str, substring ) != NULL;
 }
 
-bool8 String_Contains( const String *str, const char c ) {
-	assert( str );
+bool8 String_Contains( const string_t *str, const char c ) {
+	Assert( str );
 
 	return str->data && memchr( str->data, c, str->count ) != NULL;
 }
 
-bool8 String_Contains( const String *str, const String *substring ) {
-	assert( str );
-	assert( substring );
+bool8 String_Contains( const string_t *str, const string_t *substring ) {
+	Assert( str );
+	Assert( substring );
 
 	if ( substring->count == 0 ) {
 		return true;
@@ -235,11 +234,11 @@ bool8 String_Contains( const String *str, const String *substring ) {
 	return false;
 }
 
-String String_Replace( LinearAllocator *allocator, String* str, const char oldChar, const char newChar ) {
-	assert( str );
-	assert( str->data );
+string_t String_Replace( linearAllocator_t *allocator, string_t* str, const char oldChar, const char newChar ) {
+	Assert( str );
+	Assert( str->data );
 
-	String result = String_Copy( allocator, str );
+	string_t result = String_Copy( allocator, str );
 
 	For ( u64, charIndex, 0, result.count ) {
 		if ( result.data[charIndex] == oldChar ) {
@@ -250,24 +249,24 @@ String String_Replace( LinearAllocator *allocator, String* str, const char oldCh
 	return result;
 }
 
-bool8 String_FindFromLeft( const String *str, const char c, u64 *outIndex ) {
-	assert( str );
-	assert( outIndex );
+bool8 String_FindFromLeft( const string_t *str, const char c, u64 *outIndex ) {
+	Assert( str );
+	Assert( outIndex );
 
-	char *pos = cast( char *, memchr( str->data, c, str->count ) );
+	char *pos = Cast( char *, memchr( str->data, c, str->count ) );
 
 	if ( !pos ) {
 		return false;
 	}
 
-	*outIndex = cast( u64, pos ) - cast( u64, str->data );
+	*outIndex = Cast( u64, pos ) - Cast( u64, str->data );
 
 	return true;
 }
 
-bool8 String_FindFromRight( const String *str, const char c, u64 *outIndex ) {
-	assert( str );
-	assert( outIndex );
+bool8 String_FindFromRight( const string_t *str, const char c, u64 *outIndex ) {
+	Assert( str );
+	Assert( outIndex );
 
 	for ( u64 i = str->count; i > 0; i-- ) {
 		if ( str->data[i - 1] == c ) {
@@ -279,34 +278,34 @@ bool8 String_FindFromRight( const String *str, const char c, u64 *outIndex ) {
 	return false;
 }
 
-const char *String_Cstr( const String *str ) {
-	assert( str );
+const char *String_Cstr( const string_t *str ) {
+	Assert( str );
 
 	return TempCString( str->data, str->count );
 }
 
 const char *TempPrintf( const char *fmt, ... ) {
-	assert( fmt );
+	Assert( fmt );
 
 	va_list args;
 	va_start( args, fmt );
-	String result = String_Vprintf( Mem_GetTempStorage(), fmt, args );
+	string_t result = String_Vprintf( Mem_GetTempStorage(), fmt, args );
 	va_end( args );
 
 	return result.data;
 }
 
 char *TempCString( const char *from ) {
-	assert( from );
+	Assert( from );
 
 	return TempCString( from, strlen( from ) );
 }
 
 char *TempCString( const char *from, const u64 numChars ) {
-	assert( from );
-	assert( numChars );
+	Assert( from );
+	Assert( numChars );
 
-	char *result = cast( char *, Mem_TempAlloc( numChars + 1 ) );
+	char *result = Cast( char *, Mem_TempAlloc( numChars + 1 ) );
 	memcpy( result, from, numChars );
 	result[numChars] = 0;
 

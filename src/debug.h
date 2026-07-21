@@ -35,22 +35,22 @@ SOFTWARE.
 
 #include "int_types.h"
 
-struct LinearAllocator;
-struct String;
-template<class T> struct Array;
+struct linearAllocator_t;
+struct string_t;
+template<class T> struct array_t;
 
 #ifdef _WIN32
-	#define debug_break	__debugbreak
+	#define DebugBreak	__debugbreak
 #elif defined(__linux__)
-	#define debug_break	__builtin_trap
+	#define DebugBreak	__builtin_trap
 #else
 	#error Unrecognised platform!
 #endif
 
-#define debug_break_here_if( condition ) \
+#define DebugBreakHereIf( condition ) \
 	do { \
 		if ( ( condition ) ) { \
-			debug_break(); \
+			DebugBreak(); \
 		} \
 	} while ( 0 )
 
@@ -61,15 +61,15 @@ template<class T> struct Array;
 #endif
 
 #ifdef _DEBUG
-	#define assert( condition ) \
+	#define Assert( condition ) \
 		do { \
 			if ( !(condition) ) { \
-				assert_internal( __FILE__, __LINE__, #condition ); \
-				debug_break(); \
+				AssertInternal( __FILE__, __LINE__, #condition ); \
+				DebugBreak(); \
 			} \
 		} while ( 0 )
 #else
-	#define assert( condition )
+	#define Assert( condition )
 #endif
 
 enum ConsoleTextColor {
@@ -81,9 +81,9 @@ enum ConsoleTextColor {
 	CONSOLE_TEXT_COLOR_LIGHT_GRAY,
 };
 
-s32				get_last_error_code();
+s32				GetLastErrorCode();
 
-void			set_console_text_color( const ConsoleTextColor color );
+void			SetConsoleTextColor( const ConsoleTextColor color );
 
 // Prints the format string to the console.
 // %S is a special override that allows Core Strings to be printed (pass by value).
@@ -96,11 +96,11 @@ void			warning( const char *fmt, ... );
 void			error( const char *fmt, ... );
 
 // Prints "FATAL ERROR: " followed by the specified format string to the console, then crashes.
-void			fatal_error( const char *fmt, ... );
+void			FatalError( const char *fmt, ... );
 
 // do not call this one directly
-// call assert() instead
-void			assert_internal( const char *file, const int line, const char *fmt, ... );
+// call Assert() instead
+void			AssertInternal( const char *file, const int line, const char *fmt, ... );
 
 #if defined( __clang__ )
 #pragma clang diagnostic pop

@@ -30,7 +30,6 @@ SOFTWARE.
 
 #include "array.inl"
 #include "string.h"
-#include "helpers.h"
 #include "temp_storage.h"
 #include "defer.h"
 
@@ -40,72 +39,72 @@ SOFTWARE.
 #include <stdarg.h>
 #include <inttypes.h>
 
-static void print_varargs( FILE *file, const char *fmt, va_list args ) {
+static void PrintVarargs( FILE *file, const char *fmt, va_list args ) {
 	u64 pos = Mem_TempTell();
 	defer { Mem_TempRewindTo( pos ); };
 
-	va_list args_copy;
-	va_copy( args_copy, args );
+	va_list argsCopy;
+	va_copy( argsCopy, args );
 
 	int length = stbsp_vsnprintf( NULL, 0, fmt, args );
 
-	char *msg = cast( char *, Mem_TempAlloc( cast( u64, length + 1 ) ) );
-	stbsp_vsnprintf( msg, length + 1, fmt, args_copy );
+	char *msg = Cast( char *, Mem_TempAlloc( Cast( u64, length + 1 ) ) );
+	stbsp_vsnprintf( msg, length + 1, fmt, argsCopy );
 	msg[length] = 0;
 
 	fputs( msg, file );
 
-	va_end( args_copy );
+	va_end( argsCopy );
 }
 
 void print( const char *fmt, ... ) {
 	va_list args;
 	va_start( args, fmt );
-	print_varargs( stdout, fmt, args );
+	PrintVarargs( stdout, fmt, args );
 	va_end( args );
 }
 
 void warning( const char *fmt, ... ) {
-	set_console_text_color( CONSOLE_TEXT_COLOR_RED );
+	SetConsoleTextColor( CONSOLE_TEXT_COLOR_RED );
 
 	fputs( "WARNING: ", stderr );
 
-	set_console_text_color( CONSOLE_TEXT_COLOR_YELLOW );
+	SetConsoleTextColor( CONSOLE_TEXT_COLOR_YELLOW );
 
 	va_list args;
 	va_start( args, fmt );
-	print_varargs( stderr, fmt, args );
+	PrintVarargs( stderr, fmt, args );
 	va_end( args );
 
-	set_console_text_color( CONSOLE_TEXT_COLOR_DEFAULT );
+	SetConsoleTextColor( CONSOLE_TEXT_COLOR_DEFAULT );
 }
 
 void error( const char *fmt, ... ) {
-	set_console_text_color( CONSOLE_TEXT_COLOR_RED );
+	SetConsoleTextColor( CONSOLE_TEXT_COLOR_RED );
 
 	fputs( "ERROR: ", stderr );
 
-	set_console_text_color( CONSOLE_TEXT_COLOR_YELLOW );
+	SetConsoleTextColor( CONSOLE_TEXT_COLOR_YELLOW );
 
 	va_list args;
 	va_start( args, fmt );
-	print_varargs( stderr, fmt, args );
+	PrintVarargs( stderr, fmt, args );
 	va_end( args );
 
-	set_console_text_color( CONSOLE_TEXT_COLOR_DEFAULT );
+	SetConsoleTextColor( CONSOLE_TEXT_COLOR_DEFAULT );
 }
 
-void fatal_error( const char *fmt, ... ) {
-	set_console_text_color( CONSOLE_TEXT_COLOR_RED );
+void FatalError( const char *fmt, ... ) {
+	SetConsoleTextColor( CONSOLE_TEXT_COLOR_RED );
 
 	print( "FATAL ERROR: " );
 
-	set_console_text_color( CONSOLE_TEXT_COLOR_YELLOW );
+	SetConsoleTextColor( CONSOLE_TEXT_COLOR_YELLOW );
 
 	va_list args;
 	va_start( args, fmt );
-	print_varargs( stderr, fmt, args );
+	PrintVarargs( stderr, fmt, args );
 	va_end( args );
 
-	set_console_text_color( CONSOLE_TEXT_COLOR_DEFAULT );
+	SetConsoleTextColor( CONSOLE_TEXT_COLOR_DEFAULT );
 }

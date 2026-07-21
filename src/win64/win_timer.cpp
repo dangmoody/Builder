@@ -54,19 +54,19 @@ s64 Time_Cycles( void ) {
 }
 
 float64 Time_Seconds( void ) {
-	return cast( float64, Time_Cycles() ) / cast( float64, Time_GetFrequency() );
+	return Cast( float64, Time_Cycles() ) / Cast( float64, Time_GetFrequency() );
 }
 
-float64 Time_Ms( void ) {
-	return cast( float64, Time_Cycles() * 1000 ) / Time_GetFrequency();
+float64 Time_MS( void ) {
+	return Cast( float64, Time_Cycles() * 1000 ) / Time_GetFrequency();
 }
 
-float64 Time_Us( void ) {
-	return cast( float64, Time_Cycles() * 1000000 ) / Time_GetFrequency();
+float64 Time_US( void ) {
+	return Cast( float64, Time_Cycles() * 1000000 ) / Time_GetFrequency();
 }
 
-float64 Time_Ns( void ) {
-	return cast( float64, Time_Cycles() * 1000000000 ) / Time_GetFrequency();
+float64 Time_NS( void ) {
+	return Cast( float64, Time_Cycles() * 1000000000 ) / Time_GetFrequency();
 }
 
 #endif // _WIN32

@@ -30,16 +30,16 @@ SOFTWARE.
 
 #include "int_types.h"
 
-struct LinearAllocator;
+struct linearAllocator_t;
 
 /*
 ================================================================================================
 
-	String Builder
+	string_t Builder
 
 	Use this if you want to dynamically append content to a string.
 
-	Every time you append to a StringBuilder it puts that string into a "buffer".  Buffers are
+	Every time you append to a stringBuilder_t it puts that string into a "buffer".  Buffers are
 	stored in a linked list.
 
 ================================================================================================
@@ -51,24 +51,24 @@ struct LinearAllocator;
 #endif
 
 // TODO: DM: 23/12/2025: add 4KB static char array and use that if the string fits in that
-struct StringBuilderBuffer {
+struct stringBuilderBuffer_t {
 	u32						length;
 	char					*data;
-	StringBuilderBuffer		*next;
+	stringBuilderBuffer_t		*next;
 };
 
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
 
-struct StringBuilder {
-	LinearAllocator		*allocator;
-	StringBuilderBuffer	*head;
-	StringBuilderBuffer	*tail;
+struct stringBuilder_t {
+	linearAllocator_t		*allocator;
+	stringBuilderBuffer_t	*head;
+	stringBuilderBuffer_t	*tail;
 };
 
-StringBuilder	SB_Create( LinearAllocator *allocator );
+stringBuilder_t	SB_Create( linearAllocator_t *allocator );
 
-void			SB_Appendf( StringBuilder *builder, const char *fmt, ... );
+void			SB_Appendf( stringBuilder_t *builder, const char *fmt, ... );
 
-const char		*SB_ToString( StringBuilder *builder );
+const char		*SB_ToString( stringBuilder_t *builder );

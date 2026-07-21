@@ -588,7 +588,7 @@ STBSP__PUBLICDEF int STB_SPRINTF_DECORATE(vsprintfcb)(STBSP_SPRINTFCB *callback,
          stbsp__int32 dp;
          char const *sn;
          // DAN_BEGIN
-         String	corestring;
+         string_t	corestring;
          // DAN_END
 
       case 's':
@@ -610,7 +610,7 @@ STBSP__PUBLICDEF int STB_SPRINTF_DECORATE(vsprintfcb)(STBSP_SPRINTFCB *callback,
 // DAN_BEGIN
       case 'S':
          // get the string
-         corestring = va_arg(va, String);
+         corestring = va_arg(va, string_t);
          s = corestring.data;
          if (s == 0)
             s = (char *)"null";

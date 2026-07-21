@@ -30,7 +30,7 @@ SOFTWARE.
 
 #include "int_types.h"
 
-struct String;
+struct string_t;
 
 /*
 ================================================================================================
@@ -57,15 +57,15 @@ struct file_t {
 };
 
 enum fileVisitFlagBits_t {
-	FILE_VISIT_RECURSIVE	= bit( 0 ),
-	FILE_VISIT_FILES		= bit( 1 ),
-	FILE_VISIT_FOLDERS		= bit( 2 ),
+	FILE_VISIT_RECURSIVE	= BIT( 0 ),
+	FILE_VISIT_FILES		= BIT( 1 ),
+	FILE_VISIT_FOLDERS		= BIT( 2 ),
 };
 typedef u32 fileVisitFlags_t;
 
 enum fileOpenFlagBits_t {
-	FILE_OPEN_READ	= bit( 0 ),
-	FILE_OPEN_WRITE	= bit( 1 ),
+	FILE_OPEN_READ	= BIT( 0 ),
+	FILE_OPEN_WRITE	= BIT( 1 ),
 };
 typedef u32 fileOpenFlags_t;
 
@@ -91,13 +91,13 @@ file_t	FS_OpenOrCreateFile( const char *filename, const bool8 keepExistingConten
 bool8	FS_CloseFile( file_t *file );
 
 // Convenience function to free any memory allocated through functions like "FS_ReadEntireFile".
-void	FS_FreeFileBuffer( String *buffer );
+void	FS_FreeFileBuffer( string_t *buffer );
 
 // Opens the file, reads the entire contents, stores it in 'outBuffer', and stores the length of the file in 'outFileLength'.
 // Returns number of bytes read if successful, otherwise returns 0, the out buffer stays null, and outFileLength doesn't get written to.
 // Storing 'outFileLength' is optional.
 // Call "FS_FreeFileBuffer()" to release the memory read into the out buffer.
-bool8	FS_ReadEntireFile( const char *filename, String *outBuffer );
+bool8	FS_ReadEntireFile( const char *filename, string_t *outBuffer );
 
 // Returns true if 'size' bytes was successfully read from the file starting from it's current offset and puts the result into 'outData', otherwise returns false and the out buffer stays null.
 bool8	FS_ReadFile( file_t *file, const u64 size, void *outData );

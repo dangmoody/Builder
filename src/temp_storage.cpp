@@ -47,9 +47,9 @@ SOFTWARE.
 #define THREAD_LOCAL __thread
 #endif
 
-static THREAD_LOCAL LinearAllocator *gTempStorage = NULL;
+static THREAD_LOCAL linearAllocator_t *gTempStorage = NULL;
 
-LinearAllocator *Mem_GetTempStorage() {
+linearAllocator_t *Mem_GetTempStorage() {
 	return gTempStorage;
 }
 

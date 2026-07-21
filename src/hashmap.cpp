@@ -28,7 +28,6 @@ SOFTWARE.
 
 #include "hashmap.h"
 
-#include "helpers.h"
 #include "defer.h"
 #include "debug.h"
 #include "typecast.h"
@@ -41,19 +40,19 @@ SOFTWARE.
 /*
 ================================================================================================
 
-	Hashmap
+	hashmap_t
 
 ================================================================================================
 */
 
-Hashmap *HM_Create( LinearAllocator *allocator, const u32 startingCapacity, float32 normalizedMaxUtilisation, bool8 shouldGrow ) {
-	assert( startingCapacity );
-	assert( normalizedMaxUtilisation > 0.0f );
-	assert( normalizedMaxUtilisation <= 1.0f );
+hashmap_t *HM_Create( linearAllocator_t *allocator, const u32 startingCapacity, float32 normalizedMaxUtilisation, bool8 shouldGrow ) {
+	Assert( startingCapacity );
+	Assert( normalizedMaxUtilisation > 0.0f );
+	Assert( normalizedMaxUtilisation <= 1.0f );
 
-	Hashmap *map = cast( Hashmap *, Mem_AllocatorAlloc( allocator, sizeof( Hashmap ) ) );
+	hashmap_t *map = Cast( hashmap_t *, Mem_AllocatorAlloc( allocator, sizeof( hashmap_t ) ) );
 	map->capacity = startingCapacity;
-	map->buckets = cast( HashmapBucket *, Mem_AllocatorAlloc( allocator, startingCapacity * sizeof( HashmapBucket ) ) );
+	map->buckets = Cast( hashmapBucket_t *, Mem_AllocatorAlloc( allocator, startingCapacity * sizeof( hashmapBucket_t ) ) );
 	map->shouldGrow = shouldGrow;
 	map->maxUtilisation = normalizedMaxUtilisation;
 
@@ -62,14 +61,14 @@ Hashmap *HM_Create( LinearAllocator *allocator, const u32 startingCapacity, floa
 	return map;
 }
 
-inline void HM_SetKeyAtIndex( Hashmap *map, u32 index, u64 key ) {
+inline void HM_SetKeyAtIndex( hashmap_t *map, u32 index, u64 key ) {
 	map->buckets[index].keyHi = HM_InternalGetHiPart( key );
 	map->buckets[index].keyLo = HM_InternalGetLoPart( key );
 }
 
-void HM_Reset( Hashmap *map ) {
+void HM_Reset( hashmap_t *map ) {
 	For ( u32, i, 0, map->capacity ) {
-		HM_SetKeyAtIndex( map, trunc_cast( u32, i ), HASHMAP_UNUSED_BUCKET );
+		HM_SetKeyAtIndex( map, TruncCast( u32, i ), HASHMAP_UNUSED_BUCKET );
 		map->buckets[i].value = HASHMAP_INVALID_VALUE;
 	}
 
@@ -77,26 +76,26 @@ void HM_Reset( Hashmap *map ) {
 	map->tombstoneCount = 0;
 }
 
-inline u32 HM_TryGetIndexOfHash( const Hashmap *map, const u64 key ) {
+inline u32 HM_TryGetIndexOfHash( const hashmap_t *map, const u64 key ) {
 	u32 i = key % map->capacity;
 
-	// Note(Tom): I think this is a legit use of const cast since it's purely for telemetry
-	const_cast<Hashmap *>( map )->lastLinearProbe = 0;
+	// Note(Tom): I think this is a legit use of const Cast since it's purely for telemetry
+	const_cast<hashmap_t *>( map )->lastLinearProbe = 0;
 
 	u64 recombinedHash = HM_InternalCombineAtIndex( map, i );
 
 	while ( recombinedHash != key && recombinedHash != HASHMAP_UNUSED_BUCKET && map->lastLinearProbe < map->capacity ) {
 		i = ( i + 1 ) % map->capacity;
 		recombinedHash = HM_InternalCombineAtIndex( map, i );
-		const_cast<Hashmap *>( map )->lastLinearProbe++;
+		const_cast<hashmap_t *>( map )->lastLinearProbe++;
 	}
 
 	return i;
 }
 
-u32 HM_GetValue( const Hashmap *map, const u64 key ) {
-	assert( key != HASHMAP_UNUSED_BUCKET && "Key cannot equal empty bucket value (0)" );
-	assert( key != HASHMAP_TOMBSTONE_BUCKET && "Key cannot equal Tombstone (u32 MAX)" );
+u32 HM_GetValue( const hashmap_t *map, const u64 key ) {
+	Assert( key != HASHMAP_UNUSED_BUCKET && "Key cannot equal empty bucket value (0)" );
+	Assert( key != HASHMAP_TOMBSTONE_BUCKET && "Key cannot equal Tombstone (u32 MAX)" );
 
 	u32 i = HM_TryGetIndexOfHash( map, key );
 
@@ -110,7 +109,7 @@ u32 HM_GetValue( const Hashmap *map, const u64 key ) {
 	return map->buckets[i].value;
 }
 
-void HM_SetValue( Hashmap *map, const u64 key, const u32 value ) {
+void HM_SetValue( hashmap_t *map, const u64 key, const u32 value ) {
 	u32 i = HM_TryGetIndexOfHash( map, key );
 	u64 keyAtLocation = HM_InternalCombineAtIndex( map, i );
 
@@ -122,15 +121,15 @@ void HM_SetValue( Hashmap *map, const u64 key, const u32 value ) {
 	if ( keyAtLocation == HASHMAP_UNUSED_BUCKET ) {
 		map->usageCount++;
 
-		float32 utilization = cast( float32, map->usageCount + map->tombstoneCount ) / cast( float32, map->capacity );
+		float32 utilization = Cast( float32, map->usageCount + map->tombstoneCount ) / Cast( float32, map->capacity );
 		if ( utilization > map->maxUtilisation ) {
 			if ( map->shouldGrow ) {
-				HashmapBucket* oldBuckets = map->buckets;
+				hashmapBucket_t* oldBuckets = map->buckets;
 				// defer { free( oldBuckets ); };
 
 				u32 oldCapacity = map->capacity;
-				map->capacity = Max( cast( u32, cast( float32, map->capacity ) * 1.5f ), 2U );
-				map->buckets = cast( HashmapBucket *, malloc( map->capacity * sizeof( HashmapBucket ) ) );
+				map->capacity = Max( Cast( u32, Cast( float32, map->capacity ) * 1.5f ), 2U );
+				map->buckets = Cast( hashmapBucket_t *, malloc( map->capacity * sizeof( hashmapBucket_t ) ) );
 				// Note(Tom): I don't love that this isn't a memset anymore. this isn's possible if we keep caring about values of unused buckets: unused value != empty bucket.
 				// I suggest we start leaving them untouched. Yes they have stale old data in them, but so long as people are using set that should never be an issue
 				// (we're testing this right?)
@@ -148,7 +147,7 @@ void HM_SetValue( Hashmap *map, const u64 key, const u32 value ) {
 				HM_SetValue( map, key, value );
 				return;
 			} else {
-				warning( "Hashmap is above utilization of %f with %u buckets", map->maxUtilisation, map->capacity );
+				warning( "hashmap_t is above utilization of %f with %u buckets", map->maxUtilisation, map->capacity );
 			}
 		}
 	}
@@ -157,9 +156,9 @@ void HM_SetValue( Hashmap *map, const u64 key, const u32 value ) {
 	map->buckets[i].value = value;
 }
 
-void HM_RemoveKey( Hashmap *map, const u64 key ) {
-	assert( key != HASHMAP_UNUSED_BUCKET && "Key cannot equal empty bucket value (0)" );
-	assert( key != HASHMAP_TOMBSTONE_BUCKET && "Key cannot equal Tombstone (u32 MAX)" );
+void HM_RemoveKey( hashmap_t *map, const u64 key ) {
+	Assert( key != HASHMAP_UNUSED_BUCKET && "Key cannot equal empty bucket value (0)" );
+	Assert( key != HASHMAP_TOMBSTONE_BUCKET && "Key cannot equal Tombstone (u32 MAX)" );
 
 	u32 i = HM_TryGetIndexOfHash( map, key );
 	u64 keyAtLocation = HM_InternalCombineAtIndex( map, i );
@@ -188,17 +187,17 @@ void HM_RemoveKey( Hashmap *map, const u64 key ) {
 }
 
 u64 HM_InternalCombine( const u32 hi, const u32 lo ) {
-	return ( cast( u64, lo ) << 32 ) | hi;
+	return ( Cast( u64, lo ) << 32 ) | hi;
 }
 
-u64 HM_InternalCombineAtIndex( const Hashmap *map, const u32 index ) {
+u64 HM_InternalCombineAtIndex( const hashmap_t *map, const u32 index ) {
 	return HM_InternalCombine( map->buckets[index].keyHi, map->buckets[index].keyLo );
 }
 
 u32 HM_InternalGetLoPart( const u64 key ) {
-	return trunc_cast( u32, key >> 32 );
+	return TruncCast( u32, key >> 32 );
 }
 
 u32 HM_InternalGetHiPart( const u64 key ) {
-	return trunc_cast( u32, key & 0xFFFFFFFF );
+	return TruncCast( u32, key & 0xFFFFFFFF );
 }

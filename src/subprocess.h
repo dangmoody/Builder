@@ -30,8 +30,8 @@ SOFTWARE.
 
 #include "int_types.h"
 
-struct LinearAllocator;
-template<typename T> struct Array;
+struct linearAllocator_t;
+template<typename T> struct array_t;
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -41,28 +41,28 @@ template<typename T> struct Array;
 /*
 ================================================================================================
 
-	Process
+	process_t
 
 	OS-agnostic interface for running other processes from your program.
 
 ================================================================================================
 */
 
-struct Process;
+struct process_t;
 
-enum ProcessFlagBits {
+enum processFlagBits_t {
 	PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR = 1,
 };
-typedef u32 ProcessFlags;
+typedef u32 processFlags_t;
 
 
-Process	*Proc_Create( LinearAllocator *allocator, Array<const char *> *args, Array<const char *> *environmentVariables = NULL, const ProcessFlags flags = 0 );
+process_t	*Proc_Create( linearAllocator_t *allocator, array_t<const char *> *args, array_t<const char *> *environmentVariables = NULL, const processFlags_t flags = 0 );
 
-bool8	Proc_Destroy( Process *process );
+bool8		Proc_Destroy( process_t *process );
 
-s32		Proc_Join( Process *process );
+s32			Proc_Join( process_t *process );
 
-u32		Proc_ReadStdout( Process *process, char *outBuffer, const u64 count );
+u32			Proc_ReadStdout( process_t *process, char *outBuffer, const u64 count );
 
 #ifdef __clang__
 #pragma clang diagnostic pop

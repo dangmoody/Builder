@@ -43,19 +43,19 @@ SOFTWARE.
 /*
 ================================================================================================
 
-	Windows Process implementation
+	Windows process_t implementation
 
 ================================================================================================
 */
 
-struct Process {
-	PROCESS_INFORMATION	process_info;
+struct process_t {
+	PROCESS_INFORMATION	processInfo;
 
-	HANDLE				stdout_read;
-	HANDLE				event_stdout;
+	HANDLE				stdoutRead;
+	HANDLE				eventStdout;
 
-	HANDLE				stderr_read;
-	HANDLE				event_stderr;
+	HANDLE				stderrRead;
+	HANDLE				eventStderr;
 };
 
 static bool8 Proc_CloseHandleInternal( HANDLE *handle, const char *description ) {
@@ -64,7 +64,7 @@ static bool8 Proc_CloseHandleInternal( HANDLE *handle, const char *description )
 	}
 
 	if ( !CloseHandle( *handle ) ) {
-		fatal_error( "Failed to close %s handle: Windows error code: 0x%X\n", description, GetLastError() );
+		FatalError( "Failed to close %s handle: Windows error code: 0x%X\n", description, GetLastError() );
 		return false;
 	}
 
@@ -72,235 +72,235 @@ static bool8 Proc_CloseHandleInternal( HANDLE *handle, const char *description )
 	return true;
 }
 
-Process* Proc_Create( LinearAllocator *allocator, Array<const char *> *args, Array<const char *> *environment_variables, const ProcessFlags flags ) {
-	assert( allocator );
-	assert( args );
-	assert( args->count > 0 );
+process_t* Proc_Create( linearAllocator_t *allocator, array_t<const char *> *args, array_t<const char *> *environmentVariables, const ProcessFlags flags ) {
+	Assert( allocator );
+	Assert( args );
+	Assert( args->count > 0 );
 
-	const char *subprocess_name = ( *args )[0];
+	const char *subprocessName = ( *args )[0];
 
-	Process *process = cast( Process *, Mem_AllocatorAlloc( allocator, sizeof( Process ) ) );
-	memset( process, 0, sizeof( Process ) );
+	process_t *process = Cast( process_t *, Mem_AllocatorAlloc( allocator, sizeof( process_t ) ) );
+	memset( process, 0, sizeof( process_t ) );
 
-	SECURITY_ATTRIBUTES sec_attr = { sizeof( SECURITY_ATTRIBUTES ), NULL, TRUE };
+	SECURITY_ATTRIBUTES secAttr = { sizeof( SECURITY_ATTRIBUTES ), NULL, TRUE };
 
-	HANDLE stdout_write = NULL;
-	if ( !CreatePipe( &process->stdout_read, &stdout_write, &sec_attr, 0 ) ) {
+	HANDLE stdoutWrite = NULL;
+	if ( !CreatePipe( &process->stdoutRead, &stdoutWrite, &secAttr, 0 ) ) {
 		error( "CreatePipe call failed for stdout: 0x%X.\n", GetLastError() );
 		return NULL;
 	}
 
-	HANDLE stderr_write = NULL;
+	HANDLE stderrWrite = NULL;
 	if ( !( flags & PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR ) ) {
-		if ( !CreatePipe( &process->stderr_read, &stderr_write, &sec_attr, 0 ) ) {
+		if ( !CreatePipe( &process->stderrRead, &stderrWrite, &secAttr, 0 ) ) {
 			error( "CreatePipe call failed for stderr: 0x%X.\n", GetLastError() );
 			return NULL;
 		}
 	}
 
-	STARTUPINFO start_info = { sizeof( start_info ) };
-	start_info.dwFlags = STARTF_USESTDHANDLES;
-	start_info.hStdOutput = stdout_write;
-	start_info.hStdError = ( flags & PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR ) ? stdout_write : stderr_write;
+	STARTUPINFO startInfo = { sizeof( startInfo ) };
+	startInfo.dwFlags = STARTF_USESTDHANDLES;
+	startInfo.hStdOutput = stdoutWrite;
+	startInfo.hStdError = ( flags & PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR ) ? stdoutWrite : stderrWrite;
 
-	char *combined_args = NULL;
+	char *combinedArgs = NULL;
 	{
 		u64 offset = 0;
 
-		u64 combined_args_length = 0;
+		u64 combinedArgsLength = 0;
 
-		For ( u32, arg_index, 0, args->count ) {
-			const char *arg = ( *args )[arg_index];
-			u64 arg_len = strlen( arg );
+		For ( u32, argIndex, 0, args->count ) {
+			const char *arg = ( *args )[argIndex];
+			u64 argLen = strlen( arg );
 
-			combined_args_length += arg_len;
+			combinedArgsLength += argLen;
 
-			bool8 already_quoted = ( arg_len >= 2 ) && ( arg[0] == '"' ) && ( arg[arg_len - 1] == '"' );
+			bool8 alreadyQuoted = ( argLen >= 2 ) && ( arg[0] == '"' ) && ( arg[argLen - 1] == '"' );
 
-			if ( !already_quoted && strchr( arg, ' ' ) ) {
-				combined_args_length += 2;	// quotes around args that contain spaces
+			if ( !alreadyQuoted && strchr( arg, ' ' ) ) {
+				combinedArgsLength += 2;	// quotes around args that contain spaces
 			}
 		}
-		combined_args_length += args->count - 1;	// one space between each argument
-		combined_args_length += 1;					// null terminator
+		combinedArgsLength += args->count - 1;	// one space between each argument
+		combinedArgsLength += 1;					// null terminator
 
-		combined_args = cast( char *, Mem_TempAlloc( combined_args_length * sizeof( char ) ) );
+		combinedArgs = Cast( char *, Mem_TempAlloc( combinedArgsLength * sizeof( char ) ) );
 
-		For ( u64, arg_index, 0, args->count ) {
-			const char *arg = ( *args )[arg_index];
+		For ( u64, argIndex, 0, args->count ) {
+			const char *arg = ( *args )[argIndex];
 
-			u64 arg_len = strlen( arg );
+			u64 argLen = strlen( arg );
 
-			bool8 already_quoted = ( arg_len >= 2 ) && ( arg[0] == '"' ) && ( arg[arg_len - 1] == '"' );
-			bool8 needs_quotes = !already_quoted && strchr( arg, ' ' ) != NULL;
+			bool8 alreadyQuoted = ( argLen >= 2 ) && ( arg[0] == '"' ) && ( arg[argLen - 1] == '"' );
+			bool8 needsQuotes = !alreadyQuoted && strchr( arg, ' ' ) != NULL;
 
-			if ( needs_quotes ) {
-				combined_args[offset++] = '"';
+			if ( needsQuotes ) {
+				combinedArgs[offset++] = '"';
 			}
 
-			strncpy( combined_args + offset, arg, arg_len * sizeof( char ) );
+			strncpy( combinedArgs + offset, arg, argLen * sizeof( char ) );
 
 			// CreateProcess doesnt like forward slashes
 			// make sure they are back slashes
-			if ( arg_index == 0 ) {
-				for ( u64 char_index = 0; char_index < arg_len; char_index++ ) {
-					if ( combined_args[offset + char_index] == '/' ) {
-						combined_args[offset + char_index] = '\\';
+			if ( argIndex == 0 ) {
+				for ( u64 charIndex = 0; charIndex < argLen; charIndex++ ) {
+					if ( combinedArgs[offset + charIndex] == '/' ) {
+						combinedArgs[offset + charIndex] = '\\';
 					}
 				}
 			}
 
-			offset += arg_len;
+			offset += argLen;
 
-			if ( needs_quotes ) {
-				combined_args[offset++] = '"';
+			if ( needsQuotes ) {
+				combinedArgs[offset++] = '"';
 			}
 
-			combined_args[offset] = ' ';
+			combinedArgs[offset] = ' ';
 			offset += 1;
 		}
-		combined_args[combined_args_length - 1] = 0;
+		combinedArgs[combinedArgsLength - 1] = 0;
 	}
 
-	char *combined_env_vars = NULL;
-	if ( environment_variables && environment_variables->count ) {
-		u64 combined_env_vars_length = 0;
+	char *combinedEnvVars = NULL;
+	if ( environmentVariables && environmentVariables->count ) {
+		u64 combinedEnvVarsLength = 0;
 		u64 offset = 0;
 
-		For ( u32, env_var_index, 0, environment_variables->count ) {
-			combined_env_vars_length += strlen( ( *environment_variables )[env_var_index] );
-			combined_env_vars_length += 1;	// space
+		For ( u32, envVarIndex, 0, environmentVariables->count ) {
+			combinedEnvVarsLength += strlen( ( *environmentVariables )[envVarIndex] );
+			combinedEnvVarsLength += 1;	// space
 		}
 
-		combined_env_vars_length += 1;	// null terminator at the end
+		combinedEnvVarsLength += 1;	// null terminator at the end
 
-		combined_env_vars = cast( char *, Mem_TempAlloc( combined_env_vars_length * sizeof( char ) ) );
+		combinedEnvVars = Cast( char *, Mem_TempAlloc( combinedEnvVarsLength * sizeof( char ) ) );
 
-		For ( u32, env_var_index, 0, environment_variables->count ) {
-			const char *env_var = ( *environment_variables )[env_var_index];
+		For ( u32, envVarIndex, 0, environmentVariables->count ) {
+			const char *envVar = ( *environmentVariables )[envVarIndex];
 
-			u64 env_var_length = strlen( env_var );
-			strncpy( combined_env_vars + offset, env_var, env_var_length * sizeof( char ) );
+			u64 envVarLength = strlen( envVar );
+			strncpy( combinedEnvVars + offset, envVar, envVarLength * sizeof( char ) );
 
-			offset += env_var_length;
+			offset += envVarLength;
 
-			combined_env_vars[offset] = ' ';
+			combinedEnvVars[offset] = ' ';
 
 			offset += 1;
 		}
-		combined_env_vars[combined_env_vars_length - 1] = 0;
+		combinedEnvVars[combinedEnvVarsLength - 1] = 0;
 	}
 
 	if ( !CreateProcess(
 		NULL,
-		const_cast<LPSTR>( combined_args ),
+		const_cast<LPSTR>( combinedArgs ),
 		NULL,
 		NULL,
 		true,
 		CREATE_NO_WINDOW,
-		combined_env_vars,
+		combinedEnvVars,
 		NULL,
-		&start_info,
-		&process->process_info
+		&startInfo,
+		&process->processInfo
 	) ) {
-		error( "Failed to create process \"%s\": 0x%X.\n", subprocess_name, GetLastError() );
+		error( "Failed to create process \"%s\": 0x%X.\n", subprocessName, GetLastError() );
 		return NULL;
 	}
 
 	// close the write ends of the pipes on the parent side
 	// the child inherited them so they remain open from the child's perspective
 	// closing the parents copies ensures ReadFile on the read ends returns EOF once the child exits rather than blocking indefinitely
-	if ( !CloseHandle( stdout_write ) ) {
-		fatal_error( "Failed to close stdout write handle: 0x%X\n", GetLastError() );
+	if ( !CloseHandle( stdoutWrite ) ) {
+		FatalError( "Failed to close stdout write handle: 0x%X\n", GetLastError() );
 		return NULL;
 	}
 
-	if ( stderr_write && !CloseHandle( stderr_write ) ) {
-		fatal_error( "Failed to close stderr write handle: 0x%X\n", GetLastError() );
+	if ( stderrWrite && !CloseHandle( stderrWrite ) ) {
+		FatalError( "Failed to close stderr write handle: 0x%X\n", GetLastError() );
 		return NULL;
 	}
 
 	return process;
 }
 
-bool8 Proc_Destroy( Process* process ) {
-	assert( process );
+bool8 Proc_Destroy( process_t* process ) {
+	Assert( process );
 
-	if ( !Proc_CloseHandleInternal( &process->stdout_read, "subprocess stdout read" ) ) {
+	if ( !Proc_CloseHandleInternal( &process->stdoutRead, "subprocess stdout read" ) ) {
 		return false;
 	}
 
-	if ( !Proc_CloseHandleInternal( &process->stderr_read, "subprocess stderr read" ) ) {
+	if ( !Proc_CloseHandleInternal( &process->stderrRead, "subprocess stderr read" ) ) {
 		return false;
 	}
 
-	if ( !Proc_CloseHandleInternal( &process->process_info.hProcess, "subprocess process" ) ) {
+	if ( !Proc_CloseHandleInternal( &process->processInfo.hProcess, "subprocess process" ) ) {
 		return false;
 	}
 
-	if ( !Proc_CloseHandleInternal( &process->process_info.hThread, "subprocess thread" ) ) {
+	if ( !Proc_CloseHandleInternal( &process->processInfo.hThread, "subprocess thread" ) ) {
 		return false;
 	}
 
-	if ( process->event_stderr && process->event_stderr != process->event_stdout ) {
-		if ( !Proc_CloseHandleInternal( &process->event_stderr, "subprocess stderr event" ) ) {
+	if ( process->eventStderr && process->eventStderr != process->eventStdout ) {
+		if ( !Proc_CloseHandleInternal( &process->eventStderr, "subprocess stderr event" ) ) {
 			return false;
 		}
 	}
 
-	if ( !Proc_CloseHandleInternal( &process->event_stdout, "subprocess stdout event" ) ) {
+	if ( !Proc_CloseHandleInternal( &process->eventStdout, "subprocess stdout event" ) ) {
 		return false;
 	}
 
 	return true;
 }
 
-s32 Proc_Join( Process* process ) {
-	assert( process );
+s32 Proc_Join( process_t* process ) {
+	Assert( process );
 
-	if ( !Proc_CloseHandleInternal( &process->stdout_read, "subprocess stdout read" ) ) {
+	if ( !Proc_CloseHandleInternal( &process->stdoutRead, "subprocess stdout read" ) ) {
 		return -1;
 	}
 
-	if ( !Proc_CloseHandleInternal( &process->stderr_read, "subprocess stderr read" ) ) {
+	if ( !Proc_CloseHandleInternal( &process->stderrRead, "subprocess stderr read" ) ) {
 		return -1;
 	}
 
-	if ( WaitForSingleObject( process->process_info.hProcess, INFINITE ) != WAIT_OBJECT_0 ) {
-		fatal_error( "Failed to wait for subprocess to finish: 0x%X\n", GetLastError() );
+	if ( WaitForSingleObject( process->processInfo.hProcess, INFINITE ) != WAIT_OBJECT_0 ) {
+		FatalError( "Failed to wait for subprocess to finish: 0x%X\n", GetLastError() );
 		return -1;
 	}
 
-	DWORD exit_code = 0;
+	DWORD exitCode = 0;
 
-	if ( !GetExitCodeProcess( process->process_info.hProcess, &exit_code ) ) {
-		fatal_error( "Failed to get exit code of subprocess: 0x%X\n", GetLastError() );
+	if ( !GetExitCodeProcess( process->processInfo.hProcess, &exitCode ) ) {
+		FatalError( "Failed to get exit code of subprocess: 0x%X\n", GetLastError() );
 		return -1;
 	}
 
-	return trunc_cast( s32, exit_code );
+	return TruncCast( s32, exitCode );
 }
 
-static u32 Proc_ReadFromFileHandle( HANDLE file_handle, HANDLE event, char *out_buffer, const u64 count ) {
-	assert( file_handle );
-	//assert( event );
-	assert( out_buffer );
-	assert( count );
+static u32 Proc_ReadFromFileHandle( HANDLE fileHandle, HANDLE event, char *outBuffer, const u64 count ) {
+	Assert( fileHandle );
+	//Assert( event );
+	Assert( outBuffer );
+	Assert( count );
 
 	OVERLAPPED overlapped = {};
 	overlapped.hEvent = event;
 
-	DWORD bytes_read = 0;
-	BOOL read = ReadFile( file_handle, out_buffer, trunc_cast( u32, count ), &bytes_read, &overlapped );
+	DWORD bytesRead = 0;
+	BOOL read = ReadFile( fileHandle, outBuffer, TruncCast( u32, count ), &bytesRead, &overlapped );
 
 	if ( !read ) {
-		DWORD last_error = GetLastError();
+		DWORD lastError = GetLastError();
 
-		if ( last_error == ERROR_IO_PENDING ) {
-			if ( !GetOverlappedResult( file_handle, &overlapped, &bytes_read, 1 ) ) {
-				last_error = GetLastError();
+		if ( lastError == ERROR_IO_PENDING ) {
+			if ( !GetOverlappedResult( fileHandle, &overlapped, &bytesRead, 1 ) ) {
+				lastError = GetLastError();
 
-				if ( ( last_error != ERROR_IO_INCOMPLETE ) && ( last_error != ERROR_HANDLE_EOF ) ) {
+				if ( ( lastError != ERROR_IO_INCOMPLETE ) && ( lastError != ERROR_HANDLE_EOF ) ) {
 					error( "Failed to read stdout of subprocess: 0x%X.\n", GetLastError() );
 					return 0;
 				}
@@ -308,15 +308,15 @@ static u32 Proc_ReadFromFileHandle( HANDLE file_handle, HANDLE event, char *out_
 		}
 	}
 
-	return bytes_read;
+	return bytesRead;
 }
 
-u32 Proc_ReadStdout( Process *process, char *out_buffer, const u64 count ) {
-	assert( process );
-	assert( out_buffer );
-	assert( count );
+u32 Proc_ReadStdout( process_t *process, char *outBuffer, const u64 count ) {
+	Assert( process );
+	Assert( outBuffer );
+	Assert( count );
 
-	return Proc_ReadFromFileHandle( process->stdout_read, process->event_stdout, out_buffer, count );
+	return Proc_ReadFromFileHandle( process->stdoutRead, process->eventStdout, outBuffer, count );
 }
 
 #endif // _WIN32

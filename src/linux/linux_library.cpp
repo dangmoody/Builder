@@ -28,9 +28,9 @@ SOFTWARE.
 
 #ifdef __linux__
 
-#include <library.h>
+#include "../library.h"
 
-#include <debug.h>
+#include "../debug.h"
 
 #include <dlfcn.h>
 #include <errno.h>
@@ -39,20 +39,20 @@ SOFTWARE.
 /*
 ================================================================================================
 
-	Library
+	library_t
 
 ================================================================================================
 */
 
-Library Library_Load( const char *name ) {
-	return Library {
+library_t Library_Load( const char *name ) {
+	return library_t {
 		.ptr = dlopen( name, RTLD_LAZY ),
 	};
 }
 
-bool8 Library_Unload( Library *library ) {
-	assert( library );
-	assert( library->ptr );
+bool8 Library_Unload( library_t *library ) {
+	Assert( library );
+	Assert( library->ptr );
 
 	if ( dlclose( library->ptr ) != 0 ) {
 		int err = errno;
@@ -65,11 +65,11 @@ bool8 Library_Unload( Library *library ) {
 	return true;
 }
 
-void *Library_GetSymbol( const Library library, const char *symbol_name ) {
-	assert( library.ptr );
-	assert( symbol_name );
+void *Library_GetSymbol( const library_t library, const char *symbolName ) {
+	Assert( library.ptr );
+	Assert( symbolName );
 
-	return dlsym( library.ptr, symbol_name );
+	return dlsym( library.ptr, symbolName );
 }
 
 #endif // __linux__

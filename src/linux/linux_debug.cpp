@@ -28,14 +28,13 @@ SOFTWARE.
 
 #ifdef __linux__
 
-#include <debug.h>
+#include "../debug.h"
 
-#include <core_array.inl>
-#include <core_string.h>
-#include <core_helpers.h>
-#include <linear_allocator.h>
-#include <temp_storage.h>
-#include <defer.h>
+#include "../array.inl"
+#include "../string.h"
+#include "../linear_allocator.h"
+#include "../temp_storage.h"
+#include "../defer.h"
 
 #include <malloc.h>
 #include <errno.h>
@@ -43,31 +42,31 @@ SOFTWARE.
 #include <dlfcn.h>
 #include <cxxabi.h>
 
-void set_console_text_color( const ConsoleTextColor color ) {
-	const char *color_linux = NULL;
+void SetConsoleTextColor( const ConsoleTextColor color ) {
+	const char *colorLinux = NULL;
 
 	switch ( color ) {
-		case CONSOLE_TEXT_COLOR_DEFAULT:		color_linux = "\033[0m";    break;
-		case CONSOLE_TEXT_COLOR_RED:			color_linux = "\033[0;31m"; break;
-		case CONSOLE_TEXT_COLOR_YELLOW:			color_linux = "\033[0;32m"; break;
-		case CONSOLE_TEXT_COLOR_BLUE:			color_linux = "\033[1;34m"; break;
-		case CONSOLE_TEXT_COLOR_BRIGHT_BLUE:	color_linux = "\033[1;94m"; break;
-		case CONSOLE_TEXT_COLOR_LIGHT_GRAY:		color_linux = "\033[1;37m"; break;
+		case CONSOLE_TEXT_COLOR_DEFAULT:		colorLinux = "\033[0m";    break;
+		case CONSOLE_TEXT_COLOR_RED:			colorLinux = "\033[0;31m"; break;
+		case CONSOLE_TEXT_COLOR_YELLOW:			colorLinux = "\033[0;32m"; break;
+		case CONSOLE_TEXT_COLOR_BLUE:			colorLinux = "\033[1;34m"; break;
+		case CONSOLE_TEXT_COLOR_BRIGHT_BLUE:	colorLinux = "\033[1;94m"; break;
+		case CONSOLE_TEXT_COLOR_LIGHT_GRAY:		colorLinux = "\033[1;37m"; break;
 	}
 
-	assert( color_linux != NULL );
+	Assert( colorLinux != NULL );
 
-	print( "%s", color_linux );
+	print( "%s", colorLinux );
 }
 
-s32 get_last_error_code() {
+s32 GetLastErrorCode() {
 	return errno;
 }
 
-void assert_internal( const char *file, const int line, const char *fmt, ... ) {
-	unused( file );
-	unused( line );
-	unused( fmt );
+void AssertInternal( const char *file, const int line, const char *fmt, ... ) {
+	UNUSED( file );
+	UNUSED( line );
+	UNUSED( fmt );
 
 	// TODO: DM: write me!
 }

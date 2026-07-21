@@ -5,26 +5,26 @@
 #include "int_types.h"
 #include "string.h"
 
-struct LinearAllocator;
+struct linearAllocator_t;
 
 struct windowsSDKVersion_t {
 	s32	v0, v1, v2, v3;
 };
 
 struct windowsSDK_t {
-	String				rootFolder;
+	string_t				rootFolder;
 
-	String				ucrtInclude;
-	String				umInclude;
-	String				sharedInclude;
+	string_t				ucrtInclude;
+	string_t				umInclude;
+	string_t				sharedInclude;
 
-	String				ucrtLibPath;
-	String				umLibPath;
+	string_t				ucrtLibPath;
+	string_t				umLibPath;
 
 	windowsSDKVersion_t	version;
 };
 
-bool8	Win_GetWindowsSDK( LinearAllocator *allocator, windowsSDK_t *outSDK );
+bool8	Win_GetWindowsSDK( linearAllocator_t *allocator, windowsSDK_t *outSDK );
 
 
 //================================================================
@@ -35,13 +35,13 @@ struct msvcVersion_t {
 };
 
 struct msvcInstall_t {
-	String			rootFolder;
-	String			includePath;
-	String			libPath;
+	string_t			rootFolder;
+	string_t			includePath;
+	string_t			libPath;
 
 	msvcVersion_t	version;
 };
 
-bool8	Win_GetMSVCInstall( LinearAllocator *allocator, msvcInstall_t *outMSVC );
+bool8	Win_GetMSVCInstall( linearAllocator_t *allocator, msvcInstall_t *outMSVC );
 
 #endif // _WIN32

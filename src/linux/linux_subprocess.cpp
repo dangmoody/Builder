@@ -28,18 +28,17 @@ SOFTWARE.
 
 #ifdef __linux__
 
-#include <core_process.h>
+#include "../subprocess.h"
 
-#include <linear_allocator.h>
-#include <core_array.inl>
-#include <typecast.inl>
-#include <debug.h>
-#include <defer.h>
-#include <core_helpers.h>
+#include "../linear_allocator.h"
+#include "../array.inl"
+#include "../typecast.h"
+#include "../debug.h"
+#include "../defer.h"
 
 #include <stdio.h>
 #include <string.h>
-#include <file.h>
+#include "../file.h"
 
 #include <unistd.h>
 #include <spawn.h>
@@ -49,81 +48,81 @@ SOFTWARE.
 /*
 ================================================================================================
 
-	Linux Process implementation
+	Linux process_t implementation
 
 ================================================================================================
 */
 
-struct Process {
+struct process_t {
 	pid_t	pid;
 	FILE	*stdout;
 	FILE	*stderr;
 };
 
-static bool8 Proc_CreatePipeWithFileActions( posix_spawn_file_actions_t *spawn_actions, int fileno, int out_handles[2], const char *subprocess_name ) {
-	if ( pipe( out_handles ) != 0 ) {
+static bool8 Proc_CreatePipeWithFileActions( posix_spawn_file_actions_t *spawnActions, int fileno, int outHandles[2], const char *subprocessName ) {
+	if ( pipe( outHandles ) != 0 ) {
 		int err = errno;
-		fatal_error( "Failed to create pipe for fd %d of subprocess %s: %s\n", fileno, subprocess_name, strerror( err ) );
+		FatalError( "Failed to create pipe for fd %d of subprocess %s: %s\n", fileno, subprocessName, strerror( err ) );
 		return false;
 	}
 
-	if ( posix_spawn_file_actions_adddup2( spawn_actions, out_handles[1], fileno ) != 0 ) {
+	if ( posix_spawn_file_actions_adddup2( spawnActions, outHandles[1], fileno ) != 0 ) {
 		int err = errno;
-		fatal_error( "Failed to redirect fd %d of subprocess %s: %s\n", fileno, subprocess_name, strerror( err ) );
+		FatalError( "Failed to redirect fd %d of subprocess %s: %s\n", fileno, subprocessName, strerror( err ) );
 		return false;
 	}
 
-	if ( posix_spawn_file_actions_addclose( spawn_actions, out_handles[0] ) != 0 ) {
+	if ( posix_spawn_file_actions_addclose( spawnActions, outHandles[0] ) != 0 ) {
 		int err = errno;
-		fatal_error( "Failed to close read end of fd %d pipe in subprocess %s: %s\n", fileno, subprocess_name, strerror( err ) );
+		FatalError( "Failed to close read end of fd %d pipe in subprocess %s: %s\n", fileno, subprocessName, strerror( err ) );
 		return false;
 	}
 
-	if ( posix_spawn_file_actions_addclose( spawn_actions, out_handles[1] ) != 0 ) {
+	if ( posix_spawn_file_actions_addclose( spawnActions, outHandles[1] ) != 0 ) {
 		int err = errno;
-		fatal_error( "Failed to close write end of fd %d pipe in subprocess %s: %s\n", fileno, subprocess_name, strerror( err ) );
+		FatalError( "Failed to close write end of fd %d pipe in subprocess %s: %s\n", fileno, subprocessName, strerror( err ) );
 		return false;
 	}
 
 	return true;
 }
 
-Process	*Proc_Create( LinearAllocator *allocator, Array<const char *> *args, Array<const char *> *environment_variables, const ProcessFlags flags ) {
-	Process *subprocess = cast( Process *, Mem_AllocatorAlloc( allocator, sizeof( Process ) ) );
+process_t	*Proc_Create( linearAllocator_t *allocator, array_t<const char *> *args, array_t<const char *> *environmentVariables, const processFlags_t flags ) {
+	process_t *subprocess = Cast( process_t *, Mem_AllocatorAlloc( allocator, sizeof( process_t ) ) );
 
-	const char *subprocess_name = ( *args )[0];
+	const char *subprocessName = ( *args )[0];
 
-	posix_spawn_file_actions_t spawn_actions = {};
+	posix_spawn_file_actions_t spawnActions = {};
 
-	if ( posix_spawn_file_actions_init( &spawn_actions ) != 0 ) {
+	if ( posix_spawn_file_actions_init( &spawnActions ) != 0 ) {
 		int err = errno;
-		fatal_error( "Failed to create posix_spawn_file_actions_t for subprocess %s: %s\n", subprocess_name, strerror( err ) );
+		FatalError( "Failed to create posix_spawn_file_actions_t for subprocess %s: %s\n", subprocessName, strerror( err ) );
 		return NULL;
 	}
 
 	defer {
-		if ( posix_spawn_file_actions_destroy( &spawn_actions ) != 0 ) {
+		if ( posix_spawn_file_actions_destroy( &spawnActions ) != 0 ) {
 			int err = errno;
-			fatal_error( "Failed to destroy posix_spawn_file_actions_t for subprocess %s: %s\n", subprocess_name, strerror( err ) );
+			FatalError( "Failed to destroy posix_spawn_file_actions_t for subprocess %s: %s\n", subprocessName, strerror( err ) );
 			// return NULL;
 		}
 	};
 
-	int stdout_file_handles[2] = { -1, -1 };
-	if ( !Proc_CreatePipeWithFileActions( &spawn_actions, STDOUT_FILENO, stdout_file_handles, subprocess_name ) ) {
+	int stdoutFileHandles[2] = { -1, -1 };
+	if ( !Proc_CreatePipeWithFileActions( &spawnActions, STDOUT_FILENO, stdoutFileHandles, subprocessName ) ) {
 		return NULL;
 	}
 
-	int stderr_file_handles[2] = { -1, -1 };
+	int stderrFileHandles[2] = { -1, -1 };
 
 	if ( flags & PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR ) {
-		if ( posix_spawn_file_actions_adddup2( &spawn_actions, STDOUT_FILENO, STDERR_FILENO ) != 0 ) {
+		if ( posix_spawn_file_actions_adddup2( &spawnActions, STDOUT_FILENO, STDERR_FILENO ) != 0 ) {
 			int err = errno;
-			fatal_error( "Failed to combine stdout and stderr outputs for subprocess %s: %s\n", subprocess_name, strerror( err ) );
+			FatalError( "Failed to combine stdout and stderr outputs for subprocess %s: %s\n", subprocessName, strerror( err ) );
 			return NULL;
 		}
 	} else {
-		if ( !Proc_CreatePipeWithFileActions( &spawn_actions, STDERR_FILENO, stderr_file_handles, subprocess_name ) ) {
+		if ( !Proc_CreatePipeWithFileActions( &spawnActions, STDERR_FILENO, stderrFileHandles, subprocessName ) ) {
 			return NULL;
 		}
 	}
@@ -132,45 +131,45 @@ Process	*Proc_Create( LinearAllocator *allocator, Array<const char *> *args, Arr
 		args->Add( NULL );
 	}
 
-	char * const *args_start = cast( char * const *, &( *args )[0] );
+	char * const *argsStart = Cast( char * const *, &( *args )[0] );
 
-	char * const *env_vars_start = NULL;
-	if ( environment_variables && environment_variables->count > 0 ) {
-		if ( ( *environment_variables )[environment_variables->count - 1] != NULL ) {
-			environment_variables->Add( NULL );
+	char * const *envVarsStart = NULL;
+	if ( environmentVariables && environmentVariables->count > 0 ) {
+		if ( ( *environmentVariables )[environmentVariables->count - 1] != NULL ) {
+			environmentVariables->Add( NULL );
 		}
 
-		env_vars_start = cast( char * const *, &( *environment_variables )[0] );
+		envVarsStart = Cast( char * const *, &( *environmentVariables )[0] );
 	} else {
-		env_vars_start = environ;
+		envVarsStart = environ;
 	}
 
-	if ( posix_spawnp( &subprocess->pid, subprocess_name, &spawn_actions, NULL, args_start, env_vars_start ) != 0 ) {
+	if ( posix_spawnp( &subprocess->pid, subprocessName, &spawnActions, NULL, argsStart, envVarsStart ) != 0 ) {
 		int err = errno;
-		fatal_error( "Failed to spawn subprocess %s: %s\n", subprocess_name, strerror( err ) );
+		FatalError( "Failed to spawn subprocess %s: %s\n", subprocessName, strerror( err ) );
 		return NULL;
 	}
 
-	close( stdout_file_handles[1] );
-	subprocess->stdout = fdopen( stdout_file_handles[0], "rb" );
+	close( stdoutFileHandles[1] );
+	subprocess->stdout = fdopen( stdoutFileHandles[0], "rb" );
 
 	if ( flags & PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR ) {
 		subprocess->stderr = subprocess->stdout;
 	} else {
-		close( stderr_file_handles[1] );
-		subprocess->stderr = fdopen( stderr_file_handles[0], "rb" );
+		close( stderrFileHandles[1] );
+		subprocess->stderr = fdopen( stderrFileHandles[0], "rb" );
 	}
 
 	return subprocess;
 }
 
-bool8		Proc_Destroy( Process *process ) {
+bool8		Proc_Destroy( process_t *process ) {
 	int result = kill( process->pid, SIGKILL );
 
 	if ( result != 0 ) {
 		int err = errno;
 		if ( err != ESRCH ) {
-			fatal_error( "Failed to kill subprocess: %d: %s\n", err, strerror( err ) );
+			FatalError( "Failed to kill subprocess: %d: %s\n", err, strerror( err ) );
 			return false;
 		}
 	}
@@ -187,11 +186,11 @@ bool8		Proc_Destroy( Process *process ) {
 	return true;
 }
 
-s32		Proc_Join( Process *process ) {
+s32		Proc_Join( process_t *process ) {
 	int status = -1;
 	if ( waitpid( process->pid, &status, 0 ) != process->pid ) {
 		int err = errno;
-		fatal_error( "Failed to wait for process to finish: %s\n", strerror( err ) );
+		FatalError( "Failed to wait for process to finish: %s\n", strerror( err ) );
 		return -1;
 	}
 
@@ -202,11 +201,11 @@ s32		Proc_Join( Process *process ) {
 	}
 }
 
-u32		Proc_ReadStdout( Process *process, char *out_buffer, const u64 count ) {
-	int file_desc = fileno( process->stdout );
-	s64 bytes_read = read( file_desc, out_buffer, count );
+u32		Proc_ReadStdout( process_t *process, char *outBuffer, const u64 count ) {
+	int fileDesc = fileno( process->stdout );
+	s64 bytesRead = read( fileDesc, outBuffer, count );
 
-	return trunc_cast( u32, bytes_read );
+	return TruncCast( u32, bytesRead );
 }
 
 #endif // __linux__

@@ -30,8 +30,8 @@ SOFTWARE.
 
 #include "int_types.h"
 
-struct LinearAllocator;
-struct String;
+struct linearAllocator_t;
+struct string_t;
 
 
 // Creates a hash based on the given 64 bit 'data' that is 'length' bytes long.
@@ -41,4 +41,4 @@ u64		Hash64( const void *data, const u64 length, const u64 seed );
 // Returns a 64 bit hash based on the given string.
 // If 'seed' is zero then will not use a pre-existing seed as a base for the hash.
 u64		HashString( const char *string, const u64 seed );
-u64		HashString( const String *string, const u64 seed );
+u64		HashString( const string_t *string, const u64 seed );

@@ -42,13 +42,13 @@ SOFTWARE.
 #include "helpers.h"
 
 struct msvcState_t {
-	String						compilerPath;
-	String						compilerVersion;
-	String						linkerPath;
+	string_t						compilerPath;
+	string_t						compilerVersion;
+	string_t						linkerPath;
 
 	// windows sdk includes, msvc includes, that kind of thing
-	Array<const char *>			microsoftCoreIncludes;
-	Array<const char *>			microsoftCoreLibPaths;
+	array_t<const char *>			microsoftCoreIncludes;
+	array_t<const char *>			microsoftCoreLibPaths;
 };
 
 //================================================================
@@ -62,7 +62,7 @@ static const char *OptimizationLevelToCompilerArg( const OptimizationLevel level
 		case OPTIMIZATION_LEVEL_O3:	return "/O2";
 	}
 
-	assert( false && "Bad OptimizationLevel passed.\n" );
+	Assert( false && "Bad OptimizationLevel passed.\n" );
 
 	return NULL;
 }
@@ -74,7 +74,7 @@ static const char *OptimizationLevelToCompilerArg( const OptimizationLevel level
 // its ridiculous that Microsoft genuinely think this isnt a frankly retarded way of grabbing some simple information off your PC
 
 static bool8 MSVC_Init( compilerBackend_t *backend, const buildContext_t *context, const char *compilerPath, const char *compilerVersion ) {
-	msvcState_t *msvcState = cast( msvcState_t *, Mem_AllocatorAlloc( context->allocator, sizeof( msvcState_t ) ) );
+	msvcState_t *msvcState = Cast( msvcState_t *, Mem_AllocatorAlloc( context->allocator, sizeof( msvcState_t ) ) );
 	new( msvcState ) msvcState_t;
 
 	msvcState->compilerPath = String_Alloc( context->allocator, compilerPath, strlen( compilerPath ) + 1 );
@@ -99,7 +99,7 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const buildContext_t *contex
 		msvcState->compilerPath = path_join( context->allocator, context->msvcInstall.rootFolder.data, "bin", "Hostx64", "x64", "cl" );
 		msvcState->linkerPath = path_join( context->allocator, context->msvcInstall.rootFolder.data, "bin", "Hostx64", "x64", "link" );
 	} else {
-		String compilerDir = String_Set( compilerPath );
+		string_t compilerDir = String_Set( compilerPath );
 		compilerDir = Path_RemoveFileFromPath( &compilerDir );
 		msvcState->linkerPath = path_join( context->allocator, String_Cstr( &compilerDir ), "link" );
 	}
@@ -111,7 +111,7 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const buildContext_t *contex
 }
 
 static void MSVC_Shutdown( compilerBackend_t *backend ) {
-	msvcState_t *msvcState = cast( msvcState_t *, backend->data );
+	msvcState_t *msvcState = Cast( msvcState_t *, backend->data );
 
 	msvcState->~msvcState_t();
 	backend->data = NULL;
@@ -127,18 +127,18 @@ static bool8 MSVC_CompileSourceFile(
 	u64 sourceFileIndex,
 	std::vector<std::string> *outIncludeDependencies )
 {
-	assert( backend );
-	assert( sourceFile );
-	assert( config );
+	Assert( backend );
+	Assert( sourceFile );
+	Assert( config );
 
-	String sourceFileNoPathAndExtension = String_Set( sourceFile );
+	string_t sourceFileNoPathAndExtension = String_Set( sourceFile );
 	sourceFileNoPathAndExtension = Path_RemovePathFromFile( &sourceFileNoPathAndExtension );
 	sourceFileNoPathAndExtension = Path_RemoveFileExtension( &sourceFileNoPathAndExtension );
 
-	msvcState_t *msvcState = cast( msvcState_t *, backend->data );
+	msvcState_t *msvcState = Cast( msvcState_t *, backend->data );
 
 
-	Array<const char *> finalArgs;
+	array_t<const char *> finalArgs;
 	finalArgs.Init( Mem_GetTempStorage() );
 	finalArgs.AddRange( &cmdArchetype.baseArgs );
 
@@ -162,7 +162,7 @@ static bool8 MSVC_CompileSourceFile(
 		procFlags = PROC_FLAG_SHOW_ARGS;
 	}
 
-	String processStdout = {};
+	string_t processStdout = {};
 	s32 exitCode = RunProc( &finalArgs, NULL, procFlags, &processStdout );
 
 	// now parse the stdout
@@ -176,7 +176,7 @@ static bool8 MSVC_CompileSourceFile(
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcast-qual"
-		char *lineStart = cast( char *, buffer );
+		char *lineStart = Cast( char *, buffer );
 #pragma clang diagnostic pop
 
 		while ( *lineStart ) {
@@ -186,7 +186,7 @@ static bool8 MSVC_CompileSourceFile(
 				continue;
 			}
 
-			u64 lineLength = cast( u64, lineEnd ) - cast( u64, lineStart );
+			u64 lineLength = Cast( u64, lineEnd ) - Cast( u64, lineStart );
 			std::string bufferLine( lineStart, lineLength );
 
 			if ( String_EndsWith( bufferLine.c_str(), "\r" ) ) {
@@ -219,13 +219,13 @@ static bool8 MSVC_CompileSourceFile(
 }
 
 static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t *backend, const std::vector<std::string> &intermediateFiles, BuildConfig *config, const BuilderOptions *options ) {
-	assert( backend );
-	assert( config );
+	Assert( backend );
+	Assert( config );
 
 	const char *fullBinaryName = BuildConfig_GetFullBinaryName( config, Mem_GetTempStorage() );
 
-	msvcState_t *msvcState = cast( msvcState_t *, backend->data );
-	Array<const char *> args;
+	msvcState_t *msvcState = Cast( msvcState_t *, backend->data );
+	array_t<const char *> args;
 	args.Init( Mem_GetTempStorage() );
 	args.Reserve(
 		1 +	// link
@@ -286,7 +286,7 @@ static bool8 MSVC_LinkIntermediateFiles( compilerBackend_t *backend, const std::
 }
 
 static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t *backend, const BuildConfig *config, compilationCommandArchetype_t &outCmdArchetype ) {
-	msvcState_t *msvcState = cast( msvcState_t *, backend->data );
+	msvcState_t *msvcState = Cast( msvcState_t *, backend->data );
 
 	outCmdArchetype.baseArgs.Init( Mem_GetTempStorage() );
 	outCmdArchetype.dependencyFlags.Init( Mem_GetTempStorage() );
@@ -297,7 +297,7 @@ static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t *backe
 	const u64 ignoredWarningsCount = config->ignoreWarnings.size();
 	const u64 additionalArgsCount = config->additionalCompilerArguments.size();
 
-	Array<const char *> &baseArgs = outCmdArchetype.baseArgs;
+	array_t<const char *> &baseArgs = outCmdArchetype.baseArgs;
 	baseArgs.Reserve(
 		1 +	// compilerPath
 		1 +	// compile flag
@@ -368,11 +368,11 @@ static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t *backe
 
 		// MSVC only allows one warning level to be set
 		if ( config->warningLevels.size() > 1 ) {
-			StringBuilder builder = SB_Create( Mem_GetTempStorage() );
+			stringBuilder_t builder = SB_Create( Mem_GetTempStorage() );
 
 			SB_Appendf( &builder, "MSVC only allows ONE of the following warning levels to be set:\n" );
 
-			For ( u64, allowedWarningLevelIndex, 0, count_of( allowedWarningLevels ) ) {
+			For ( u64, allowedWarningLevelIndex, 0, COUNT_OF( allowedWarningLevels ) ) {
 				SB_Appendf( &builder, "%s, ", allowedWarningLevels[allowedWarningLevelIndex] );
 			}
 
@@ -386,7 +386,7 @@ static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t *backe
 
 			bool8 found = false;
 
-			For ( u64, allowedWarningLevelIndex, 0, count_of( allowedWarningLevels ) ) {
+			For ( u64, allowedWarningLevelIndex, 0, COUNT_OF( allowedWarningLevels ) ) {
 				if ( String_Equals( allowedWarningLevels[allowedWarningLevelIndex], warningLevel ) ) {
 					found = true;
 					break;
@@ -421,14 +421,14 @@ static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t *backe
 	return true;
 }
 
-static String MSVC_GetCompilerPath( compilerBackend_t *backend ) {
-	msvcState_t *msvcState = cast( msvcState_t *, backend->data );
+static string_t MSVC_GetCompilerPath( compilerBackend_t *backend ) {
+	msvcState_t *msvcState = Cast( msvcState_t *, backend->data );
 
 	return msvcState->compilerPath;
 }
 
-static String MSVC_GetCompilerVersion( compilerBackend_t *backend ) {
-	msvcState_t *msvcState = cast( msvcState_t *, backend->data );
+static string_t MSVC_GetCompilerVersion( compilerBackend_t *backend ) {
+	msvcState_t *msvcState = Cast( msvcState_t *, backend->data );
 
 	return msvcState->compilerVersion;
 }

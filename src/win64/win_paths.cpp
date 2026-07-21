@@ -49,14 +49,14 @@ SOFTWARE.
 ================================================================================================
 */
 
-String Path_AppPath( LinearAllocator *allocator ) {
-	char app_full_path[MAX_PATH] = {};
-	DWORD length = GetModuleFileNameA( NULL, app_full_path, MAX_PATH );
+string_t Path_AppPath( linearAllocator_t *allocator ) {
+	char appFullPath[MAX_PATH] = {};
+	DWORD length = GetModuleFileNameA( NULL, appFullPath, MAX_PATH );
 
-	return String_Alloc( allocator, app_full_path, length );
+	return String_Alloc( allocator, appFullPath, length );
 }
 
-String Path_GetCwd( LinearAllocator *allocator ) {
+string_t Path_GetCwd( linearAllocator_t *allocator ) {
 	char cwd[MAX_PATH] = {};
 	DWORD length = GetCurrentDirectory( MAX_PATH, cwd );
 
@@ -64,18 +64,18 @@ String Path_GetCwd( LinearAllocator *allocator ) {
 }
 
 bool8 Path_SetCwd( const char *path ) {
-	assert( path );
+	Assert( path );
 
-	return cast( bool8, SetCurrentDirectory( path ) );
+	return Cast( bool8, SetCurrentDirectory( path ) );
 }
 
-String Path_AbsolutePath( LinearAllocator *allocator, const char *path ) {
-	assert( path );
+string_t Path_AbsolutePath( linearAllocator_t *allocator, const char *path ) {
+	Assert( path );
 
-	char absolute_path[MAX_PATH] = {};
-	DWORD length = GetFullPathName( path, MAX_PATH, absolute_path, NULL );
+	char absolutePath[MAX_PATH] = {};
+	DWORD length = GetFullPathName( path, MAX_PATH, absolutePath, NULL );
 
-	return String_Alloc( allocator, absolute_path, length );
+	return String_Alloc( allocator, absolutePath, length );
 }
 
 bool8 Path_IsAbsolute( const char *path ) {
@@ -86,7 +86,7 @@ bool8 Path_IsAbsolute( const char *path ) {
 	return isalpha( path[0] ) && path[1] == ':' && ( path[2] == '\\' || path[2] == '/' );
 }
 
-String Path_FixSlashes( LinearAllocator *allocator, String *str ) {
+string_t Path_FixSlashes( linearAllocator_t *allocator, string_t *str ) {
 	return String_Replace( allocator, str, '/', PATH_SEPARATOR );
 }
 

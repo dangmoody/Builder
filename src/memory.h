@@ -38,10 +38,10 @@ SOFTWARE.
 ================================================================================================
 */
 
-void	*VirtualReserve( const u64 sizeBytes );
+void	*Mem_VirtualReserve( const u64 sizeBytes );
 
-void	*VirtualCommit( void *ptr, const u64 sizeBytes );
+void	*Mem_VirtualCommit( void *ptr, const u64 sizeBytes );
 
-void	VirtualDecommit( void *ptr, const u64 sizeBytes );
+void	Mem_VirtualDecommit( void *ptr, const u64 sizeBytes );
 
-void	VirtualFree( void *ptr );
+void	Mem_VirtualFree( void *ptr );

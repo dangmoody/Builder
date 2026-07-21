@@ -28,19 +28,19 @@ SOFTWARE.
 
 #ifdef __linux__
 
-#include <os.h>
-#include <typecast.inl>
+#include "../os.h"
+#include "../typecast.h"
 
 #include <unistd.h>
 
 u32	OS_GetVirtualMemoryPageSize() {
-	long page_size = sysconf( _SC_PAGESIZE );
-	return trunc_cast( u32, page_size );
+	long pageSize = sysconf( _SC_PAGESIZE );
+	return TruncCast( u32, pageSize );
 }
 
 u32 OS_GetNumCpuCores() {
-	long num_cores = sysconf( _SC_NPROCESSORS_ONLN );
-	return trunc_cast( u32, num_cores );
+	long numCores = sysconf( _SC_NPROCESSORS_ONLN );
+	return TruncCast( u32, numCores );
 }
 
 #endif // __linux__

@@ -1446,7 +1446,7 @@ void TemperSetupInternal( void ) {
 
 	// get old stdout
 	g_temperTestContext.oldStdoutID = g_temperTestContext.callbacks.Dup( TEMPERDEV_STDOUT_FILENO );
-	assert( g_temperTestContext.oldStdoutID != TEMPERDEV_INVALID_FILE_ID );
+	TEMPERDEV_ASSERT( g_temperTestContext.oldStdoutID != TEMPERDEV_INVALID_FILE_ID );
 
 	// get the "null" file
 	// when we "suppress" stdout we actually just write to a null file that no-one can see

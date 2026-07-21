@@ -27,35 +27,34 @@ SOFTWARE.
 */
 
 #include "builder_local.h"
-#include "core/include/temp_storage.h"
 
 #ifdef _WIN32
 #include "win_support.h"
 #endif
 
-#include "core/include/core_string.h"
-#include "core/include/debug.h"
-#include "core/include/core_string.h"
-#include "core/include/paths.h"
-#include "core/include/core_array.inl"
-#include "core/include/file.h"
-#include "core/include/core_process.h"
-#include "core/include/string_builder.h"
-#include "core/include/defer.h"
-#include "core/include/core_helpers.h"
+#include "temp_storage.h"
+#include "string.h"
+#include "debug.h"
+#include "paths.h"
+#include "array.inl"
+#include "file.h"
+#include "subprocess.h"
+#include "string_builder.h"
+#include "defer.h"
+#include "library.h"
 
 #include <clang-c/Index.h>
 
 struct clangState_t {
 	// TODO(DM): 11/02/2026: remove these when eds command archetype changes get merged in
-	String						compilerPath;
-	String						compilerVersion;
-	String						linkerPath;
-	String						arPath;	// static library linker for gcc (on windows and linux) and clang (linux)
+	string_t		compilerPath;
+	string_t		compilerVersion;
+	string_t		linkerPath;
+	string_t		arPath;	// static library linker for gcc (on windows and linux) and clang (linux)
 
 #ifdef _WIN32
-	windowsSDK_t				winSDK;
-	msvcInstall_t				msvcInstall;
+	windowsSDK_t	winSDK;
+	msvcInstall_t	msvcInstall;
 #endif
 };
 
@@ -72,15 +71,15 @@ static const char *OptimizationLevelToCompilerArg( const OptimizationLevel level
 static void ReadDependencyFile( const char *depFilename, std::vector<std::string> &outIncludeDependencies ) {
 	LogVerbose( "Parsing dependency file \"%s\"...\n", depFilename );
 
-	String depFileBuffer = {};
+	string_t depFileBuffer = {};
 
-	if ( !file_read_entire( depFilename, &depFileBuffer ) ) {
-		s32 errorCode = get_last_error_code();
-		fatal_error( "Failed to read \"%s\".  This should never happen! Error code: " ERROR_CODE_FORMAT "\n", depFilename, errorCode );
+	if ( !FS_ReadEntireFile( depFilename, &depFileBuffer ) ) {
+		s32 errorCode = GetLastErrorCode();
+		FatalError( "Failed to read \"%s\".  This should never happen! Error code: " ERROR_CODE_FORMAT "\n", depFilename, errorCode );
 		return;
 	}
 
-	defer { file_free_buffer( &depFileBuffer ); };
+	defer { FS_FreeFileBuffer( &depFileBuffer ); };
 
 	outIncludeDependencies.clear();
 
@@ -89,13 +88,13 @@ static void ReadDependencyFile( const char *depFilename, std::vector<std::string
 	// .d files start with the name of the binary followed by a colon
 	// so skip past that first
 	current = strchr( depFileBuffer.data, ':' );
-	assert( current );
+	Assert( current );
 	current += 1;	// skip past the colon
 	current += 1;	// skip past the following whitespace
 
 	// skip past the newline after
 	current = strchr( current, '\n' );
-	assert( current );
+	Assert( current );
 	current += 1;
 
 	while ( *current ) {
@@ -111,7 +110,7 @@ static void ReadDependencyFile( const char *depFilename, std::vector<std::string
 		// filenames are separated by either new line or space
 		if ( !dependencyEnd ) dependencyEnd = strchr( dependencyStart, ' ' );
 		if ( !dependencyEnd ) dependencyEnd = strchr( dependencyStart, '\n' );
-		assert( dependencyEnd );
+		Assert( dependencyEnd );
 		// paths can have spaces in them, but they are preceded by a single backslash (\)
 		// so if we find a space but it has a single backslash just before it then keep searching for a space
 		while ( dependencyEnd && ( *( dependencyEnd - 1 ) == '\\' ) ) {
@@ -126,7 +125,7 @@ static void ReadDependencyFile( const char *depFilename, std::vector<std::string
 			dependencyEnd -= 1;
 		}
 
-		u64 dependencyFilenameLength = cast( u64, dependencyEnd ) - cast( u64, dependencyStart );
+		u64 dependencyFilenameLength = Cast( u64, dependencyEnd ) - Cast( u64, dependencyStart );
 
 		// get the substring we actually need
 		std::string dependencyFilename( dependencyStart, dependencyFilenameLength );
@@ -145,7 +144,6 @@ static void ReadDependencyFile( const char *depFilename, std::vector<std::string
 
 		current = dependencyEnd + 1;
 
-		//while ( *current == PATH_SEPARATOR ) {
 		while ( *current == '\\' ) {
 			current += 1;
 		}
@@ -162,30 +160,30 @@ static void ReadDependencyFile( const char *depFilename, std::vector<std::string
 	LogVerbose( "Finished parsing dependency file \"%s\"...\n", depFilename );
 }
 
-static void ResolveCompilerAndLinkerPaths( clangState_t *clangState, LinearAllocator *allocator, const char *compilerPath, const char *compilerName, const char *linkerName ) {
-	String compilerPathStr = string_set( compilerPath );
-	String pathToCompiler = path_remove_file_from_path( &compilerPathStr );
+static void ResolveCompilerAndLinkerPaths( clangState_t *clangState, linearAllocator_t *allocator, const char *compilerPath, const char *compilerName, const char *linkerName ) {
+	string_t compilerPathStr = String_Set( compilerPath );
+	string_t pathToCompiler = Path_RemoveFileFromPath( &compilerPathStr );
 
 	if ( pathToCompiler.count != compilerPathStr.count ) {
-		const char *pathToCompilerCStr = string_cstr( &pathToCompiler );
-		clangState->compilerPath = path_join( allocator, pathToCompilerCStr, compilerName );
-		clangState->linkerPath = path_join( allocator, pathToCompilerCStr, linkerName );
+		const char *pathToCompilerCStr = String_Cstr( &pathToCompiler );
+		clangState->compilerPath = Path_Join( allocator, pathToCompilerCStr, compilerName );
+		clangState->linkerPath = Path_Join( allocator, pathToCompilerCStr, linkerName );
 	} else {
-		clangState->compilerPath = string_alloc( allocator, compilerPath, strlen( compilerPath ) + 1 );
-		clangState->linkerPath = string_alloc( allocator, linkerName, strlen( linkerName ) + 1 );
+		clangState->compilerPath = String_Alloc( allocator, compilerPath, strlen( compilerPath ) + 1 );
+		clangState->linkerPath = String_Alloc( allocator, linkerName, strlen( linkerName ) + 1 );
 	}
 }
 
 //================================================================
 
 static bool8 Clang_Init( compilerBackend_t *backend, const buildContext_t *context, const char *compilerPath, const char *compilerVersion ) {
-	backend->data = cast( clangState_t *, linear_allocator_alloc( context->allocator, sizeof( clangState_t ) ) );
+	backend->data = Cast( clangState_t *, Mem_Alloc( context->allocator, sizeof( clangState_t ) ) );
 	new( backend->data ) clangState_t;
 
-	clangState_t *clangState = cast( clangState_t *, backend->data );
+	clangState_t *clangState = Cast( clangState_t *, backend->data );
 
 	if ( compilerVersion ) {
-		clangState->compilerVersion = string_alloc( context->allocator, compilerVersion, strlen( compilerVersion ) + 1 );
+		clangState->compilerVersion = String_Alloc( context->allocator, compilerVersion, strlen( compilerVersion ) + 1 );
 	}
 
 	const char *clangExe = "clang";
@@ -199,13 +197,13 @@ static bool8 Clang_Init( compilerBackend_t *backend, const buildContext_t *conte
 
 	ResolveCompilerAndLinkerPaths( clangState, context->allocator, compilerPath, clangExe, linkerExe );
 
-	String pathToCompiler = string_set( compilerPath );
-	pathToCompiler = path_remove_file_from_path( &pathToCompiler );
+	string_t pathToCompiler = String_Set( compilerPath );
+	pathToCompiler = Path_RemoveFileFromPath( &pathToCompiler );
 
 #if defined( _WIN32 )
-	clangState->arPath = path_join( context->allocator, string_cstr( &pathToCompiler ), "ar" );
+	clangState->arPath = Path_Join( context->allocator, String_Cstr( &pathToCompiler ), "ar" );
 #elif defined( __linux__ )
-	clangState->arPath = path_join( context->allocator, string_cstr( &pathToCompiler ), linkerExe );
+	clangState->arPath = Path_Join( context->allocator, String_Cstr( &pathToCompiler ), linkerExe );
 #endif
 
 #ifdef _WIN32
@@ -217,31 +215,31 @@ static bool8 Clang_Init( compilerBackend_t *backend, const buildContext_t *conte
 }
 
 static bool8 GCC_Init( compilerBackend_t *backend, const buildContext_t *context, const char *compilerPath, const char *compilerVersion ) {
-	backend->data = cast( clangState_t *, linear_allocator_alloc( context->allocator, sizeof( clangState_t ) ) );
+	backend->data = Cast( clangState_t *, Mem_Alloc( context->allocator, sizeof( clangState_t ) ) );
 	new( backend->data ) clangState_t;
 
-	clangState_t *clangState = cast( clangState_t *, backend->data );
+	clangState_t *clangState = Cast( clangState_t *, backend->data );
 
 	if ( compilerVersion ) {
-		clangState->compilerVersion = string_alloc( context->allocator, compilerVersion, strlen( compilerVersion ) + 1 );
+		clangState->compilerVersion = String_Alloc( context->allocator, compilerVersion, strlen( compilerVersion ) + 1 );
 	}
 
 	ResolveCompilerAndLinkerPaths( clangState, context->allocator, compilerPath, "gcc", "ld" );
 
-	String compilerPathStr = string_set( compilerPath );
-	String pathToCompiler = path_remove_file_from_path( &compilerPathStr );
+	string_t compilerPathStr = String_Set( compilerPath );
+	string_t pathToCompiler = Path_RemoveFileFromPath( &compilerPathStr );
 
 	if ( pathToCompiler.count != compilerPathStr.count ) {
-		clangState->arPath = path_join( context->allocator, string_cstr( &pathToCompiler ), "ar" );
+		clangState->arPath = Path_Join( context->allocator, String_Cstr( &pathToCompiler ), "ar" );
 	} else {
-		clangState->arPath = string_alloc( context->allocator, "ar", strlen( "ar" ) + 1 );
+		clangState->arPath = String_Alloc( context->allocator, "ar", strlen( "ar" ) + 1 );
 	}
 
 	return true;
 }
 
 static void Clang_Shutdown( compilerBackend_t *backend ) {
-	clangState_t *clangState = cast( clangState_t *, backend->data );
+	clangState_t *clangState = Cast( clangState_t *, backend->data );
 
 	clangState->~clangState_t();
 	backend->data = NULL;
@@ -257,38 +255,38 @@ static bool8 Clang_CompileSourceFile(
 	u64 sourceFileIndex,
 	std::vector<std::string> *outIncludeDependencies )
 {
-	assert( backend );
-	assert( sourceFile );
+	Assert( backend );
+	Assert( sourceFile );
 
-	clangState_t *clangState = cast( clangState_t *, backend->data );
+	clangState_t *clangState = Cast( clangState_t *, backend->data );
 
-	String sourceFileNoPath = string_set( sourceFile );
-	sourceFileNoPath = path_remove_path_from_file( &sourceFileNoPath );
+	string_t sourceFileNoPath = String_Set( sourceFile );
+	sourceFileNoPath = Path_RemovePathFromFile( &sourceFileNoPath );
 
-	const char *depFilename = temp_printf( "%s%c%s.d", config->intermediateFolder.c_str(), PATH_SEPARATOR, string_cstr( &sourceFileNoPath ) );
+	const char *depFilename = TempPrintf( "%s%c%s.d", config->intermediateFolder.c_str(), PATH_SEPARATOR, String_Cstr( &sourceFileNoPath ) );
 
-	Array<const char *> finalArgs;
-	finalArgs.init( mem_get_temp_storage() );
-	finalArgs.add_range( &cmdArchetype.baseArgs );
+	array_t<const char *> finalArgs;
+	finalArgs.Init( Mem_GetTempStorage() );
+	finalArgs.AddRange( &cmdArchetype.baseArgs );
 
-	String sourceFileNoPathAndExtension = path_remove_file_extension( &sourceFileNoPath );
+	string_t sourceFileNoPathAndExtension = Path_RemoveFileExtension( &sourceFileNoPath );
 
-	const char *intermediateFile = temp_printf( "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, string_cstr( &sourceFileNoPathAndExtension ) );
+	const char *intermediateFile = TempPrintf( "%s%c%s.o", config->intermediateFolder.c_str(), PATH_SEPARATOR, String_Cstr( &sourceFileNoPathAndExtension ) );
 
 	// Fill up remaining arguments
 
 	// Dependency Flags/File
 	For ( u64, flagIndex, 0, cmdArchetype.dependencyFlags.count ) {
-		finalArgs.add( cmdArchetype.dependencyFlags[flagIndex] );
+		finalArgs.Add( cmdArchetype.dependencyFlags[flagIndex] );
 	}
-	finalArgs.add( temp_printf( "%s%c%s.d", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPath.data ) );
+	finalArgs.Add( TempPrintf( "%s%c%s.d", config->intermediateFolder.c_str(), PATH_SEPARATOR, sourceFileNoPath.data ) );
 
 	// Output Flag/File
-	finalArgs.add( cmdArchetype.outputFlag );
-	finalArgs.add( intermediateFile );
+	finalArgs.Add( cmdArchetype.outputFlag );
+	finalArgs.Add( intermediateFile );
 
 	// Source File
-	finalArgs.add( sourceFile );
+	finalArgs.Add( sourceFile );
 
 	procFlags_t procFlags = PROC_FLAG_SHOW_STDOUT;
 	if ( buildContext->consolidateCompilerArgs ) {
@@ -311,17 +309,16 @@ static bool8 Clang_CompileSourceFile(
 }
 
 static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const std::vector<std::string> &intermediateFiles, BuildConfig *config, const BuilderOptions *options ) {
-	assert( backend );
-	assert( config );
-	// assert( options );
+	Assert( backend );
+	Assert( config );
 
-	clangState_t *clangState = cast( clangState_t *, backend->data );
+	clangState_t *clangState = Cast( clangState_t *, backend->data );
 
-	const char *fullBinaryName = BuildConfig_GetFullBinaryName( config, mem_get_temp_storage() );
+	const char *fullBinaryName = BuildConfig_GetFullBinaryName( config, Mem_GetTempStorage() );
 
-	Array<const char *> args;
-	args.init( mem_get_temp_storage() );
-	args.reserve(
+	array_t<const char *> args;
+	args.Init( Mem_GetTempStorage() );
+	args.Reserve(
 		1 + // lib.exe or link.exe
 		1 + // verbose flag
 		1 + // /DLL
@@ -341,43 +338,42 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const std:
 	// so we need to start splitting backend files down by compiler and linker
 	// and then unify the linker codepaths on windows when calling either clang or msvc
 #ifdef _WIN32
-	//args.add( clangState->linkerPath.data );
 	if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
-		args.add( temp_printf( "%s\\bin\\Hostx64\\x64\\lib", clangState->msvcInstall.rootFolder.data ) );
+		args.Add( TempPrintf( "%s\\bin\\Hostx64\\x64\\lib", clangState->msvcInstall.rootFolder.data ) );
 	} else {
-		args.add( temp_printf( "%s\\bin\\Hostx64\\x64\\link", clangState->msvcInstall.rootFolder.data ) );
+		args.Add( TempPrintf( "%s\\bin\\Hostx64\\x64\\link", clangState->msvcInstall.rootFolder.data ) );
 
-		args.add( "/NODEFAULTLIB" );
+		args.Add( "/NODEFAULTLIB" );
 	}
 
 	if ( g_verbose ) {
-		args.add( "/verbose" );
+		args.Add( "/verbose" );
 	}
 
 	if ( config->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
-		args.add( "/DLL" );
+		args.Add( "/DLL" );
 	}
 
 	if ( config->binaryType != BINARY_TYPE_STATIC_LIBRARY && !config->removeSymbols ) {
-		args.add( "/DEBUG" );
+		args.Add( "/DEBUG" );
 	}
 
-	args.add( temp_printf( "/OUT:%s", fullBinaryName ) );
+	args.Add( TempPrintf( "/OUT:%s", fullBinaryName ) );
 
 	For ( u64, i, 0, intermediateFiles.size() ) {
-		args.add( intermediateFiles[i].c_str() );
+		args.Add( intermediateFiles[i].c_str() );
 	}
 
-	args.add( temp_printf( "/LIBPATH:%s", clangState->winSDK.ucrtLibPath.data ) );
-	args.add( temp_printf( "/LIBPATH:%s", clangState->winSDK.umLibPath.data ) );
-	args.add( temp_printf( "/LIBPATH:%s", clangState->msvcInstall.libPath.data ) );
+	args.Add( TempPrintf( "/LIBPATH:%s", clangState->winSDK.ucrtLibPath.data ) );
+	args.Add( TempPrintf( "/LIBPATH:%s", clangState->winSDK.umLibPath.data ) );
+	args.Add( TempPrintf( "/LIBPATH:%s", clangState->msvcInstall.libPath.data ) );
 
 	For ( u32, libPathIndex, 0, config->additionalLibPaths.size() ) {
-		args.add( temp_printf( "/LIBPATH:%s", config->additionalLibPaths[libPathIndex].c_str() ) );
+		args.Add( TempPrintf( "/LIBPATH:%s", config->additionalLibPaths[libPathIndex].c_str() ) );
 	}
 
 	if ( !options || !options->noDefaultLibs ) {
-		args.add( "kernel32.lib" );
+		args.Add( "kernel32.lib" );
 
 		// these defines are what drive the choice of lib windows std compiles against
 		bool8 debugBuild = false;
@@ -395,88 +391,88 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const std:
 		if ( config->binaryType != BINARY_TYPE_STATIC_LIBRARY ) {
 			if( debugBuild ) {
 				if ( hasDllRuntime ) {
-				args.add( "msvcrtd.lib" );
-				args.add( "msvcprtd.lib" );
-				args.add( "vcruntimed.lib" );
-				args.add( "ucrtd.lib" );
+				args.Add( "msvcrtd.lib" );
+				args.Add( "msvcprtd.lib" );
+				args.Add( "vcruntimed.lib" );
+				args.Add( "ucrtd.lib" );
 				}
 				else {
-					args.add( "libcmtd.lib" );
-					args.add( "libcpmtd.lib" );
-					args.add( "libvcruntimed.lib" );
-					args.add( "libucrtd.lib" );
+					args.Add( "libcmtd.lib" );
+					args.Add( "libcpmtd.lib" );
+					args.Add( "libvcruntimed.lib" );
+					args.Add( "libucrtd.lib" );
 				}
 			} else {
 				if ( hasDllRuntime ) {
-					args.add( "msvcrt.lib" );
-					args.add( "msvcprt.lib" );
-					args.add( "vcruntime.lib" );
-					args.add( "ucrt.lib" );
+					args.Add( "msvcrt.lib" );
+					args.Add( "msvcprt.lib" );
+					args.Add( "vcruntime.lib" );
+					args.Add( "ucrt.lib" );
 				}
 				else {
-					args.add( "libcmt.lib" );
-					args.add( "libcpmt.lib" );
-					args.add( "libvcruntime.lib" );
-					args.add( "libucrt.lib" );
+					args.Add( "libcmt.lib" );
+					args.Add( "libcpmt.lib" );
+					args.Add( "libvcruntime.lib" );
+					args.Add( "libucrt.lib" );
 				}
 			}
 		}
 	}
 
 	For ( u32, libIndex, 0, config->additionalLibs.size() ) {
-		args.add( temp_printf( "%s%s", config->additionalLibs[libIndex].c_str(), GetFileExtensionFromBinaryType( BINARY_TYPE_STATIC_LIBRARY ) ) );
+		args.Add( TempPrintf( "%s%s", config->additionalLibs[libIndex].c_str(), GetFileExtensionFromBinaryType( BINARY_TYPE_STATIC_LIBRARY ) ) );
 	}
 
 	For ( u32, libIndex, 0, config->additionalLinkerArguments.size() ) {
-		args.add( config->additionalLinkerArguments[libIndex].c_str() );
+		args.Add( config->additionalLinkerArguments[libIndex].c_str() );
 	}
 #else
 	// clang and gcc treat static libraries as just an archive of .o files
 	// so there is no real "link" step in this case, the .o files are just "archived" together
 	// for dynamic libraries and executables clang and gcc recommend you call the compiler again and just pass in all the intermediate files
 	if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
-		args.add( clangState->arPath.data );
-		args.add( "rc" );
-		args.add( fullBinaryName );
+		args.Add( clangState->arPath.data );
+		args.Add( "rc" );
+		args.Add( fullBinaryName );
 
 		if ( g_verbose ) {
-			args.add( "-v" );
+			args.Add( "-v" );
 		}
 
 		For ( u64, i, 0, intermediateFiles.size() ) {
-			args.add( intermediateFiles[i].c_str() );
+			args.Add( intermediateFiles[i].c_str() );
 		}
 	} else {
-		args.add( clangState->compilerPath.data );
+		args.Add( clangState->compilerPath.data );
 
 		if ( config->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
-			args.add( "-shared" );
+			args.Add( "-shared" );
 		}
 
 		if ( !config->removeSymbols ) {
-			args.add( "-g" );
+			args.Add( "-g" );
 		}
 
 		if ( g_verbose ) {
-			args.add( "-v" );
+			args.Add( "-v" );
 		}
 
 		For ( u64, i, 0, intermediateFiles.size() ) {
-			args.add( intermediateFiles[i].c_str() );
+			args.Add( intermediateFiles[i].c_str() );
 		}
 
 		For ( u32, libPathIndex, 0, config->additionalLibPaths.size() ) {
-			args.add( temp_printf( "-L%s", config->additionalLibPaths[libPathIndex].c_str() ) );
+			args.Add( TempPrintf( "-L%s", config->additionalLibPaths[libPathIndex].c_str() ) );
 		}
 
 #ifdef _WIN32
-		args.add( temp_printf( "-L%s", clangState->winSDK.ucrtLibPath.data ) );
-		args.add( temp_printf( "-L%s", clangState->winSDK.umLibPath.data ) );
+		args.Add( TempPrintf( "-L%s", clangState->winSDK.ucrtLibPath.data ) );
+		args.Add( TempPrintf( "-L%s", clangState->winSDK.umLibPath.data ) );
 #endif
 
 #ifdef __linux__
 		if ( !options || !options->noDefaultLibs ) {
-			args.add( "-lstdc++" );
+			args.Add( "-lstdc++" );
 		}
 #endif
 
@@ -485,29 +481,29 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const std:
 		// so on linux make the user specify the file extension themselves
 		For ( u32, libIndex, 0, config->additionalLibs.size() ) {
 #ifdef _WIN32
-			args.add( temp_printf( "-l%s%s", config->additionalLibs[libIndex].c_str(), GetFileExtensionFromBinaryType( BINARY_TYPE_STATIC_LIBRARY ) ) );
+			args.Add( TempPrintf( "-l%s%s", config->additionalLibs[libIndex].c_str(), GetFileExtensionFromBinaryType( BINARY_TYPE_STATIC_LIBRARY ) ) );
 #else
-			args.add( temp_printf( "-l%s", config->additionalLibs[libIndex].c_str() ) );
+			args.Add( TempPrintf( "-l%s", config->additionalLibs[libIndex].c_str() ) );
 #endif
 		}
 
 		For ( u32, libIndex, 0, config->additionalLinkerArguments.size() ) {
-			args.add( config->additionalLinkerArguments[libIndex].c_str() );
+			args.Add( config->additionalLinkerArguments[libIndex].c_str() );
 		}
 
 		// TODO(DM): 09/10/2025: this works fine but do we want to expose this to the user?
 		// or do we want to just do this by default on linux because its a really common thing that people do?
 #ifdef __linux__
 		if ( config->binaryType == BINARY_TYPE_EXE ) {
-			String fullBinaryPath = string_set( fullBinaryName );
-			fullBinaryPath = path_remove_file_from_path( &fullBinaryPath );
+			string_t fullBinaryPath = String_Set( fullBinaryName );
+			fullBinaryPath = Path_RemoveFileFromPath( &fullBinaryPath );
 
-			args.add( temp_printf( "-Wl,-rpath=%s", string_cstr( &fullBinaryPath ) ) );
+			args.Add( TempPrintf( "-Wl,-rpath=%s", String_Cstr( &fullBinaryPath ) ) );
 		}
 #endif
 
-		args.add( "-o" );
-		args.add( fullBinaryName );
+		args.Add( "-o" );
+		args.Add( fullBinaryName );
 	}
 #endif
 
@@ -517,16 +513,16 @@ static bool8 Clang_LinkIntermediateFiles( compilerBackend_t *backend, const std:
 }
 
 static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const std::vector<std::string> &intermediateFiles, BuildConfig *config, const BuilderOptions *options ) {
-	assert( backend );
-	assert( config );
+	Assert( backend );
+	Assert( config );
 
-	clangState_t *clangState = cast( clangState_t *, backend->data );
+	clangState_t *clangState = Cast( clangState_t *, backend->data );
 
-	const char *fullBinaryName = BuildConfig_GetFullBinaryName( config, mem_get_temp_storage() );
+	const char *fullBinaryName = BuildConfig_GetFullBinaryName( config, Mem_GetTempStorage() );
 
-	Array<const char *> args;
-	args.init( mem_get_temp_storage() );
-	args.reserve(
+	array_t<const char *> args;
+	args.Init( Mem_GetTempStorage() );
+	args.Reserve(
 		1 + // lld-link
 		1 + // verbose flag
 		1 + // /lib or -shared
@@ -544,70 +540,65 @@ static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const std::v
 	// so there is no real "link" step in this case, the .o files are just "archived" together
 	// for dynamic libraries and executables clang and gcc recommend you call the compiler again and just pass in all the intermediate files
 	if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
-		args.add( clangState->arPath.data );
-		args.add( "rc" );
-		args.add( fullBinaryName );
+		args.Add( clangState->arPath.data );
+		args.Add( "rc" );
+		args.Add( fullBinaryName );
 
 		if ( g_verbose ) {
-			args.add( "-v" );
+			args.Add( "-v" );
 		}
 
 		For ( u64, i, 0, intermediateFiles.size() ) {
-			args.add( intermediateFiles[i].c_str() );
+			args.Add( intermediateFiles[i].c_str() );
 		}
 	} else {
-		args.add( clangState->compilerPath.data );
+		args.Add( clangState->compilerPath.data );
 
 		if ( config->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
-			args.add( "-shared" );
+			args.Add( "-shared" );
 		}
 
 		if ( !config->removeSymbols ) {
-			args.add( "-g" );
+			args.Add( "-g" );
 		}
 
 		if ( options && options->noDefaultLibs ) {
-			args.add( "-nodefaultlibs" );
+			args.Add( "-nodefaultlibs" );
 		}
 
 		if ( g_verbose ) {
-			args.add( "-v" );
+			args.Add( "-v" );
 		}
 
 		For ( u64, i, 0, intermediateFiles.size() ) {
-			args.add( intermediateFiles[i].c_str() );
+			args.Add( intermediateFiles[i].c_str() );
 		}
 
 		For ( u32, libPathIndex, 0, config->additionalLibPaths.size() ) {
-			args.add( temp_printf( "-L%s", config->additionalLibPaths[libPathIndex].c_str() ) );
+			args.Add( TempPrintf( "-L%s", config->additionalLibPaths[libPathIndex].c_str() ) );
 		}
 
-// #ifdef _WIN32
-// 		args.add( temp_printf( "-L%s", clangState->winSDK.ucrtLibPath.data ) );
-// 		args.add( temp_printf( "-L%s", clangState->winSDK.umLibPath.data ) );
-// #endif
-
 		For ( u32, libIndex, 0, config->additionalLibs.size() ) {
-			args.add( temp_printf( "-l%s", config->additionalLibs[libIndex].c_str() ) );
+			args.Add( TempPrintf( "-l%s", config->additionalLibs[libIndex].c_str() ) );
 		}
 
 		For ( u32, libIndex, 0, config->additionalLinkerArguments.size() ) {
-			args.add( config->additionalLinkerArguments[libIndex].c_str() );
+			args.Add( config->additionalLinkerArguments[libIndex].c_str() );
 		}
 
 		// TODO(DM): 09/10/2025: this works fine but do we want to expose this to the user?
 		// or do we want to just do this by default on linux because its a really common thing that people do?
 #ifdef __linux__
 		if ( config->binaryType == BINARY_TYPE_EXE ) {
-			String fullBinaryPath = string_set( fullBinaryName );
-			fullBinaryPath = path_remove_file_from_path( &fullBinaryPath );
+			string_t fullBinaryPath = String_Set( fullBinaryName );
+			fullBinaryPath = Path_RemoveFileFromPath( &fullBinaryPath );
 
-			args.add( temp_printf( "-Wl,-rpath=%s", string_cstr( &fullBinaryPath ) ) );
+			args.Add( TempPrintf( "-Wl,-rpath=%s", String_Cstr( &fullBinaryPath ) ) );
 		}
 #endif
 
-		args.add( "-o" );
-		args.add( fullBinaryName );
+		args.Add( "-o" );
+		args.Add( fullBinaryName );
 	}
 
 	s32 exitCode = RunProc( &args, NULL, PROC_FLAG_SHOW_ARGS | PROC_FLAG_SHOW_STDOUT );
@@ -616,17 +607,14 @@ static bool8 GCC_LinkIntermediateFiles( compilerBackend_t *backend, const std::v
 }
 
 static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t *backend, const BuildConfig *config, compilationCommandArchetype_t &outCmdArchetype ) {
-	clangState_t *clangState = cast( clangState_t *, backend->data );
+	clangState_t *clangState = Cast( clangState_t *, backend->data );
 
-	outCmdArchetype.baseArgs.init( mem_get_temp_storage() );
-	outCmdArchetype.dependencyFlags.init( mem_get_temp_storage() );
+	outCmdArchetype.baseArgs.Init( Mem_GetTempStorage() );
+	outCmdArchetype.dependencyFlags.Init( Mem_GetTempStorage() );
 
 	const char *compilerPath = clangState->compilerPath.data;
 
-	bool8 isClang = string_ends_with( compilerPath, "clang" ) || string_ends_with( compilerPath, "clang++" );
-
-	// Not used originally but leaving here for clarity
-	//bool8 isGCC = string_ends_with( backend->compilerPath.data, "gcc" ) || string_ends_with( backend->compilerPath.data, "g++" ); not used
+	bool8 isClang = String_EndsWith( compilerPath, "clang" ) || String_EndsWith( compilerPath, "clang++" );
 
 	const u64 definesCount = config->defines.size();
 	const u64 additionalIncludesCount = config->additionalIncludes.size();
@@ -635,8 +623,8 @@ static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t *back
 
 	// Only reserve up enough up to additionalArgsCount,
 	// as we keep dependency flags, and the output flag separate
-	Array<const char *> &baseArgs = outCmdArchetype.baseArgs;
-	baseArgs.reserve(
+	array_t<const char *> &baseArgs = outCmdArchetype.baseArgs;
+	baseArgs.Reserve(
 		1 +	// compiler path
 		1 +	// verbose flag
 		1 +	// compile flag
@@ -653,48 +641,41 @@ static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t *back
 	);
 
 	// Compiler Path
-	baseArgs.add( compilerPath );
+	baseArgs.Add( compilerPath );
 
 	if ( g_verbose ) {
-		baseArgs.add( "-v" );
+		baseArgs.Add( "-v" );
 	}
 
 	// Compile Flag
-	baseArgs.add( "-c" );
+	baseArgs.Add( "-c" );
 
 	// Language Version
 	if ( config->languageVersion != LANGUAGE_VERSION_UNSET ) {
-		baseArgs.add( temp_printf( "-std=%s", LanguageVersionToString( config->languageVersion ) ) );
+		baseArgs.Add( TempPrintf( "-std=%s", LanguageVersionToString( config->languageVersion ) ) );
 	}
 
 	// Symbols Flag
 	if ( !config->removeSymbols ) {
-		baseArgs.add( "-g" );
+		baseArgs.Add( "-g" );
 	}
 
 	// Optimization Level
-	baseArgs.add( OptimizationLevelToCompilerArg( config->optimizationLevel ) );
+	baseArgs.Add( OptimizationLevelToCompilerArg( config->optimizationLevel ) );
 
 	// Defines
 	For ( u32, defineIndex, 0, definesCount ) {
-		baseArgs.add( temp_printf( "-D%s", config->defines[defineIndex].c_str() ) );
+		baseArgs.Add( TempPrintf( "-D%s", config->defines[defineIndex].c_str() ) );
 	}
-
-// #ifdef _WIN32
-// 	// windows SDK includes
-// 	baseArgs.add( temp_printf( "-isystem%s", clangState->winSDK.ucrtInclude.data ) );
-// 	baseArgs.add( temp_printf( "-isystem%s", clangState->winSDK.umInclude.data ) );
-// 	baseArgs.add( temp_printf( "-isystem%s", clangState->winSDK.sharedInclude.data ) );
-// #endif
 
 	// Additional Includes
 	For ( u32, includeIndex, 0, additionalIncludesCount ) {
-		baseArgs.add( temp_printf( "-I%s", config->additionalIncludes[includeIndex].c_str() ) );
+		baseArgs.Add( TempPrintf( "-I%s", config->additionalIncludes[includeIndex].c_str() ) );
 	}
 
 	// Warning As Error
 	if ( config->warningsAsErrors ) {
-		baseArgs.add( "-Werror" );
+		baseArgs.Add( "-Werror" );
 	}
 
 	// Warning Level
@@ -716,27 +697,27 @@ static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t *back
 			}
 
 			if ( !found ) {
-				error( "\"%s\" is not allowed as a warning level.\n", warningLevel );
+				Error( "\"%s\" is not allowed as a warning level.\n", warningLevel );
 				return false;
 			}
 
-			baseArgs.add( warningLevel );
+			baseArgs.Add( warningLevel );
 		}
 	}
 
 	// Ignored Warnings
 	For ( u64, ignoreWarningIndex, 0, ignoredWarningsCount ) {
-		baseArgs.add( config->ignoreWarnings[ignoreWarningIndex].c_str() );
+		baseArgs.Add( config->ignoreWarnings[ignoreWarningIndex].c_str() );
 	}
 
 	// Additional Arguments
 	For ( u64, additionalArgumentIndex, 0, additionalArgsCount ) {
-		baseArgs.add( config->additionalCompilerArguments[additionalArgumentIndex].c_str() );
+		baseArgs.Add( config->additionalCompilerArguments[additionalArgumentIndex].c_str() );
 	}
 
 	// Dependency Flags
-	outCmdArchetype.dependencyFlags.add( "-MMD" );
-	outCmdArchetype.dependencyFlags.add( "-MF" );
+	outCmdArchetype.dependencyFlags.Add( "-MMD" );
+	outCmdArchetype.dependencyFlags.Add( "-MF" );
 
 	// Output Flag
 	outCmdArchetype.outputFlag = "-o";
@@ -744,14 +725,14 @@ static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t *back
 	return true;
 }
 
-static String Clang_GetCompilerPath( compilerBackend_t *backend ) {
-	clangState_t *clangState = cast( clangState_t *, backend->data );
+static string_t Clang_GetCompilerPath( compilerBackend_t *backend ) {
+	clangState_t *clangState = Cast( clangState_t *, backend->data );
 
 	return clangState->compilerPath;
 }
 
-static String Clang_GetCompilerVersion( compilerBackend_t *backend ) {
-	unused( backend );
+static string_t Clang_GetCompilerVersion( compilerBackend_t *backend ) {
+	UNUSED( backend );
 
 	// TODO: DM: 09/05/2026: pretty sure we can do better with this bit here
 	CXString clangVersionString = clang_getClangVersion();
@@ -759,16 +740,16 @@ static String Clang_GetCompilerVersion( compilerBackend_t *backend ) {
 	u64 clangVersionCStrLength = strlen( clangVersionCStr );
 	defer { clang_disposeString( clangVersionString ); };
 
-	String result = string_alloc( mem_get_temp_storage(), clangVersionCStr, clangVersionCStrLength + 1 );
+	string_t result = String_Alloc( Mem_GetTempStorage(), clangVersionCStr, clangVersionCStrLength + 1 );
 
-	if ( string_starts_with( result.data, "clang version " ) ) {
+	if ( String_StartsWith( result.data, "clang version " ) ) {
 		u64 versionPrefixLength = strlen( "clang version " );
 		result.data += versionPrefixLength;
 		result.count -= versionPrefixLength;
 	}
 
 	u64 firstWhitespacePos = 0;
-	if ( string_find_from_left( &result, ' ', &firstWhitespacePos ) ) {
+	if ( String_FindFromLeft( &result, ' ', &firstWhitespacePos ) ) {
 		result.count = firstWhitespacePos;
 		result.data[result.count] = 0;
 	}
@@ -777,19 +758,19 @@ static String Clang_GetCompilerVersion( compilerBackend_t *backend ) {
 }
 
 // TODO: DM: 09/05/2026: revisit this function
-static String GCC_GetCompilerVersion( compilerBackend_t *backend ) {
-	clangState_t *clangState = cast( clangState_t *, backend->data );
+static string_t GCC_GetCompilerVersion( compilerBackend_t *backend ) {
+	clangState_t *clangState = Cast( clangState_t *, backend->data );
 
-	String compilerVersion = {};
+	string_t compilerVersion = {};
 
 	const char *gccVersionPrefix = "gcc version ";
 
-	Array<const char *> args;
-	args.init( mem_get_temp_storage() );
-	args.add( clangState->compilerPath.data );
-	args.add( "-v" );
+	array_t<const char *> args;
+	args.Init( Mem_GetTempStorage() );
+	args.Add( clangState->compilerPath.data );
+	args.Add( "-v" );
 
-	String gccOutputString = {};
+	string_t gccOutputString = {};
 	s32 exitCode = RunProc( &args, NULL, 0, &gccOutputString );
 
 	const char *versionStart = strstr( gccOutputString.data, gccVersionPrefix );
@@ -798,11 +779,11 @@ static String GCC_GetCompilerVersion( compilerBackend_t *backend ) {
 		versionStart += strlen( gccVersionPrefix );
 
 		const char *versionEnd = strchr( versionStart, ' ' );
-		assert( versionEnd );
+		Assert( versionEnd );
 
-		u64 versionLength = cast( u64, versionEnd ) - cast( u64, versionStart );
+		u64 versionLength = Cast( u64, versionEnd ) - Cast( u64, versionStart );
 
-		compilerVersion = string_alloc( mem_get_temp_storage(), versionStart, versionLength + 1 );
+		compilerVersion = String_Alloc( Mem_GetTempStorage(), versionStart, versionLength + 1 );
 		compilerVersion.data[versionLength] = '\0';
 		compilerVersion.count = versionLength;
 	}
@@ -812,26 +793,26 @@ static String GCC_GetCompilerVersion( compilerBackend_t *backend ) {
 
 void CreateCompilerBackend_Clang( compilerBackend_t *outBackend ) {
 	*outBackend = compilerBackend_t {
-		.data										= NULL,
-		.Init										= Clang_Init,
-		.Shutdown									= Clang_Shutdown,
-		.CompileSourceFile							= Clang_CompileSourceFile,
-		.LinkIntermediateFiles						= Clang_LinkIntermediateFiles,
-		.GetCompilationCommandArchetype				= Clang_GetCompilationCommandArchetype,
-		.GetCompilerPath							= Clang_GetCompilerPath,
-		.GetCompilerVersion							= Clang_GetCompilerVersion,
+		.data							= NULL,
+		.Init							= Clang_Init,
+		.Shutdown						= Clang_Shutdown,
+		.CompileSourceFile				= Clang_CompileSourceFile,
+		.LinkIntermediateFiles			= Clang_LinkIntermediateFiles,
+		.GetCompilationCommandArchetype	= Clang_GetCompilationCommandArchetype,
+		.GetCompilerPath				= Clang_GetCompilerPath,
+		.GetCompilerVersion				= Clang_GetCompilerVersion,
 	};
 }
 
 void CreateCompilerBackend_GCC( compilerBackend_t *outBackend ) {
 	*outBackend = compilerBackend_t {
-		.data										= NULL,
-		.Init										= GCC_Init,
-		.Shutdown									= Clang_Shutdown,
-		.CompileSourceFile							= Clang_CompileSourceFile,
-		.LinkIntermediateFiles						= GCC_LinkIntermediateFiles,
-		.GetCompilationCommandArchetype				= Clang_GetCompilationCommandArchetype,
-		.GetCompilerPath							= Clang_GetCompilerPath,
-		.GetCompilerVersion							= GCC_GetCompilerVersion,
+		.data							= NULL,
+		.Init							= GCC_Init,
+		.Shutdown						= Clang_Shutdown,
+		.CompileSourceFile				= Clang_CompileSourceFile,
+		.LinkIntermediateFiles			= GCC_LinkIntermediateFiles,
+		.GetCompilationCommandArchetype	= Clang_GetCompilationCommandArchetype,
+		.GetCompilerPath				= Clang_GetCompilerPath,
+		.GetCompilerVersion				= GCC_GetCompilerVersion,
 	};
 }

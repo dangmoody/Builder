@@ -26,7 +26,7 @@ mkdir -p $binFolder
 intermediateFolder="${builderDir}/intermediate"
 mkdir -p $intermediateFolder
 
-defines="-D_CRT_SECURE_NO_WARNINGS -DHLML_NAMESPACE"
+defines="-D_CRT_SECURE_NO_WARNINGS -DHLML_NAMESPACE -DHASHMAP_HIDE_MISSING_KEY_WARNING"
 if [[ "$config" == "debug" ]]; then
 	symbols="-g"
 	optimisation=""
@@ -38,11 +38,11 @@ elif [[ "$config" == "release" ]]; then
 	defines="$defines -DNDEBUG -DBUILDER_PROGRAM_NAME=\"$programName\""
 fi
 
-includes="-I${builderDir}/src/core/include -I${builderDir}/clang/include"
+includes="-I${builderDir}/clang/include"
 
-libPaths="-L${builderDir}/clang/lib -L${builderDir}/3rdparty/core"
+libPaths="-L${builderDir}/clang/lib"
 
-libraries="-lstdc++ -luuid -lclang -l:core.so"
+libraries="-lstdc++ -luuid -lclang"
 
 warningLevels="-Werror -Wall -Wextra -Weverything -Wpedantic"
-ignoreWarnings="-Wno-newline-eof -Wno-format-nonliteral -Wno-gnu-zero-variadic-macro-arguments -Wno-declaration-after-statement -Wno-unsafe-buffer-usage -Wno-zero-as-null-pointer-constant -Wno-c++98-compat-pedantic -Wno-old-style-cast -Wno-missing-field-initializers -Wno-switch-default -Wno-covered-switch-default -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-cast-align -Wno-double-promotion -Wno-alloca -Wno-padded -Wno-documentation-unknown-command"
+ignoreWarnings="-Wno-newline-eof -Wno-format-nonliteral -Wno-gnu-zero-variadic-macro-arguments -Wno-declaration-after-statement -Wno-unsafe-buffer-usage -Wno-zero-as-null-pointer-constant -Wno-c++98-compat-pedantic -Wno-old-style-cast -Wno-missing-field-initializers -Wno-switch-default -Wno-covered-switch-default -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-cast-align -Wno-double-promotion -Wno-alloca -Wno-padded -Wno-documentation-unknown-command -Wno-switch -Wno-cast-qual -Wno-class-varargs -Wno-sign-compare -Wno-implicit-int-float-conversion"

@@ -45,31 +45,32 @@ if /I [%config%] == [debug] (
 	set symbols=-g
 	set optimisation=-O0
 	set programName=builder_debug
-	set defines=-D_CRT_SECURE_NO_WARNINGS -DHLML_NAMESPACE -D_DEBUG -DBUILDER_PROGRAM_NAME=\"builder_debug\"
+	set defines=-D_CRT_SECURE_NO_WARNINGS -DHLML_NAMESPACE -D_DEBUG -DBUILDER_PROGRAM_NAME=\"builder_debug\" -DHASHMAP_HIDE_MISSING_KEY_WARNING
 	set libraries=-luser32.lib -lShlwapi.lib -lDbgHelp.lib -lOle32.lib -lAdvapi32.lib -lOleAut32.lib -llibclang.lib -lkernel32.lib^
- -lmsvcrtd.lib -lmsvcprtd.lib -lvcruntimed.lib -lucrtd.lib -lcore/core.lib
+ -lmsvcrtd.lib -lmsvcprtd.lib -lvcruntimed.lib -lucrtd.lib
 )
 
 if /I [%config%] == [release]  (
 	set symbols=
 	set optimisation=-O3
 	set programName=builder
-	set defines=-D_CRT_SECURE_NO_WARNINGS -DHLML_NAMESPACE -DNDEBUG -DBUILDER_PROGRAM_NAME=\"builder\"
+	set defines=-D_CRT_SECURE_NO_WARNINGS -DHLML_NAMESPACE -DNDEBUG -DBUILDER_PROGRAM_NAME=\"builder\" -DHASHMAP_HIDE_MISSING_KEY_WARNING
 	set libraries=-luser32.lib -lShlwapi.lib -lDbgHelp.lib -lOle32.lib -lAdvapi32.lib -lOleAut32.lib -llibclang.lib -lkernel32.lib^
- -lmsvcrt.lib -lmsvcprt.lib -lvcruntime.lib -lucrt.lib -lcore/core.lib
+ -lmsvcrt.lib -lmsvcprt.lib -lvcruntime.lib -lucrt.lib
 )
 
 REM Set up shared environment variables
-set includes=-Isrc\\core\\include -Iclang\\include
+set includes=-Iclang\\include
 
-set libPaths=-Lclang\\lib -L3rdparty
+set libPaths=-Lclang\\lib
 
 set warningLevels=-Werror -Wall -Wextra -Weverything -Wpedantic
 
 set ignoreWarnings=-Wno-newline-eof -Wno-format-nonliteral -Wno-gnu-zero-variadic-macro-arguments -Wno-declaration-after-statement^
  -Wno-unsafe-buffer-usage -Wno-zero-as-null-pointer-constant -Wno-c++98-compat-pedantic -Wno-old-style-cast^
- -Wno-missing-field-initializers -Wno-switch-default -Wno-covered-switch-default -Wno-unused-function -Wno-unused-variable^
- -Wno-unused-but-set-variable -Wno-double-promotion -Wno-documentation-unknown-command -Wno-switch
+ -Wno-missing-field-initializers -Wno-switch-default -Wno-covered-switch-default -Wno-unused-variable^
+ -Wno-unused-but-set-variable -Wno-double-promotion -Wno-documentation-unknown-command -Wno-switch^
+ -Wno-cast-qual -Wno-class-varargs -Wno-sign-compare -Wno-implicit-int-float-conversion
 
 exit /B 0
 

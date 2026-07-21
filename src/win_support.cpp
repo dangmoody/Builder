@@ -4,15 +4,14 @@
 #include "win_support.h"
 #include "builder_local.h"
 
-#include "core/include/typecast.inl"
-#include "core/include/file.h"
-#include "core/include/temp_storage.h"
-#include "core/include/core_string.h"
-#include "core/include/core_array.inl"
-#include "core/include/string_builder.h"
-#include "core/include/defer.h"
-#include "core/include/core_helpers.h"
-#include "core/include/paths.h"
+#include "typecast.h"
+#include "file.h"
+#include "temp_storage.h"
+#include "string.h"
+#include "array.inl"
+#include "string_builder.h"
+#include "defer.h"
+#include "paths.h"
 
 #include <Windows.h>
 
@@ -48,13 +47,13 @@ struct DECLSPEC_UUID( "42843719-DB4C-46C2-8E7C-64F1816EFD5B" ) DECLSPEC_NOVTABLE
 
 #pragma clang diagnostic pop
 
-static void OnWindowsSDKVersionFound( const FileInfo *fileInfo, void *data ) {
-	Array<windowsSDKVersion_t> *versions = cast( Array<windowsSDKVersion_t> *, data );
+static void OnWindowsSDKVersionFound( const fileInfo_t *fileInfo, void *data ) {
+	array_t<windowsSDKVersion_t> *versions = Cast( array_t<windowsSDKVersion_t> *, data );
 
 	s32 v0 = 0, v1 = 0, v2 = 0, v3 = 0;
 	sscanf( fileInfo->filename, "%d.%d.%d.%d", &v0, &v1, &v2, &v3 );
 
-	versions->add( { v0, v1, v2, v3 } );
+	versions->Add( { v0, v1, v2, v3 } );
 }
 
 static const char *FindRegistryValueFromKey( const HKEY key, const char *valueName ) {
@@ -67,10 +66,10 @@ static const char *FindRegistryValueFromKey( const HKEY key, const char *valueNa
 	}
 
 	// valueStrLength from RegQueryValueExA includes the null terminator for REG_SZ strings
-	char *valueStr = cast( char *, mem_temp_alloc( valueStrLength * sizeof( char ) ) );
+	char *valueStr = Cast( char *, Mem_TempAlloc( valueStrLength * sizeof( char ) ) );
 
 	DWORD type;
-	status = RegQueryValueExA( key, valueName, NULL, &type, cast( LPBYTE, valueStr ), &valueStrLength );
+	status = RegQueryValueExA( key, valueName, NULL, &type, Cast( LPBYTE, valueStr ), &valueStrLength );
 
 	if ( type != REG_SZ ) {
 		return NULL;
@@ -79,15 +78,15 @@ static const char *FindRegistryValueFromKey( const HKEY key, const char *valueNa
 	if ( status == ERROR_SUCCESS ) {
 		return valueStr;
 	} else if ( status == ERROR_MORE_DATA ) {
-		assert( false );	// should never get here
+		Assert( false );	// should never get here
 	}
 
 	return NULL;
 }
 
 static int CompareWindowsSDKVersions( const void *a, const void *b ) {
-	const windowsSDKVersion_t *versionA = cast( const windowsSDKVersion_t *, a );
-	const windowsSDKVersion_t *versionB = cast( const windowsSDKVersion_t *, b );
+	const windowsSDKVersion_t *versionA = Cast( const windowsSDKVersion_t *, a );
+	const windowsSDKVersion_t *versionB = Cast( const windowsSDKVersion_t *, b );
 
 	if ( versionA->v0 != versionB->v0 ) return versionB->v0 - versionA->v0;
 	if ( versionA->v1 != versionB->v1 ) return versionB->v1 - versionA->v1;
@@ -96,9 +95,9 @@ static int CompareWindowsSDKVersions( const void *a, const void *b ) {
 	return versionB->v3 - versionA->v3;
 }
 
-bool8 Win_GetWindowsSDK( LinearAllocator *allocator, windowsSDK_t *outSDK ) {
-	assert( allocator );
-	assert( outSDK );
+bool8 Win_GetWindowsSDK( linearAllocator_t *allocator, windowsSDK_t *outSDK ) {
+	Assert( allocator );
+	Assert( outSDK );
 
 	HKEY key;
 
@@ -106,7 +105,7 @@ bool8 Win_GetWindowsSDK( LinearAllocator *allocator, windowsSDK_t *outSDK ) {
 	LSTATUS status = RegOpenKeyExA( HKEY_LOCAL_MACHINE, winSDKRegPath, 0, KEY_QUERY_VALUE | KEY_WOW64_32KEY | KEY_ENUMERATE_SUB_KEYS, &key );
 
 	if ( status != ERROR_SUCCESS ) {
-		error(
+		Error(
 			"Failed to get Windows SDK installation directory from your Windows registry.  The registry path \"%s\" doesn't seem to exist on your machine.\n"
 			"This likely means you don't have the Windows SDK installed on your machine.\n"
 			"In order to build using MSVC (which you asked me to do) then you will need to install a version of the Windows SDK on your PC.\n"
@@ -122,7 +121,7 @@ bool8 Win_GetWindowsSDK( LinearAllocator *allocator, windowsSDK_t *outSDK ) {
 	const char *windowsSDKRoot = FindRegistryValueFromKey( key, winSDKRegKey );
 
 	if ( !windowsSDKRoot ) {
-		error(
+		Error(
 			"Failed to get Windows SDK installation directory from your Windows registry.  The registry key \"%s\" couldn't be queried from the registry path: \"%s\"\n"
 			"This likely means you don't have the Windows SDK installed on your machine.\n"
 			"In order to build using MSVC (which you asked me to do) then you will need to install a version of the Windows SDK on your PC.\n"
@@ -133,16 +132,16 @@ bool8 Win_GetWindowsSDK( LinearAllocator *allocator, windowsSDK_t *outSDK ) {
 		return false;
 	}
 
-	outSDK->rootFolder = string_alloc( allocator, windowsSDKRoot, strlen( windowsSDKRoot ) + 1 );
+	outSDK->rootFolder = String_Alloc( allocator, windowsSDKRoot, strlen( windowsSDKRoot ) + 1 );
 
 	// get the latest version of the windows sdk
-	const char *windowsSDKFolder = temp_printf( "%sLib", windowsSDKRoot );
+	const char *windowsSDKFolder = TempPrintf( "%sLib", windowsSDKRoot );
 
-	Array<windowsSDKVersion_t> versions;
-	versions.init( mem_get_temp_storage() );
+	array_t<windowsSDKVersion_t> versions;
+	versions.Init( Mem_GetTempStorage() );
 
-	if ( !file_get_all_files_in_folder( windowsSDKFolder, FILE_VISIT_FOLDERS, OnWindowsSDKVersionFound, &versions ) ) {
-		error( "Failed to query your Windows SDK root folder for the version of the Windows SDK that you asked for.  Do you definitely have at least one version of the Windows SDK installed?\n" );
+	if ( !FS_GetAllFilesInFolder( windowsSDKFolder, FILE_VISIT_FOLDERS, OnWindowsSDKVersionFound, &versions ) ) {
+		Error( "Failed to query your Windows SDK root folder for the version of the Windows SDK that you asked for.  Do you definitely have at least one version of the Windows SDK installed?\n" );
 		return false;
 	}
 
@@ -155,47 +154,46 @@ bool8 Win_GetWindowsSDK( LinearAllocator *allocator, windowsSDK_t *outSDK ) {
 	For ( u32, versionIndex, 0, versions.count ) {
 		windowsSDKVersion_t *version = &versions[versionIndex];
 
-		Array<const char *> missingFolders;
-		missingFolders.init( mem_get_temp_storage() );
-		missingFolders.reserve( 5 );
+		array_t<const char *> missingFolders;
+		missingFolders.Init( Mem_GetTempStorage() );
+		missingFolders.Reserve( 5 );
 
 		// TODO(DM): 21/04/2026: rewind temp storage after we are done with this?
-		const char *ucrtIncludeFolder = temp_printf( "%sinclude\\%d.%d.%d.%d\\ucrt", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
-		const char *umIncludeFolder = temp_printf( "%sinclude\\%d.%d.%d.%d\\um", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
-		const char *sharedIncludeFolder = temp_printf( "%sinclude\\%d.%d.%d.%d\\shared", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
-		const char *ucrtLibFolder = temp_printf( "%sLib\\%d.%d.%d.%d\\ucrt\\x64", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
-		const char *umLibFolder = temp_printf( "%sLib\\%d.%d.%d.%d\\um\\x64", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
+		const char *ucrtIncludeFolder = TempPrintf( "%sinclude\\%d.%d.%d.%d\\ucrt", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
+		const char *umIncludeFolder = TempPrintf( "%sinclude\\%d.%d.%d.%d\\um", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
+		const char *sharedIncludeFolder = TempPrintf( "%sinclude\\%d.%d.%d.%d\\shared", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
+		const char *ucrtLibFolder = TempPrintf( "%sLib\\%d.%d.%d.%d\\ucrt\\x64", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
+		const char *umLibFolder = TempPrintf( "%sLib\\%d.%d.%d.%d\\um\\x64", outSDK->rootFolder.data, version->v0, version->v1, version->v2, version->v3 );
 
-		if ( !folder_exists( ucrtIncludeFolder ) ) {
-			missingFolders.add( ucrtIncludeFolder );
+		if ( !FS_FolderExists( ucrtIncludeFolder ) ) {
+			missingFolders.Add( ucrtIncludeFolder );
 		}
 
-		if ( !folder_exists( umIncludeFolder ) ) {
-			missingFolders.add( umIncludeFolder );
+		if ( !FS_FolderExists( umIncludeFolder ) ) {
+			missingFolders.Add( umIncludeFolder );
 		}
 
-		if ( !folder_exists( sharedIncludeFolder ) ) {
-			missingFolders.add( sharedIncludeFolder );
+		if ( !FS_FolderExists( sharedIncludeFolder ) ) {
+			missingFolders.Add( sharedIncludeFolder );
 		}
 
-		if ( !folder_exists( ucrtLibFolder ) ) {
-			missingFolders.add( ucrtLibFolder );
+		if ( !FS_FolderExists( ucrtLibFolder ) ) {
+			missingFolders.Add( ucrtLibFolder );
 		}
 
-		if ( !folder_exists( umLibFolder ) ) {
-			missingFolders.add( umLibFolder );
+		if ( !FS_FolderExists( umLibFolder ) ) {
+			missingFolders.Add( umLibFolder );
 		}
 
 		if ( missingFolders.count > 0 ) {
-			StringBuilder sb = string_builder_create( mem_get_temp_storage() );
-			//defer { string_builder_destroy( &sb ); };
-			string_builder_appendf( &sb, "Version %d.%d.%d.%d of your Windows SDK installation is malformed because the following folders could not be found:\n", version->v0, version->v1, version->v2, version->v3 );
+			stringBuilder_t sb = SB_Create( Mem_GetTempStorage() );
+			SB_Appendf( &sb, "Version %d.%d.%d.%d of your Windows SDK installation is malformed because the following folders could not be found:\n", version->v0, version->v1, version->v2, version->v3 );
 			For ( u32, missingFolderIndex, 0, missingFolders.count ) {
-				string_builder_appendf( &sb, " - %s\n", missingFolders[missingFolderIndex] );
+				SB_Appendf( &sb, " - %s\n", missingFolders[missingFolderIndex] );
 			}
-			string_builder_appendf( &sb, "If you want to use this version of the Windows SDK specifically, you will need to fix this yourself.\n" );
+			SB_Appendf( &sb, "If you want to use this version of the Windows SDK specifically, you will need to fix this yourself.\n" );
 
-			warning( "%s\n", string_builder_to_string( &sb ) );
+			Warning( "%s\n", SB_ToString( &sb ) );
 
 			continue;
 		}
@@ -208,7 +206,7 @@ bool8 Win_GetWindowsSDK( LinearAllocator *allocator, windowsSDK_t *outSDK ) {
 	}
 
 	if ( !foundVersion ) {
-		error(
+		Error(
 			"Failed to find a valid installation of the Windows SDK on your machine.\n"
 			"You have %llu versions of the Windows SDK installed on your machine, and somehow all of them appear to be malformed.\n"
 			"You need to install a version through the Visual Studio Installer, or via the separate Build Tools installer from Microsoft.\n"
@@ -218,13 +216,13 @@ bool8 Win_GetWindowsSDK( LinearAllocator *allocator, windowsSDK_t *outSDK ) {
 		return false;
 	}
 
-	const char *versionStr = temp_printf( "%d.%d.%d.%d", outSDK->version.v0, outSDK->version.v1, outSDK->version.v2, outSDK->version.v3 );
+	const char *versionStr = TempPrintf( "%d.%d.%d.%d", outSDK->version.v0, outSDK->version.v1, outSDK->version.v2, outSDK->version.v3 );
 
-	outSDK->ucrtInclude = path_join( allocator, windowsSDKRoot, "include", versionStr, "ucrt" );
-	outSDK->umInclude = path_join( allocator, windowsSDKRoot, "include", versionStr, "um" );
-	outSDK->sharedInclude = path_join( allocator, windowsSDKRoot, "include", versionStr, "shared" );
-	outSDK->ucrtLibPath = path_join( allocator, windowsSDKRoot, "Lib", versionStr, "ucrt", "x64" );
-	outSDK->umLibPath = path_join( allocator, windowsSDKRoot, "Lib", versionStr, "um", "x64" );
+	outSDK->ucrtInclude = Path_Join( allocator, windowsSDKRoot, "include", versionStr, "ucrt" );
+	outSDK->umInclude = Path_Join( allocator, windowsSDKRoot, "include", versionStr, "um" );
+	outSDK->sharedInclude = Path_Join( allocator, windowsSDKRoot, "include", versionStr, "shared" );
+	outSDK->ucrtLibPath = Path_Join( allocator, windowsSDKRoot, "Lib", versionStr, "ucrt", "x64" );
+	outSDK->umLibPath = Path_Join( allocator, windowsSDKRoot, "Lib", versionStr, "um", "x64" );
 
 	printf( "Using latest valid Windows SDK version that was found, which was: %s.\n", versionStr );
 
@@ -252,21 +250,21 @@ bool8 Win_GetWindowsSDK( LinearAllocator *allocator, windowsSDK_t *outSDK ) {
 //================================================================
 
 struct foundMSVCInstallData_t {
-	LinearAllocator				*allocator;
+	linearAllocator_t			*allocator;
 	const char					*rootFolder;
 	std::vector<msvcInstall_t>	*installs;
 };
 
-static void OnMSVCInstallFound( const FileInfo *fileInfo, void *userData ) {
-	foundMSVCInstallData_t *data = cast( foundMSVCInstallData_t *, userData );
+static void OnMSVCInstallFound( const fileInfo_t *fileInfo, void *userData ) {
+	foundMSVCInstallData_t *data = Cast( foundMSVCInstallData_t *, userData );
 
 	msvcInstall_t install = {};
 
 	sscanf( fileInfo->filename, "%d.%d.%d", &install.version.v0, &install.version.v1, &install.version.v2 );
 
-	install.rootFolder = path_join( data->allocator, data->rootFolder, fileInfo->filename );
-	install.includePath = path_join( data->allocator, install.rootFolder.data, "include" );
-	install.libPath = path_join( data->allocator, install.rootFolder.data, "lib", "x64" );
+	install.rootFolder = Path_Join( data->allocator, data->rootFolder, fileInfo->filename );
+	install.includePath = Path_Join( data->allocator, install.rootFolder.data, "include" );
+	install.libPath = Path_Join( data->allocator, install.rootFolder.data, "lib", "x64" );
 
 	LogVerbose( "Found MSVC installation located at: \"%s\"\n", install.rootFolder.data );
 
@@ -274,8 +272,8 @@ static void OnMSVCInstallFound( const FileInfo *fileInfo, void *userData ) {
 }
 
 static int CompareMSVCInstallVersions( const void *a, const void *b ) {
-	const msvcInstall_t *installA = cast( const msvcInstall_t*, a );
-	const msvcInstall_t *installB = cast( const msvcInstall_t*, b );
+	const msvcInstall_t *installA = Cast( const msvcInstall_t*, a );
+	const msvcInstall_t *installB = Cast( const msvcInstall_t*, b );
 
 	const msvcVersion_t *versionA = &installA->version;
 	const msvcVersion_t *versionB = &installB->version;
@@ -287,15 +285,15 @@ static int CompareMSVCInstallVersions( const void *a, const void *b ) {
 }
 
 static bool8 MSVCNotInstalled() {
-	error( "No valid MSVC installation found on your PC.  You need to install one through either the Visual Studio Installer or through the MS Build Tools.\n" );
+	Error( "No valid MSVC installation found on your PC.  You need to install one through either the Visual Studio Installer or through the MS Build Tools.\n" );
 	return false;
 }
 
 // get all versions of MSVC
 // thanks to Microsoft we will be doing that in the most retarded way possible
-bool8 Win_GetMSVCInstall( LinearAllocator *allocator, msvcInstall_t *outInstall ) {
-	assert( allocator );
-	assert( outInstall );
+bool8 Win_GetMSVCInstall( linearAllocator_t *allocator, msvcInstall_t *outInstall ) {
+	Assert( allocator );
+	Assert( outInstall );
 
 	LogVerbose( "Querying for MSVC installations...\n" );
 
@@ -304,7 +302,7 @@ bool8 Win_GetMSVCInstall( LinearAllocator *allocator, msvcInstall_t *outInstall 
 	hr = CoInitializeEx( NULL, COINIT_MULTITHREADED );
 
 	if ( FAILED( hr ) ) {
-		error( "CoInitializeEx() call failed: 0x%X\n", hr );
+		Error( "CoInitializeEx() call failed: 0x%X\n", hr );
 		return false;
 	}
 
@@ -315,14 +313,14 @@ bool8 Win_GetMSVCInstall( LinearAllocator *allocator, msvcInstall_t *outInstall 
 	GUID CLSID_SetupConfiguration	= { 0x177F0C4A, 0x1CD3, 0x4DE7, { 0xA3, 0x2C, 0x71, 0xDB, 0xBB, 0x9F, 0xA3, 0x6D } };
 
 	ISetupConfiguration *setupConfig = NULL;
-	hr = CoCreateInstance( CLSID_SetupConfiguration, NULL, CLSCTX_INPROC_SERVER, myUID, cast( void **, &setupConfig ) );
+	hr = CoCreateInstance( CLSID_SetupConfiguration, NULL, CLSCTX_INPROC_SERVER, myUID, Cast( void **, &setupConfig ) );
 
 	if ( hr == REGDB_E_CLASSNOTREG ) {
 		return MSVCNotInstalled();
 	}
 
 	if ( FAILED( hr ) ) {
-		error( "CoCreateInstance() call failed: 0x%X\n", hr );
+		Error( "CoCreateInstance() call failed: 0x%X\n", hr );
 		return false;
 	}
 
@@ -332,12 +330,12 @@ bool8 Win_GetMSVCInstall( LinearAllocator *allocator, msvcInstall_t *outInstall 
 	hr = setupConfig->EnumInstances( &instances );
 
 	if ( FAILED( hr ) ) {
-		error( "setupConfig->EnumInstances() called failed: 0x%X\n", hr );
+		Error( "setupConfig->EnumInstances() called failed: 0x%X\n", hr );
 		return false;
 	}
 
 	if ( !instances ) {
-		error( "setupConfig->EnumInstances() returned no instances.  Bailing...\n" );
+		Error( "setupConfig->EnumInstances() returned no instances.  Bailing...\n" );
 		return false;
 	}
 
@@ -357,7 +355,7 @@ bool8 Win_GetMSVCInstall( LinearAllocator *allocator, msvcInstall_t *outInstall 
 		hr = instance->GetInstallationPath( &visualStudioInstallationPathWide );
 
 		if ( FAILED( hr ) ) {
-			error( "instance->GetInstallationPath() call failed: 0x%X\n", hr );
+			Error( "instance->GetInstallationPath() call failed: 0x%X\n", hr );
 			return false;
 		}
 
@@ -368,26 +366,26 @@ bool8 Win_GetMSVCInstall( LinearAllocator *allocator, msvcInstall_t *outInstall 
 		{
 			UINT wideLength = SysStringLen( visualStudioInstallationPathWide );
 
-			int utf8Length = WideCharToMultiByte( CP_UTF8, 0, visualStudioInstallationPathWide, trunc_cast( int, wideLength ), NULL, 0, NULL, NULL );
+			int utf8Length = WideCharToMultiByte( CP_UTF8, 0, visualStudioInstallationPathWide, TruncCast( int, wideLength ), NULL, 0, NULL, NULL );
 
 			if ( utf8Length <= 0 ) {
-				error( "First WideCharToMultiByte() call failed: WinAPI error code 0x%X\n", GetLastError() );
+				Error( "First WideCharToMultiByte() call failed: WinAPI error code 0x%X\n", GetLastError() );
 				return false;
 			}
 
-			visualStudioInstallationPath = cast( char*, mem_temp_alloc( trunc_cast( u64, utf8Length + 1 ) * sizeof( char ) ) );
+			visualStudioInstallationPath = Cast( char*, Mem_TempAlloc( TruncCast( u64, utf8Length + 1 ) * sizeof( char ) ) );
 
-			int converted = WideCharToMultiByte( CP_UTF8, 0, visualStudioInstallationPathWide, trunc_cast( int, wideLength ), visualStudioInstallationPath, utf8Length, NULL, NULL );
+			int converted = WideCharToMultiByte( CP_UTF8, 0, visualStudioInstallationPathWide, TruncCast( int, wideLength ), visualStudioInstallationPath, utf8Length, NULL, NULL );
 
 			if ( !converted ) {
-				error( "Second WideCharToMultiByte() call failed: WinAPI error code 0x%X\n", GetLastError() );
+				Error( "Second WideCharToMultiByte() call failed: WinAPI error code 0x%X\n", GetLastError() );
 				return false;
 			}
 
 			visualStudioInstallationPath[utf8Length] = 0;
 		}
 
-		msvcRootFolder = temp_printf( "%s\\VC\\Tools\\MSVC", visualStudioInstallationPath );
+		msvcRootFolder = TempPrintf( "%s\\VC\\Tools\\MSVC", visualStudioInstallationPath );
 
 		foundMSVCInstallData_t data = {
 			.allocator	= allocator,
@@ -395,8 +393,8 @@ bool8 Win_GetMSVCInstall( LinearAllocator *allocator, msvcInstall_t *outInstall 
 			.installs	= &foundMSVCInstalls
 		};
 
-		if ( !file_get_all_files_in_folder( msvcRootFolder, FILE_VISIT_FOLDERS, OnMSVCInstallFound, &data ) ) {
-			error( "Failed to query for all MSVC installation folders.  Error code: " ERROR_CODE_FORMAT "\n", get_last_error_code() );
+		if ( !FS_GetAllFilesInFolder( msvcRootFolder, FILE_VISIT_FOLDERS, OnMSVCInstallFound, &data ) ) {
+			Error( "Failed to query for all MSVC installation folders.  Error code: " ERROR_CODE_FORMAT "\n", GetLastErrorCode() );
 			return false;
 		}
 
@@ -414,28 +412,27 @@ bool8 Win_GetMSVCInstall( LinearAllocator *allocator, msvcInstall_t *outInstall 
 	For ( u32, versionIndex, 0, foundMSVCInstalls.size() ) {
 		msvcInstall_t *install = &foundMSVCInstalls[versionIndex];
 
-		Array<const char *> missingFolders;
-		missingFolders.init( mem_get_temp_storage() );
-		missingFolders.reserve( 2 );
+		array_t<const char *> missingFolders;
+		missingFolders.Init( Mem_GetTempStorage() );
+		missingFolders.Reserve( 2 );
 
-		if ( !folder_exists( install->includePath.data ) ) {
-			missingFolders.add( install->includePath.data );
+		if ( !FS_FolderExists( install->includePath.data ) ) {
+			missingFolders.Add( install->includePath.data );
 		}
 
-		if ( !folder_exists( install->libPath.data ) ) {
-			missingFolders.add( install->libPath.data );
+		if ( !FS_FolderExists( install->libPath.data ) ) {
+			missingFolders.Add( install->libPath.data );
 		}
 
 		if ( missingFolders.count > 0 ) {
-			StringBuilder sb = string_builder_create( mem_get_temp_storage() );
-			//defer { string_builder_destroy( &sb ); };
-			string_builder_appendf( &sb, "Version %d.%d.%d of your MSVC installation is malformed because the following folders could not be found:\n", install->version.v0, install->version.v1, install->version.v2 );
+			stringBuilder_t sb = SB_Create( Mem_GetTempStorage() );
+			SB_Appendf( &sb, "Version %d.%d.%d of your MSVC installation is malformed because the following folders could not be found:\n", install->version.v0, install->version.v1, install->version.v2 );
 			For ( u32, missingFolderIndex, 0, missingFolders.count ) {
-				string_builder_appendf( &sb, " - %s\n", missingFolders[missingFolderIndex] );
+				SB_Appendf( &sb, " - %s\n", missingFolders[missingFolderIndex] );
 			}
-			string_builder_appendf( &sb, "If you want to use this version of MSVC specifically, you will need to fix this yourself.\n" );
+			SB_Appendf( &sb, "If you want to use this version of MSVC specifically, you will need to fix this yourself.\n" );
 
-			warning( "%s\n", string_builder_to_string( &sb ) );
+			Warning( "%s\n", SB_ToString( &sb ) );
 
 			continue;
 		}

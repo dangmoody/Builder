@@ -1,0 +1,110 @@
+/*
+===========================================================================
+
+Builder
+
+Copyright (c) 2025 Dan Moody
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+===========================================================================
+*/
+
+#include "debug.h"
+
+#include "array.inl"
+#include "string.h"
+#include "temp_storage.h"
+#include "defer.h"
+
+#include "stb_local.h"
+
+#include <stdio.h>
+#include <stdarg.h>
+#include <inttypes.h>
+
+static void PrintVarargs( FILE *file, const char *fmt, va_list args ) {
+	u64 pos = Mem_TempTell();
+	defer { Mem_TempRewindTo( pos ); };
+
+	va_list argsCopy;
+	va_copy( argsCopy, args );
+
+	int length = stbsp_vsnprintf( NULL, 0, fmt, args );
+
+	char *msg = Cast( char *, Mem_TempAlloc( Cast( u64, length + 1 ) ) );
+	stbsp_vsnprintf( msg, length + 1, fmt, argsCopy );
+	msg[length] = 0;
+
+	fputs( msg, file );
+
+	va_end( argsCopy );
+}
+
+void Print( const char *fmt, ... ) {
+	va_list args;
+	va_start( args, fmt );
+	PrintVarargs( stdout, fmt, args );
+	va_end( args );
+}
+
+void Warning( const char *fmt, ... ) {
+	SetConsoleTextColor( CONSOLE_TEXT_COLOR_RED );
+
+	fputs( "WARNING: ", stderr );
+
+	SetConsoleTextColor( CONSOLE_TEXT_COLOR_YELLOW );
+
+	va_list args;
+	va_start( args, fmt );
+	PrintVarargs( stderr, fmt, args );
+	va_end( args );
+
+	SetConsoleTextColor( CONSOLE_TEXT_COLOR_DEFAULT );
+}
+
+void Error( const char *fmt, ... ) {
+	SetConsoleTextColor( CONSOLE_TEXT_COLOR_RED );
+
+	fputs( "ERROR: ", stderr );
+
+	SetConsoleTextColor( CONSOLE_TEXT_COLOR_YELLOW );
+
+	va_list args;
+	va_start( args, fmt );
+	PrintVarargs( stderr, fmt, args );
+	va_end( args );
+
+	SetConsoleTextColor( CONSOLE_TEXT_COLOR_DEFAULT );
+}
+
+void FatalError( const char *fmt, ... ) {
+	SetConsoleTextColor( CONSOLE_TEXT_COLOR_RED );
+
+	Print( "FATAL ERROR: " );
+
+	SetConsoleTextColor( CONSOLE_TEXT_COLOR_YELLOW );
+
+	va_list args;
+	va_start( args, fmt );
+	PrintVarargs( stderr, fmt, args );
+	va_end( args );
+
+	SetConsoleTextColor( CONSOLE_TEXT_COLOR_DEFAULT );
+}

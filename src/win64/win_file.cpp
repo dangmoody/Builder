@@ -344,7 +344,7 @@ bool8 FS_DeleteFolder( const char *path ) {
 	bool8 result = Cast( bool8, RemoveDirectoryA( path ) );
 
 	if ( !result ) {
-		error( "Failed to delete folder path \"%s\": 0x%X.\n", path, GetLastError() );
+		Error( "Failed to delete folder path \"%s\": 0x%X.\n", path, GetLastError() );
 	}
 
 	return result;

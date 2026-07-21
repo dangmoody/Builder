@@ -315,7 +315,7 @@ s32 RunProc( array_t<const char *> *args, array_t<const char *> *environmentVari
 	process_t *process = Proc_Create( Mem_GetTempStorage(), args, environmentVariables, PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR );
 
 	if ( !process ) {
-		error(
+		Error(
 			"Failed to run process \"%s\".\n"
 			"Is it definitely installed? Is it meant to be added to your PATH? Did you type the path correctly?\n"
 			, ( *args )[0]
@@ -363,7 +363,7 @@ bool8 WriteStringBuilderToFile( stringBuilder_t *stringBuilder, const char *file
 
 	if ( !written ) {
 		s32 errorCode = GetLastErrorCode();
-		error( "Failed to write \"%s\": " ERROR_CODE_FORMAT ".\n", filename, errorCode );
+		Error( "Failed to write \"%s\": " ERROR_CODE_FORMAT ".\n", filename, errorCode );
 
 		return false;
 	}
@@ -528,7 +528,7 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 	// process_t only once how the base compilation command should look like, fill up dep/output/source args later for each source file
 	compilationCommandArchetype_t cmdArchetype {};
 	if ( !compilerBackend->GetCompilationCommandArchetype( compilerBackend, config, cmdArchetype ) ) {
-		error( "Failed to generate compilation command.\n" );
+		Error( "Failed to generate compilation command.\n" );
 		return BUILD_RESULT_FAILED;
 	}
 
@@ -617,7 +617,7 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 	}
 
 	if ( pool.numFailed.value > 0 ) {
-		error( "Compile failed.\n" );
+		Error( "Compile failed.\n" );
 		return BUILD_RESULT_FAILED;
 	}
 
@@ -651,7 +651,7 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 		printf( "\nLinking:\n" );
 
 		if ( !compilerBackend->LinkIntermediateFiles( compilerBackend, intermediateFiles, config, options ) ) {
-			error( "Linking failed.\n" );
+			Error( "Linking failed.\n" );
 			return BUILD_RESULT_FAILED;
 		}
 	}
@@ -678,7 +678,7 @@ static void Nuke_DeleteAllFilesAndCacheFoldersInternal( const fileInfo_t *fileIn
 		LogVerbose( "Deleting file \"%s\"\n", fileInfo->fullFilename );
 
 		if ( !FS_DeleteFile( fileInfo->fullFilename ) ) {
-			error( "Nuke failed to delete file \"%s\".\n", fileInfo->fullFilename );
+			Error( "Nuke failed to delete file \"%s\".\n", fileInfo->fullFilename );
 		}
 	}
 }
@@ -692,7 +692,7 @@ bool8 NukeFolder( const char *folder, const bool8 deleteRootFolder, const bool8 
 	fileVisitFlags_t visitFlags = FILE_VISIT_FILES | FILE_VISIT_RECURSIVE | FILE_VISIT_FOLDERS;
 
 	if ( !FS_GetAllFilesInFolder( folder, visitFlags, Nuke_DeleteAllFilesAndCacheFoldersInternal, &nukeContext ) ) {
-		error( "Failed to visit all files in folder \"%s\" while trying to nuke it.  You'll have to clean these files and folders up manually.  Sorry.\n", folder );
+		Error( "Failed to visit all files in folder \"%s\" while trying to nuke it.  You'll have to clean these files and folders up manually.  Sorry.\n", folder );
 		QUIT_ERROR();
 	}
 
@@ -706,14 +706,14 @@ bool8 NukeFolder( const char *folder, const bool8 deleteRootFolder, const bool8 
 		}
 
 		if ( !FS_DeleteFolder( subfolder ) ) {
-			error( "Failed to delete subfolder \"%s\".  You will need to nuke this one manually.  Sorry.\n", subfolder );
+			Error( "Failed to delete subfolder \"%s\".  You will need to nuke this one manually.  Sorry.\n", subfolder );
 			result = false;
 		}
 	}
 
 	if ( deleteRootFolder ) {
 		if ( !FS_DeleteFolder( folder ) ) {
-			error( "Failed to nuke root folder \"%s\" after deleting all the files and folders inside it.  You'll need to do this manually.  Sorry.\n", folder );
+			Error( "Failed to nuke root folder \"%s\" after deleting all the files and folders inside it.  You'll need to do this manually.  Sorry.\n", folder );
 			result = false;
 		}
 	}
@@ -1107,7 +1107,7 @@ static bool8 WriteIncludeDependenciesFile( buildContext_t *context ) {
 
 	if ( !FS_WriteEntireFile( context->includeDependenciesFilename.data, byteBuffer.data.data, byteBuffer.data.count ) ) {
 		s32 errorCode = GetLastErrorCode();
-		error( "Failed to write file \"%s\".  Error code: " ERROR_CODE_FORMAT ".\n", context->includeDependenciesFilename.data, errorCode );
+		Error( "Failed to write file \"%s\".  Error code: " ERROR_CODE_FORMAT ".\n", context->includeDependenciesFilename.data, errorCode );
 		return false;
 	}
 
@@ -1349,7 +1349,7 @@ static bool WriteCompilationDatabase( buildContext_t *context ) {
 	const char *outputFilename = TempPrintf( "%s%ccompile_commands.json", context->inputFilePath.data, PATH_SEPARATOR );
 	if ( !FS_WriteEntireFile( outputFilename, json, strlen( json ) ) ) {
 		s32 errorCode = GetLastErrorCode();
-		error(
+		Error(
 			"Failed to write compilation database \"%s\". Error code: " ERROR_CODE_FORMAT "\n",
 			outputFilename,
 			errorCode
@@ -1431,7 +1431,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 		if ( FileIsSourceFile( arg ) ) {
 			if ( context.inputFile != NULL ) {
-				error( "You've already specified a file for me to build.  If you want me to build more than one source file, specify it via %s().\n", SET_BUILDER_OPTIONS_FUNC_NAME );
+				Error( "You've already specified a file for me to build.  If you want me to build more than one source file, specify it via %s().\n", SET_BUILDER_OPTIONS_FUNC_NAME );
 				QUIT_ERROR();
 			}
 
@@ -1444,7 +1444,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 			const char *equals = strchr( arg, '=' );
 
 			if ( !equals ) {
-				error( "I detected that you want to set a config, but you never gave me the equals (=) immediately after it.  You need to do that.\n" );
+				Error( "I detected that you want to set a config, but you never gave me the equals (=) immediately after it.  You need to do that.\n" );
 
 				return ShowUsage( 1 );
 			}
@@ -1452,7 +1452,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 			const char *configName = equals + 1;
 
 			if ( strlen( configName ) < 1 ) {
-				error( "You specified the start of the config arg, but you never actually gave me a name for the config.  I need that.\n" );
+				Error( "You specified the start of the config arg, but you never actually gave me a name for the config.  I need that.\n" );
 
 				return ShowUsage( 1 );
 			}
@@ -1465,7 +1465,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 		if ( String_Equals( arg, ARG_NUKE ) ) {
 			if ( argIndex == argc - 1 ) {
-				error( "You passed in " ARG_NUKE " but you never told me what folder you want me to nuke.  I need to know!" );
+				Error( "You passed in " ARG_NUKE " but you never told me what folder you want me to nuke.  I need to know!" );
 				QUIT_ERROR();
 			}
 
@@ -1476,12 +1476,12 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 			printf( "Nuking \"%s\"\n", folderToNuke );
 
 			if ( !FS_FolderExists( folderToNuke ) ) {
-				error( "Can't nuke folder \"%s\" because it doesn't exist.  Have you typed it in correctly?\n", folderToNuke );
+				Error( "Can't nuke folder \"%s\" because it doesn't exist.  Have you typed it in correctly?\n", folderToNuke );
 				QUIT_ERROR();
 			}
 
 			if ( !NukeFolder( folderToNuke, false, true ) ) {
-				error( "Failed to nuke folder \"%s\".  You will have to clean this one up manually by yourself.  Sorry.\n", folderToNuke );
+				Error( "Failed to nuke folder \"%s\".  You will have to clean this one up manually by yourself.  Sorry.\n", folderToNuke );
 				QUIT_ERROR();
 			}
 
@@ -1502,7 +1502,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	// we need a source file specified at the command line
 	// otherwise we dont know what to build!
 	if ( context.inputFile == NULL ) {
-		error(
+		Error(
 			"You haven't told me what source files I need to build.  I need one.\n"
 			"Run builder " ARG_HELP_LONG " if you need help.\n"
 		);
@@ -1647,7 +1647,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 			} break;
 
 			case BUILD_RESULT_FAILED: {
-				error( "Pre-build failed!\n" );
+				Error( "Pre-build failed!\n" );
 				QUIT_ERROR();
 			} //break;
 
@@ -1714,7 +1714,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 		// you either want to generate a visual studio solution or build this config, but not both
 		if ( inputConfigName ) {
-			error(
+			Error(
 				"I see you want to generate a Visual Studio Solution, but you've also specified a config that you want to build.\n"
 				"You must do one or the other, you can't do both.\n\n"
 			);
@@ -1746,7 +1746,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		bool8 generated = GenerateVisualStudioSolution( &context, &options );
 
 		if ( !generated ) {
-			error( "Failed to generate Visual Studio solution.\n" );	// TODO(DM): better error message
+			Error( "Failed to generate Visual Studio solution.\n" );	// TODO(DM): better error message
 			QUIT_ERROR();
 		}
 
@@ -1757,7 +1757,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		float64 start = Time_MS();
 
 		if ( !GenerateVSCodeJSONFiles( &context, &options ) ) {
-			error( "Failed to generate VS Code JSON files.\n" );
+			Error( "Failed to generate VS Code JSON files.\n" );
 			QUIT_ERROR();
 		}
 
@@ -1766,7 +1766,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		float64 start = Time_MS();
 
 		if ( !GenerateZedJSONFiles( &context, &options ) ) {
-			error( "Failed to generate Zed JSON files.\n" );
+			Error( "Failed to generate Zed JSON files.\n" );
 			QUIT_ERROR();
 		}
 
@@ -1807,7 +1807,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 #ifdef _WIN32
 				CreateCompilerBackend_MSVC( &compilerBackend );
 #else
-				error(
+				Error(
 					"It appears you want to compile with MSVC on a non-Windows platform.\n"
 					"MSVC only supports Windows.  Sorry.\n"
 				);
@@ -1815,7 +1815,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 				QUIT_ERROR();
 #endif
 			} else {
-				error(
+				Error(
 					"The compiler you want to build with (\"%s\") is not one that I recognise.\n"
 					"Currently, I only support: Clang, GCC, and MSVC.\n"
 					"So you must use one of those compilers and make the compiler path end with the name of the executable.  Sorry!\n"
@@ -1846,7 +1846,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 			string_t compilerVersion = compilerBackend.GetCompilerVersion( &compilerBackend );
 
 			if ( !String_Equals( compilerVersion.data, options.compilerVersion.c_str() ) ) {
-				warning(
+				Warning(
 					"I see that you are using compiler version \"%s\", but compiler version \"%s\" was set in %s.\n"
 					"I will still go ahead with building the program, but things may not work as you expect.\n\n"
 					, compilerVersion.data, options.compilerVersion.c_str(), SET_BUILDER_OPTIONS_FUNC_NAME
@@ -1873,7 +1873,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 			AddBuildConfigAndDependenciesUnique( &context, &options.configs[0], configsToBuild );
 		} else {
 			if ( !inputConfigName ) {
-				error(
+				Error(
 					"This build has multiple configs, but you never specified a config name.\n"
 					"You must pass in a config name via " ARG_CONFIG "\n"
 					"Run builder " ARG_HELP_LONG " if you need help.\n"
@@ -1884,7 +1884,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 			For ( size_t, configIndex, 0, options.configs.size() ) {
 				if ( options.configs[configIndex].name.empty() ) {
-					error(
+					Error(
 						"You have multiple BuildConfigs in your build source file, but some of them have empty names.\n"
 						"When you have multiple BuildConfigs, ALL of them MUST have non-empty names.\n"
 						"You need to set 'BuildConfig::name' in every BuildConfig that you add via AddBuildConfig() (including dependencies!).\n"
@@ -1910,7 +1910,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 				u64 configNameHashB = HashString( configNameB, 0 );
 
 				if ( configNameHashA == configNameHashB ) {
-					error( "I found multiple configs with the name \"%s\".  All config names MUST be unique, otherwise I don't know which specific config you want me to build.\n", configNameA );
+					Error( "I found multiple configs with the name \"%s\".  All config names MUST be unique, otherwise I don't know which specific config you want me to build.\n", configNameA );
 					QUIT_ERROR();
 				}
 			}
@@ -1933,7 +1933,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 			}
 
 			if ( !foundConfig ) {
-				error( "You passed the config name \"%s\" via the command line, but I never found a config with that name inside %s.  Make sure they match.\n", inputConfigName, SET_BUILDER_OPTIONS_FUNC_NAME );
+				Error( "You passed the config name \"%s\" via the command line, but I never found a config with that name inside %s.  Make sure they match.\n", inputConfigName, SET_BUILDER_OPTIONS_FUNC_NAME );
 				QUIT_ERROR();
 			}
 		}
@@ -2042,7 +2042,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 
 					case BUILD_RESULT_FAILED:
 						numFailedBuilds++;
-						error( "Build failed.\n\n" );
+						Error( "Build failed.\n\n" );
 						QUIT_ERROR();
 
 					case BUILD_RESULT_SKIPPED:

@@ -57,14 +57,14 @@ static void PrintVarargs( FILE *file, const char *fmt, va_list args ) {
 	va_end( argsCopy );
 }
 
-void print( const char *fmt, ... ) {
+void Print( const char *fmt, ... ) {
 	va_list args;
 	va_start( args, fmt );
 	PrintVarargs( stdout, fmt, args );
 	va_end( args );
 }
 
-void warning( const char *fmt, ... ) {
+void Warning( const char *fmt, ... ) {
 	SetConsoleTextColor( CONSOLE_TEXT_COLOR_RED );
 
 	fputs( "WARNING: ", stderr );
@@ -79,7 +79,7 @@ void warning( const char *fmt, ... ) {
 	SetConsoleTextColor( CONSOLE_TEXT_COLOR_DEFAULT );
 }
 
-void error( const char *fmt, ... ) {
+void Error( const char *fmt, ... ) {
 	SetConsoleTextColor( CONSOLE_TEXT_COLOR_RED );
 
 	fputs( "ERROR: ", stderr );
@@ -97,7 +97,7 @@ void error( const char *fmt, ... ) {
 void FatalError( const char *fmt, ... ) {
 	SetConsoleTextColor( CONSOLE_TEXT_COLOR_RED );
 
-	print( "FATAL ERROR: " );
+	Print( "FATAL ERROR: " );
 
 	SetConsoleTextColor( CONSOLE_TEXT_COLOR_YELLOW );
 

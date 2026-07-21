@@ -106,7 +106,7 @@ bool8 Win_GetWindowsSDK( linearAllocator_t *allocator, windowsSDK_t *outSDK ) {
 	LSTATUS status = RegOpenKeyExA( HKEY_LOCAL_MACHINE, winSDKRegPath, 0, KEY_QUERY_VALUE | KEY_WOW64_32KEY | KEY_ENUMERATE_SUB_KEYS, &key );
 
 	if ( status != ERROR_SUCCESS ) {
-		error(
+		Error(
 			"Failed to get Windows SDK installation directory from your Windows registry.  The registry path \"%s\" doesn't seem to exist on your machine.\n"
 			"This likely means you don't have the Windows SDK installed on your machine.\n"
 			"In order to build using MSVC (which you asked me to do) then you will need to install a version of the Windows SDK on your PC.\n"
@@ -122,7 +122,7 @@ bool8 Win_GetWindowsSDK( linearAllocator_t *allocator, windowsSDK_t *outSDK ) {
 	const char *windowsSDKRoot = FindRegistryValueFromKey( key, winSDKRegKey );
 
 	if ( !windowsSDKRoot ) {
-		error(
+		Error(
 			"Failed to get Windows SDK installation directory from your Windows registry.  The registry key \"%s\" couldn't be queried from the registry path: \"%s\"\n"
 			"This likely means you don't have the Windows SDK installed on your machine.\n"
 			"In order to build using MSVC (which you asked me to do) then you will need to install a version of the Windows SDK on your PC.\n"
@@ -142,7 +142,7 @@ bool8 Win_GetWindowsSDK( linearAllocator_t *allocator, windowsSDK_t *outSDK ) {
 	versions.Init( Mem_GetTempStorage() );
 
 	if ( !FS_GetAllFilesInFolder( windowsSDKFolder, FILE_VISIT_FOLDERS, OnWindowsSDKVersionFound, &versions ) ) {
-		error( "Failed to query your Windows SDK root folder for the version of the Windows SDK that you asked for.  Do you definitely have at least one version of the Windows SDK installed?\n" );
+		Error( "Failed to query your Windows SDK root folder for the version of the Windows SDK that you asked for.  Do you definitely have at least one version of the Windows SDK installed?\n" );
 		return false;
 	}
 
@@ -195,7 +195,7 @@ bool8 Win_GetWindowsSDK( linearAllocator_t *allocator, windowsSDK_t *outSDK ) {
 			}
 			SB_Appendf( &sb, "If you want to use this version of the Windows SDK specifically, you will need to fix this yourself.\n" );
 
-			warning( "%s\n", SB_ToString( &sb ) );
+			Warning( "%s\n", SB_ToString( &sb ) );
 
 			continue;
 		}
@@ -208,7 +208,7 @@ bool8 Win_GetWindowsSDK( linearAllocator_t *allocator, windowsSDK_t *outSDK ) {
 	}
 
 	if ( !foundVersion ) {
-		error(
+		Error(
 			"Failed to find a valid installation of the Windows SDK on your machine.\n"
 			"You have %llu versions of the Windows SDK installed on your machine, and somehow all of them appear to be malformed.\n"
 			"You need to install a version through the Visual Studio Installer, or via the separate Build Tools installer from Microsoft.\n"
@@ -287,7 +287,7 @@ static int CompareMSVCInstallVersions( const void *a, const void *b ) {
 }
 
 static bool8 MSVCNotInstalled() {
-	error( "No valid MSVC installation found on your PC.  You need to install one through either the Visual Studio Installer or through the MS Build Tools.\n" );
+	Error( "No valid MSVC installation found on your PC.  You need to install one through either the Visual Studio Installer or through the MS Build Tools.\n" );
 	return false;
 }
 
@@ -304,7 +304,7 @@ bool8 Win_GetMSVCInstall( linearAllocator_t *allocator, msvcInstall_t *outInstal
 	hr = CoInitializeEx( NULL, COINIT_MULTITHREADED );
 
 	if ( FAILED( hr ) ) {
-		error( "CoInitializeEx() call failed: 0x%X\n", hr );
+		Error( "CoInitializeEx() call failed: 0x%X\n", hr );
 		return false;
 	}
 
@@ -322,7 +322,7 @@ bool8 Win_GetMSVCInstall( linearAllocator_t *allocator, msvcInstall_t *outInstal
 	}
 
 	if ( FAILED( hr ) ) {
-		error( "CoCreateInstance() call failed: 0x%X\n", hr );
+		Error( "CoCreateInstance() call failed: 0x%X\n", hr );
 		return false;
 	}
 
@@ -332,12 +332,12 @@ bool8 Win_GetMSVCInstall( linearAllocator_t *allocator, msvcInstall_t *outInstal
 	hr = setupConfig->EnumInstances( &instances );
 
 	if ( FAILED( hr ) ) {
-		error( "setupConfig->EnumInstances() called failed: 0x%X\n", hr );
+		Error( "setupConfig->EnumInstances() called failed: 0x%X\n", hr );
 		return false;
 	}
 
 	if ( !instances ) {
-		error( "setupConfig->EnumInstances() returned no instances.  Bailing...\n" );
+		Error( "setupConfig->EnumInstances() returned no instances.  Bailing...\n" );
 		return false;
 	}
 
@@ -357,7 +357,7 @@ bool8 Win_GetMSVCInstall( linearAllocator_t *allocator, msvcInstall_t *outInstal
 		hr = instance->GetInstallationPath( &visualStudioInstallationPathWide );
 
 		if ( FAILED( hr ) ) {
-			error( "instance->GetInstallationPath() call failed: 0x%X\n", hr );
+			Error( "instance->GetInstallationPath() call failed: 0x%X\n", hr );
 			return false;
 		}
 
@@ -371,7 +371,7 @@ bool8 Win_GetMSVCInstall( linearAllocator_t *allocator, msvcInstall_t *outInstal
 			int utf8Length = WideCharToMultiByte( CP_UTF8, 0, visualStudioInstallationPathWide, TruncCast( int, wideLength ), NULL, 0, NULL, NULL );
 
 			if ( utf8Length <= 0 ) {
-				error( "First WideCharToMultiByte() call failed: WinAPI error code 0x%X\n", GetLastError() );
+				Error( "First WideCharToMultiByte() call failed: WinAPI error code 0x%X\n", GetLastError() );
 				return false;
 			}
 
@@ -380,7 +380,7 @@ bool8 Win_GetMSVCInstall( linearAllocator_t *allocator, msvcInstall_t *outInstal
 			int converted = WideCharToMultiByte( CP_UTF8, 0, visualStudioInstallationPathWide, TruncCast( int, wideLength ), visualStudioInstallationPath, utf8Length, NULL, NULL );
 
 			if ( !converted ) {
-				error( "Second WideCharToMultiByte() call failed: WinAPI error code 0x%X\n", GetLastError() );
+				Error( "Second WideCharToMultiByte() call failed: WinAPI error code 0x%X\n", GetLastError() );
 				return false;
 			}
 
@@ -396,7 +396,7 @@ bool8 Win_GetMSVCInstall( linearAllocator_t *allocator, msvcInstall_t *outInstal
 		};
 
 		if ( !FS_GetAllFilesInFolder( msvcRootFolder, FILE_VISIT_FOLDERS, OnMSVCInstallFound, &data ) ) {
-			error( "Failed to query for all MSVC installation folders.  Error code: " ERROR_CODE_FORMAT "\n", GetLastErrorCode() );
+			Error( "Failed to query for all MSVC installation folders.  Error code: " ERROR_CODE_FORMAT "\n", GetLastErrorCode() );
 			return false;
 		}
 
@@ -435,7 +435,7 @@ bool8 Win_GetMSVCInstall( linearAllocator_t *allocator, msvcInstall_t *outInstal
 			}
 			SB_Appendf( &sb, "If you want to use this version of MSVC specifically, you will need to fix this yourself.\n" );
 
-			warning( "%s\n", SB_ToString( &sb ) );
+			Warning( "%s\n", SB_ToString( &sb ) );
 
 			continue;
 		}

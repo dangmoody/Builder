@@ -715,7 +715,7 @@ static bool8 Clang_GetCompilationCommandArchetype( const compilerBackend_t *back
 			}
 
 			if ( !found ) {
-				error( "\"%s\" is not allowed as a warning level.\n", warningLevel );
+				Error( "\"%s\" is not allowed as a warning level.\n", warningLevel );
 				return false;
 			}
 

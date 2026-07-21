@@ -99,7 +99,7 @@ static void VS_DeleteOldProjectFilesCallback( const fileInfo_t *fileInfo, void *
 			if ( FS_DeleteFile( fileInfo->fullFilename ) ) {
 				break;
 			} else {
-				warning( "Failed to delete old Visual Studio file \"%s\" while deleting old Visual Studio files.  You will have to delete this one yourself.  Sorry.\n", fileInfo->fullFilename );
+				Warning( "Failed to delete old Visual Studio file \"%s\" while deleting old Visual Studio files.  You will have to delete this one yourself.  Sorry.\n", fileInfo->fullFilename );
 			}
 		}
 	}
@@ -131,17 +131,17 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 	{
 		bool8 validSolution = true;
 		if ( options->solution.name.empty() ) {
-			error( "You never set the name of the solution.  I need that.\n" );
+			Error( "You never set the name of the solution.  I need that.\n" );
 			validSolution = false;
 		}
 
 		if ( options->solution.platforms.size() < 1 ) {
-			error( "You must set at least one platform when generating a Visual Studio Solution.\n" );
+			Error( "You must set at least one platform when generating a Visual Studio Solution.\n" );
 			validSolution = false;
 		}
 
 		if ( options->solution.projects.size() < 1 ) {
-			error( "As well as a Solution, you must also generate at least one Visual Studio Project to go with it.\n" );
+			Error( "As well as a Solution, you must also generate at least one Visual Studio Project to go with it.\n" );
 			validSolution = false;
 		}
 
@@ -187,7 +187,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 				SB_Appendf( &error, "Builder will still generate the solution, but know that not setting at least one platform name to any of these defaults will cause certain fields in the property pages of your Visual Studio project to not be correct.\n" );
 				SB_Appendf( &error, "You have been warned.\n" );
 
-				warning( SB_ToString( &error ) );
+				Warning( SB_ToString( &error ) );
 			}
 		}
 	}
@@ -235,7 +235,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 
 	if ( !FS_CreateFolderIfItDoesntExist( visualStudioProjectFilesPath ) ) {
 		s32 errorCode = GetLastErrorCode();
-		error( "Failed to create the Visual Studio Solution folder.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
+		Error( "Failed to create the Visual Studio Solution folder.  Error code: " ERROR_CODE_FORMAT "\n", errorCode );
 
 		return false;
 	}
@@ -248,7 +248,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 		{
 			bool8 validProject = true;
 			if ( project->name.empty() ) {
-				error( "There is a Visual Studio Project that doesn't have a name here.  You need to fill that in.\n" );
+				Error( "There is a Visual Studio Project that doesn't have a name here.  You need to fill that in.\n" );
 				validProject = false;
 			}
 
@@ -257,17 +257,17 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 				VisualStudioConfig *config = &project->configs[configIndex];
 
 				if ( config->name.empty() ) {
-					error( "There is a config for project \"%s\" that doesn't have a name here.  You need to fill that in.\n", project->name.c_str() );
+					Error( "There is a config for project \"%s\" that doesn't have a name here.  You need to fill that in.\n", project->name.c_str() );
 					validProject = false;
 				}
 
 				if ( config->options.name.empty() ) {
-					error( "There is a config for project \"%s\" that doesn't have a name set in it's BuildConfig.  You need to fill that in.\n", project->name.c_str() );
+					Error( "There is a config for project \"%s\" that doesn't have a name set in it's BuildConfig.  You need to fill that in.\n", project->name.c_str() );
 					validProject = false;
 				}
 
 				if ( config->options.binaryType == BINARY_TYPE_EXE && config->options.binaryFolder.empty() ) {
-					error(
+					Error(
 						"Build config \"%s\" is an executable, but you never specified an output directory when generating the Visual Studio project \"%s\", config \"%s\".\n"
 						"Visual Studio needs this in order to know where to run the executable from when debugging.  You need to set this.\n"
 						, config->options.name.c_str(), project->name.c_str(), config->name.c_str()

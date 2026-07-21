@@ -98,7 +98,7 @@ bool8 FS_CloseFile( file_t* file ) {
 	if ( close( TruncCast( int, file->handle ) ) != 0 ) {
 		int err = errno;
 
-		error( "Failed to close file \"%s\": %s\n", strerror( err ) );
+		Error( "Failed to close file \"%s\": %s\n", strerror( err ) );
 
 		return false;
 	}
@@ -196,7 +196,7 @@ bool8 FS_GetAllFilesInFolder( const char *path, const fileVisitFlags_t visitFlag
 
 		if ( !dir ) {
 			int err = errno;
-			print( "Can't open dir \"%s\": %s\n", directory, strerror( err ) );
+			printf( "Can't open dir \"%s\": %s\n", directory, strerror( err ) );
 			return false;
 		}
 

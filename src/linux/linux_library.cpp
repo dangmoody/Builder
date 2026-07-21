@@ -56,7 +56,7 @@ bool8 Library_Unload( library_t *library ) {
 
 	if ( dlclose( library->ptr ) != 0 ) {
 		int err = errno;
-		error( "Failed to close library handle: %s\n", strerror( err ) );	// TODO: DM: 20/03/2026: I think we want to get rid of this
+		Error( "Failed to close library handle: %s\n", strerror( err ) );	// TODO: DM: 20/03/2026: I think we want to get rid of this
 		return false;
 	}
 

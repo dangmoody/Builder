@@ -101,7 +101,7 @@ u32 HM_GetValue( const hashmap_t *map, const u64 key ) {
 
 	if ( HM_InternalCombineAtIndex( map, i ) != key ) {
 #ifndef HASHMAP_HIDE_MISSING_KEY_WARNING
-		warning( "GET: Key %llu not found in hashmap\n", key );
+		Warning( "GET: Key %llu not found in hashmap\n", key );
 #endif
 		return HASHMAP_INVALID_VALUE;
 	}
@@ -114,7 +114,7 @@ void HM_SetValue( hashmap_t *map, const u64 key, const u32 value ) {
 	u64 keyAtLocation = HM_InternalCombineAtIndex( map, i );
 
 	if ( keyAtLocation != key && keyAtLocation != HASHMAP_UNUSED_BUCKET ) {
-		warning( "SET: Key %llu or empty space not found in hashmap\n", key );
+		Warning( "SET: Key %llu or empty space not found in hashmap\n", key );
 		return;
 	}
 
@@ -147,7 +147,7 @@ void HM_SetValue( hashmap_t *map, const u64 key, const u32 value ) {
 				HM_SetValue( map, key, value );
 				return;
 			} else {
-				warning( "hashmap_t is above utilization of %f with %u buckets", map->maxUtilisation, map->capacity );
+				Warning( "hashmap_t is above utilization of %f with %u buckets", map->maxUtilisation, map->capacity );
 			}
 		}
 	}
@@ -164,7 +164,7 @@ void HM_RemoveKey( hashmap_t *map, const u64 key ) {
 	u64 keyAtLocation = HM_InternalCombineAtIndex( map, i );
 
 	if ( keyAtLocation != key ) {
-		warning( "REMOVE: Key %llu not found in hashmap\n", key );
+		Warning( "REMOVE: Key %llu not found in hashmap\n", key );
 		return;
 	}
 

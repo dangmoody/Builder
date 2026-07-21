@@ -39,7 +39,7 @@ bool8 GenerateZedJSONFiles( buildContext_t *context, BuilderOptions *options ) {
 	const char *dotZedFolder = TempPrintf( "%s%c.zed", context->inputFilePath.data, PATH_SEPARATOR );
 
 	if ( !FS_CreateFolderIfItDoesntExist( dotZedFolder ) ) {
-		error( "Failed to create .zed folder at \"%s\".\n", context->inputFilePath.data );
+		Error( "Failed to create .zed folder at \"%s\".\n", context->inputFilePath.data );
 		return false;
 	}
 
@@ -108,7 +108,7 @@ bool8 GenerateZedJSONFiles( buildContext_t *context, BuilderOptions *options ) {
 		SB_Appendf( &tasksJSONContent, "]\n" );
 
 		if ( !WriteStringBuilderToFile( &tasksJSONContent, tasksJSONFilename ) ) {
-			error( "Failed to write \"%s\".\n", tasksJSONFilename );
+			Error( "Failed to write \"%s\".\n", tasksJSONFilename );
 			return false;
 		}
 
@@ -160,7 +160,7 @@ bool8 GenerateZedJSONFiles( buildContext_t *context, BuilderOptions *options ) {
 			ZedDebugConfig *debugConfig = &options->zedJSONOptions.debugConfigs[i];
 
 			if ( debugConfig->label.empty() ) {
-				error( "When generating Zed debug configs (for your debug.json), the label must be set to something.  It cannot be empty.\n" );
+				Error( "When generating Zed debug configs (for your debug.json), the label must be set to something.  It cannot be empty.\n" );
 				return false;
 			}
 
@@ -221,7 +221,7 @@ bool8 GenerateZedJSONFiles( buildContext_t *context, BuilderOptions *options ) {
 		SB_Appendf( &debugJSONContent, "]\n" );
 
 		if ( !WriteStringBuilderToFile( &debugJSONContent, debugJSONFilename ) ) {
-			error( "Failed to write \"%s\".\n", debugJSONFilename );
+			Error( "Failed to write \"%s\".\n", debugJSONFilename );
 			return false;
 		}
 

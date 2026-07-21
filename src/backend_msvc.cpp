@@ -333,7 +333,7 @@ static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t *backe
 	if ( config->optimizationLevel == OPTIMIZATION_LEVEL_O3 ) {
 		static bool8 warned = false;
 		if ( !warned ) {
-			warning( "MSVC doesn't have optimization level /O3. /O2 is the maximum. Defaulting to that instead...\n" );
+			Warning( "MSVC doesn't have optimization level /O3. /O2 is the maximum. Defaulting to that instead...\n" );
 			warned = true;
 		}
 	}
@@ -376,7 +376,7 @@ static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t *backe
 				SB_Appendf( &builder, "%s, ", allowedWarningLevels[allowedWarningLevelIndex] );
 			}
 
-			error( "%s\n", SB_ToString( &builder ) );
+			Error( "%s\n", SB_ToString( &builder ) );
 
 			return false;
 		}
@@ -394,7 +394,7 @@ static bool8 MSVC_GetCompilationCommandArchetype( const compilerBackend_t *backe
 			}
 
 			if ( !found ) {
-				error( "\"%s\" is not allowed as a warning level.\n", warningLevel );
+				Error( "\"%s\" is not allowed as a warning level.\n", warningLevel );
 				return false;
 			}
 

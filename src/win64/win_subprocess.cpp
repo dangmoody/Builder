@@ -86,14 +86,14 @@ process_t* Proc_Create( linearAllocator_t *allocator, array_t<const char *> *arg
 
 	HANDLE stdoutWrite = NULL;
 	if ( !CreatePipe( &process->stdoutRead, &stdoutWrite, &secAttr, 0 ) ) {
-		error( "CreatePipe call failed for stdout: 0x%X.\n", GetLastError() );
+		Error( "CreatePipe call failed for stdout: 0x%X.\n", GetLastError() );
 		return NULL;
 	}
 
 	HANDLE stderrWrite = NULL;
 	if ( !( flags & PROCESS_FLAG_COMBINE_STDOUT_AND_STDERR ) ) {
 		if ( !CreatePipe( &process->stderrRead, &stderrWrite, &secAttr, 0 ) ) {
-			error( "CreatePipe call failed for stderr: 0x%X.\n", GetLastError() );
+			Error( "CreatePipe call failed for stderr: 0x%X.\n", GetLastError() );
 			return NULL;
 		}
 	}
@@ -203,7 +203,7 @@ process_t* Proc_Create( linearAllocator_t *allocator, array_t<const char *> *arg
 		&startInfo,
 		&process->processInfo
 	) ) {
-		error( "Failed to create process \"%s\": 0x%X.\n", subprocessName, GetLastError() );
+		Error( "Failed to create process \"%s\": 0x%X.\n", subprocessName, GetLastError() );
 		return NULL;
 	}
 
@@ -301,7 +301,7 @@ static u32 Proc_ReadFromFileHandle( HANDLE fileHandle, HANDLE event, char *outBu
 				lastError = GetLastError();
 
 				if ( ( lastError != ERROR_IO_INCOMPLETE ) && ( lastError != ERROR_HANDLE_EOF ) ) {
-					error( "Failed to read stdout of subprocess: 0x%X.\n", GetLastError() );
+					Error( "Failed to read stdout of subprocess: 0x%X.\n", GetLastError() );
 					return 0;
 				}
 			}

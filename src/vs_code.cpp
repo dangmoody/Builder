@@ -39,7 +39,7 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 	const char *dotVSCodeFolder = TempPrintf( "%s%c.vscode", context->inputFilePath.data, PATH_SEPARATOR );
 
 	if ( !FS_CreateFolderIfItDoesntExist( dotVSCodeFolder ) ) {
-		error( "Failed to create .vscode folder at \"%s\".\n", context->inputFilePath.data );
+		Error( "Failed to create .vscode folder at \"%s\".\n", context->inputFilePath.data );
 		return false;
 	}
 
@@ -159,7 +159,7 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 		SB_Appendf( &cppPropertiesJSONContent, "}\n" );
 
 		if ( !WriteStringBuilderToFile( &cppPropertiesJSONContent, cppPropertiesJSONFilename ) ) {
-			error( "Failed to write \"%s\".\n", cppPropertiesJSONFilename );
+			Error( "Failed to write \"%s\".\n", cppPropertiesJSONFilename );
 			return false;
 		}
 
@@ -231,7 +231,7 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 		SB_Appendf( &tasksJSONContent, "}\n" );
 
 		if ( !WriteStringBuilderToFile( &tasksJSONContent, tasksJSONFilename ) ) {
-			error( "Failed to write \"%s\".\n", tasksJSONFilename );
+			Error( "Failed to write \"%s\".\n", tasksJSONFilename );
 			return false;
 		}
 
@@ -380,7 +380,7 @@ bool8 GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options 
 		SB_Appendf( &launchJSONContent, "}\n" );
 
 		if ( !WriteStringBuilderToFile( &launchJSONContent, launchJSONFilename ) ) {
-			error( "Failed to write \"%s\".\n", launchJSONFilename );
+			Error( "Failed to write \"%s\".\n", launchJSONFilename );
 			return false;
 		}
 

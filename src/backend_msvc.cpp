@@ -29,17 +29,17 @@ SOFTWARE.
 #ifdef _WIN32
 
 #include "builder_local.h"
-#include "win_support.h"
 
-#include "core/include/debug.h"
-#include "core/include/core_string.h"
-#include "core/include/paths.h"
-#include "core/include/core_array.inl"
-#include "core/include/string_builder.h"
-#include "core/include/core_process.h"
-#include "core/include/file.h"
-#include "core/include/temp_storage.h"
-#include "core/include/core_helpers.h"
+#include "win_support.h"
+#include "debug.h"
+#include "string.h"
+#include "paths.h"
+#include "array.inl"
+#include "string_builder.h"
+#include "subprocess.h"
+#include "file.h"
+#include "temp_storage.h"
+#include "helpers.h"
 
 struct msvcState_t {
 	String						compilerPath;

@@ -34,9 +34,9 @@ SOFTWARE.
 // can we keep those there without needing this include to do it? header files shouldn't include other header files (unless it's int_types.h or something like that)!
 #include "win_support.h"
 
-#include "core/include/int_types.h"
-#include "core/include/core_array.h"
-#include "core/include/core_string.h"
+#include "int_types.h"
+#include "array.h"
+#include "string.h"
 
 #ifdef _WIN64
 #define NOMINMAX

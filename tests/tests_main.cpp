@@ -1,20 +1,21 @@
 #include "../src/builder_local.h"
 
-#include <string>
-#include <debug.h>
-#include <core_array.inl>
-#include <typecast.inl>
-#include <paths.h>
-#include <string_builder.h>
-#include <defer.h>
-#include <core_helpers.h>
-#include <temp_storage.h>
+#include "../src/debug.h"
+#include "../src/array.inl"
+#include "../src/typecast.h"
+#include "../src/paths.h"
+#include "../src/string_builder.h"
+#include "../src/defer.h"
+#include "../src/helpers.h"
+#include "../src/temp_storage.h"
 
 #define TEMPERDEV_ASSERT assert
 #define TEMPER_IMPLEMENTATION
-#include "../src/core/include/file.h"
-#include "../src/core/include/core_string.h"
+#include "../src/file.h"
+#include "../src/string.h"
 #include "temper/temper.h"
+
+#include <string>
 
 
 static void InitTestThread() {
@@ -249,7 +250,7 @@ TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 	String oldCWD = path_get_cwd( testScratch );
 
 	TEMPER_CHECK_TRUE_M( path_set_cwd( test.rootDir ), "Failed to cd into the test folder \"%s\": %s.\n", test.rootDir, strerror( errno ) );
-	defer { TEMPER_CHECK_TRUE_M( path_set_cwd( oldCWD.data ), "Failed to cd back out of the test folder: %s.\n", strerror( errno ) ); };
+	defer { TEMPER_CHECK_TRUE_M( path_set_cwd( string_cstr( &oldCWD ) ), "Failed to cd back out of the test folder: %s.\n", strerror( errno ) ); };
 
 	// get all the files that this test will generate
 	// we will want these later to check if they got successfully deleted (tests should clean up after themselves properly)

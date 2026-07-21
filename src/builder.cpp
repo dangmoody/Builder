@@ -28,28 +28,26 @@ SOFTWARE.
 
 #include "builder_local.h"
 
-#include "core/include/core_math.h"
-#include "core/include/linear_allocator.h"
 #include "win_support.h"
-
-#include "core/include/core_helpers.h"
-#include "core/include/core_array.inl"
-#include "core/include/int_types.h"
-#include "core/include/core_string.h"
-#include "core/include/string_builder.h"
-#include "core/include/paths.h"
-#include "core/include/core_process.h"
-#include "core/include/file.h"
-#include "core/include/typecast.inl"
-#include "core/include/temp_storage.h"
-#include "core/include/hash.h"
-#include "core/include/timer.h"
-#include "core/include/library.h"
-#include "core/include/core_string.h"
-#include "core/include/hashmap.h"
-#include "core/include/defer.h"
-#include "core/include/core_thread.h"
-#include "core/include/os.h"
+#include "math.h"
+#include "linear_allocator.h"
+#include "helpers.h"
+#include "array.inl"
+#include "int_types.h"
+#include "string.h"
+#include "string_builder.h"
+#include "paths.h"
+#include "subprocess.h"
+#include "file.h"
+#include "typecast.h"
+#include "temp_storage.h"
+#include "hash.h"
+#include "timer.h"
+#include "library.h"
+#include "hashmap.h"
+#include "defer.h"
+#include "thread.h"
+#include "os.h"
 
 #ifdef _WIN64
 #include <Shlwapi.h>
@@ -608,6 +606,12 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 	For ( u64, threadIndex, 0, numThreads ) {
 		threads.add( thread_create( CompileJobThread, &pool ) );
 	}
+
+	defer {
+		For ( u64, threadIndex, 0, numThreads ) {
+			thread_destroy( &threads[threadIndex] );
+		}
+	};
 
 	For ( u64, threadIndex, 0, threads.count ) {
 		thread_wait( &threads[threadIndex] );

@@ -2,8 +2,8 @@
 
 #ifdef _WIN32
 
-#include "core/include/int_types.h"
-#include "core/include/core_string.h"
+#include "int_types.h"
+#include "string.h"
 
 struct LinearAllocator;
 

@@ -32,9 +32,10 @@ SOFTWARE.
 #include <string.h>
 #include <string>
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
 #ifdef __linux__
 #include <cstring> // ctring is not a part of std string on linux and needs a manual include
-#pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wpadded"
 #endif // __linux__
 

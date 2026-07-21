@@ -28,13 +28,13 @@ SOFTWARE.
 
 #include "builder_local.h"
 
-#include "core/include/paths.h"
-#include "core/include/core_string.h"
-#include "core/include/file.h"
-#include "core/include/debug.h"
-#include "core/include/string_builder.h"
-#include "core/include/core_helpers.h"
-#include "core/include/temp_storage.h"
+#include "paths.h"
+#include "string.h"
+#include "file.h"
+#include "debug.h"
+#include "string_builder.h"
+#include "helpers.h"
+#include "temp_storage.h"
 
 bool8 GenerateZedJSONFiles( buildContext_t *context, BuilderOptions *options ) {
 	const char *dotZedFolder = temp_printf( "%s%c.zed", context->inputFilePath.data, PATH_SEPARATOR );

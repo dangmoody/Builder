@@ -27,22 +27,22 @@ SOFTWARE.
 */
 
 #include "builder_local.h"
-#include "core/include/temp_storage.h"
 
 #ifdef _WIN32
 #include "win_support.h"
 #endif
 
-#include "core/include/core_string.h"
-#include "core/include/debug.h"
-#include "core/include/core_string.h"
-#include "core/include/paths.h"
-#include "core/include/core_array.inl"
-#include "core/include/file.h"
-#include "core/include/core_process.h"
-#include "core/include/string_builder.h"
-#include "core/include/defer.h"
-#include "core/include/core_helpers.h"
+#include "temp_storage.h"
+#include "string.h"
+#include "debug.h"
+#include "paths.h"
+#include "array.inl"
+#include "file.h"
+#include "subprocess.h"
+#include "string_builder.h"
+#include "defer.h"
+#include "helpers.h"
+#include "library.h"
 
 #include <clang-c/Index.h>
 

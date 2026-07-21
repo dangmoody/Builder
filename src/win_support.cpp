@@ -4,15 +4,15 @@
 #include "win_support.h"
 #include "builder_local.h"
 
-#include "core/include/typecast.inl"
-#include "core/include/file.h"
-#include "core/include/temp_storage.h"
-#include "core/include/core_string.h"
-#include "core/include/core_array.inl"
-#include "core/include/string_builder.h"
-#include "core/include/defer.h"
-#include "core/include/core_helpers.h"
-#include "core/include/paths.h"
+#include "typecast.h"
+#include "file.h"
+#include "temp_storage.h"
+#include "string.h"
+#include "array.inl"
+#include "string_builder.h"
+#include "defer.h"
+#include "helpers.h"
+#include "paths.h"
 
 #include <Windows.h>
 

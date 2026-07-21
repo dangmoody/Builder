@@ -78,7 +78,7 @@ process_t* Proc_Create( linearAllocator_t *allocator, array_t<const char *> *arg
 
 	const char *subprocessName = ( *args )[0];
 
-	process_t *process = Cast( process_t *, Mem_AllocatorAlloc( allocator, sizeof( process_t ) ) );
+	process_t *process = Cast( process_t *, Mem_Alloc( allocator, sizeof( process_t ) ) );
 	memset( process, 0, sizeof( process_t ) );
 
 	SECURITY_ATTRIBUTES secAttr = { sizeof( SECURITY_ATTRIBUTES ), NULL, TRUE };

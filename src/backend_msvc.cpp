@@ -73,7 +73,7 @@ static const char *OptimizationLevelToCompilerArg( const OptimizationLevel level
 // its ridiculous that Microsoft genuinely think this isnt a frankly retarded way of grabbing some simple information off your PC
 
 static bool8 MSVC_Init( compilerBackend_t *backend, const buildContext_t *context, const char *compilerPath, const char *compilerVersion ) {
-	msvcState_t *msvcState = Cast( msvcState_t *, Mem_AllocatorAlloc( context->allocator, sizeof( msvcState_t ) ) );
+	msvcState_t *msvcState = Cast( msvcState_t *, Mem_Alloc( context->allocator, sizeof( msvcState_t ) ) );
 	new( msvcState ) msvcState_t;
 
 	msvcState->compilerPath = String_Alloc( context->allocator, compilerPath, strlen( compilerPath ) + 1 );

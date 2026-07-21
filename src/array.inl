@@ -90,7 +90,7 @@ void array_t<T>::Reserve( const u64 newAlloced ) {
 	if ( newAlloced > alloced ) {
 		alloced = NextPowerOf2Up( newAlloced );
 
-		T *newData = Cast( T*, Mem_AllocatorAlloc( allocator, alloced * sizeof( T ) ) );
+		T *newData = Cast( T*, Mem_Alloc( allocator, alloced * sizeof( T ) ) );
 		if ( count > 0 ) {
 			memcpy( newData, data, count * sizeof( T ) );
 		}

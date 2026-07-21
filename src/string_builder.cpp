@@ -63,7 +63,7 @@ void SB_Appendf( stringBuilder_t *builder, const char *fmt, ... ) {
 	va_list args;
 	va_start( args, fmt );
 
-	stringBuilderBuffer_t *buffer = Cast( stringBuilderBuffer_t *, Mem_AllocatorAlloc( builder->allocator, sizeof( stringBuilderBuffer_t ) ) );
+	stringBuilderBuffer_t *buffer = Cast( stringBuilderBuffer_t *, Mem_Alloc( builder->allocator, sizeof( stringBuilderBuffer_t ) ) );
 	memset( buffer, 0, sizeof( stringBuilderBuffer_t ) );
 
 	va_list argsCopy;
@@ -71,7 +71,7 @@ void SB_Appendf( stringBuilder_t *builder, const char *fmt, ... ) {
 
 	buffer->length = TruncCast( u32, stbsp_vsnprintf( NULL, 0, fmt, args ) );
 
-	buffer->data = Cast( char *, Mem_AllocatorAlloc( builder->allocator, buffer->length + 1, 1 ) );
+	buffer->data = Cast( char *, Mem_Alloc( builder->allocator, buffer->length + 1, 1 ) );
 	stbsp_vsnprintf( buffer->data, Cast( int, buffer->length + 1 ), fmt, argsCopy );
 	va_end( argsCopy );
 	buffer->data[buffer->length] = 0;
@@ -108,7 +108,7 @@ const char *SB_ToString( stringBuilder_t *builder ) {
 
 	totalLength += 1;
 
-	result = Cast( char *, Mem_AllocatorAlloc( builder->allocator, totalLength * sizeof( char ), 1 ) );
+	result = Cast( char *, Mem_Alloc( builder->allocator, totalLength * sizeof( char ), 1 ) );
 
 	current = builder->head;
 

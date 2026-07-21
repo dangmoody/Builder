@@ -88,7 +88,7 @@ static bool8 Proc_CreatePipeWithFileActions( posix_spawn_file_actions_t *spawnAc
 }
 
 process_t	*Proc_Create( linearAllocator_t *allocator, array_t<const char *> *args, array_t<const char *> *environmentVariables, const processFlags_t flags ) {
-	process_t *subprocess = Cast( process_t *, Mem_AllocatorAlloc( allocator, sizeof( process_t ) ) );
+	process_t *subprocess = Cast( process_t *, Mem_Alloc( allocator, sizeof( process_t ) ) );
 
 	const char *subprocessName = ( *args )[0];
 

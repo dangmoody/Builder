@@ -51,7 +51,7 @@ static string_t String_Vprintf( linearAllocator_t *allocator, const char *fmt, v
 
 	result.count = TruncCast( u64, length );
 
-	result.data = Cast( char *, Mem_AllocatorAlloc( allocator, result.count + 1 ) );
+	result.data = Cast( char *, Mem_Alloc( allocator, result.count + 1 ) );
 	stbsp_vsnprintf( result.data, length + 1, fmt, argsCopy );
 
 	va_end( argsCopy );
@@ -103,7 +103,7 @@ string_t String_Alloc( linearAllocator_t *allocator, const char *str, const u64 
 	Assert( str );
 
 	string_t result = {
-		.data	= Cast( char *, Mem_AllocatorAlloc( allocator, length ) ),
+		.data	= Cast( char *, Mem_Alloc( allocator, length ) ),
 		.count	= length,
 	};
 

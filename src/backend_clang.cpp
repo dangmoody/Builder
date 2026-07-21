@@ -177,7 +177,7 @@ static void ResolveCompilerAndLinkerPaths( clangState_t *clangState, linearAlloc
 //================================================================
 
 static bool8 Clang_Init( compilerBackend_t *backend, const buildContext_t *context, const char *compilerPath, const char *compilerVersion ) {
-	backend->data = Cast( clangState_t *, Mem_AllocatorAlloc( context->allocator, sizeof( clangState_t ) ) );
+	backend->data = Cast( clangState_t *, Mem_Alloc( context->allocator, sizeof( clangState_t ) ) );
 	new( backend->data ) clangState_t;
 
 	clangState_t *clangState = Cast( clangState_t *, backend->data );
@@ -215,7 +215,7 @@ static bool8 Clang_Init( compilerBackend_t *backend, const buildContext_t *conte
 }
 
 static bool8 GCC_Init( compilerBackend_t *backend, const buildContext_t *context, const char *compilerPath, const char *compilerVersion ) {
-	backend->data = Cast( clangState_t *, Mem_AllocatorAlloc( context->allocator, sizeof( clangState_t ) ) );
+	backend->data = Cast( clangState_t *, Mem_Alloc( context->allocator, sizeof( clangState_t ) ) );
 	new( backend->data ) clangState_t;
 
 	clangState_t *clangState = Cast( clangState_t *, backend->data );

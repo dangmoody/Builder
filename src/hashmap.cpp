@@ -50,9 +50,9 @@ hashmap_t *HM_Create( linearAllocator_t *allocator, const u32 startingCapacity, 
 	Assert( normalizedMaxUtilisation > 0.0f );
 	Assert( normalizedMaxUtilisation <= 1.0f );
 
-	hashmap_t *map = Cast( hashmap_t *, Mem_AllocatorAlloc( allocator, sizeof( hashmap_t ) ) );
+	hashmap_t *map = Cast( hashmap_t *, Mem_Alloc( allocator, sizeof( hashmap_t ) ) );
 	map->capacity = startingCapacity;
-	map->buckets = Cast( hashmapBucket_t *, Mem_AllocatorAlloc( allocator, startingCapacity * sizeof( hashmapBucket_t ) ) );
+	map->buckets = Cast( hashmapBucket_t *, Mem_Alloc( allocator, startingCapacity * sizeof( hashmapBucket_t ) ) );
 	map->shouldGrow = shouldGrow;
 	map->maxUtilisation = normalizedMaxUtilisation;
 

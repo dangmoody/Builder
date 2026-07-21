@@ -57,16 +57,16 @@ struct linearAllocator_t {
 	u64	virtualMemoryPageSize;
 };
 
-linearAllocator_t	*Mem_AllocatorCreate( const u64 reservedBytes );
+linearAllocator_t	*Mem_CreateAllocator( const u64 reservedBytes );
 
-void				Mem_AllocatorDestroy( linearAllocator_t *allocator );
+void				Mem_DestroyAllocator( linearAllocator_t *allocator );
 
-void				*Mem_AllocatorAlloc( linearAllocator_t *allocator, const u64 sizeBytes, const u32 alignment = 8 );
+void				*Mem_Alloc( linearAllocator_t *allocator, const u64 sizeBytes, const u32 alignment = 8 );
 
-void				Mem_AllocatorReset( linearAllocator_t *allocator );
+void				Mem_Reset( linearAllocator_t *allocator );
 
-u64					Mem_AllocatorTell( linearAllocator_t *allocator );
+u64					Mem_Tell( linearAllocator_t *allocator );
 
-void				Mem_AllocatorRewindTo( linearAllocator_t *allocator, const u64 offset );
+void				Mem_RewindTo( linearAllocator_t *allocator, const u64 offset );
 
-void				Mem_AllocatorRewindBy( linearAllocator_t *allocator, const u64 bytes );
+void				Mem_RewindBy( linearAllocator_t *allocator, const u64 bytes );

@@ -54,26 +54,26 @@ linearAllocator_t *Mem_GetTempStorage() {
 }
 
 void Mem_InitTempStorage( const u64 sizeBytes ) {
-	gTempStorage = Mem_AllocatorCreate( sizeBytes );
+	gTempStorage = Mem_CreateAllocator( sizeBytes );
 }
 
 void Mem_ShutdownTempStorage() {
-	Mem_AllocatorDestroy( gTempStorage );
+	Mem_DestroyAllocator( gTempStorage );
 	gTempStorage = NULL;
 }
 
 void* Mem_TempAlloc( const u64 sizeBytes, const u32 alignment ) {
-	return Mem_AllocatorAlloc( gTempStorage, sizeBytes, alignment );
+	return Mem_Alloc( gTempStorage, sizeBytes, alignment );
 }
 
 void Mem_ResetTempStorage() {
-	Mem_AllocatorReset( gTempStorage );
+	Mem_Reset( gTempStorage );
 }
 
 u64 Mem_TempTell() {
-	return Mem_AllocatorTell( gTempStorage );
+	return Mem_Tell( gTempStorage );
 }
 
 void Mem_TempRewindTo( const u64 pos ) {
-	Mem_AllocatorRewindTo( gTempStorage, pos );
+	Mem_RewindTo( gTempStorage, pos );
 }

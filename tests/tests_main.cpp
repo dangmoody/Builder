@@ -173,8 +173,8 @@ struct sourceFilesPatternTest_t {
 };
 
 TEST_PARAMETRIC( Test_GetSourceFilesMatchingPattern, TEMPER_FLAG_SHOULD_RUN, sourceFilesPatternTest_t test ) {
-	linearAllocator_t* testScratch = Mem_AllocatorCreate(MEM_KILOBYTES(64));
-	defer{ Mem_AllocatorDestroy(testScratch); };
+	linearAllocator_t* testScratch = Mem_CreateAllocator(MEM_KILOBYTES(64));
+	defer{ Mem_DestroyAllocator(testScratch); };
 
 	string_t basePath = String_Set( test.basePath );
 	string_t pattern = String_Set( test.pattern );
@@ -239,8 +239,8 @@ TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 
 	// Builder uses temp storage a lot internally
 	// so make our own temp storage for each test and free once were done
-	linearAllocator_t *testScratch = Mem_AllocatorCreate( MEM_KILOBYTES( 64 ) );
-	defer { Mem_AllocatorDestroy( testScratch ); };
+	linearAllocator_t *testScratch = Mem_CreateAllocator( MEM_KILOBYTES( 64 ) );
+	defer { Mem_DestroyAllocator( testScratch ); };
 
 	// move ourselves to the root folder of that test
 	// run the test from that folder
@@ -476,8 +476,8 @@ TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 
 	// Builder uses temp storage a lot internally
 	// so make our own temp storage for each test and free once were done
-	linearAllocator_t *testScratch = Mem_AllocatorCreate( MEM_KILOBYTES( 64 ) );
-	defer { Mem_AllocatorDestroy( testScratch ); };
+	linearAllocator_t *testScratch = Mem_CreateAllocator( MEM_KILOBYTES( 64 ) );
+	defer { Mem_DestroyAllocator( testScratch ); };
 
 	// need to find where msbuild lives on windows
 #ifdef _WIN32
@@ -577,8 +577,8 @@ TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	// Builder uses temp storage a lot internally
 	// so make our own temp storage for each test and free once were done
-	linearAllocator_t *testScratch = Mem_AllocatorCreate( MEM_KILOBYTES( 64 ) );
-	defer { Mem_AllocatorDestroy( testScratch ); };
+	linearAllocator_t *testScratch = Mem_CreateAllocator( MEM_KILOBYTES( 64 ) );
+	defer { Mem_DestroyAllocator( testScratch ); };
 
 	const char *buildFile				= "test_generate_vscode_json_files/generate_vscode_json.cpp";
 	const char *dotBuilderFolder		= "test_generate_vscode_json_files/.builder";
@@ -689,8 +689,8 @@ TEST( GenerateVSCodeJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 TEST( GenerateZedJSONFiles, TEMPER_FLAG_SHOULD_RUN ) {
 	// Builder uses temp storage a lot internally
 	// so make our own temp storage for each test and free once were done
-	linearAllocator_t *testScratch = Mem_AllocatorCreate( MEM_KILOBYTES( 64 ) );
-	defer { Mem_AllocatorDestroy( testScratch ); };
+	linearAllocator_t *testScratch = Mem_CreateAllocator( MEM_KILOBYTES( 64 ) );
+	defer { Mem_DestroyAllocator( testScratch ); };
 
 	const char *dotBuilderFolder = "test_generate_zed_json_files/.builder";
 	const char *tasksJSONPath    = "test_generate_zed_json_files/.zed/tasks.json";
@@ -814,8 +814,8 @@ TEST( ValidateCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 	// If the compile_commands.json is malformed, clang-tidy will fail with an error like:
 	//     "Error while trying to load a compilation database"
 
-	linearAllocator_t *testScratch = Mem_AllocatorCreate( MEM_KILOBYTES( 1 ) );
-	defer { Mem_AllocatorDestroy( testScratch ); };
+	linearAllocator_t *testScratch = Mem_CreateAllocator( MEM_KILOBYTES( 1 ) );
+	defer { Mem_DestroyAllocator( testScratch ); };
 
 	array_t<const char *> args;
 	args.Init( testScratch );

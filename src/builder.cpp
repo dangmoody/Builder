@@ -70,8 +70,8 @@ SOFTWARE.
 
 enum {
 	BUILDER_VERSION_MAJOR	= 0,
-	BUILDER_VERSION_MINOR	= 13,
-	BUILDER_VERSION_PATCH	= 1,
+	BUILDER_VERSION_MINOR	= 14,
+	BUILDER_VERSION_PATCH	= 0,
 };
 
 enum buildResult_t {
@@ -1385,11 +1385,11 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	printf( "Builder v%d.%d.%d RC0\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {};
-	context.allocator = Mem_AllocatorCreate( MEM_KILOBYTES( 128 ) );
+	context.allocator = Mem_CreateAllocator( MEM_KILOBYTES( 128 ) );
 	context.configIndices = HM_Create( context.allocator, 1 );	// TODO(DM): 30/03/2025: whats a reasonable default here?
 
 	defer {
-		Mem_AllocatorDestroy( context.allocator );
+		Mem_DestroyAllocator( context.allocator );
 		context.allocator = NULL;
 	};
 
@@ -1404,12 +1404,12 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		// .argv = argv,
 	};
 
-	args.argv = Cast( char **, Mem_AllocatorAlloc( context.allocator, Cast( u32, argc ) * sizeof( const char * ) ) );
+	args.argv = Cast( char **, Mem_Alloc( context.allocator, Cast( u32, argc ) * sizeof( const char * ) ) );
 
 	For ( s32, argIndex, 0, argc ) {
 		u64 argLength = strlen( argv[argIndex] );
 
-		char *outArg = Cast( char *, Mem_AllocatorAlloc( context.allocator, argLength + 1 ) );
+		char *outArg = Cast( char *, Mem_Alloc( context.allocator, argLength + 1 ) );
 		memcpy( outArg, argv[argIndex], argLength );
 		outArg[argLength] = 0;
 

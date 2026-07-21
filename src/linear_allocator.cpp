@@ -38,7 +38,7 @@ SOFTWARE.
 #include <malloc.h>
 #include <memory.h>
 
-linearAllocator_t *Mem_AllocatorCreate( const u64 reservedBytes ) {
+linearAllocator_t *Mem_CreateAllocator( const u64 reservedBytes ) {
 	Assert( reservedBytes );
 
 	u32 pageSize = OS_GetVirtualMemoryPageSize();
@@ -59,7 +59,7 @@ linearAllocator_t *Mem_AllocatorCreate( const u64 reservedBytes ) {
 	return allocator;
 }
 
-void Mem_AllocatorDestroy( linearAllocator_t *allocator ) {
+void Mem_DestroyAllocator( linearAllocator_t *allocator ) {
 	Assert( allocator );
 
 	Mem_VirtualFree( allocator->ptr );
@@ -68,7 +68,7 @@ void Mem_AllocatorDestroy( linearAllocator_t *allocator ) {
 	allocator = NULL;
 }
 
-void* Mem_AllocatorAlloc( linearAllocator_t *allocator, const u64 sizeBytes, const u32 alignment ) {
+void* Mem_Alloc( linearAllocator_t *allocator, const u64 sizeBytes, const u32 alignment ) {
 	Assert( allocator );
 	Assert( sizeBytes );
 
@@ -93,18 +93,18 @@ void* Mem_AllocatorAlloc( linearAllocator_t *allocator, const u64 sizeBytes, con
 	return ptr;
 }
 
-void Mem_AllocatorReset( linearAllocator_t *allocator ) {
+void Mem_Reset( linearAllocator_t *allocator ) {
 	allocator->offset = 0;
 }
 
-u64 Mem_AllocatorTell( linearAllocator_t *allocator ) {
+u64 Mem_Tell( linearAllocator_t *allocator ) {
 	return allocator->offset;
 }
 
-void Mem_AllocatorRewindTo( linearAllocator_t *allocator, const u64 offset ) {
+void Mem_RewindTo( linearAllocator_t *allocator, const u64 offset ) {
 	allocator->offset = offset;
 }
 
-void Mem_AllocatorRewindBy( linearAllocator_t *allocator, const u64 bytes ) {
+void Mem_RewindBy( linearAllocator_t *allocator, const u64 bytes ) {
 	allocator->offset -= bytes;
 }

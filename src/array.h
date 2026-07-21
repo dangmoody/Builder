@@ -39,18 +39,18 @@ struct Array {
 	u64				count;
 	u64				alloced;
 
-	void			init( LinearAllocator *alloc );
-	void			zero();
+	void			Init( LinearAllocator *alloc );
+	void			Zero();
 
-	void			reset();
+	void			Reset();
 
-	void			add( const T &element );
-	void			add_range( const T *ptr, const u64 count );
-	void			add_range( const Array<T> *array );
+	void			Add( const T &element );
+	void			AddRange( const T *ptr, const u64 count );
+	void			AddRange( const Array<T> *array );
 
-	void			reserve( const u64 new_alloced );
+	void			Reserve( const u64 newAlloced );
 
-	void			resize( const u64 count );
+	void			Resize( const u64 count );
 
 	T				&operator[]( const u64 index );
 	const T			&operator[]( const u64 index ) const;

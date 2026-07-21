@@ -32,16 +32,16 @@ SOFTWARE.
 
 
 // returns a timestamp in clock cycles
-s64		time_cycles( void );
+s64		Time_Cycles( void );
 
 // returns a timestamp in seconds
-float64	time_seconds( void );
+float64	Time_Seconds( void );
 
 // returns a timestamp in milliseconds
-float64	time_ms( void );
+float64	Time_Ms( void );
 
 // returns a timestamp in microseconds
-float64	time_us( void );
+float64	Time_Us( void );
 
 // returns a timestamp in nanoseconds
-float64	time_ns( void );
+float64	Time_Ns( void );

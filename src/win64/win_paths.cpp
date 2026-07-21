@@ -49,36 +49,36 @@ SOFTWARE.
 ================================================================================================
 */
 
-String path_app_path( LinearAllocator *allocator ) {
+String Path_AppPath( LinearAllocator *allocator ) {
 	char app_full_path[MAX_PATH] = {};
 	DWORD length = GetModuleFileNameA( NULL, app_full_path, MAX_PATH );
 
-	return string_alloc( allocator, app_full_path, length );
+	return String_Alloc( allocator, app_full_path, length );
 }
 
-String path_get_cwd( LinearAllocator *allocator ) {
+String Path_GetCwd( LinearAllocator *allocator ) {
 	char cwd[MAX_PATH] = {};
 	DWORD length = GetCurrentDirectory( MAX_PATH, cwd );
 
-	return string_alloc( allocator, cwd, length );
+	return String_Alloc( allocator, cwd, length );
 }
 
-bool8 path_set_cwd( const char *path ) {
+bool8 Path_SetCwd( const char *path ) {
 	assert( path );
 
 	return cast( bool8, SetCurrentDirectory( path ) );
 }
 
-String path_absolute_path( LinearAllocator *allocator, const char *path ) {
+String Path_AbsolutePath( LinearAllocator *allocator, const char *path ) {
 	assert( path );
 
 	char absolute_path[MAX_PATH] = {};
 	DWORD length = GetFullPathName( path, MAX_PATH, absolute_path, NULL );
 
-	return string_alloc( allocator, absolute_path, length );
+	return String_Alloc( allocator, absolute_path, length );
 }
 
-bool8 path_is_absolute( const char *path ) {
+bool8 Path_IsAbsolute( const char *path ) {
 	if ( !path || strlen( path ) < 3 ) {
 		return false;
 	}
@@ -86,8 +86,8 @@ bool8 path_is_absolute( const char *path ) {
 	return isalpha( path[0] ) && path[1] == ':' && ( path[2] == '\\' || path[2] == '/' );
 }
 
-String path_fix_slashes( LinearAllocator *allocator, String *str ) {
-	return string_replace( allocator, str, '/', PATH_SEPARATOR );
+String Path_FixSlashes( LinearAllocator *allocator, String *str ) {
+	return String_Replace( allocator, str, '/', PATH_SEPARATOR );
 }
 
 #endif // _WIN32

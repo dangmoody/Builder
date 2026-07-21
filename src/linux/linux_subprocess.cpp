@@ -60,7 +60,7 @@ struct Process {
 	FILE	*stderr;
 };
 
-static bool8 create_pipe_with_file_actions( posix_spawn_file_actions_t *spawn_actions, int fileno, int out_handles[2], const char *subprocess_name ) {
+static bool8 Proc_CreatePipeWithFileActions( posix_spawn_file_actions_t *spawn_actions, int fileno, int out_handles[2], const char *subprocess_name ) {
 	if ( pipe( out_handles ) != 0 ) {
 		int err = errno;
 		fatal_error( "Failed to create pipe for fd %d of subprocess %s: %s\n", fileno, subprocess_name, strerror( err ) );
@@ -88,8 +88,8 @@ static bool8 create_pipe_with_file_actions( posix_spawn_file_actions_t *spawn_ac
 	return true;
 }
 
-Process	*process_create( LinearAllocator *allocator, Array<const char *> *args, Array<const char *> *environment_variables, const ProcessFlags flags ) {
-	Process *subprocess = cast( Process *, linear_allocator_alloc( allocator, sizeof( Process ) ) );
+Process	*Proc_Create( LinearAllocator *allocator, Array<const char *> *args, Array<const char *> *environment_variables, const ProcessFlags flags ) {
+	Process *subprocess = cast( Process *, Mem_AllocatorAlloc( allocator, sizeof( Process ) ) );
 
 	const char *subprocess_name = ( *args )[0];
 
@@ -110,7 +110,7 @@ Process	*process_create( LinearAllocator *allocator, Array<const char *> *args, 
 	};
 
 	int stdout_file_handles[2] = { -1, -1 };
-	if ( !create_pipe_with_file_actions( &spawn_actions, STDOUT_FILENO, stdout_file_handles, subprocess_name ) ) {
+	if ( !Proc_CreatePipeWithFileActions( &spawn_actions, STDOUT_FILENO, stdout_file_handles, subprocess_name ) ) {
 		return NULL;
 	}
 
@@ -123,13 +123,13 @@ Process	*process_create( LinearAllocator *allocator, Array<const char *> *args, 
 			return NULL;
 		}
 	} else {
-		if ( !create_pipe_with_file_actions( &spawn_actions, STDERR_FILENO, stderr_file_handles, subprocess_name ) ) {
+		if ( !Proc_CreatePipeWithFileActions( &spawn_actions, STDERR_FILENO, stderr_file_handles, subprocess_name ) ) {
 			return NULL;
 		}
 	}
 
 	if ( ( *args )[args->count - 1] != NULL ) {
-		args->add( NULL );
+		args->Add( NULL );
 	}
 
 	char * const *args_start = cast( char * const *, &( *args )[0] );
@@ -137,7 +137,7 @@ Process	*process_create( LinearAllocator *allocator, Array<const char *> *args, 
 	char * const *env_vars_start = NULL;
 	if ( environment_variables && environment_variables->count > 0 ) {
 		if ( ( *environment_variables )[environment_variables->count - 1] != NULL ) {
-			environment_variables->add( NULL );
+			environment_variables->Add( NULL );
 		}
 
 		env_vars_start = cast( char * const *, &( *environment_variables )[0] );
@@ -164,7 +164,7 @@ Process	*process_create( LinearAllocator *allocator, Array<const char *> *args, 
 	return subprocess;
 }
 
-bool8		process_destroy( Process *process ) {
+bool8		Proc_Destroy( Process *process ) {
 	int result = kill( process->pid, SIGKILL );
 
 	if ( result != 0 ) {
@@ -187,7 +187,7 @@ bool8		process_destroy( Process *process ) {
 	return true;
 }
 
-s32		process_join( Process *process ) {
+s32		Proc_Join( Process *process ) {
 	int status = -1;
 	if ( waitpid( process->pid, &status, 0 ) != process->pid ) {
 		int err = errno;
@@ -202,7 +202,7 @@ s32		process_join( Process *process ) {
 	}
 }
 
-u32		process_read_stdout( Process *process, char *out_buffer, const u64 count ) {
+u32		Proc_ReadStdout( Process *process, char *out_buffer, const u64 count ) {
 	int file_desc = fileno( process->stdout );
 	s64 bytes_read = read( file_desc, out_buffer, count );
 

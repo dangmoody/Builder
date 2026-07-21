@@ -51,49 +51,49 @@ struct String;
 #endif
 
 // Returns the absolute path of where the current program is running from.
-String				path_app_path( LinearAllocator *allocator );
+String				Path_AppPath( LinearAllocator *allocator );
 
 // Returns the path that your program is currently running from.
-String				path_get_cwd( LinearAllocator *allocator );
+String				Path_GetCwd( LinearAllocator *allocator );
 
 // Sets the current working directory (cwd) that the program will run from to the specified path.
-bool8				path_set_cwd( const char *path );
+bool8				Path_SetCwd( const char *path );
 
 // Returns the absolute path of 'file'.
-String				path_absolute_path( LinearAllocator *allocator, const char *path );
+String				Path_AbsolutePath( LinearAllocator *allocator, const char *path );
 
 // If 'path' is a path with a filename, then returns just the path part with the filename part removed.  Otherwise returns the original string.
-String				path_remove_file_from_path( const String *path );
+String				Path_RemoveFileFromPath( const String *path );
 
 // If 'path' is a path with a filename, then returns just the filename part with the path part removed.  Otherwise returns the original string.
-String				path_remove_path_from_file( const String *path );
+String				Path_RemovePathFromFile( const String *path );
 
 // If 'filename' is a filename with a file extension then returns that filename without the file extension.  Otherwise returns the original filename.
-String				path_remove_file_extension( const String *filename );
+String				Path_RemoveFileExtension( const String *filename );
 
 // On Windows:   Returns true if the path starts with a letter followed by a colon (for example: "C:"), otherwise returns false.
 // On Mac/Linux: Returns true if the path starts with two backslashes or a single forward slash, otherwise returns false.
-bool8				path_is_absolute( const char *path );
+bool8				Path_IsAbsolute( const char *path );
 
 // Make sure that any slashes found in 'path' are what the OS expects them to be.
-String				path_fix_slashes( LinearAllocator *allocator, String *str );
+String				Path_FixSlashes( LinearAllocator *allocator, String *str );
 
-String				path_relative_path_to( LinearAllocator *allocator, const char *from, const char *to );
+String				Path_RelativePathTo( LinearAllocator *allocator, const char *from, const char *to );
 
 // DO NOT CALL THIS DIRECTLY.
 // CALL path_join INSTEAD.
-String				path_join_internal( LinearAllocator *allocator, const int count, ... );
+String				Path_JoinInternal( LinearAllocator *allocator, const int count, ... );
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wc++98-compat"
 #pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
 
 template<typename ...Args>
-inline int path_va_args_count( Args&&... ) {
+inline int Path_VaArgsCount( Args&&... ) {
 	return sizeof...( Args );
 }
 
 // Takes a variable number of strings and separates each one with a slash (back slash on Windows, forward slash on all other platforms).
-#define path_join( allocator, ... )	path_join_internal( allocator, path_va_args_count( __VA_ARGS__ ), __VA_ARGS__ )
+#define path_join( allocator, ... )	Path_JoinInternal( allocator, Path_VaArgsCount( __VA_ARGS__ ), __VA_ARGS__ )
 
 #pragma clang diagnostic pop

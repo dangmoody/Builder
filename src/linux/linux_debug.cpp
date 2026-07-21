@@ -43,47 +43,6 @@ SOFTWARE.
 #include <dlfcn.h>
 #include <cxxabi.h>
 
-Array<String> get_callstack( LinearAllocator *allocator ) {
-	const int NUM_FRAMES = 1024;
-	void *buffer[NUM_FRAMES];
-
-	int frames_count = backtrace( buffer, NUM_FRAMES );
-
-	char **fallback_names = backtrace_symbols( buffer, frames_count );
-	defer { free( fallback_names ); };
-
-	Array<String> frames;
-	frames.init( allocator );
-	frames.reserve( trunc_cast( u64, frames_count ) );
-
-	// skip the first found frame because that will just be this function that we're in, which is useless for a callstack
-	For ( u32, frame_index, 1, frames_count ) {
-		Dl_info info;
-		const char *name = fallback_names[frame_index];
-		char *demangled = NULL;
-
-		if ( dladdr( buffer[frame_index], &info ) && info.dli_sname ) {
-			int status = 0;
-			demangled = abi::__cxa_demangle( info.dli_sname, NULL, NULL, &status );
-
-			if ( status == 0 && demangled ) {
-				name = demangled;
-			} else {
-				name = info.dli_sname;
-			}
-		}
-
-		String frame = string_alloc( allocator, name );
-
-		free( demangled );
-		demangled = NULL;
-
-		frames.add( frame );
-	}
-
-	return frames;
-}
-
 void set_console_text_color( const ConsoleTextColor color ) {
 	const char *color_linux = NULL;
 

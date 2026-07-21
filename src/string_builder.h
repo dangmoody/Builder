@@ -67,8 +67,8 @@ struct StringBuilder {
 	StringBuilderBuffer	*tail;
 };
 
-StringBuilder	string_builder_create( LinearAllocator *allocator );
+StringBuilder	SB_Create( LinearAllocator *allocator );
 
-void			string_builder_appendf( StringBuilder *builder, const char *fmt, ... );
+void			SB_Appendf( StringBuilder *builder, const char *fmt, ... );
 
-const char		*string_builder_to_string( StringBuilder *builder );
+const char		*SB_ToString( StringBuilder *builder );

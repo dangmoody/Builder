@@ -65,67 +65,67 @@ struct String {
 
 // Sets the contents of the string to the specified string literal.
 // This string will not own the data it holds.
-String		string_set( const char *str );
-String		string_set( const char *str, const u64 count );
+String		String_Set( const char *str );
+String		String_Set( const char *str, const u64 count );
 
 // Sets the contents of the string to the range of specified string literal.
 // This string will not own the data it holds.
-String		substring( const char *str, const u64 offset, const u64 count );
+String		String_Substring( const char *str, const u64 offset, const u64 count );
 
 // Allocates a copy of the null-terminated C string 'str' using 'allocator'.
 // This string will hold the data it holds.
-String		string_alloc( LinearAllocator *allocator, const char *str );
+String		String_Alloc( LinearAllocator *allocator, const char *str );
 
 // Allocates a copy of the first 'length' characters of 'str' using 'allocator'.
 // // This string will hold the data it holds.
-String		string_alloc( LinearAllocator *allocator, const char *str, const u64 length );
+String		String_Alloc( LinearAllocator *allocator, const char *str, const u64 length );
 
 // Allocates a printf-formatted string using 'allocator'.
-String		string_printf( LinearAllocator *allocator, const char *fmt, ... );
+String		String_Printf( LinearAllocator *allocator, const char *fmt, ... );
 
 // Allocates a copy of 'src' using 'allocator'.
-String		string_copy( LinearAllocator *allocator, const String *src );
+String		String_Copy( LinearAllocator *allocator, const String *src );
 
 // Returns true if the contents of string 'lhs' are EXACTLY the same as the contents of string 'rhs'.  Case sensitive.
-bool8		string_equals( const char *lhs, const char *rhs );
-bool8		string_equals( const String *lhs, const String *rhs );
+bool8		String_Equals( const char *lhs, const char *rhs );
+bool8		String_Equals( const String *lhs, const String *rhs );
 
 // Returns true if the first characters of string 'str' are EXACTLY the same as string 'prefix'.  Case sensitive.
-bool8		string_starts_with( const char *str, const char *prefix );
-bool8		string_starts_with( const String *str, const String *prefix );
+bool8		String_StartsWith( const char *str, const char *prefix );
+bool8		String_StartsWith( const String *str, const String *prefix );
 
 // Returns true if the last character of 'str' is the value of 'end'.  Case sensitive.
-bool8		string_ends_with( const char *str, const char end );
-bool8		string_ends_with( const String *str, const char end );
+bool8		String_EndsWith( const char *str, const char end );
+bool8		String_EndsWith( const String *str, const char end );
 
 // Returns true if the last characters of 'str' are EXACTLY the same as string 'suffix'.  Case sensitive.
-bool8		string_ends_with( const char *str, const char *suffix );
-bool8		string_ends_with( const String *str, const String *suffix );
+bool8		String_EndsWith( const char *str, const char *suffix );
+bool8		String_EndsWith( const String *str, const String *suffix );
 
 // Returns true if string 'str' has EXACTLY the contents of 'substring' somewhere in it.  Case sensitive.
-bool8		string_contains( const char *str, const char c );
-bool8		string_contains( const char *str, const char *substring );
-bool8		string_contains( const String *str, const char c );
-bool8		string_contains( const String *str, const String *substring );
+bool8		String_Contains( const char *str, const char c );
+bool8		String_Contains( const char *str, const char *substring );
+bool8		String_Contains( const String *str, const char c );
+bool8		String_Contains( const String *str, const String *substring );
 
-// Replaces every occurrence of 'old_char' in 'str' with 'new_char'.
-String		string_replace( LinearAllocator *allocator, String *str, const char old_char, const char new_char );
+// Replaces every occurrence of 'oldChar' in 'str' with 'newChar'.
+String		String_Replace( LinearAllocator *allocator, String *str, const char oldChar, const char newChar );
 
-// Returns true if character 'c' is found in 'str', searching left to right, and sets 'out_index' to the position of the first occurrence.  Returns false if 'c' cannot be found.
-bool8		string_find_from_left( const String *str, const char c, u64 *out_index );
+// Returns true if character 'c' is found in 'str', searching left to right, and sets 'outIndex' to the position of the first occurrence.  Returns false if 'c' cannot be found.
+bool8		String_FindFromLeft( const String *str, const char c, u64 *outIndex );
 
-// Returns true if character 'c' is found in 'str', searching right to left, and sets 'out_index' to the position of the last occurrence.  Returns false if 'c' cannot be found.
-bool8		string_find_from_right( const String *str, const char c, u64 *out_index );
+// Returns true if character 'c' is found in 'str', searching right to left, and sets 'outIndex' to the position of the last occurrence.  Returns false if 'c' cannot be found.
+bool8		String_FindFromRight( const String *str, const char c, u64 *outIndex );
 
 // Returns a null-terminated copy of 'str' allocated on temp storage, truncated to 'str->count'.
 // Use this to safely pass a String as a '%s' argument to printf.
-const char	*string_cstr( const String *str );
+const char	*String_Cstr( const String *str );
 
 // Returns a printf-formatted string with the given format string and var args that's been allocated via temp storage.
-const char	*temp_printf( const char *fmt, ... );
+const char	*TempPrintf( const char *fmt, ... );
 
 // Returns a copy of 'from' that has been allocated on temp storage.
-char		*temp_c_string( const char *from );
+char		*TempCString( const char *from );
 
 // Copies 'length' characters from 'from' and allocates it on temp storage.
-char		*temp_c_string( const char *from, const u64 length );
+char		*TempCString( const char *from, const u64 length );

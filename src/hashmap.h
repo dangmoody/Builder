@@ -54,35 +54,35 @@ constexpr u64 HASHMAP_TOMBSTONE_BUCKET 	= 0xffffffffffffffffU;
 constexpr u32 HASHMAP_INVALID_VALUE 	= 0xffffffffU;
 
 struct HashmapBucket {
-	u32		key_hi;
-	u32		key_lo;
+	u32		keyHi;
+	u32		keyLo;
 	u32		value;
 };
 
 struct Hashmap {
 	u32				capacity;
-	u32				usage_count;
-	u32 			tombstone_count;
-	u32				last_linear_probe;
-	float32			max_utilisation;
-	bool8			should_grow;
+	u32				usageCount;
+	u32 			tombstoneCount;
+	u32				lastLinearProbe;
+	float32			maxUtilisation;
+	bool8			shouldGrow;
 	HashmapBucket	*buckets;
 };
 
-Hashmap	*hashmap_create( LinearAllocator *allocator, u32 starting_capacity, float32 normalized_max_utilisation = 0.5f, bool8 should_grow = true );
+Hashmap	*HM_Create( LinearAllocator *allocator, u32 startingCapacity, float32 normalizedMaxUtilisation = 0.5f, bool8 shouldGrow = true );
 
-void	hashmap_reset( Hashmap *map );
+void	HM_Reset( Hashmap *map );
 
 // Returns the value associated with the key if the key has a value, otherwise returns 0.
-u32		hashmap_get_value( const Hashmap *map, const u64 key );
+u32		HM_GetValue( const Hashmap *map, const u64 key );
 
-void	hashmap_set_value( Hashmap *map, const u64 key, const u32 value );
-void	hashmap_remove_key( Hashmap *map, const u64 key );
+void	HM_SetValue( Hashmap *map, const u64 key, const u32 value );
+void	HM_RemoveKey( Hashmap *map, const u64 key );
 
-u64		hashmap_internal_combine( const u32 hi, const u32 lo );
-u64		hashmap_internal_combine_at_index( const Hashmap *map, const u32 index );
-u32		hashmap_internal_get_lo_part( const u64 key );
-u32		hashmap_internal_get_hi_part( const u64 key );
+u64		HM_InternalCombine( const u32 hi, const u32 lo );
+u64		HM_InternalCombineAtIndex( const Hashmap *map, const u32 index );
+u32		HM_InternalGetLoPart( const u64 key );
+u32		HM_InternalGetHiPart( const u64 key );
 
 #if defined( __clang__ )
 #pragma clang diagnostic pop

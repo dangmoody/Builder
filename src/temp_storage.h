@@ -45,15 +45,15 @@ struct LinearAllocator;
 ================================================================================================
 */
 
-LinearAllocator	*mem_get_temp_storage();
+LinearAllocator	*Mem_GetTempStorage();
 
-void				mem_init_temp_storage( const u64 size_bytes );
-void				mem_shutdown_temp_storage();
+void				Mem_InitTempStorage( const u64 sizeBytes );
+void				Mem_ShutdownTempStorage();
 
-void*				mem_temp_alloc( const u64 size_bytes, const u32 alignment = 8 );
+void*				Mem_TempAlloc( const u64 sizeBytes, const u32 alignment = 8 );
 
-void				mem_reset_temp_storage();
+void				Mem_ResetTempStorage();
 
-u64				mem_temp_tell();
+u64				Mem_TempTell();
 
-void				mem_temp_rewind_to( const u64 pos );
+void				Mem_TempRewindTo( const u64 pos );

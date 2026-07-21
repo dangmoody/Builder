@@ -49,20 +49,20 @@ SOFTWARE.
 ================================================================================================
 */
 
-u64 hash64( const void *data, const u64 length, const u64 seed ) {
+u64 Hash64( const void *data, const u64 length, const u64 seed ) {
 	assert( data );
 
 	return XXH64( data, length, seed );
 }
 
-u64 hash_string( const char *string, const u64 seed ) {
+u64 HashString( const char *string, const u64 seed ) {
 	assert( string );
 
-	return hash64( string, strlen( string ), seed );
+	return Hash64( string, strlen( string ), seed );
 }
 
-u64 hash_string( const String *string, const u64 seed ) {
+u64 HashString( const String *string, const u64 seed ) {
 	assert( string );
 
-	return hash64( string->data, string->count, seed );
+	return Hash64( string->data, string->count, seed );
 }

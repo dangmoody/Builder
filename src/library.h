@@ -46,11 +46,11 @@ struct Library {
 };
 
 // Loads a dynamic library.
-Library	library_load( const char *name );
+Library	Library_Load( const char *name );
 
 // Attempts to unload a dynamic library and returns true if successful, otherwise returns false.
-bool8		library_unload( Library *library );
+bool8		Library_Unload( Library *library );
 
 // Returns the symbol as a pointer from the dynamic library.
 // If the symbol can't be found then returns NULL.
-void		*library_get_symbol( const Library library, const char *symbol_name );
+void		*Library_GetSymbol( const Library library, const char *symbolName );

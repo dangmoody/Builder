@@ -51,105 +51,105 @@ struct String;
 
 #define INVALID_FILE_HANDLE U64_MAX
 
-struct File {
+struct file_t {
 	u64		handle;
 	u64		offset;
 };
 
-enum FileVisitFlagBits {
+enum fileVisitFlagBits_t {
 	FILE_VISIT_RECURSIVE	= bit( 0 ),
 	FILE_VISIT_FILES		= bit( 1 ),
 	FILE_VISIT_FOLDERS		= bit( 2 ),
 };
-typedef u32 FileVisitFlags;
+typedef u32 fileVisitFlags_t;
 
-enum FileOpenFlagBits {
+enum fileOpenFlagBits_t {
 	FILE_OPEN_READ	= bit( 0 ),
 	FILE_OPEN_WRITE	= bit( 1 ),
 };
-typedef u32 FileOpenFlags;
+typedef u32 fileOpenFlags_t;
 
 // TODO: DM: 05/10/2025: support for symlinks
-struct FileInfo {
-	u64			size_bytes;
-	u64			last_write_time;
-	bool8		is_directory;
+struct fileInfo_t {
+	u64			sizeBytes;
+	u64			lastWriteTime;
+	bool8		isDirectory;
 	const char	*filename;
-	const char	*full_filename;
+	const char	*fullFilename;
 };
 
-typedef void ( *FileVisitCallback )( const FileInfo *file_info, void *user_data );
+typedef void ( *fileVisitCallback_t )( const fileInfo_t *fileInfo, void *userData );
 
 
 // Opens the file with the specified access flags.
-File	file_open( const char *filename, const FileOpenFlags open_flags = FILE_OPEN_READ | FILE_OPEN_WRITE );
+file_t	FS_OpenFile( const char *filename, const fileOpenFlags_t openFlags = FILE_OPEN_READ | FILE_OPEN_WRITE );
 
 // If the file exists then opens it for reading and writing, otherwise creates it and then opens it.
-File	file_open_or_create( const char *filename, const bool8 keep_existing_content = false );
+file_t	FS_OpenOrCreateFile( const char *filename, const bool8 keepExistingContent = false );
 
 // Closes the file.
-bool8	file_close( File *file );
+bool8	FS_CloseFile( file_t *file );
 
-// Convenience function to free any memory allocated through functions like "file_read_entire".
-void	file_free_buffer( String *buffer );
+// Convenience function to free any memory allocated through functions like "FS_ReadEntireFile".
+void	FS_FreeFileBuffer( String *buffer );
 
-// Opens the file, reads the entire contents, stores it in 'out_buffer', and stores the length of the file in 'out_file_length'.
-// Returns number of bytes read if successful, otherwise returns 0, the out buffer stays null, and out_file_length doesn't get written to.
-// Storing 'out_file_length' is optional.
-// Call "file_free_buffer()" to release the memory read into the out buffer.
-bool8	file_read_entire( const char *filename, String *out_buffer );
+// Opens the file, reads the entire contents, stores it in 'outBuffer', and stores the length of the file in 'outFileLength'.
+// Returns number of bytes read if successful, otherwise returns 0, the out buffer stays null, and outFileLength doesn't get written to.
+// Storing 'outFileLength' is optional.
+// Call "FS_FreeFileBuffer()" to release the memory read into the out buffer.
+bool8	FS_ReadEntireFile( const char *filename, String *outBuffer );
 
-// Returns true if 'size' bytes was successfully read from the file starting from it's current offset and puts the result into 'out_data', otherwise returns false and the out buffer stays null.
-bool8	file_read( File *file, const u64 size, void *out_data );
+// Returns true if 'size' bytes was successfully read from the file starting from it's current offset and puts the result into 'outData', otherwise returns false and the out buffer stays null.
+bool8	FS_ReadFile( file_t *file, const u64 size, void *outData );
 
-// Returns true if 'size' bytes was successfully read from the file starting from 'offset' and puts the result into 'out_data', otherwise returns false and the out buffer stays null.
+// Returns true if 'size' bytes was successfully read from the file starting from 'offset' and puts the result into 'outData', otherwise returns false and the out buffer stays null.
 // Also sets the file's internal offset to 'offset' + 'size' if the read was successful.
-bool8	file_read( File *file, const u64 offset, const u64 size, void* out_data );
+bool8	FS_ReadFile( file_t *file, const u64 offset, const u64 size, void* outData );
 
 // Writes the specified buffer into the file, overwriting all previous content.
 // Returns true if the write was successful, otherwise returns false.
-bool8	file_write_entire( const char *filename, const void *data, const u64 size );
+bool8	FS_WriteEntireFile( const char *filename, const void *data, const u64 size );
 
 // Writes the specified buffer into 'file' starting from the file's current offset.
 // Returns true if the write was successful and increases the file's offset by 'size' bytes, otherwise returns false.
-bool8	file_write( File *file, const void *data, const u64 size );
+bool8	FS_WriteFile( file_t *file, const void *data, const u64 size );
 
 // writes the specified string into 'file' starting from the file's current offset.
 // Returns true if the write was succesful and increases the file's offset by the length of the string, otherwise returns false.
-bool8	file_write( File *file, const char *data );
+bool8	FS_WriteFile( file_t *file, const char *data );
 
 // Writes the specified buffer into the file at the specified offset.
 // Returns true if the write was successful, otherwise returns false.
-bool8	file_write( File *file, const void *data, const u64 offset, const u64 size );
+bool8	FS_WriteFile( file_t *file, const void *data, const u64 offset, const u64 size );
 
 // Returns true if successfully deletes the file, otherwise returns false.
-bool8	file_delete( const char *filename );
+bool8	FS_DeleteFile( const char *filename );
 
-// If the file exists sets 'out_size' to the size of the file and returns true, otherwise returns false.
-bool8	file_get_size( const char *filename, u64 *out_size );
+// If the file exists sets 'outSize' to the size of the file and returns true, otherwise returns false.
+bool8	FS_GetFileSize( const char *filename, u64 *outSize );
 
-// If the file exists sets 'out_last_write_time' to the timestamp of when the file was last written to and returns true, otherwise returns false.
-bool8	file_get_last_write_time( const char *filename, u64 *out_last_write_time );
+// If the file exists sets 'outLastWriteTime' to the timestamp of when the file was last written to and returns true, otherwise returns false.
+bool8	FS_GetFileLastWriteTime( const char *filename, u64 *outLastWriteTime );
 
 // Returns true if all files found in path can be successfully visited, otherwise returns false.
-// For each file found, 'visit_callback' gets called.
-// If 'visit_folders' is true then 'visit_callback' will also fire for each folder that gets visited.
-// 'user_data' can be NULL.
-bool8	file_get_all_files_in_folder( const char *path, const FileVisitFlags visit_flags, FileVisitCallback visit_callback, void *user_data );
+// For each file found, 'visitCallback' gets called.
+// If 'visitFolders' is true then 'visitCallback' will also fire for each folder that gets visited.
+// 'userData' can be NULL.
+bool8	FS_GetAllFilesInFolder( const char *path, const fileVisitFlags_t visitFlags, fileVisitCallback_t visitCallback, void *userData );
 
 // Returns true if the file actually exists on the file system, otherwise returns false.
-bool8	file_exists( const char* filename );
+bool8	FS_FileExists( const char* filename );
 
 // If the folder at the given path already exists then returns true.
 // If the folder at the given path does NOT exist but was successfully created then returns true.
 // Otherwise returns false because the folder did NOT previously exist and could not be created.
-bool8	folder_create_if_it_doesnt_exist( const char *path );
+bool8	FS_CreateFolderIfItDoesntExist( const char *path );
 
 // Returns true if the given folder path exists and could be deleted, otherwise returns false.
-bool8	folder_delete( const char *path );
+bool8	FS_DeleteFolder( const char *path );
 
 // Returns true if the given folder path exists, otherwise returns false.
-bool8	folder_exists( const char *path );
+bool8	FS_FolderExists( const char *path );
 
 #if defined( __clang__ )
 #pragma clang diagnostic pop

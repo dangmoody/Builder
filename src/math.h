@@ -46,27 +46,27 @@ SOFTWARE.
 
 // Returns true if 'a' is within an epsilon range to 'b', otherwise returns false.
 // TODO: DM: 08/05/2026: do this properly
-bool8	float64_equals( const float64 a, const float64 b );
+bool8	Float64Equals( const float64 a, const float64 b );
 
 // Returns whichever value is smallest.
-u32	min( const u32 a, const u32 b );
+u32	Min( const u32 a, const u32 b );
 
 // Returns whichever value is smallest.
-u64	min( const u64 a, const u64 b );
+u64	Min( const u64 a, const u64 b );
 
 // Returns whichever value is largest.
-u32	max( const u32 a, const u32 b );
+u32	Max( const u32 a, const u32 b );
 
 // Returns whichever value is largest.
-u64	max( const u64 a, const u64 b );
+u64	Max( const u64 a, const u64 b );
 
 // Returns the number of zeros on the left hand side of 'number' when viewed in base 2.
-s32	get_num_leading_zeros( const u64 number );
+s32	GetNumLeadingZeros( const u64 number );
 
 // Returns the next power of two that is higher than 'number'.
-u64	next_power_of_2_up( const u64 number );
+u64	NextPowerOf2Up( const u64 number );
 
 // Returns 'x' rounded up to the next multiple of 'alignment'. 'alignment' must be a power of two.
-inline u64 align_up( const u64 x, const u64 alignment ) {
+inline u64 AlignUp( const u64 x, const u64 alignment ) {
 	return ( x + ( alignment - 1 ) ) & ~( alignment - 1 );
 }

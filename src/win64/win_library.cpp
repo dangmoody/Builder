@@ -43,13 +43,13 @@ SOFTWARE.
 ================================================================================================
 */
 
-Library library_load( const char *name ) {
+Library Library_Load( const char *name ) {
 	assert( name );
 
 	return { LoadLibraryA( name ) };
 }
 
-bool8 library_unload( Library *library ) {
+bool8 Library_Unload( Library *library ) {
 	assert( library && library->ptr );
 
 	if ( !FreeLibrary( cast( HMODULE, library->ptr ) ) ) {
@@ -61,7 +61,7 @@ bool8 library_unload( Library *library ) {
 	return true;
 }
 
-void* library_get_symbol( const Library library, const char *symbol_name ) {
+void* Library_GetSymbol( const Library library, const char *symbol_name ) {
 	assert( library.ptr );
 	assert( symbol_name );
 

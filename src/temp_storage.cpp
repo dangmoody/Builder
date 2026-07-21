@@ -47,33 +47,33 @@ SOFTWARE.
 #define THREAD_LOCAL __thread
 #endif
 
-static THREAD_LOCAL LinearAllocator *g_temp_storage = NULL;
+static THREAD_LOCAL LinearAllocator *gTempStorage = NULL;
 
-LinearAllocator *mem_get_temp_storage() {
-	return g_temp_storage;
+LinearAllocator *Mem_GetTempStorage() {
+	return gTempStorage;
 }
 
-void mem_init_temp_storage( const u64 size_bytes ) {
-	g_temp_storage = linear_allocator_create( size_bytes );
+void Mem_InitTempStorage( const u64 sizeBytes ) {
+	gTempStorage = Mem_AllocatorCreate( sizeBytes );
 }
 
-void mem_shutdown_temp_storage() {
-	linear_allocator_destroy( g_temp_storage );
-	g_temp_storage = NULL;
+void Mem_ShutdownTempStorage() {
+	Mem_AllocatorDestroy( gTempStorage );
+	gTempStorage = NULL;
 }
 
-void* mem_temp_alloc( const u64 size_bytes, const u32 alignment ) {
-	return linear_allocator_alloc( g_temp_storage, size_bytes, alignment );
+void* Mem_TempAlloc( const u64 sizeBytes, const u32 alignment ) {
+	return Mem_AllocatorAlloc( gTempStorage, sizeBytes, alignment );
 }
 
-void mem_reset_temp_storage() {
-	linear_allocator_reset( g_temp_storage );
+void Mem_ResetTempStorage() {
+	Mem_AllocatorReset( gTempStorage );
 }
 
-u64 mem_temp_tell() {
-	return linear_allocator_tell( g_temp_storage );
+u64 Mem_TempTell() {
+	return Mem_AllocatorTell( gTempStorage );
 }
 
-void mem_temp_rewind_to( const u64 pos ) {
-	linear_allocator_rewind_to( g_temp_storage, pos );
+void Mem_TempRewindTo( const u64 pos ) {
+	Mem_AllocatorRewindTo( gTempStorage, pos );
 }

@@ -30,27 +30,27 @@ SOFTWARE.
 
 #include <math.h>
 
-bool8 float64_equals( const float64 a, const float64 b ) {
+bool8 Float64Equals( const float64 a, const float64 b ) {
 	return fabs( a - b ) < 0.0001;
 }
 
-u32 min( const u32 a, const u32 b ) {
+u32 Min( const u32 a, const u32 b ) {
 	return ( a < b ) ? a : b;
 }
 
-u64 min( const u64 a, const u64 b ) {
+u64 Min( const u64 a, const u64 b ) {
 	return ( a < b ) ? a : b;
 }
 
-u32 max( const u32 a, const u32 b ) {
+u32 Max( const u32 a, const u32 b ) {
 	return ( a > b ) ? a : b;
 }
 
-u64 max( const u64 a, const u64 b ) {
+u64 Max( const u64 a, const u64 b ) {
 	return ( a > b ) ? a : b;
 }
 
-u64	next_power_of_2_up( const u64 number ) {
-	return ( number == 1 ) ? 1 : 1 << ( 64 - get_num_leading_zeros( number - 1 ) );
+u64	NextPowerOf2Up( const u64 number ) {
+	return ( number == 1 ) ? 1 : 1 << ( 64 - GetNumLeadingZeros( number - 1 ) );
 }
 

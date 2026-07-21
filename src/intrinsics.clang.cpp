@@ -29,7 +29,7 @@ SOFTWARE.
 
 #include "math.h"
 
-s32 get_num_leading_zeros( const u64 number ) {
+s32 GetNumLeadingZeros( const u64 number ) {
 	return __builtin_clzll( number );
 }
 

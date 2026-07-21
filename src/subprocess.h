@@ -56,13 +56,13 @@ enum ProcessFlagBits {
 typedef u32 ProcessFlags;
 
 
-Process	*process_create( LinearAllocator *allocator, Array<const char *> *args, Array<const char *> *environment_variables = NULL, const ProcessFlags flags = 0 );
+Process	*Proc_Create( LinearAllocator *allocator, Array<const char *> *args, Array<const char *> *environmentVariables = NULL, const ProcessFlags flags = 0 );
 
-bool8	process_destroy( Process *process );
+bool8	Proc_Destroy( Process *process );
 
-s32		process_join( Process *process );
+s32		Proc_Join( Process *process );
 
-u32		process_read_stdout( Process *process, char *out_buffer, const u64 count );
+u32		Proc_ReadStdout( Process *process, char *outBuffer, const u64 count );
 
 #ifdef __clang__
 #pragma clang diagnostic pop

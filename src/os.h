@@ -29,7 +29,7 @@ SOFTWARE.
 
 #include "int_types.h"
 
-u32	os_get_virtual_memory_page_size();
+u32	OS_GetVirtualMemoryPageSize();
 
 // Returns the total number of cores that the CPU has, including hyperthreads.
-u32	os_get_num_cpu_cores();
+u32	OS_GetNumCpuCores();

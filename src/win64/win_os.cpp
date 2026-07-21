@@ -44,13 +44,13 @@ SOFTWARE.
 ================================================================================================
 */
 
-u32 os_get_virtual_memory_page_size() {
+u32 OS_GetVirtualMemoryPageSize() {
 	SYSTEM_INFO sys_info = {};
 	GetSystemInfo( &sys_info );
 	return sys_info.dwPageSize;
 }
 
-u32 os_get_num_cpu_cores() {
+u32 OS_GetNumCpuCores() {
 	SYSTEM_INFO sys_info = {};
 	GetSystemInfo( &sys_info );
 	return sys_info.dwNumberOfProcessors;

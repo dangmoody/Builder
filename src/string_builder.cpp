@@ -46,7 +46,7 @@ SOFTWARE.
 ================================================================================================
 */
 
-StringBuilder string_builder_create( LinearAllocator *allocator ) {
+StringBuilder SB_Create( LinearAllocator *allocator ) {
 	assert( allocator );
 
 	return {
@@ -56,24 +56,24 @@ StringBuilder string_builder_create( LinearAllocator *allocator ) {
 	};
 }
 
-void string_builder_appendf( StringBuilder *builder, const char *fmt, ... ) {
+void SB_Appendf( StringBuilder *builder, const char *fmt, ... ) {
 	assert( builder );
 	assert( fmt );
 
 	va_list args;
 	va_start( args, fmt );
 
-	StringBuilderBuffer *buffer = cast( StringBuilderBuffer *, linear_allocator_alloc( builder->allocator, sizeof( StringBuilderBuffer ) ) );
+	StringBuilderBuffer *buffer = cast( StringBuilderBuffer *, Mem_AllocatorAlloc( builder->allocator, sizeof( StringBuilderBuffer ) ) );
 	memset( buffer, 0, sizeof( StringBuilderBuffer ) );
 
-	va_list args_copy;
-	va_copy( args_copy, args );
+	va_list argsCopy;
+	va_copy( argsCopy, args );
 
 	buffer->length = trunc_cast( u32, stbsp_vsnprintf( NULL, 0, fmt, args ) );
 
-	buffer->data = cast( char *, linear_allocator_alloc( builder->allocator, buffer->length + 1, 1 ) );
-	stbsp_vsnprintf( buffer->data, cast( int, buffer->length + 1 ), fmt, args_copy );
-	va_end( args_copy );
+	buffer->data = cast( char *, Mem_AllocatorAlloc( builder->allocator, buffer->length + 1, 1 ) );
+	stbsp_vsnprintf( buffer->data, cast( int, buffer->length + 1 ), fmt, argsCopy );
+	va_end( argsCopy );
 	buffer->data[buffer->length] = 0;
 
 	// if no head then this is the first element
@@ -89,9 +89,9 @@ void string_builder_appendf( StringBuilder *builder, const char *fmt, ... ) {
 	va_end( args );
 }
 
-const char *string_builder_to_string( StringBuilder *builder ) {
+const char *SB_ToString( StringBuilder *builder ) {
 	char *result = NULL;
-	u64 total_length = 0;
+	u64 totalLength = 0;
 	u64 offset = 0;
 
 	StringBuilderBuffer *current = builder->head;
@@ -101,14 +101,14 @@ const char *string_builder_to_string( StringBuilder *builder ) {
 	}
 
 	while ( current ) {
-		total_length += current->length;
+		totalLength += current->length;
 
 		current = current->next;
 	}
 
-	total_length += 1;
+	totalLength += 1;
 
-	result = cast( char *, linear_allocator_alloc( builder->allocator, total_length * sizeof( char ), 1 ) );
+	result = cast( char *, Mem_AllocatorAlloc( builder->allocator, totalLength * sizeof( char ), 1 ) );
 
 	current = builder->head;
 
@@ -120,7 +120,7 @@ const char *string_builder_to_string( StringBuilder *builder ) {
 		current = current->next;
 	}
 
-	result[total_length - 1] = 0;
+	result[totalLength - 1] = 0;
 
 	return result;
 }

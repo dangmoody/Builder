@@ -28,6 +28,6 @@ SOFTWARE.
 
 #pragma once
 
-u64		file_get_size_internal( const File *file );
+u64		FS_GetFileSizeInternal( const file_t *file );
 
-bool8	create_folder_internal( const char *path );
+bool8	FS_CreateFolderInternal( const char *path );

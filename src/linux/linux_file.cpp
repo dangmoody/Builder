@@ -53,7 +53,7 @@ SOFTWARE.
 ================================================================================================
 */
 
-static File open_file_internal( const char *filename, int flags ) {
+static File FS_OpenFileInternal( const char *filename, int flags ) {
 	assert( filename );
 
 	int handle = open( filename, flags, S_IRWXU | S_IRWXG | S_IRWXO );
@@ -64,7 +64,7 @@ static File open_file_internal( const char *filename, int flags ) {
 	return { trunc_cast( u64, handle ), 0 };
 }
 
-File file_open( const char *filename, const FileOpenFlags open_flags ) {
+File FS_OpenFile( const char *filename, const FileOpenFlags open_flags ) {
 	assert( filename );
 
 	int open_flags_linux;
@@ -76,10 +76,10 @@ File file_open( const char *filename, const FileOpenFlags open_flags ) {
 		open_flags_linux = O_RDONLY;
 	}
 
-	return open_file_internal( filename, open_flags_linux );
+	return FS_OpenFileInternal( filename, open_flags_linux );
 }
 
-File file_open_or_create( const char *filename, const bool8 keep_existing_content ) {
+File FS_OpenOrCreateFile( const char *filename, const bool8 keep_existing_content ) {
 	assert( filename );
 
 	int flags = O_CREAT | O_RDWR;
@@ -88,10 +88,10 @@ File file_open_or_create( const char *filename, const bool8 keep_existing_conten
 		flags |= O_TRUNC;
 	}
 
-	return open_file_internal( filename, flags );
+	return FS_OpenFileInternal( filename, flags );
 }
 
-bool8 file_close( File* file ) {
+bool8 FS_CloseFile( File* file ) {
 	assert( file );
 	assert( file->handle != INVALID_FILE_HANDLE );
 
@@ -106,7 +106,7 @@ bool8 file_close( File* file ) {
 	return true;
 }
 
-bool8 file_read( File* file, const u64 offset, const u64 size, void* out_data ) {
+bool8 FS_ReadFile( File* file, const u64 offset, const u64 size, void* out_data ) {
 	assert( file && file->handle != INVALID_FILE_HANDLE );
 	assert( size );
 	assert( out_data );
@@ -116,7 +116,7 @@ bool8 file_read( File* file, const u64 offset, const u64 size, void* out_data ) 
 	return trunc_cast( u64, bytes_read ) == size;
 }
 
-bool8 file_write( File* file, const void* data, const u64 offset, const u64 size ) {
+bool8 FS_WriteFile( File* file, const void* data, const u64 offset, const u64 size ) {
 	assert( file && file->handle != INVALID_FILE_HANDLE );
 	assert( data );
 	assert( size );
@@ -126,7 +126,7 @@ bool8 file_write( File* file, const void* data, const u64 offset, const u64 size
 	return trunc_cast( u64, bytes_written ) == size;
 }
 
-bool8 file_delete( const char *filename ) {
+bool8 FS_DeleteFile( const char *filename ) {
 	assert( filename );
 
 	int result = remove( filename );
@@ -139,7 +139,7 @@ bool8 file_delete( const char *filename ) {
 	return result == 0;
 }
 
-bool8 file_get_size( const char *filename, u64 *out_size ) {
+bool8 FS_GetFileSize( const char *filename, u64 *out_size ) {
 	assert( filename );
 	assert( out_size );
 
@@ -153,7 +153,7 @@ bool8 file_get_size( const char *filename, u64 *out_size ) {
 	return true;
 }
 
-bool8 file_get_last_write_time( const char *filename, u64 *out_last_write_time ) {
+bool8 FS_GetFileLastWriteTime( const char *filename, u64 *out_last_write_time ) {
 	assert( filename );
 	assert( out_last_write_time );
 
@@ -167,25 +167,25 @@ bool8 file_get_last_write_time( const char *filename, u64 *out_last_write_time )
 	return true;
 }
 
-bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit_flags, FileVisitCallback visit_callback, void *user_data ) {
+bool8 FS_GetAllFilesInFolder( const char *path, const FileVisitFlags visit_flags, FileVisitCallback visit_callback, void *user_data ) {
 	assert( path );
 	assert( visit_callback );
 
 	// AK: ideally we would take a String as a parameter, should we change this function and add a deprecated overload that does:
-	// bool8 file_get_all_files_in_folder( const char *path... ) { file_get_all_files_in_folder( string_set(path)... ) }
-	String path_string = string_set( path );
-	if ( !string_ends_with( &path_string, '\\' ) && !string_ends_with( &path_string, '/' ) ) {
-		path_string = string_printf( mem_get_temp_storage(), "%s%c", path_string.data, PATH_SEPARATOR );
+	// bool8 FS_GetAllFilesInFolder( const char *path... ) { FS_GetAllFilesInFolder( String_Set(path)... ) }
+	String path_string = String_Set( path );
+	if ( !String_EndsWith( &path_string, '\\' ) && !String_EndsWith( &path_string, '/' ) ) {
+		path_string = String_Printf( Mem_GetTempStorage(), "%s%c", path_string.data, PATH_SEPARATOR );
 	}
 
 	Array<String> directories;
-	directories.init( mem_get_temp_storage() );
-	directories.add( path_string );
+	directories.Init( Mem_GetTempStorage() );
+	directories.Add( path_string );
 
 	u32 dir_index = 0;
 
 	while ( dir_index < directories.count ) {
-		const char *directory = string_cstr( &directories[dir_index] );
+		const char *directory = String_Cstr( &directories[dir_index] );
 
 		//printf( "Scanning directory \"%s\"\n", directory );
 
@@ -202,7 +202,7 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 
 		struct dirent *entry = NULL;
 		while ( ( entry = readdir( dir ) ) != NULL ) {
-			if ( string_equals( entry->d_name, "." ) || string_equals( entry->d_name, ".." ) ) {
+			if ( String_Equals( entry->d_name, "." ) || String_Equals( entry->d_name, ".." ) ) {
 				continue;
 			}
 			bool8 is_directory = entry->d_type == DT_DIR;
@@ -213,9 +213,9 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 			// here because builder 'demanded' it (my bad gang)
 			String full_filename;
 			if ( is_directory ) {
-				full_filename = string_printf( mem_get_temp_storage(), "%s%s/", directory, entry->d_name );
+				full_filename = String_Printf( Mem_GetTempStorage(), "%s%s/", directory, entry->d_name );
 			} else {
-				full_filename = string_printf( mem_get_temp_storage(), "%s%s", directory, entry->d_name );
+				full_filename = String_Printf( Mem_GetTempStorage(), "%s%s", directory, entry->d_name );
 			}
 
 			struct stat file_stat = {};
@@ -226,20 +226,20 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 			}
 
 			FileInfo file_info = {
-				.size_bytes			= trunc_cast( u64, file_stat.st_size ),
-				.last_write_time	= trunc_cast( u64, file_stat.st_mtime ),
-				.is_directory		= is_directory,
+				.sizeBytes			= trunc_cast( u64, file_stat.st_size ),
+				.lastWriteTime	= trunc_cast( u64, file_stat.st_mtime ),
+				.isDirectory		= is_directory,
 				.filename			= entry->d_name,
-				.full_filename		= full_filename.data,
+				.fullFilename		= full_filename.data,
 			};
 
-			if ( file_info.is_directory ) {
+			if ( file_info.isDirectory ) {
 				if ( visit_flags & FILE_VISIT_FOLDERS ) {
 					visit_callback( &file_info, user_data );
 				}
 
 				if ( visit_flags & FILE_VISIT_RECURSIVE ) {
-					directories.add( full_filename );
+					directories.Add( full_filename );
 				}
 			} else if ( visit_flags & FILE_VISIT_FILES ) {
 				visit_callback( &file_info, user_data );
@@ -250,13 +250,13 @@ bool8 file_get_all_files_in_folder( const char *path, const FileVisitFlags visit
 	return true;
 }
 
-bool8 file_exists( const char *filename ) {
+bool8 FS_FileExists( const char *filename ) {
 	assert( filename );
 
 	return access( filename, 0 ) == 0;
 }
 
-bool8 create_folder_internal( const char *path ) {
+bool8 FS_CreateFolderInternal( const char *path ) {
 	int result = mkdir( path, S_IRWXU | S_IRWXG | S_IRWXO );
 	int err = errno;
 
@@ -267,7 +267,7 @@ bool8 create_folder_internal( const char *path ) {
 	return result == 0;
 }
 
-bool8 folder_delete( const char *path ) {
+bool8 FS_DeleteFolder( const char *path ) {
 	assert( path );
 
 	int result = rmdir( path );
@@ -280,7 +280,7 @@ bool8 folder_delete( const char *path ) {
 	return result == 0;
 }
 
-bool8 folder_exists( const char *path ) {
+bool8 FS_FolderExists( const char *path ) {
 	assert( path );
 
 	DIR* dir = opendir( path );

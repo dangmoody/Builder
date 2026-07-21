@@ -48,43 +48,6 @@ SOFTWARE.
 #include <string.h>
 #include <malloc.h>	// alloca
 
-Array<String> get_callstack( LinearAllocator *allocator ) {
-	Array<String> callstack;
-	callstack.init( allocator );
-
-	HANDLE process = GetCurrentProcess();
-
-	static bool8 sym_initialized = false;
-	if ( !sym_initialized ) {
-		SymInitialize( process, NULL, TRUE );
-		sym_initialized = true;
-	}
-
-	// TODO: DM: 05/04/2026: can we do better than a hardcoded constant?
-	void *frames[1024];
-	u16 frame_count = CaptureStackBackTrace( 1, 1024, frames, NULL );
-
-	u8 symbol_buffer[sizeof( SYMBOL_INFO ) + MAX_SYM_NAME];
-
-	For ( u16, i, 0, frame_count ) {
-		DWORD64 address = cast( DWORD64, cast( u64, frames[i] ) );
-
-		SYMBOL_INFO *symbol = cast( SYMBOL_INFO *, symbol_buffer );
-		memset( symbol, 0, sizeof( SYMBOL_INFO ) );
-		symbol->SizeOfStruct = sizeof( SYMBOL_INFO );
-		symbol->MaxNameLen = MAX_SYM_NAME;
-
-		DWORD64 displacement = 0;
-		if ( SymFromAddr( process, address, &displacement, symbol ) ) {
-			callstack.add( string_alloc( allocator, symbol->Name ) );
-		} else {
-			callstack.add( string_alloc( allocator, "???" ) );
-		}
-	}
-
-	return callstack;
-}
-
 void set_console_text_color( const ConsoleTextColor color ) {
 	HANDLE handle = GetStdHandle( STD_OUTPUT_HANDLE );
 

@@ -46,15 +46,15 @@ struct ThreadBootstrapData {
 	u64			temp_storage_size;
 };
 
-static DWORD thread_bootstrap( void *data ) {
+static DWORD Thread_Bootstrap( void *data ) {
 	assert( data );
 
 	ThreadBootstrapData *bootstrap_data = cast( ThreadBootstrapData *, data );
 
 	assert( bootstrap_data->thread_func );
 
-	mem_init_temp_storage( bootstrap_data->temp_storage_size );
-	defer { mem_shutdown_temp_storage(); };
+	Mem_InitTempStorage( bootstrap_data->temp_storage_size );
+	defer { Mem_ShutdownTempStorage(); };
 
 	s32 exit_code = bootstrap_data->thread_func( bootstrap_data->data );
 
@@ -66,7 +66,7 @@ static DWORD thread_bootstrap( void *data ) {
 	return exit_code_dword;
 }
 
-Thread thread_create( ThreadFunc thread_func, void *data ) {
+Thread Thread_Create( ThreadFunc thread_func, void *data ) {
 	assert( thread_func );
 
 	// bootstrap data cant be local
@@ -76,16 +76,16 @@ Thread thread_create( ThreadFunc thread_func, void *data ) {
 	ThreadBootstrapData *bootstrap = cast( ThreadBootstrapData *, malloc( sizeof( ThreadBootstrapData ) ) );
 	bootstrap->thread_func = thread_func;
 	bootstrap->data = data;
-	bootstrap->temp_storage_size = mem_get_temp_storage()->reserved_bytes;
+	bootstrap->temp_storage_size = Mem_GetTempStorage()->reservedBytes;
 
 	DWORD creation_flags = 0;
 
-	HANDLE handle = CreateThread( NULL, 0, thread_bootstrap, bootstrap, creation_flags, NULL );
+	HANDLE handle = CreateThread( NULL, 0, Thread_Bootstrap, bootstrap, creation_flags, NULL );
 
 	return { handle };
 }
 
-void thread_destroy( Thread *thread ) {
+void Thread_Destroy( Thread *thread ) {
 	assert( thread );
 	assert( thread->ptr );
 
@@ -93,7 +93,7 @@ void thread_destroy( Thread *thread ) {
 	thread->ptr = NULL;
 }
 
-s32 thread_wait( Thread *thread ) {
+s32 Thread_Wait( Thread *thread ) {
 	assert( thread );
 	assert( thread->ptr );
 
@@ -112,7 +112,7 @@ s32 thread_wait( Thread *thread ) {
 	return trunc_cast( s32, exit_code );
 }
 
-u32	atomic_increment( Atomic32 *atomic ) {
+u32	Thread_AtomicIncrement( Atomic32 *atomic ) {
 	return InterlockedIncrement( &atomic->value );
 }
 

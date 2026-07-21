@@ -81,9 +81,6 @@ enum ConsoleTextColor {
 	CONSOLE_TEXT_COLOR_LIGHT_GRAY,
 };
 
-Array<String>	get_callstack( LinearAllocator *allocator );
-void			dump_callstack();
-
 s32				get_last_error_code();
 
 void			set_console_text_color( const ConsoleTextColor color );

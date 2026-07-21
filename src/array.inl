@@ -45,7 +45,7 @@ SOFTWARE.
 #endif
 
 template<class T>
-void Array<T>::init( LinearAllocator *alloc ) {
+void Array<T>::Init( LinearAllocator *alloc ) {
 	allocator = alloc;
 	data = NULL;
 	count = 0;
@@ -53,7 +53,7 @@ void Array<T>::init( LinearAllocator *alloc ) {
 }
 
 template<class T>
-void Array<T>::zero() {
+void Array<T>::Zero() {
 	allocator = NULL;
 	data = NULL;
 	count = 0;
@@ -62,46 +62,46 @@ void Array<T>::zero() {
 
 
 template<class T>
-void Array<T>::reset() {
+void Array<T>::Reset() {
 	count = 0;
 }
 
 template<class T>
-void Array<T>::add( const T &element ) {
-	add_range( &element, 1 );
+void Array<T>::Add( const T &element ) {
+	AddRange( &element, 1 );
 }
 
 template<class T>
-void Array<T>::add_range( const T *ptr, const u64 num_items ) {
-	reserve( count + num_items );
-	memcpy( data + count, ptr, num_items * sizeof( T ) );
-	count += num_items;
+void Array<T>::AddRange( const T *ptr, const u64 numItems ) {
+	Reserve( count + numItems );
+	memcpy( data + count, ptr, numItems * sizeof( T ) );
+	count += numItems;
 }
 
 template<class T>
-void Array<T>::add_range( const Array<T> *array ) {
+void Array<T>::AddRange( const Array<T> *array ) {
 	if ( array->count > 0 ) {
-		add_range( array->data, array->count );
+		AddRange( array->data, array->count );
 	}
 }
 
 template<class T>
-void Array<T>::reserve( const u64 new_alloced ) {
-	if ( new_alloced > alloced ) {
-		alloced = next_power_of_2_up( new_alloced );
+void Array<T>::Reserve( const u64 newAlloced ) {
+	if ( newAlloced > alloced ) {
+		alloced = NextPowerOf2Up( newAlloced );
 
-		T *new_data = cast( T*, linear_allocator_alloc( allocator, alloced * sizeof( T ) ) );
+		T *newData = cast( T*, Mem_AllocatorAlloc( allocator, alloced * sizeof( T ) ) );
 		if ( count > 0 ) {
-			memcpy( new_data, data, count * sizeof( T ) );
+			memcpy( newData, data, count * sizeof( T ) );
 		}
-		data = new_data;
+		data = newData;
 	}
 }
 
 template<class T>
-void Array<T>::resize( const u64 new_count ) {
-	reserve( new_count );
-	this->count = new_count;
+void Array<T>::Resize( const u64 newCount ) {
+	Reserve( newCount );
+	this->count = newCount;
 }
 
 template<class T>

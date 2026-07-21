@@ -41,15 +41,15 @@ SOFTWARE.
 #include <inttypes.h>
 
 static void print_varargs( FILE *file, const char *fmt, va_list args ) {
-	u64 pos = mem_temp_tell();
-	defer { mem_temp_rewind_to( pos ); };
+	u64 pos = Mem_TempTell();
+	defer { Mem_TempRewindTo( pos ); };
 
 	va_list args_copy;
 	va_copy( args_copy, args );
 
 	int length = stbsp_vsnprintf( NULL, 0, fmt, args );
 
-	char *msg = cast( char *, mem_temp_alloc( cast( u64, length + 1 ) ) );
+	char *msg = cast( char *, Mem_TempAlloc( cast( u64, length + 1 ) ) );
 	stbsp_vsnprintf( msg, length + 1, fmt, args_copy );
 	msg[length] = 0;
 
@@ -108,12 +108,4 @@ void fatal_error( const char *fmt, ... ) {
 	va_end( args );
 
 	set_console_text_color( CONSOLE_TEXT_COLOR_DEFAULT );
-}
-
-void dump_callstack() {
-	Array<String> callstack = get_callstack( mem_get_temp_storage() );
-
-	For ( u64, frame_index, 0, callstack.count ) {
-		print( "[%" PRIu64 "]: %S\n", frame_index, callstack[frame_index] );
-	}
 }

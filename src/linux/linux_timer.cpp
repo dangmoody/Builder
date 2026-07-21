@@ -44,7 +44,7 @@ SOFTWARE.
 
 // TODO: DM: how do we get clock cycles on linux?
 // this isnt it!
-s64 time_cycles( void ) {
+s64 Time_Cycles( void ) {
 	struct timespec now;
 	clock_gettime( CLOCK_MONOTONIC, &now );
 
@@ -53,20 +53,20 @@ s64 time_cycles( void ) {
 	return clocks;
 }
 
-float64 time_seconds( void ) {
-	return cast( float64, time_cycles() / 1000000000.0 );
+float64 Time_Seconds( void ) {
+	return cast( float64, Time_Cycles() / 1000000000.0 );
 }
 
-float64 time_ms( void ) {
-	return cast( float64, time_cycles() / 1000000.0 );
+float64 Time_Ms( void ) {
+	return cast( float64, Time_Cycles() / 1000000.0 );
 }
 
-float64 time_us( void ) {
-	return cast( float64, time_cycles() / 1000.0 );
+float64 Time_Us( void ) {
+	return cast( float64, Time_Cycles() / 1000.0 );
 }
 
-float64 time_ns( void ) {
-	return cast( float64, time_cycles() );
+float64 Time_Ns( void ) {
+	return cast( float64, Time_Cycles() );
 }
 
 #endif // __linux__

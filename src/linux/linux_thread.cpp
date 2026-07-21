@@ -49,15 +49,15 @@ struct ThreadBootstrapData {
 	u64				temp_storage_size;
 };
 
-static void *thread_bootstrap( void *data ) {
+static void *Thread_Bootstrap( void *data ) {
 	assert( data );
 
 	ThreadBootstrapData *bootstrap_data = cast( ThreadBootstrapData *, data );
 
 	assert( bootstrap_data );
 
-	mem_init_temp_storage( bootstrap_data->temp_storage_size );
-	defer { mem_shutdown_temp_storage(); };
+	Mem_InitTempStorage( bootstrap_data->temp_storage_size );
+	defer { Mem_ShutdownTempStorage(); };
 
 	s32 exit_code = bootstrap_data->thread_func( bootstrap_data->data );
 
@@ -72,7 +72,7 @@ static void *thread_bootstrap( void *data ) {
 	return cast( void *, exit_code_ptr );
 }
 
-Thread		thread_create( ThreadFunc thread_func, void *data ) {
+Thread		Thread_Create( ThreadFunc thread_func, void *data ) {
 	assert( thread_func );
 
 	pthread_t thread_linux;
@@ -84,9 +84,9 @@ Thread		thread_create( ThreadFunc thread_func, void *data ) {
 	ThreadBootstrapData *bootstrap_data = cast( ThreadBootstrapData *, malloc( sizeof( ThreadBootstrapData ) ) );
 	bootstrap_data->thread_func = thread_func;
 	bootstrap_data->data = data;
-	bootstrap_data->temp_storage_size = mem_get_temp_storage()->reserved_bytes;
+	bootstrap_data->temp_storage_size = Mem_GetTempStorage()->reservedBytes;
 
-	if ( pthread_create( &thread_linux, &attribs, &thread_bootstrap, bootstrap_data ) != 0 ) {
+	if ( pthread_create( &thread_linux, &attribs, &Thread_Bootstrap, bootstrap_data ) != 0 ) {
 		int err = errno;
 		fatal_error( "Failed to create thread: %s\n", strerror( err ) );
 
@@ -96,7 +96,7 @@ Thread		thread_create( ThreadFunc thread_func, void *data ) {
 	return { cast( void *, thread_linux ) };
 }
 
-void		thread_destroy( Thread *thread ) {
+void		Thread_Destroy( Thread *thread ) {
 	pthread_t pthread_linux = cast( pthread_t, thread->ptr );
 
 	if ( pthread_linux ) {
@@ -109,7 +109,7 @@ void		thread_destroy( Thread *thread ) {
 	}
 }
 
-s32		thread_wait( Thread *thread ) {
+s32		Thread_Wait( Thread *thread ) {
 	pthread_t pthread_linux = cast( pthread_t, thread->ptr );
 
 	s32 *exit_code_ptr;
@@ -134,7 +134,7 @@ s32		thread_wait( Thread *thread ) {
 // so we need them?
 #pragma clang diagnostic ignored "-Watomic-implicit-seq-cst"
 
-u32		atomic_increment( Atomic32 *atomic ) {
+u32		Thread_AtomicIncrement( Atomic32 *atomic ) {
 	assert( atomic );
 	return __sync_add_and_fetch( &atomic->value, 1 );
 }

@@ -55,7 +55,7 @@ SOFTWARE.
 ================================================================================================
 */
 
-String path_app_path( LinearAllocator *allocator ) {
+String Path_AppPath( LinearAllocator *allocator ) {
 	assert( allocator );
 
 	char app_path[PATH_MAX] = {};
@@ -67,10 +67,10 @@ String path_app_path( LinearAllocator *allocator ) {
 		return {};
 	}
 
-	return string_alloc( allocator, app_path, trunc_cast( u64, length ) );
+	return String_Alloc( allocator, app_path, trunc_cast( u64, length ) );
 }
 
-String path_get_cwd( LinearAllocator *allocator ) {
+String Path_GetCwd( LinearAllocator *allocator ) {
 	assert( allocator );
 
 	const char *cwd = getcwd( NULL, PATH_MAX );
@@ -81,10 +81,10 @@ String path_get_cwd( LinearAllocator *allocator ) {
 		return {};
 	}
 
-	return string_alloc( allocator, cwd, strlen( cwd ) );
+	return String_Alloc( allocator, cwd, strlen( cwd ) );
 }
 
-bool8 path_set_cwd( const char *path ) {
+bool8 Path_SetCwd( const char *path ) {
 	assert( path );
 
 	if ( chdir( path ) != 0 ) {
@@ -97,7 +97,7 @@ bool8 path_set_cwd( const char *path ) {
 	return true;
 }
 
-String path_absolute_path( LinearAllocator *allocator, const char *path ) {
+String Path_AbsolutePath( LinearAllocator *allocator, const char *path ) {
 	assert( allocator );
 	assert( path );
 
@@ -111,17 +111,17 @@ String path_absolute_path( LinearAllocator *allocator, const char *path ) {
 		return {};
 	}
 
-	return string_alloc( allocator, result, strlen( result ) );
+	return String_Alloc( allocator, result, strlen( result ) );
 }
 
-bool8 path_is_absolute( const char *path ) {
+bool8 Path_IsAbsolute( const char *path ) {
 	assert( path );
 
 	return path[0] == '/';
 }
 
-String path_fix_slashes( LinearAllocator *allocator, String *str ) {
-	return string_replace( allocator, str, '\\', PATH_SEPARATOR );
+String Path_FixSlashes( LinearAllocator *allocator, String *str ) {
+	return String_Replace( allocator, str, '\\', PATH_SEPARATOR );
 }
 
 #endif // __linux__

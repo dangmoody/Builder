@@ -58,7 +58,7 @@ struct Process {
 	HANDLE				event_stderr;
 };
 
-static bool8 close_handle_internal( HANDLE *handle, const char *description ) {
+static bool8 Proc_CloseHandleInternal( HANDLE *handle, const char *description ) {
 	if ( !*handle ) {
 		return true;
 	}
@@ -72,14 +72,14 @@ static bool8 close_handle_internal( HANDLE *handle, const char *description ) {
 	return true;
 }
 
-Process* process_create( LinearAllocator *allocator, Array<const char *> *args, Array<const char *> *environment_variables, const ProcessFlags flags ) {
+Process* Proc_Create( LinearAllocator *allocator, Array<const char *> *args, Array<const char *> *environment_variables, const ProcessFlags flags ) {
 	assert( allocator );
 	assert( args );
 	assert( args->count > 0 );
 
 	const char *subprocess_name = ( *args )[0];
 
-	Process *process = cast( Process *, linear_allocator_alloc( allocator, sizeof( Process ) ) );
+	Process *process = cast( Process *, Mem_AllocatorAlloc( allocator, sizeof( Process ) ) );
 	memset( process, 0, sizeof( Process ) );
 
 	SECURITY_ATTRIBUTES sec_attr = { sizeof( SECURITY_ATTRIBUTES ), NULL, TRUE };
@@ -124,7 +124,7 @@ Process* process_create( LinearAllocator *allocator, Array<const char *> *args, 
 		combined_args_length += args->count - 1;	// one space between each argument
 		combined_args_length += 1;					// null terminator
 
-		combined_args = cast( char *, mem_temp_alloc( combined_args_length * sizeof( char ) ) );
+		combined_args = cast( char *, Mem_TempAlloc( combined_args_length * sizeof( char ) ) );
 
 		For ( u64, arg_index, 0, args->count ) {
 			const char *arg = ( *args )[arg_index];
@@ -174,7 +174,7 @@ Process* process_create( LinearAllocator *allocator, Array<const char *> *args, 
 
 		combined_env_vars_length += 1;	// null terminator at the end
 
-		combined_env_vars = cast( char *, mem_temp_alloc( combined_env_vars_length * sizeof( char ) ) );
+		combined_env_vars = cast( char *, Mem_TempAlloc( combined_env_vars_length * sizeof( char ) ) );
 
 		For ( u32, env_var_index, 0, environment_variables->count ) {
 			const char *env_var = ( *environment_variables )[env_var_index];
@@ -223,46 +223,46 @@ Process* process_create( LinearAllocator *allocator, Array<const char *> *args, 
 	return process;
 }
 
-bool8 process_destroy( Process* process ) {
+bool8 Proc_Destroy( Process* process ) {
 	assert( process );
 
-	if ( !close_handle_internal( &process->stdout_read, "subprocess stdout read" ) ) {
+	if ( !Proc_CloseHandleInternal( &process->stdout_read, "subprocess stdout read" ) ) {
 		return false;
 	}
 
-	if ( !close_handle_internal( &process->stderr_read, "subprocess stderr read" ) ) {
+	if ( !Proc_CloseHandleInternal( &process->stderr_read, "subprocess stderr read" ) ) {
 		return false;
 	}
 
-	if ( !close_handle_internal( &process->process_info.hProcess, "subprocess process" ) ) {
+	if ( !Proc_CloseHandleInternal( &process->process_info.hProcess, "subprocess process" ) ) {
 		return false;
 	}
 
-	if ( !close_handle_internal( &process->process_info.hThread, "subprocess thread" ) ) {
+	if ( !Proc_CloseHandleInternal( &process->process_info.hThread, "subprocess thread" ) ) {
 		return false;
 	}
 
 	if ( process->event_stderr && process->event_stderr != process->event_stdout ) {
-		if ( !close_handle_internal( &process->event_stderr, "subprocess stderr event" ) ) {
+		if ( !Proc_CloseHandleInternal( &process->event_stderr, "subprocess stderr event" ) ) {
 			return false;
 		}
 	}
 
-	if ( !close_handle_internal( &process->event_stdout, "subprocess stdout event" ) ) {
+	if ( !Proc_CloseHandleInternal( &process->event_stdout, "subprocess stdout event" ) ) {
 		return false;
 	}
 
 	return true;
 }
 
-s32 process_join( Process* process ) {
+s32 Proc_Join( Process* process ) {
 	assert( process );
 
-	if ( !close_handle_internal( &process->stdout_read, "subprocess stdout read" ) ) {
+	if ( !Proc_CloseHandleInternal( &process->stdout_read, "subprocess stdout read" ) ) {
 		return -1;
 	}
 
-	if ( !close_handle_internal( &process->stderr_read, "subprocess stderr read" ) ) {
+	if ( !Proc_CloseHandleInternal( &process->stderr_read, "subprocess stderr read" ) ) {
 		return -1;
 	}
 
@@ -281,7 +281,7 @@ s32 process_join( Process* process ) {
 	return trunc_cast( s32, exit_code );
 }
 
-static u32 read_from_file_handle( HANDLE file_handle, HANDLE event, char *out_buffer, const u64 count ) {
+static u32 Proc_ReadFromFileHandle( HANDLE file_handle, HANDLE event, char *out_buffer, const u64 count ) {
 	assert( file_handle );
 	//assert( event );
 	assert( out_buffer );
@@ -311,12 +311,12 @@ static u32 read_from_file_handle( HANDLE file_handle, HANDLE event, char *out_bu
 	return bytes_read;
 }
 
-u32 process_read_stdout( Process *process, char *out_buffer, const u64 count ) {
+u32 Proc_ReadStdout( Process *process, char *out_buffer, const u64 count ) {
 	assert( process );
 	assert( out_buffer );
 	assert( count );
 
-	return read_from_file_handle( process->stdout_read, process->event_stdout, out_buffer, count );
+	return Proc_ReadFromFileHandle( process->stdout_read, process->event_stdout, out_buffer, count );
 }
 
 #endif // _WIN32

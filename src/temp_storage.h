@@ -54,6 +54,6 @@ void*				Mem_TempAlloc( const u64 sizeBytes, const u32 alignment = 8 );
 
 void				Mem_ResetTempStorage();
 
-u64				Mem_TempTell();
+u64					Mem_TempTell();
 
 void				Mem_TempRewindTo( const u64 pos );

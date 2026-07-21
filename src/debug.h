@@ -72,7 +72,7 @@ template<class T> struct array_t;
 	#define Assert( condition )
 #endif
 
-enum ConsoleTextColor {
+enum consoleTextColor_t {
 	CONSOLE_TEXT_COLOR_DEFAULT	= 0,
 	CONSOLE_TEXT_COLOR_RED,
 	CONSOLE_TEXT_COLOR_YELLOW,
@@ -83,17 +83,17 @@ enum ConsoleTextColor {
 
 s32				GetLastErrorCode();
 
-void			SetConsoleTextColor( const ConsoleTextColor color );
+void			SetConsoleTextColor( const consoleTextColor_t color );
 
 // Prints the format string to the console.
 // %S is a special override that allows Core Strings to be printed (pass by value).
-void			print( const char *fmt, ... );
+void			Print( const char *fmt, ... );
 
 // Prints "WARNING: " followed by the specified format string to the console.
-void			warning( const char *fmt, ... );
+void			Warning( const char *fmt, ... );
 
 // Prints "ERROR: " followed by the specified format string to the console.
-void			error( const char *fmt, ... );
+void			Error( const char *fmt, ... );
 
 // Prints "FATAL ERROR: " followed by the specified format string to the console, then crashes.
 void			FatalError( const char *fmt, ... );

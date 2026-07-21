@@ -54,7 +54,7 @@ struct linearAllocator_t;
 struct stringBuilderBuffer_t {
 	u32						length;
 	char					*data;
-	stringBuilderBuffer_t		*next;
+	stringBuilderBuffer_t	*next;
 };
 
 #ifdef __clang__

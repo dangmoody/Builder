@@ -109,16 +109,16 @@ struct compilationDatabaseEntry_t {
 };
 
 struct buildContext_t {
-	linearAllocator_t							*allocator;
+	linearAllocator_t						*allocator;
 
-	hashmap_t									*configIndices;
-	hashmap_t									*sourceFileIndices;
+	hashmap_t								*configIndices;
+	hashmap_t								*sourceFileIndices;
 	std::vector<includeDependencies_t>		sourceFileIncludeDependencies;
 
 	const char								*inputFile;
-	string_t									inputFilePath;
-	string_t									dotBuilderFolder;
-	string_t									includeDependenciesFilename;
+	string_t								inputFilePath;
+	string_t								dotBuilderFolder;
+	string_t								includeDependenciesFilename;
 
 	bool8									forceRebuild;
 	bool8									consolidateCompilerArgs;
@@ -135,38 +135,38 @@ extern bool8	g_verbose;
 // shared entry point
 // used in the actual builder program
 // also used by tests so they dont have to start a separate subprocess to build
-int			BuilderMain( const int firstArg, int argc, const char * const * argv );
+int						BuilderMain( const int firstArg, int argc, const char * const * argv );
 
-void		LogVerbose( const char *fmt, ... );
+void					LogVerbose( const char *fmt, ... );
 
-u64			GetLastFileWriteTime( const char *filename );
+u64						GetLastFileWriteTime( const char *filename );
 
-bool8		NukeFolder( const char *folder, const bool8 deleteRootFolder, const bool8 printDeletions );
+bool8					NukeFolder( const char *folder, const bool8 deleteRootFolder, const bool8 printDeletions );
 
-const char	*GetNextSlashInPath( const char *path );
+const char				*GetNextSlashInPath( const char *path );
 
-bool8		FileIsSourceFile( const char *filename );
-bool8		FileIsHeaderFile( const char *filename );
+bool8					FileIsSourceFile( const char *filename );
+bool8					FileIsHeaderFile( const char *filename );
 
-const char	*GetFileExtensionFromBinaryType( const BinaryType type );
+const char				*GetFileExtensionFromBinaryType( const BinaryType type );
 
-const char	*BuildConfig_GetFullBinaryName( const BuildConfig *config, linearAllocator_t *allocator );
+const char				*BuildConfig_GetFullBinaryName( const BuildConfig *config, linearAllocator_t *allocator );
 
-void		RecordCompilationDatabaseEntry( buildContext_t *buildContext, const char *sourceFileName, const array_t<const char *> &compilationCommandArray, u64 sourceFileIndex );
+void					RecordCompilationDatabaseEntry( buildContext_t *buildContext, const char *sourceFileName, const array_t<const char *> &compilationCommandArray, u64 sourceFileIndex );
 
-s32			RunProc( array_t<const char *> *args, array_t<const char *> *environmentVariables, const procFlags_t procFlags = 0, string_t *outStdout = NULL );
+s32						RunProc( array_t<const char *> *args, array_t<const char *> *environmentVariables, const procFlags_t procFlags = 0, string_t *outStdout = NULL );
 
-bool8		WriteStringBuilderToFile( stringBuilder_t *stringBuilder, const char *filename );
+bool8					WriteStringBuilderToFile( stringBuilder_t *stringBuilder, const char *filename );
 
-bool8		PathMatchesFilter( const string_t* filename, const string_t* filter );
+bool8					PathMatchesFilter( const string_t* filename, const string_t* filter );
 
 std::vector<std::string> GetSourceFilesMatchingPattern( const string_t* basePath, const string_t* folderPattern, const string_t* filePattern );
 
-bool8		GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *options );
+bool8					GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *options );
 
-bool8		GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options );
+bool8					GenerateVSCodeJSONFiles( buildContext_t *context, BuilderOptions *options );
 
-bool8		GenerateZedJSONFiles( buildContext_t *context, BuilderOptions *options );
+bool8					GenerateZedJSONFiles( buildContext_t *context, BuilderOptions *options );
 
 inline const char *LanguageVersionToString( const LanguageVersion version ) {
 	switch ( version ) {

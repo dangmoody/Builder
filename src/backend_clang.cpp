@@ -47,14 +47,14 @@ SOFTWARE.
 
 struct clangState_t {
 	// TODO(DM): 11/02/2026: remove these when eds command archetype changes get merged in
-	string_t						compilerPath;
-	string_t						compilerVersion;
-	string_t						linkerPath;
-	string_t						arPath;	// static library linker for gcc (on windows and linux) and clang (linux)
+	string_t		compilerPath;
+	string_t		compilerVersion;
+	string_t		linkerPath;
+	string_t		arPath;	// static library linker for gcc (on windows and linux) and clang (linux)
 
 #ifdef _WIN32
-	windowsSDK_t				winSDK;
-	msvcInstall_t				msvcInstall;
+	windowsSDK_t	winSDK;
+	msvcInstall_t	msvcInstall;
 #endif
 };
 
@@ -811,26 +811,26 @@ static string_t GCC_GetCompilerVersion( compilerBackend_t *backend ) {
 
 void CreateCompilerBackend_Clang( compilerBackend_t *outBackend ) {
 	*outBackend = compilerBackend_t {
-		.data										= NULL,
-		.Init										= Clang_Init,
-		.Shutdown									= Clang_Shutdown,
-		.CompileSourceFile							= Clang_CompileSourceFile,
-		.LinkIntermediateFiles						= Clang_LinkIntermediateFiles,
-		.GetCompilationCommandArchetype				= Clang_GetCompilationCommandArchetype,
-		.GetCompilerPath							= Clang_GetCompilerPath,
-		.GetCompilerVersion							= Clang_GetCompilerVersion,
+		.data							= NULL,
+		.Init							= Clang_Init,
+		.Shutdown						= Clang_Shutdown,
+		.CompileSourceFile				= Clang_CompileSourceFile,
+		.LinkIntermediateFiles			= Clang_LinkIntermediateFiles,
+		.GetCompilationCommandArchetype	= Clang_GetCompilationCommandArchetype,
+		.GetCompilerPath				= Clang_GetCompilerPath,
+		.GetCompilerVersion				= Clang_GetCompilerVersion,
 	};
 }
 
 void CreateCompilerBackend_GCC( compilerBackend_t *outBackend ) {
 	*outBackend = compilerBackend_t {
-		.data										= NULL,
-		.Init										= GCC_Init,
-		.Shutdown									= Clang_Shutdown,
-		.CompileSourceFile							= Clang_CompileSourceFile,
-		.LinkIntermediateFiles						= GCC_LinkIntermediateFiles,
-		.GetCompilationCommandArchetype				= Clang_GetCompilationCommandArchetype,
-		.GetCompilerPath							= Clang_GetCompilerPath,
-		.GetCompilerVersion							= GCC_GetCompilerVersion,
+		.data							= NULL,
+		.Init							= GCC_Init,
+		.Shutdown						= Clang_Shutdown,
+		.CompileSourceFile				= Clang_CompileSourceFile,
+		.LinkIntermediateFiles			= GCC_LinkIntermediateFiles,
+		.GetCompilationCommandArchetype	= Clang_GetCompilationCommandArchetype,
+		.GetCompilerPath				= Clang_GetCompilerPath,
+		.GetCompilerVersion				= GCC_GetCompilerVersion,
 	};
 }

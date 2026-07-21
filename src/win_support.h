@@ -12,14 +12,14 @@ struct windowsSDKVersion_t {
 };
 
 struct windowsSDK_t {
-	string_t				rootFolder;
+	string_t			rootFolder;
 
-	string_t				ucrtInclude;
-	string_t				umInclude;
-	string_t				sharedInclude;
+	string_t			ucrtInclude;
+	string_t			umInclude;
+	string_t			sharedInclude;
 
-	string_t				ucrtLibPath;
-	string_t				umLibPath;
+	string_t			ucrtLibPath;
+	string_t			umLibPath;
 
 	windowsSDKVersion_t	version;
 };
@@ -35,9 +35,9 @@ struct msvcVersion_t {
 };
 
 struct msvcInstall_t {
-	string_t			rootFolder;
-	string_t			includePath;
-	string_t			libPath;
+	string_t		rootFolder;
+	string_t		includePath;
+	string_t		libPath;
 
 	msvcVersion_t	version;
 };

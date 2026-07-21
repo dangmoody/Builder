@@ -48,7 +48,7 @@ SOFTWARE.
 #include <string.h>
 #include <malloc.h>	// alloca
 
-void SetConsoleTextColor( const ConsoleTextColor color ) {
+void SetConsoleTextColor( const consoleTextColor_t color ) {
 	HANDLE handle = GetStdHandle( STD_OUTPUT_HANDLE );
 
 	WORD colorCode = 0;

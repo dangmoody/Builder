@@ -42,13 +42,13 @@ SOFTWARE.
 #include "helpers.h"
 
 struct msvcState_t {
-	string_t						compilerPath;
-	string_t						compilerVersion;
-	string_t						linkerPath;
+	string_t				compilerPath;
+	string_t				compilerVersion;
+	string_t				linkerPath;
 
 	// windows sdk includes, msvc includes, that kind of thing
-	array_t<const char *>			microsoftCoreIncludes;
-	array_t<const char *>			microsoftCoreLibPaths;
+	array_t<const char *>	microsoftCoreIncludes;
+	array_t<const char *>	microsoftCoreLibPaths;
 };
 
 //================================================================
@@ -435,14 +435,14 @@ static string_t MSVC_GetCompilerVersion( compilerBackend_t *backend ) {
 
 void CreateCompilerBackend_MSVC( compilerBackend_t *outBackend ) {
 	*outBackend = compilerBackend_t {
-		.data										= NULL,
-		.Init										= MSVC_Init,
-		.Shutdown									= MSVC_Shutdown,
-		.CompileSourceFile							= MSVC_CompileSourceFile,
-		.LinkIntermediateFiles						= MSVC_LinkIntermediateFiles,
-		.GetCompilationCommandArchetype				= MSVC_GetCompilationCommandArchetype,
-		.GetCompilerPath							= MSVC_GetCompilerPath,
-		.GetCompilerVersion							= MSVC_GetCompilerVersion,
+		.data							= NULL,
+		.Init							= MSVC_Init,
+		.Shutdown						= MSVC_Shutdown,
+		.CompileSourceFile				= MSVC_CompileSourceFile,
+		.LinkIntermediateFiles			= MSVC_LinkIntermediateFiles,
+		.GetCompilationCommandArchetype	= MSVC_GetCompilationCommandArchetype,
+		.GetCompilerPath				= MSVC_GetCompilerPath,
+		.GetCompilerVersion				= MSVC_GetCompilerVersion,
 	};
 }
 

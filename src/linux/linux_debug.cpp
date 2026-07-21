@@ -42,7 +42,7 @@ SOFTWARE.
 #include <dlfcn.h>
 #include <cxxabi.h>
 
-void SetConsoleTextColor( const ConsoleTextColor color ) {
+void SetConsoleTextColor( const consoleTextColor_t color ) {
 	const char *colorLinux = NULL;
 
 	switch ( color ) {
@@ -56,7 +56,7 @@ void SetConsoleTextColor( const ConsoleTextColor color ) {
 
 	Assert( colorLinux != NULL );
 
-	print( "%s", colorLinux );
+	Print( "%s", colorLinux );
 }
 
 s32 GetLastErrorCode() {

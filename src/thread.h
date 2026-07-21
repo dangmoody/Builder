@@ -53,7 +53,7 @@ struct atomic32_t {
 typedef s32 ( *ThreadFunc )( void *data );
 
 // Creates and immediately executes a thread that runs 'threadFunc' with 'data' passed through.
-thread_t		Thread_Create( ThreadFunc threadFunc, void *data );
+thread_t	Thread_Create( ThreadFunc threadFunc, void *data );
 
 // Waits for the thread to stop running, then destroys it.
 void		Thread_Destroy( thread_t *thread );

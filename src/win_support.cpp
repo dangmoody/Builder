@@ -252,7 +252,7 @@ bool8 Win_GetWindowsSDK( linearAllocator_t *allocator, windowsSDK_t *outSDK ) {
 //================================================================
 
 struct foundMSVCInstallData_t {
-	linearAllocator_t				*allocator;
+	linearAllocator_t			*allocator;
 	const char					*rootFolder;
 	std::vector<msvcInstall_t>	*installs;
 };

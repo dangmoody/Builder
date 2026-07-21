@@ -65,7 +65,7 @@ void				*Mem_AllocatorAlloc( linearAllocator_t *allocator, const u64 sizeBytes, 
 
 void				Mem_AllocatorReset( linearAllocator_t *allocator );
 
-u64				Mem_AllocatorTell( linearAllocator_t *allocator );
+u64					Mem_AllocatorTell( linearAllocator_t *allocator );
 
 void				Mem_AllocatorRewindTo( linearAllocator_t *allocator, const u64 offset );
 

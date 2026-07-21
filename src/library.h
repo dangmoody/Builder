@@ -42,7 +42,7 @@ SOFTWARE.
 */
 
 struct library_t {
-	void			*ptr;
+	void	*ptr;
 };
 
 // Loads a dynamic library.

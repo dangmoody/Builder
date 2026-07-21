@@ -65,26 +65,26 @@ struct string_t {
 
 // Sets the contents of the string to the specified string literal.
 // This string will not own the data it holds.
-string_t		String_Set( const char *str );
-string_t		String_Set( const char *str, const u64 count );
+string_t	String_Set( const char *str );
+string_t	String_Set( const char *str, const u64 count );
 
 // Sets the contents of the string to the range of specified string literal.
 // This string will not own the data it holds.
-string_t		String_Substring( const char *str, const u64 offset, const u64 count );
+string_t	String_Substring( const char *str, const u64 offset, const u64 count );
 
 // Allocates a copy of the null-terminated C string 'str' using 'allocator'.
 // This string will hold the data it holds.
-string_t		String_Alloc( linearAllocator_t *allocator, const char *str );
+string_t	String_Alloc( linearAllocator_t *allocator, const char *str );
 
 // Allocates a copy of the first 'length' characters of 'str' using 'allocator'.
 // // This string will hold the data it holds.
-string_t		String_Alloc( linearAllocator_t *allocator, const char *str, const u64 length );
+string_t	String_Alloc( linearAllocator_t *allocator, const char *str, const u64 length );
 
 // Allocates a printf-formatted string using 'allocator'.
-string_t		String_Printf( linearAllocator_t *allocator, const char *fmt, ... );
+string_t	String_Printf( linearAllocator_t *allocator, const char *fmt, ... );
 
 // Allocates a copy of 'src' using 'allocator'.
-string_t		String_Copy( linearAllocator_t *allocator, const string_t *src );
+string_t	String_Copy( linearAllocator_t *allocator, const string_t *src );
 
 // Returns true if the contents of string 'lhs' are EXACTLY the same as the contents of string 'rhs'.  Case sensitive.
 bool8		String_Equals( const char *lhs, const char *rhs );
@@ -109,7 +109,7 @@ bool8		String_Contains( const string_t *str, const char c );
 bool8		String_Contains( const string_t *str, const string_t *substring );
 
 // Replaces every occurrence of 'oldChar' in 'str' with 'newChar'.
-string_t		String_Replace( linearAllocator_t *allocator, string_t *str, const char oldChar, const char newChar );
+string_t	String_Replace( linearAllocator_t *allocator, string_t *str, const char oldChar, const char newChar );
 
 // Returns true if character 'c' is found in 'str', searching left to right, and sets 'outIndex' to the position of the first occurrence.  Returns false if 'c' cannot be found.
 bool8		String_FindFromLeft( const string_t *str, const char c, u64 *outIndex );

@@ -40,8 +40,8 @@ SOFTWARE.
 */
 
 // Call these ones!
-#define Cast( Type, x )				(Type) (x)
-#define TruncCast( Type, x )		TruncCastInternal<Type>( (x) )
+#define Cast( Type, x )			(Type) (x)
+#define TruncCast( Type, x )	TruncCastInternal<Type>( (x) )
 
 
 #pragma clang diagnostic push

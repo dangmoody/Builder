@@ -54,8 +54,8 @@ SOFTWARE.
 #define VISUAL_STUDIO_FOLDER_PROJECT_TYPE_GUID	"2150E333-8FDC-42A3-9474-1A3956D46DE8"	// project folder
 
 struct visualStudioFileFilter_t {
-	const char* filePath;
-	string_t fileFilter;
+	const char*	filePath;
+	string_t	fileFilter;
 };
 
 // data layout comes from: https://learn.microsoft.com/en-us/windows/win32/api/guiddef/ns-guiddef-guid

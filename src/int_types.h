@@ -76,7 +76,7 @@ typedef u8			bool8;
 #define FLOAT64_MAX	DBL_MAX
 
 // returns bit position 'x'
-#define BIT( x )	( 1ULL << (x) )
+#define BIT( x )						( 1ULL << (x) )
 
 // returns number of elements in static array
 #define COUNT_OF( x )					( sizeof( (x) ) / sizeof( (x)[0] ) )

@@ -666,7 +666,7 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 
 struct nukeContext_t {
 	array_t<const char *>	subfolders;
-	bool8				printDeletions;
+	bool8					printDeletions;
 };
 
 static void Nuke_DeleteAllFilesAndCacheFoldersInternal( const fileInfo_t *fileInfo, void *userData ) {
@@ -1149,8 +1149,8 @@ enum flagArgumentFormBits_t {
 typedef u32 argumentForms_t;
 
 struct flagRule_t {
-	const char *flag = nullptr;
-	argumentForms_t forms;
+	const char		*flag = nullptr;
+	argumentForms_t	forms;
 };
 
 static constexpr flagRule_t flagArgumentRules[] = {

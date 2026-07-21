@@ -71,18 +71,18 @@ struct hashmap_t {
 
 hashmap_t	*HM_Create( linearAllocator_t *allocator, u32 startingCapacity, float32 normalizedMaxUtilisation = 0.5f, bool8 shouldGrow = true );
 
-void	HM_Reset( hashmap_t *map );
+void		HM_Reset( hashmap_t *map );
 
 // Returns the value associated with the key if the key has a value, otherwise returns 0.
-u32		HM_GetValue( const hashmap_t *map, const u64 key );
+u32			HM_GetValue( const hashmap_t *map, const u64 key );
 
-void	HM_SetValue( hashmap_t *map, const u64 key, const u32 value );
-void	HM_RemoveKey( hashmap_t *map, const u64 key );
+void		HM_SetValue( hashmap_t *map, const u64 key, const u32 value );
+void		HM_RemoveKey( hashmap_t *map, const u64 key );
 
-u64		HM_InternalCombine( const u32 hi, const u32 lo );
-u64		HM_InternalCombineAtIndex( const hashmap_t *map, const u32 index );
-u32		HM_InternalGetLoPart( const u64 key );
-u32		HM_InternalGetHiPart( const u64 key );
+u64			HM_InternalCombine( const u32 hi, const u32 lo );
+u64			HM_InternalCombineAtIndex( const hashmap_t *map, const u32 index );
+u32			HM_InternalGetLoPart( const u64 key );
+u32			HM_InternalGetHiPart( const u64 key );
 
 #if defined( __clang__ )
 #pragma clang diagnostic pop

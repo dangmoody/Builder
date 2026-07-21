@@ -6,7 +6,6 @@
 #include "../src/paths.h"
 #include "../src/string_builder.h"
 #include "../src/defer.h"
-#include "../src/helpers.h"
 #include "../src/temp_storage.h"
 
 #define TEMPERDEV_ASSERT Assert
@@ -99,7 +98,7 @@ struct buildTestGeneratedFiles_t {
 };
 
 static void GetAllGeneratedFiles( const fileInfo_t *fileInfo, void *data ) {
-	buildTestGeneratedFiles_t *generatedFiles = cast( buildTestGeneratedFiles_t *, data );
+	buildTestGeneratedFiles_t *generatedFiles = Cast( buildTestGeneratedFiles_t *, data );
 
 	if ( fileInfo->isDirectory ) {
 		generatedFiles->folders.Add( fileInfo->fullFilename );
@@ -287,7 +286,7 @@ TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, buildTest_t test ) {
 	}
 
 	For ( u32, compilerIndex, 0, COMPILER_ALL ) {
-		compilerFlagBits_t compiler = cast( compilerFlagBits_t, BIT( compilerIndex ) );
+		compilerFlagBits_t compiler = Cast( compilerFlagBits_t, BIT( compilerIndex ) );
 
 #ifdef __linux__
 		if ( compiler == COMPILER_MSVC_SHORT || compiler == COMPILER_MSVC_FULL_PATH ) {

@@ -167,8 +167,8 @@ static void ResolveCompilerAndLinkerPaths( clangState_t *clangState, linearAlloc
 
 	if ( pathToCompiler.count != compilerPathStr.count ) {
 		const char *pathToCompilerCStr = String_Cstr( &pathToCompiler );
-		clangState->compilerPath = path_join( allocator, pathToCompilerCStr, compilerName );
-		clangState->linkerPath = path_join( allocator, pathToCompilerCStr, linkerName );
+		clangState->compilerPath = Path_Join( allocator, pathToCompilerCStr, compilerName );
+		clangState->linkerPath = Path_Join( allocator, pathToCompilerCStr, linkerName );
 	} else {
 		clangState->compilerPath = String_Alloc( allocator, compilerPath, strlen( compilerPath ) + 1 );
 		clangState->linkerPath = String_Alloc( allocator, linkerName, strlen( linkerName ) + 1 );
@@ -202,9 +202,9 @@ static bool8 Clang_Init( compilerBackend_t *backend, const buildContext_t *conte
 	pathToCompiler = Path_RemoveFileFromPath( &pathToCompiler );
 
 #if defined( _WIN32 )
-	clangState->arPath = path_join( context->allocator, String_Cstr( &pathToCompiler ), "ar" );
+	clangState->arPath = Path_Join( context->allocator, String_Cstr( &pathToCompiler ), "ar" );
 #elif defined( __linux__ )
-	clangState->arPath = path_join( context->allocator, String_Cstr( &pathToCompiler ), linkerExe );
+	clangState->arPath = Path_Join( context->allocator, String_Cstr( &pathToCompiler ), linkerExe );
 #endif
 
 #ifdef _WIN32
@@ -231,7 +231,7 @@ static bool8 GCC_Init( compilerBackend_t *backend, const buildContext_t *context
 	string_t pathToCompiler = Path_RemoveFileFromPath( &compilerPathStr );
 
 	if ( pathToCompiler.count != compilerPathStr.count ) {
-		clangState->arPath = path_join( context->allocator, String_Cstr( &pathToCompiler ), "ar" );
+		clangState->arPath = Path_Join( context->allocator, String_Cstr( &pathToCompiler ), "ar" );
 	} else {
 		clangState->arPath = String_Alloc( context->allocator, "ar", strlen( "ar" ) + 1 );
 	}

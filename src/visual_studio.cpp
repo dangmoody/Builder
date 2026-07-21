@@ -573,7 +573,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 					string_t inputFileNoPathStr = String_Set( context->inputFile );
 					string_t inputFileNoPath = Path_RemovePathFromFile( &inputFileNoPathStr );
 
-					string_t inputFileRelative = path_join( Mem_GetTempStorage(), pathFromSolutionToInputFile, inputFileNoPath.data );
+					string_t inputFileRelative = Path_Join( Mem_GetTempStorage(), pathFromSolutionToInputFile, inputFileNoPath.data );
 
 					// const char *appPath = Path_RemoveFileFromPath( Path_AppPath() );
 					string_t appPath = Path_AppPath( Mem_GetTempStorage() );

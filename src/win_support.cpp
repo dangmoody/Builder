@@ -220,11 +220,11 @@ bool8 Win_GetWindowsSDK( linearAllocator_t *allocator, windowsSDK_t *outSDK ) {
 
 	const char *versionStr = TempPrintf( "%d.%d.%d.%d", outSDK->version.v0, outSDK->version.v1, outSDK->version.v2, outSDK->version.v3 );
 
-	outSDK->ucrtInclude = path_join( allocator, windowsSDKRoot, "include", versionStr, "ucrt" );
-	outSDK->umInclude = path_join( allocator, windowsSDKRoot, "include", versionStr, "um" );
-	outSDK->sharedInclude = path_join( allocator, windowsSDKRoot, "include", versionStr, "shared" );
-	outSDK->ucrtLibPath = path_join( allocator, windowsSDKRoot, "Lib", versionStr, "ucrt", "x64" );
-	outSDK->umLibPath = path_join( allocator, windowsSDKRoot, "Lib", versionStr, "um", "x64" );
+	outSDK->ucrtInclude = Path_Join( allocator, windowsSDKRoot, "include", versionStr, "ucrt" );
+	outSDK->umInclude = Path_Join( allocator, windowsSDKRoot, "include", versionStr, "um" );
+	outSDK->sharedInclude = Path_Join( allocator, windowsSDKRoot, "include", versionStr, "shared" );
+	outSDK->ucrtLibPath = Path_Join( allocator, windowsSDKRoot, "Lib", versionStr, "ucrt", "x64" );
+	outSDK->umLibPath = Path_Join( allocator, windowsSDKRoot, "Lib", versionStr, "um", "x64" );
 
 	printf( "Using latest valid Windows SDK version that was found, which was: %s.\n", versionStr );
 
@@ -264,9 +264,9 @@ static void OnMSVCInstallFound( const fileInfo_t *fileInfo, void *userData ) {
 
 	sscanf( fileInfo->filename, "%d.%d.%d", &install.version.v0, &install.version.v1, &install.version.v2 );
 
-	install.rootFolder = path_join( data->allocator, data->rootFolder, fileInfo->filename );
-	install.includePath = path_join( data->allocator, install.rootFolder.data, "include" );
-	install.libPath = path_join( data->allocator, install.rootFolder.data, "lib", "x64" );
+	install.rootFolder = Path_Join( data->allocator, data->rootFolder, fileInfo->filename );
+	install.includePath = Path_Join( data->allocator, install.rootFolder.data, "include" );
+	install.libPath = Path_Join( data->allocator, install.rootFolder.data, "lib", "x64" );
 
 	LogVerbose( "Found MSVC installation located at: \"%s\"\n", install.rootFolder.data );
 

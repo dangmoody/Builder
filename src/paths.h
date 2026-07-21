@@ -81,7 +81,7 @@ string_t	Path_FixSlashes( linearAllocator_t *allocator, string_t *str );
 string_t	Path_RelativePathTo( linearAllocator_t *allocator, const char *from, const char *to );
 
 // DO NOT CALL THIS DIRECTLY.
-// CALL path_join INSTEAD.
+// CALL Path_Join INSTEAD.
 string_t	Path_JoinInternal( linearAllocator_t *allocator, const int count, ... );
 
 #pragma clang diagnostic push
@@ -94,6 +94,6 @@ inline int Path_VaArgsCount( Args&&... ) {
 }
 
 // Takes a variable number of strings and separates each one with a slash (back slash on Windows, forward slash on all other platforms).
-#define path_join( allocator, ... )	Path_JoinInternal( allocator, Path_VaArgsCount( __VA_ARGS__ ), __VA_ARGS__ )
+#define Path_Join( allocator, ... )	Path_JoinInternal( allocator, Path_VaArgsCount( __VA_ARGS__ ), __VA_ARGS__ )
 
 #pragma clang diagnostic pop

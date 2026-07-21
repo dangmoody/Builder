@@ -268,7 +268,7 @@ bool8 FS_GetAllFilesInFolder( const char *path, const fileVisitFlags_t visitFlag
 
 		while ( 1 ) {
 			bool8 isDirectory = Cast( bool8, findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY );
-			// TODO: DM: 10/05/2026: really, this wants to be done via path_join
+			// TODO: DM: 10/05/2026: really, this wants to be done via Path_Join
 			// but theres a few things that rely on this behaviour
 			// so changing this will cause side effects in various places/codebases that use core
 			// TODO: AK: 17/07/2026: currently we add a trailing slash to the end of all paths as

@@ -1537,7 +1537,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 		context.inputFilePath.data[inputFilePath.count] = '\0';
 		context.inputFilePath.count = inputFilePath.count;
 
-		context.dotBuilderFolder = path_join( context.allocator, context.inputFilePath.data, ".builder" );
+		context.dotBuilderFolder = Path_Join( context.allocator, context.inputFilePath.data, ".builder" );
 
 		string_t inputFileStripped = String_Set( context.inputFile );
 		inputFileStripped = Path_RemoveFileExtension( &inputFileStripped );
@@ -1569,7 +1569,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	// init default compiler backend (the version of clang that builder came with)
 	compilerBackend_t compilerBackend = {};
 	CreateCompilerBackend_Clang( &compilerBackend );
-	string_t defaultCompilerPath = path_join( Mem_GetTempStorage(), appPathOnly.data, "..", "clang", "bin", "clang" );
+	string_t defaultCompilerPath = Path_Join( Mem_GetTempStorage(), appPathOnly.data, "..", "clang", "bin", "clang" );
 	compilerBackend.Init( &compilerBackend, &context, defaultCompilerPath.data, NULL );
 	defer {
 		compilerBackend.Shutdown( &compilerBackend );
@@ -1786,7 +1786,7 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 			{
 				string_t pathToCompiler = Path_RemoveFileFromPath( &compilerPathView );
 				if ( pathToCompiler.count != compilerPathView.count && !Path_IsAbsolute( options.compilerPath.c_str() ) ) {
-					actualCompilerPath = path_join( Mem_GetTempStorage(), context.inputFilePath.data, options.compilerPath.c_str() );
+					actualCompilerPath = Path_Join( Mem_GetTempStorage(), context.inputFilePath.data, options.compilerPath.c_str() );
 				} else {
 					actualCompilerPath = String_Set( options.compilerPath.c_str() );
 				}

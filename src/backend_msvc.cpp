@@ -96,12 +96,12 @@ static bool8 MSVC_Init( compilerBackend_t *backend, const buildContext_t *contex
 	msvcState->microsoftCoreLibPaths.Add( context->winSDK.umLibPath.data );
 
 	if ( String_Equals( compilerPath, "cl" ) || String_Equals( compilerPath, "cl.exe" ) ) {
-		msvcState->compilerPath = path_join( context->allocator, context->msvcInstall.rootFolder.data, "bin", "Hostx64", "x64", "cl" );
-		msvcState->linkerPath = path_join( context->allocator, context->msvcInstall.rootFolder.data, "bin", "Hostx64", "x64", "link" );
+		msvcState->compilerPath = Path_Join( context->allocator, context->msvcInstall.rootFolder.data, "bin", "Hostx64", "x64", "cl" );
+		msvcState->linkerPath = Path_Join( context->allocator, context->msvcInstall.rootFolder.data, "bin", "Hostx64", "x64", "link" );
 	} else {
 		string_t compilerDir = String_Set( compilerPath );
 		compilerDir = Path_RemoveFileFromPath( &compilerDir );
-		msvcState->linkerPath = path_join( context->allocator, String_Cstr( &compilerDir ), "link" );
+		msvcState->linkerPath = Path_Join( context->allocator, String_Cstr( &compilerDir ), "link" );
 	}
 
 	msvcState->microsoftCoreIncludes.Add( context->msvcInstall.includePath.data );

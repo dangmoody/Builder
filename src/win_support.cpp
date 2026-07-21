@@ -11,7 +11,6 @@
 #include "array.inl"
 #include "string_builder.h"
 #include "defer.h"
-#include "helpers.h"
 #include "paths.h"
 
 #include <Windows.h>

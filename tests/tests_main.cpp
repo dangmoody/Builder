@@ -518,7 +518,7 @@ TEST( GenerateVisualStudioSolution, TEMPER_FLAG_SHOULD_RUN ) {
 			if ( !lineEnd ) lineEnd = strchr( lineStart, '\n' );
 			Assert( lineEnd );
 
-			u64 count = cast( u64, lineEnd ) - cast( u64, lineStart );
+			u64 count = Cast( u64, lineEnd ) - Cast( u64, lineStart );
 
 			*outString = String_Set( lineStart, count );
 

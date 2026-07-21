@@ -34,7 +34,6 @@ SOFTWARE.
 
 #include "../array.inl"
 #include "../string.h"
-#include "../helpers.h"
 #include "../linear_allocator.h"
 #include "../temp_storage.h"
 #include "../typecast.h"
@@ -87,11 +86,11 @@ void AssertInternal( const char *file, const int line, const char *fmt, ... ) {
 
 	SetConsoleTextColor( CONSOLE_TEXT_COLOR_RED );
 
-	print( "ASSERT FAILURE: %s line %d: ", file, line );
+	printf( "ASSERT FAILURE: %s line %d: ", file, line );
 
 	SetConsoleTextColor( CONSOLE_TEXT_COLOR_YELLOW );
 
-	print( "%s\n", buffer );
+	printf( "%s\n", buffer );
 
 	SetConsoleTextColor( CONSOLE_TEXT_COLOR_DEFAULT );
 

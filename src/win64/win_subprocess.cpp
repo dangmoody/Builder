@@ -33,7 +33,6 @@ SOFTWARE.
 #include "../typecast.h"
 #include "../string_builder.h"
 #include "../array.inl"
-#include "../helpers.h"
 #include "../linear_allocator.h"
 #include "../temp_storage.h"
 #include "../defer.h"
@@ -72,7 +71,7 @@ static bool8 Proc_CloseHandleInternal( HANDLE *handle, const char *description )
 	return true;
 }
 
-process_t* Proc_Create( linearAllocator_t *allocator, array_t<const char *> *args, array_t<const char *> *environmentVariables, const ProcessFlags flags ) {
+process_t* Proc_Create( linearAllocator_t *allocator, array_t<const char *> *args, array_t<const char *> *environmentVariables, const processFlags_t flags ) {
 	Assert( allocator );
 	Assert( args );
 	Assert( args->count > 0 );

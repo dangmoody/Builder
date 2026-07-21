@@ -30,7 +30,6 @@ SOFTWARE.
 
 #include "../paths.h"
 
-#include "../helpers.h"
 #include "../temp_storage.h"
 #include "../debug.h"
 #include "../typecast.h"

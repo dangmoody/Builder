@@ -29,7 +29,6 @@ SOFTWARE.
 
 #include "../thread.h"
 
-#include "../helpers.h"
 #include "../debug.h"
 #include "../defer.h"
 #include "../typecast.h"

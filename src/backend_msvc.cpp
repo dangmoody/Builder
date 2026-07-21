@@ -39,7 +39,6 @@ SOFTWARE.
 #include "subprocess.h"
 #include "file.h"
 #include "temp_storage.h"
-#include "helpers.h"
 
 struct msvcState_t {
 	string_t				compilerPath;

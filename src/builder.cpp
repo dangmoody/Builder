@@ -519,7 +519,7 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 
 	if ( config->OnPreBuild ) {
 		LogVerbose( "Found a OnPreBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name.c_str() );
-		config->OnPreBuild();
+		config->OnPreBuild( config );
 	}
 
 	std::vector<std::string> intermediateFiles;
@@ -658,7 +658,7 @@ static buildResult_t BuildBinary( buildContext_t *context, BuildConfig *config, 
 
 	if ( config->OnPostBuild ) {
 		LogVerbose( "Found a OnPostBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name.c_str() );
-		config->OnPostBuild();
+		config->OnPostBuild( config );
 	}
 
 	return BUILD_RESULT_SUCCESS;

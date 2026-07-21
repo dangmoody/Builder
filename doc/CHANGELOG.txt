@@ -1,4 +1,6 @@
-v0.13.1, 24/07/2026:
+v0.14.0, 24/07/2026:
+
+This version introduces a new version number despite minimal changes that would otherwise only constitute a patch number bump because Builder got rewritten a fair amount internally between this version and the last one.
 
 * Visual Studio:
 	* Replaced VisualStudioProject::codeFolders and fileExtensions with VisualStudioProject::extraFiles (thanks @aiden-knight!).

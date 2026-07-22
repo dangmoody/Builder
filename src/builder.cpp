@@ -1374,7 +1374,13 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	// I feel like there's a cleaner solution to this, just not sure what
 	bool8 ownsTempStorage = Mem_GetTempStorage() == NULL;
 	if ( ownsTempStorage ) {
-		Mem_InitTempStorage( MEM_MEGABYTES( 128 ) );
+		// HACK: DM: 22/07/2026: reserving a shit ton of address space like this is clearly not the best long term solution
+		// just because this works for all the codebases weve tested with today doesnt mean that it will work for codebases of all sizes in future
+		// the main problem we have with this is that the number source files (for example) that we need to gather and build comes from user-land, which means its a highly variable number
+		// therefore a fixed allocator like this is only so useful and we dont know how much memory we actually need until its too late
+		// the real solution here is to be much, much smarter about how we use the main allocator and temp storage
+		// our usage of the allocators needs fundamental revision
+		Mem_InitTempStorage( MEM_GIGABYTES( 128 ) );
 	}
 	defer {
 		if ( ownsTempStorage ) {
@@ -1385,7 +1391,13 @@ int BuilderMain( const int firstArg, int argc, const char * const * argv ) {
 	printf( "Builder v%d.%d.%d RC0\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	buildContext_t context = {};
-	context.allocator = Mem_CreateAllocator( MEM_KILOBYTES( 128 ) );
+	// HACK: DM: 22/07/2026: reserving a shit ton of address space like this is clearly not the best long term solution
+	// just because this works for all the codebases weve tested with today doesnt mean that it will work for codebases of all sizes in future
+	// the main problem we have with this is that the number source files (for example) that we need to gather and build comes from user-land, which means its a highly variable number
+	// therefore a fixed allocator like this is only so useful and we dont know how much memory we actually need until its too late
+	// the real solution here is to be much, much smarter about how we use the main allocator and temp storage
+	// our usage of the allocators needs fundamental revision
+	context.allocator = Mem_CreateAllocator( MEM_GIGABYTES( 128 ) );
 	context.configIndices = HM_Create( context.allocator, 1 );	// TODO(DM): 30/03/2025: whats a reasonable default here?
 
 	defer {

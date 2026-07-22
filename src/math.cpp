@@ -50,6 +50,14 @@ u64 Max( const u64 a, const u64 b ) {
 	return ( a > b ) ? a : b;
 }
 
+s32 GetNumLeadingZeros( const u64 number ) {
+#ifdef __clang__
+	return __builtin_clzll( number );
+#else
+#error Uncrecognised compiler.
+#endif
+}
+
 u64	NextPowerOf2Up( const u64 number ) {
 	return ( number == 1 ) ? 1 : 1 << ( 64 - GetNumLeadingZeros( number - 1 ) );
 }

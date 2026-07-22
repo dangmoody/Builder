@@ -27,7 +27,6 @@ SOFTWARE.
 */
 
 #include "file.h"
-#include "file_local.h"
 
 #include "typecast.h"
 #include "debug.h"
@@ -125,45 +124,4 @@ bool8 FS_WriteFile( file_t *file, const void *data, const u64 size ) {
 
 bool8 FS_WriteFile( file_t *file, const char *data ) {
 	return FS_WriteFile( file, data, strlen( data ) * sizeof( char ) );
-}
-
-bool8 FS_CreateFolderIfItDoesntExist( const char *path ) {
-	Assert( path );
-
-	if ( FS_FolderExists( path ) ) {
-		return true;
-	}
-
-	// otherwise create the folder
-	{
-		bool8 result = false;
-
-		u64 pathLen = strlen( path );
-
-		for ( u64 i = 0; i <= pathLen; i++ ) {
-#if defined( __linux__ )
-			if ( path[i] != '/' && path[i] != '\0') {
-				continue;
-			}
-
-			// dont process root folder
-			if ( i == 0 && path[i] == '/' ) {
-				continue;
-			}
-#elif defined( _WIN32 )
-			if ( path[i] != '/' && path[i] != '\0' && path[i] != '\\' ) {
-				continue;
-			}
-#endif
-
-			char name[1024] = {};
-			strncpy( name, path, i );
-
-			if ( !FS_FolderExists( name ) ) {
-				result |= FS_CreateFolderInternal( name );
-			}
-		}
-
-		return result;
-	}
 }

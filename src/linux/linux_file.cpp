@@ -43,7 +43,8 @@ SOFTWARE.
 #include <sys/types.h>
 #include <dirent.h>
 #include <errno.h>
-#include <cstdio>
+#include <stdio.h>
+#include <string.h>
 
 /*
 ================================================================================================
@@ -253,15 +254,46 @@ bool8 FS_FileExists( const char *filename ) {
 	return access( filename, 0 ) == 0;
 }
 
-bool8 FS_CreateFolderInternal( const char *path ) {
-	int result = mkdir( path, S_IRWXU | S_IRWXG | S_IRWXO );
-	int err = errno;
+bool8 FS_CreateFolderIfItDoesntExist( const char *path ) {
+	Assert( path );
 
-	if ( ( result != 0 ) && ( err != EEXIST ) ) {
-		FatalError( "ERROR: Failed to create directory \"%s\": %s\n", path, strerror( err ) );
+	if ( FS_FolderExists( path ) ) {
+		return true;
 	}
 
-	return result == 0;
+	// otherwise create the folder
+	{
+		bool8 result = false;
+
+		u64 pathLen = strlen( path );
+
+		for ( u64 i = 0; i <= pathLen; i++ ) {
+			if ( path[i] != '/' && path[i] != '\0' ) {
+				continue;
+			}
+
+			// dont process root folder
+			if ( i == 0 && path[i] == '/' ) {
+				continue;
+			}
+
+			char name[1024] = {};
+			strncpy( name, path, i );
+
+			if ( !FS_FolderExists( name ) ) {
+				int mkdirResult = mkdir( name, S_IRWXU | S_IRWXG | S_IRWXO );
+				int err = errno;
+
+				if ( ( mkdirResult != 0 ) && ( err != EEXIST ) ) {
+					FatalError( "ERROR: Failed to create directory \"%s\": %s\n", name, strerror( err ) );
+				}
+
+				result |= ( mkdirResult == 0 );
+			}
+		}
+
+		return result;
+	}
 }
 
 bool8 FS_DeleteFolder( const char *path ) {

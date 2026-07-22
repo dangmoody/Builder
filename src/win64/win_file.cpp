@@ -29,7 +29,6 @@ SOFTWARE.
 #ifdef _WIN32
 
 #include "../file.h"
-#include "../file_local.h"
 
 #include "../debug.h"
 #include "../defer.h"
@@ -40,6 +39,7 @@ SOFTWARE.
 #include "../string.h"
 
 #include <Windows.h>
+#include <string.h>
 
 /*
 ================================================================================================
@@ -271,11 +271,11 @@ bool8 FS_GetAllFilesInFolder( const char *path, const fileVisitFlags_t visitFlag
 			}
 
 			fileInfo_t fileInfo = {
-				.sizeBytes			= ( TruncCast( u64, findData.nFileSizeHigh ) << 32 ) | findData.nFileSizeLow,
+				.sizeBytes		= ( TruncCast( u64, findData.nFileSizeHigh ) << 32 ) | findData.nFileSizeLow,
 				.lastWriteTime	= ( TruncCast( u64, findData.ftLastWriteTime.dwHighDateTime ) << 32 ) | findData.ftLastWriteTime.dwLowDateTime,
-				.isDirectory		= isDirectory,
-				.filename			= findData.cFileName,
-				.fullFilename		= fullFilename.data,
+				.isDirectory	= isDirectory,
+				.filename		= findData.cFileName,
+				.fullFilename	= fullFilename.data,
 			};
 
 			if ( fileInfo.isDirectory ) {
@@ -311,19 +311,37 @@ bool8 FS_FileExists( const char *filename ) {
 	return GetFileAttributes( filename ) != INVALID_FILE_ATTRIBUTES;
 }
 
-bool8 FS_CreateFolderInternal( const char *path ) {
+bool8 FS_CreateFolderIfItDoesntExist( const char *path ) {
 	Assert( path );
 
 	if ( FS_FolderExists( path ) ) {
 		return true;
 	}
 
-	SECURITY_ATTRIBUTES attributes = {};
-	attributes.nLength = sizeof( SECURITY_ATTRIBUTES );
+	// otherwise create the folder
+	{
+		bool8 result = false;
 
-	bool8 result = Cast( bool8, CreateDirectoryA( path, &attributes ) );
+		u64 pathLen = strlen( path );
 
-	return result;
+		for ( u64 i = 0; i <= pathLen; i++ ) {
+			if ( path[i] != '/' && path[i] != '\0' && path[i] != '\\' ) {
+				continue;
+			}
+
+			char name[1024] = {};
+			strncpy( name, path, i );
+
+			if ( !FS_FolderExists( name ) ) {
+				SECURITY_ATTRIBUTES attributes = {};
+				attributes.nLength = sizeof( SECURITY_ATTRIBUTES );
+
+				result |= Cast( bool8, CreateDirectoryA( name, &attributes ) );
+			}
+		}
+
+		return result;
+	}
 }
 
 bool8 FS_DeleteFolder( const char *path ) {

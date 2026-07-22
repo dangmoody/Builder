@@ -176,7 +176,6 @@
     <ClCompile Include="src\file.cpp" />
     <ClCompile Include="src\hash.cpp" />
     <ClCompile Include="src\hashmap.cpp" />
-    <ClCompile Include="src\intrinsics.clang.cpp" />
     <ClCompile Include="src\linear_allocator.cpp" />
     <ClCompile Include="src\linux\linux_debug.cpp" />
     <ClCompile Include="src\linux\linux_file.cpp" />
@@ -280,7 +279,6 @@
     <ClInclude Include="src\debug.h" />
     <ClInclude Include="src\defer.h" />
     <ClInclude Include="src\file.h" />
-    <ClInclude Include="src\file_local.h" />
     <ClInclude Include="src\hash.h" />
     <ClInclude Include="src\hashmap.h" />
     <ClInclude Include="src\helpers.h" />

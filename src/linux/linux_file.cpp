@@ -29,7 +29,6 @@ SOFTWARE.
 #ifdef __linux__
 
 #include "../file.h"
-#include "../file_local.h"
 #include "../paths.h"
 #include "../array.inl"
 #include "../defer.h"

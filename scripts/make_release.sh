@@ -45,6 +45,6 @@ echo "Done."
 echo ""
 
 echo "Making release archive..."
-tar cvf releases/builder_${version}_linux.tar.xz -I 'xz -9e --lzma2=dict=256M' ./bin/builder ./bin/libclang.so ./bin/libclang.so.20.1 ./bin/core.so clang include doc/CHANGELOG.txt doc/Contributing.md README.md LICENSE
+tar cvf releases/builder_${version}_linux.tar.xz -I 'xz -9e --lzma2=dict=256M' ./bin/builder ./bin/libclang.so ./bin/libclang.so.20.1 clang include doc/CHANGELOG.txt doc/Contributing.md README.md LICENSE
 
 popd

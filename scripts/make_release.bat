@@ -56,7 +56,6 @@ set tempFolder=.\\releases\\temp
 robocopy    .\\doc        %tempFolder%\\doc   CHANGELOG.txt
 robocopy    .\\doc        %tempFolder%\\doc   Contributing.md
 robocopy    .\\bin        %tempFolder%\\bin   builder.exe
-robocopy    .\\bin        %tempFolder%\\bin   core.dll
 robocopy    .\\clang\\bin %tempFolder%\\bin   libclang.dll
 robocopy /e .\\clang      %tempFolder%\\clang
 

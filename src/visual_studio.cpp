@@ -538,9 +538,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 					For ( u64, includePathIndex, 0, config->options.additionalIncludes.size() ) {
 						const char *additionalInclude = config->options.additionalIncludes[includePathIndex].c_str();
 
-						bool8 isEnvironmentVariable = String_StartsWith( additionalInclude, "$" );
-
-						if ( Path_IsAbsolute( additionalInclude ) || isEnvironmentVariable ) {
+						if ( Path_IsAbsolute( additionalInclude ) ) {
 							SB_Appendf( &vcxprojContent, "%s;", config->options.additionalIncludes[includePathIndex].c_str() );
 						} else {
 							SB_Appendf( &vcxprojContent, "%s%c%s;", pathFromSolutionToInputFile, PATH_SEPARATOR, config->options.additionalIncludes[includePathIndex].c_str() );
@@ -554,9 +552,7 @@ bool8 GenerateVisualStudioSolution( buildContext_t *context, BuilderOptions *opt
 					For ( u64, libPathIndex, 0, config->options.additionalLibPaths.size() ) {
 						const char *additionalLibPath = config->options.additionalLibPaths[libPathIndex].c_str();
 
-						bool8 isEnvironmentVariable = String_StartsWith( additionalLibPath, "$" );
-
-						if ( Path_IsAbsolute( additionalLibPath ) || isEnvironmentVariable ) {
+						if ( Path_IsAbsolute( additionalLibPath ) ) {
 							SB_Appendf( &vcxprojContent, "%s;", additionalLibPath );
 						} else {
 							SB_Appendf( &vcxprojContent, "%s%c%s;", pathFromSolutionToInputFile, PATH_SEPARATOR, additionalLibPath );

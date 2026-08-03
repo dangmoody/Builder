@@ -1,9 +1,3 @@
-v0.14.1, <RELEASE DATE HERE>:
-
-* Fixed bad paths getting generated in Visual Studio generation if the path was an environment variable.
-
-----------------------------------------------------------------
-
 v0.14.0, 24/07/2026:
 
 This version introduces a new version number despite minimal changes that would otherwise only constitute a patch number bump because Builder got rewritten a fair amount internally between this version and the last one.

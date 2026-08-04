@@ -8,6 +8,9 @@ extern "C" {
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 
 #include <stdint.h>
+#ifndef __cplusplus
+#include <stdbool.h>
+#endif
 
 typedef enum BinaryType {
 	BINARY_TYPE_EXE	= 0,
@@ -55,20 +58,25 @@ const char	*StringBuilder_ToString( stringBuilder_t *builder );
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN 1
 #include <Windows.h>
+#include <objbase.h>
+#include <oleauto.h>
+#if defined( _MSC_VER )
+#pragma comment( lib, "ole32.lib" )
+#pragma comment( lib, "oleaut32.lib" )
+#pragma comment( lib, "advapi32.lib" )
+#endif
 #elif defined( __linux__ )
 #include <unistd.h>
 #include <sys/wait.h>
 #include <errno.h>
+#else
+#error Unrecognised platform.
 #endif
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
-
-#ifndef __cplusplus
-#include <stdbool.h>
-#endif
 
 #ifndef BUILDER_ASSERT
 #include <assert.h>
@@ -84,6 +92,10 @@ enum {
 #define ARG_HELP_SHORT	"-h"
 #define ARG_HELP_LONG	"--help"
 #define ARG_CONFIG		"--config="
+
+static bool StringEquals( const char *a, const char *b ) {
+	return strcmp( a, b ) == 0;
+}
 
 static bool StringStartsWith( const char *str, const char *prefix ) {
 	return strncmp( str, prefix, strlen( prefix ) ) == 0;
@@ -183,7 +195,7 @@ static void SetCmdLineArgs( BuilderOptions *options, const int argc, char **argv
 
 static bool HasCommandLineArg( BuilderOptions *options, const char *arg ) {
 	for ( int argIndex = 0; argIndex < options->argc; argIndex++ ) {
-		if ( strcmp( options->argv[argIndex], arg ) == 0 ) {
+		if ( StringEquals( options->argv[argIndex], arg ) ) {
 			return true;
 		}
 	}
@@ -192,8 +204,7 @@ static bool HasCommandLineArg( BuilderOptions *options, const char *arg ) {
 }
 
 static void AddBuildConfig( BuilderOptions *options, BuildConfig *config ) {
-	options->configsCount++;
-	options->configs = (BuildConfig *) realloc( options->configs, options->configsCount * sizeof( BuildConfig ) );
+	options->configs = (BuildConfig *) realloc( options->configs, ++options->configsCount * sizeof( BuildConfig ) );
 
 	BuildConfig *dst = &options->configs[options->configsCount - 1];
 
@@ -359,7 +370,6 @@ static int ShowUsage( const int exitCode ) {
 	return exitCode;
 }
 
-// TODO: DM: 30/07/2026: add unix support
 static const char *GetFileExtensionFromBinaryType( const BinaryType binaryType ) {
 #if defined( _WIN32 )
 	switch ( binaryType ) {
@@ -367,18 +377,647 @@ static const char *GetFileExtensionFromBinaryType( const BinaryType binaryType )
 		case BINARY_TYPE_DYNAMIC_LIBRARY:	return ".dll";
 		case BINARY_TYPE_STATIC_LIBRARY:	return ".lib";
 	}
-#else
+#elif defined( __linux__ )
 	switch ( binaryType ) {
 		case BINARY_TYPE_EXE:				return "";
 		case BINARY_TYPE_DYNAMIC_LIBRARY:	return ".so";
 		case BINARY_TYPE_STATIC_LIBRARY:	return ".a";
 	}
+#else
+#error Unrecognised platform.
 #endif
 
 	BUILDER_ASSERT( false && "Bad BinaryType.\n" );
 
 	return NULL;
 }
+
+static char *Builder_FormatString( const char *fmt, ... ) {
+	va_list args;
+	va_start( args, fmt );
+
+	va_list argsCopy;
+	va_copy( argsCopy, args );
+
+	const int length = vsnprintf( NULL, 0, fmt, args );
+	va_end( args );
+
+	char *result = (char *) malloc( (size_t) length + 1 );
+	vsnprintf( result, (size_t) length + 1, fmt, argsCopy );
+	va_end( argsCopy );
+
+	return result;
+}
+
+typedef struct {
+	uint64_t	sizeBytes;
+	uint64_t	lastWriteTime;
+	bool		isDirectory;
+	const char	*filename;
+	const char	*fullFilename;
+} fileInfo_t;
+
+typedef void ( *builderFileVisitCallback_t )( fileInfo_t *fileInfo, void *data );
+
+typedef enum {
+	BUILDER_FILE_VISIT_FILES		= 1 << 0,
+	BUILDER_FILE_VISIT_FOLDERS		= 1 << 1,
+	BUILDER_FILE_VISIT_RECURSIVE	= 1 << 2,
+} builderFileVisitFlagBits_t;
+typedef uint32_t builderFileVisitFlags_t;
+
+static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t visitFlags, builderFileVisitCallback_t callback, void *data ) {
+	BUILDER_ASSERT( path );
+	BUILDER_ASSERT( callback );
+
+	uint32_t directoriesCount = 0;
+	const char **directories = malloc( 1 * sizeof( char * ) );
+	directories[directoriesCount++] = path;
+
+	uint32_t dirIndex = 0;
+
+	while ( dirIndex < directoriesCount ) {
+		const char *dir = directories[dirIndex];
+
+		dirIndex += 1;
+
+		const size_t dirLength = strlen( dir );
+		const bool dirHasTrailingSeparator = dirLength > 0 && ( dir[dirLength - 1] == '\\' || dir[dirLength - 1] == '/' );
+
+		char *searchPath = Builder_FormatString( dirHasTrailingSeparator ? "%s*" : "%s\\*", dir );
+
+		WIN32_FIND_DATA findData = {};
+		HANDLE handle = FindFirstFile( searchPath, &findData );
+
+		if ( handle == INVALID_HANDLE_VALUE ) {
+			return false;
+		}
+
+		while ( 1 ) {
+			fileInfo_t fileInfo = {
+				.sizeBytes		= ( (uint64_t) findData.nFileSizeHigh << 32 ) | findData.nFileSizeLow,
+				.lastWriteTime	= ( (uint64_t) findData.ftLastWriteTime.dwHighDateTime << 32 ) | findData.ftLastWriteTime.dwLowDateTime,
+				.isDirectory	= (bool) ( findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ),
+				.filename		= findData.cFileName,
+				.fullFilename	= Builder_FormatString( dirHasTrailingSeparator ? "%s%s" : "%s\\%s", dir, findData.cFileName ),
+			};
+
+			if ( fileInfo.isDirectory ) {
+				if ( !StringEquals( findData.cFileName, "." ) && !StringEquals( findData.cFileName, ".." ) ) {
+					if ( visitFlags & BUILDER_FILE_VISIT_FOLDERS ) {
+						callback( &fileInfo, data );
+					}
+
+					if ( visitFlags & BUILDER_FILE_VISIT_RECURSIVE ) {
+						directories = realloc( directories, ++directoriesCount * sizeof( char * ) );
+						directories[directoriesCount - 1] = fileInfo.fullFilename;
+					}
+				}
+			} else if ( visitFlags & BUILDER_FILE_VISIT_FILES ) {
+				callback( &fileInfo, data );
+			}
+
+			if ( !FindNextFile( handle, &findData ) ) {
+				break;
+			}
+		}
+
+		if ( !FindClose( handle ) ) {
+			return false;
+		}
+	}
+
+	free( directories );
+	directories = NULL;
+
+	return true;
+}
+
+#ifdef _WIN32
+// the Windows SDK only ships these Setup.Configuration interfaces as C++ (STDMETHOD/DECLSPEC_UUID
+// expand to virtual methods via inheritance), so for plain C we declare the vtables by hand instead -
+// same memory layout, called as This->lpVtbl->Method( This, ... )
+typedef struct ISetupInstance ISetupInstance;
+typedef struct {
+	HRESULT	( STDMETHODCALLTYPE *QueryInterface )( ISetupInstance *This, REFIID riid, void **ppvObject );
+	ULONG	( STDMETHODCALLTYPE *AddRef )( ISetupInstance *This );
+	ULONG	( STDMETHODCALLTYPE *Release )( ISetupInstance *This );
+	HRESULT	( STDMETHODCALLTYPE *GetInstanceId )( ISetupInstance *This, BSTR *pbstrInstanceId );
+	HRESULT	( STDMETHODCALLTYPE *GetInstallDate )( ISetupInstance *This, LPFILETIME pInstallDate );
+	HRESULT	( STDMETHODCALLTYPE *GetInstallationName )( ISetupInstance *This, BSTR *pbstrInstallationName );
+	HRESULT	( STDMETHODCALLTYPE *GetInstallationPath )( ISetupInstance *This, BSTR *pbstrInstallationPath );
+	HRESULT	( STDMETHODCALLTYPE *GetInstallationVersion )( ISetupInstance *This, BSTR *pbstrInstallationVersion );
+	HRESULT	( STDMETHODCALLTYPE *GetDisplayName )( ISetupInstance *This, LCID lcid, BSTR *pbstrDisplayName );
+	HRESULT	( STDMETHODCALLTYPE *GetDescription )( ISetupInstance *This, LCID lcid, BSTR *pbstrDescription );
+	HRESULT	( STDMETHODCALLTYPE *ResolvePath )( ISetupInstance *This, LPCOLESTR pwszRelativePath, BSTR *pbstrAbsolutePath );
+} ISetupInstanceVTable;
+
+struct ISetupInstance {
+	ISetupInstanceVTable *vtable;
+};
+
+typedef struct IEnumSetupInstances IEnumSetupInstances;
+typedef struct {
+	HRESULT	( STDMETHODCALLTYPE *QueryInterface )( IEnumSetupInstances *This, REFIID riid, void **ppvObject );
+	ULONG	( STDMETHODCALLTYPE *AddRef )( IEnumSetupInstances *This );
+	ULONG	( STDMETHODCALLTYPE *Release )( IEnumSetupInstances *This );
+	HRESULT	( STDMETHODCALLTYPE *Next )( IEnumSetupInstances *This, ULONG celt, ISetupInstance **rgelt, ULONG *pceltFetched );
+	HRESULT	( STDMETHODCALLTYPE *Skip )( IEnumSetupInstances *This, ULONG celt );
+	HRESULT	( STDMETHODCALLTYPE *Reset )( IEnumSetupInstances *This );
+	HRESULT	( STDMETHODCALLTYPE *Clone )( IEnumSetupInstances *This, IEnumSetupInstances **ppenum );
+} IEnumSetupInstancesVTable;
+
+struct IEnumSetupInstances {
+	IEnumSetupInstancesVTable *vtable;
+};
+
+typedef struct ISetupConfiguration ISetupConfiguration;
+typedef struct {
+	HRESULT	( STDMETHODCALLTYPE *QueryInterface )( ISetupConfiguration *This, REFIID riid, void **ppvObject );
+	ULONG	( STDMETHODCALLTYPE *AddRef )( ISetupConfiguration *This );
+	ULONG	( STDMETHODCALLTYPE *Release )( ISetupConfiguration *This );
+	HRESULT	( STDMETHODCALLTYPE *EnumInstances )( ISetupConfiguration *This, IEnumSetupInstances **ppEnumInstances );
+	HRESULT	( STDMETHODCALLTYPE *GetInstanceForCurrentProcess )( ISetupConfiguration *This, ISetupInstance **ppInstance );
+	HRESULT	( STDMETHODCALLTYPE *GetInstanceForPath )( ISetupConfiguration *This, LPCWSTR wzPath, ISetupInstance **ppInstance );
+} ISetupConfigurationVTable;
+
+struct ISetupConfiguration {
+	ISetupConfigurationVTable *vtable;
+};
+
+typedef struct {
+	int32_t	v0, v1, v2;
+} builderMSVCVersion_t;
+
+typedef struct {
+	const char				*rootFolder;
+	const char				*includePath;
+	const char				*libPath;
+
+	builderMSVCVersion_t	version;
+} builderMSVCInstall_t;
+
+typedef struct {
+	builderMSVCInstall_t	**installs;
+	uint32_t				*installsCount;
+} builderFoundMSVCInstallData_t;
+
+static bool Builder_FolderExists( const char *path ) {
+	const DWORD attributes = GetFileAttributesA( path );
+
+	return attributes != INVALID_FILE_ATTRIBUTES && ( attributes & FILE_ATTRIBUTE_DIRECTORY );
+}
+
+typedef struct {
+	int32_t	v0, v1, v2, v3;
+} builderWindowsSDKVersion_t;
+
+typedef struct {
+	const char					*rootFolder;
+	const char					*ucrtIncludePath;
+	const char					*umIncludePath;
+	const char					*sharedIncludePath;
+	const char					*ucrtLibPath;
+	const char					*umLibPath;
+
+	builderWindowsSDKVersion_t	version;
+} builderWindowsSDKInstall_t;
+
+typedef struct {
+	builderWindowsSDKVersion_t	**versions;
+	uint32_t					*versionsCount;
+} builderFoundWindowsSDKVersionData_t;
+
+static void OnWindowsSDKVersionFound( fileInfo_t *fileInfo, void *data ) {
+	builderFoundWindowsSDKVersionData_t *foundData = (builderFoundWindowsSDKVersionData_t *) data;
+
+	builderWindowsSDKVersion_t version = {};
+
+	if ( sscanf( fileInfo->filename, "%d.%d.%d.%d", &version.v0, &version.v1, &version.v2, &version.v3 ) != 4 ) {
+		return;
+	}
+
+	*foundData->versions = (builderWindowsSDKVersion_t *) realloc( *foundData->versions, ( *foundData->versionsCount + 1 ) * sizeof( builderWindowsSDKVersion_t ) );
+	( *foundData->versions )[*foundData->versionsCount] = version;
+
+	( *foundData->versionsCount )++;
+}
+
+static int CompareWindowsSDKVersions( const void *a, const void *b ) {
+	const builderWindowsSDKVersion_t *versionA = (const builderWindowsSDKVersion_t *) a;
+	const builderWindowsSDKVersion_t *versionB = (const builderWindowsSDKVersion_t *) b;
+
+	if ( versionA->v0 != versionB->v0 ) return versionB->v0 - versionA->v0;
+	if ( versionA->v1 != versionB->v1 ) return versionB->v1 - versionA->v1;
+	if ( versionA->v2 != versionB->v2 ) return versionB->v2 - versionA->v2;
+
+	return versionB->v3 - versionA->v3;
+}
+
+static bool Builder_GetWindowsSDKInstall( builderWindowsSDKInstall_t *outSDK ) {
+	BUILDER_ASSERT( outSDK );
+
+	bool success = false;
+	HKEY key = NULL;
+	const char *windowsSDKRoot = NULL;
+	builderWindowsSDKVersion_t *versions = NULL;
+	uint32_t versionsCount = 0;
+	bool found = false;
+
+	const char *winSDKRegPath = "SOFTWARE\\Microsoft\\Windows Kits\\Installed Roots";
+	LSTATUS status = RegOpenKeyExA( HKEY_LOCAL_MACHINE, winSDKRegPath, 0, KEY_QUERY_VALUE | KEY_WOW64_32KEY | KEY_ENUMERATE_SUB_KEYS, &key );
+
+	if ( status != ERROR_SUCCESS ) {
+		BuilderError(
+			"Failed to get Windows SDK installation directory from your Windows registry.  The registry path \"%s\" doesn't seem to exist on your machine.\n"
+			"This likely means you don't have the Windows SDK installed on your machine.\n"
+			"In order to build using MSVC (which you asked me to do) then you will need to install a version of the Windows SDK on your PC.\n"
+			, winSDKRegPath
+		);
+
+		goto cleanup;
+	}
+
+	const char *winSDKRegKey = "KitsRoot10";
+
+	DWORD windowsSDKRootLength = 0;
+	status = RegQueryValueExA( key, winSDKRegKey, NULL, NULL, NULL, &windowsSDKRootLength );
+
+	if ( status == ERROR_SUCCESS ) {
+		// valueStrLength from RegQueryValueExA includes the null terminator for REG_SZ strings
+		char *windowsSDKRootStr = (char *) malloc( windowsSDKRootLength * sizeof( char ) );
+
+		DWORD windowsSDKRootType = 0;
+
+		status = RegQueryValueExA( key, winSDKRegKey, NULL, &windowsSDKRootType, (LPBYTE) windowsSDKRootStr, &windowsSDKRootLength );
+
+		if ( status == ERROR_SUCCESS && windowsSDKRootType == REG_SZ ) {
+			windowsSDKRoot = windowsSDKRootStr;
+		} else {
+			free( windowsSDKRootStr );
+		}
+	}
+
+	if ( !windowsSDKRoot ) {
+		BuilderError(
+			"Failed to get Windows SDK installation directory from your Windows registry.  The registry key \"%s\" couldn't be queried from the registry path: \"%s\"\n"
+			"This likely means you don't have the Windows SDK installed on your machine.\n"
+			"In order to build using MSVC (which you asked me to do) then you will need to install a version of the Windows SDK on your PC.\n"
+			, winSDKRegKey
+			, winSDKRegPath
+		);
+
+		goto cleanup;
+	}
+
+	{
+		char *windowsSDKLibFolder = Builder_FormatString( "%sLib", windowsSDKRoot );
+
+		builderFoundWindowsSDKVersionData_t foundData = {
+			.versions		= &versions,
+			.versionsCount	= &versionsCount,
+		};
+
+		const bool visited = Builder_VisitFiles( windowsSDKLibFolder, BUILDER_FILE_VISIT_FOLDERS, OnWindowsSDKVersionFound, &foundData );
+
+		free( windowsSDKLibFolder );
+
+		if ( !visited ) {
+			BuilderError( "Failed to query your Windows SDK root folder for the version of the Windows SDK that you asked for.  Do you definitely have at least one version of the Windows SDK installed?\n" );
+			goto cleanup;
+		}
+	}
+
+	if ( versionsCount == 0 ) {
+		BuilderError( "Failed to find any versions of the Windows SDK installed under \"%s\".\n", windowsSDKRoot );
+		goto cleanup;
+	}
+
+	// newest version first
+	qsort( versions, versionsCount, sizeof( builderWindowsSDKVersion_t ), CompareWindowsSDKVersions );
+
+	// find the first windows SDK folder that isnt malformed
+	for ( uint32_t versionIndex = 0; versionIndex < versionsCount; versionIndex++ ) {
+		builderWindowsSDKVersion_t *version = &versions[versionIndex];
+
+		char *ucrtIncludeFolder = Builder_FormatString( "%sinclude\\%d.%d.%d.%d\\ucrt", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
+		char *umIncludeFolder = Builder_FormatString( "%sinclude\\%d.%d.%d.%d\\um", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
+		char *sharedIncludeFolder = Builder_FormatString( "%sinclude\\%d.%d.%d.%d\\shared", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
+		char *ucrtLibFolder = Builder_FormatString( "%sLib\\%d.%d.%d.%d\\ucrt\\x64", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
+		char *umLibFolder = Builder_FormatString( "%sLib\\%d.%d.%d.%d\\um\\x64", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
+
+		uint32_t missingFoldersCount = 0;
+		const char *missingFolders[5] = {};
+
+		if ( !Builder_FolderExists( ucrtIncludeFolder ) ) {
+			missingFolders[missingFoldersCount++] = ucrtIncludeFolder;
+		}
+
+		if ( !Builder_FolderExists( umIncludeFolder ) ) {
+			missingFolders[missingFoldersCount++] = umIncludeFolder;
+		}
+
+		if ( !Builder_FolderExists( sharedIncludeFolder ) ) {
+			missingFolders[missingFoldersCount++] = sharedIncludeFolder;
+		}
+
+		if ( !Builder_FolderExists( ucrtLibFolder ) ) {
+			missingFolders[missingFoldersCount++] = ucrtLibFolder;
+		}
+
+		if ( !Builder_FolderExists( umLibFolder ) ) {
+			missingFolders[missingFoldersCount++] = umLibFolder;
+		}
+
+		if ( missingFoldersCount > 0 ) {
+			stringBuilder_t sb = {};
+			StringBuilder_Appendf( &sb, "Version %d.%d.%d.%d of your Windows SDK installation is malformed because the following folders could not be found:\n", version->v0, version->v1, version->v2, version->v3 );
+
+			for ( uint32_t missingFolderIndex = 0; missingFolderIndex < missingFoldersCount; missingFolderIndex++ ) {
+				StringBuilder_Appendf( &sb, " - %s\n", missingFolders[missingFolderIndex] );
+			}
+
+			StringBuilder_Appendf( &sb, "If you want to use this version of the Windows SDK specifically, you will need to fix this yourself.\n" );
+
+			BuilderWarning( "%s", StringBuilder_ToString( &sb ) );
+
+			free( ucrtIncludeFolder );
+			free( umIncludeFolder );
+			free( sharedIncludeFolder );
+			free( ucrtLibFolder );
+			free( umLibFolder );
+
+			continue;
+		}
+
+		outSDK->rootFolder			= windowsSDKRoot;
+		outSDK->ucrtIncludePath		= ucrtIncludeFolder;
+		outSDK->umIncludePath		= umIncludeFolder;
+		outSDK->sharedIncludePath	= sharedIncludeFolder;
+		outSDK->ucrtLibPath			= ucrtLibFolder;
+		outSDK->umLibPath			= umLibFolder;
+		outSDK->version				= *version;
+
+		found = true;
+
+		break;
+	}
+
+	if ( !found ) {
+		BuilderError(
+			"Failed to find a valid installation of the Windows SDK on your machine.\n"
+			"You have %u versions of the Windows SDK installed on your machine, and somehow all of them appear to be malformed.\n"
+			"You need to install a version through the Visual Studio Installer, or via the separate Build Tools installer from Microsoft.\n"
+			, versionsCount
+		);
+
+		goto cleanup;
+	}
+
+	printf( "Using latest valid Windows SDK version that was found, which was: %d.%d.%d.%d\n", outSDK->version.v0, outSDK->version.v1, outSDK->version.v2, outSDK->version.v3 );
+
+	success = true;
+
+cleanup:
+	if ( key ) {
+		RegCloseKey( key );
+	}
+
+	return success;
+}
+
+// MSVC toolset folders are named like "14.44.35207" - that's the only part of each entry we need to parse ourselves
+static void OnMSVCInstallFound( fileInfo_t *fileInfo, void *data ) {
+	builderFoundMSVCInstallData_t *foundData = (builderFoundMSVCInstallData_t *) data;
+
+	builderMSVCVersion_t version = {};
+
+	if ( sscanf( fileInfo->filename, "%d.%d.%d", &version.v0, &version.v1, &version.v2 ) != 3 ) {
+		return;
+	}
+
+	builderMSVCInstall_t install = {
+		.rootFolder		= Builder_FormatString( "%s", fileInfo->fullFilename ),
+		.includePath	= Builder_FormatString( "%s\\include", fileInfo->fullFilename ),
+		.libPath		= Builder_FormatString( "%s\\lib\\x64", fileInfo->fullFilename ),
+		.version		= version,
+	};
+
+	*foundData->installs = (builderMSVCInstall_t *) realloc( *foundData->installs, ( *foundData->installsCount + 1 ) * sizeof( builderMSVCInstall_t ) );
+	( *foundData->installs )[*foundData->installsCount] = install;
+
+	( *foundData->installsCount )++;
+}
+
+static bool Builder_MSVCNotInstalled( void ) {
+	BuilderError( "No valid MSVC installation found on your PC.  You need to install one through either the Visual Studio Installer or through the MS Build Tools.\n" );
+	return false;
+}
+
+static int CompareMSVCInstallVersions( const void *a, const void *b ) {
+	const builderMSVCInstall_t *installA = (const builderMSVCInstall_t *) a;
+	const builderMSVCInstall_t *installB = (const builderMSVCInstall_t *) b;
+
+	if ( installA->version.v0 != installB->version.v0 ) {
+		return installB->version.v0 - installA->version.v0;
+	}
+
+	if ( installA->version.v1 != installB->version.v1 ) {
+		return installB->version.v1 - installA->version.v1;
+	}
+
+	return installB->version.v2 - installA->version.v2;
+}
+
+// get all versions of MSVC
+// thanks to Microsoft we will be doing that in the most retarded way possible
+static bool Builder_GetMSVCInstall( builderMSVCInstall_t *outInstall ) {
+	BUILDER_ASSERT( outInstall );
+
+	bool success = false;
+
+	// these are fixed, documented GUIDs for Microsoft.VisualStudio.Setup.Configuration.Native - not something we get to choose
+	const GUID IID_ISetupConfiguration	= { 0x42843719, 0xDB4C, 0x46C2, { 0x8E, 0x7C, 0x64, 0xF1, 0x81, 0x6E, 0xFD, 0x5B } };
+	const GUID CLSID_SetupConfiguration	= { 0x177F0C4A, 0x1CD3, 0x4DE7, { 0xA3, 0x2C, 0x71, 0xDB, 0xBB, 0x9F, 0xA3, 0x6D } };
+
+	HRESULT hr = S_OK;
+
+	hr = CoInitializeEx( NULL, COINIT_MULTITHREADED );
+
+	if ( FAILED( hr ) ) {
+		BuilderError( "CoInitializeEx() call failed: 0x%X\n", hr );
+		return false;
+	}
+
+	ISetupConfiguration *setupConfig = NULL;
+
+	hr = CoCreateInstance( &CLSID_SetupConfiguration, NULL, CLSCTX_INPROC_SERVER, &IID_ISetupConfiguration, (void **) &setupConfig );
+
+	if ( hr == REGDB_E_CLASSNOTREG ) {
+		success = Builder_MSVCNotInstalled();
+		goto cleanup;
+	}
+
+	if ( FAILED( hr ) ) {
+		BuilderError( "CoCreateInstance() call failed: 0x%X\n", hr );
+		goto cleanup;
+	}
+
+	IEnumSetupInstances *instances = NULL;
+	ISetupInstance *instance = NULL;
+
+	hr = setupConfig->vtable->EnumInstances( setupConfig, &instances );
+
+	if ( FAILED( hr ) ) {
+		BuilderError( "setupConfig->EnumInstances() call failed: 0x%X\n", hr );
+		goto cleanup;
+	}
+
+	if ( !instances ) {
+		BuilderError( "setupConfig->EnumInstances() returned no instances.  Bailing...\n" );
+		goto cleanup;
+	}
+
+	ULONG foundInstance = 0;
+	hr = instances->vtable->Next( instances, 1, &instance, &foundInstance );
+
+	builderMSVCInstall_t *foundMSVCInstalls = NULL;
+	uint32_t foundMSVCInstallsCount = 0;
+
+	while ( foundInstance ) {
+		BSTR visualStudioInstallationPathWide = NULL;
+		hr = instance->vtable->GetInstallationPath( instance, &visualStudioInstallationPathWide );
+
+		if ( FAILED( hr ) ) {
+			BuilderError( "instance->GetInstallationPath() call failed: 0x%X\n", hr );
+			instance->vtable->Release( instance );
+			goto cleanup;
+		}
+
+		char *visualStudioInstallationPath = NULL;
+
+		{
+			const UINT wideLength = SysStringLen( visualStudioInstallationPathWide );
+
+			const int utf8Length = WideCharToMultiByte( CP_UTF8, 0, visualStudioInstallationPathWide, (int) wideLength, NULL, 0, NULL, NULL );
+
+			if ( utf8Length <= 0 ) {
+				BuilderError( "First WideCharToMultiByte() call failed: WinAPI error code 0x%X\n", GetLastError() );
+				SysFreeString( visualStudioInstallationPathWide );
+				instance->vtable->Release( instance );
+				goto cleanup;
+			}
+
+			visualStudioInstallationPath = (char *) malloc( ( (size_t) utf8Length + 1 ) * sizeof( char ) );
+
+			const int converted = WideCharToMultiByte( CP_UTF8, 0, visualStudioInstallationPathWide, (int) wideLength, visualStudioInstallationPath, utf8Length, NULL, NULL );
+
+			if ( !converted ) {
+				BuilderError( "Second WideCharToMultiByte() call failed: WinAPI error code 0x%X\n", GetLastError() );
+				SysFreeString( visualStudioInstallationPathWide );
+				instance->vtable->Release( instance );
+				goto cleanup;
+			}
+
+			visualStudioInstallationPath[utf8Length] = 0;
+		}
+
+		SysFreeString( visualStudioInstallationPathWide );
+
+		char *msvcRootFolder = Builder_FormatString( "%s\\VC\\Tools\\MSVC", visualStudioInstallationPath );
+
+		free( visualStudioInstallationPath );
+
+		builderFoundMSVCInstallData_t foundData = {
+			.installs		= &foundMSVCInstalls,
+			.installsCount	= &foundMSVCInstallsCount,
+		};
+
+		if ( !Builder_VisitFiles( msvcRootFolder, BUILDER_FILE_VISIT_FOLDERS, OnMSVCInstallFound, &foundData ) ) {
+			BuilderError( "Failed to query for MSVC installation folders under \"%s\".\n", msvcRootFolder );
+			free( msvcRootFolder );
+			instance->vtable->Release( instance );
+			goto cleanup;
+		}
+
+		free( msvcRootFolder );
+
+		instance->vtable->Release( instance );
+
+		hr = instances->vtable->Next( instances, 1, &instance, &foundInstance );
+	}
+
+	if ( foundMSVCInstallsCount == 0 ) {
+		success = Builder_MSVCNotInstalled();
+		goto cleanup;
+	}
+
+	// newest version first
+	qsort( foundMSVCInstalls, foundMSVCInstallsCount, sizeof( builderMSVCInstall_t ), CompareMSVCInstallVersions );
+
+	bool found = false;
+	uint32_t useVersionIndex = 0;
+
+	for ( uint32_t versionIndex = 0; versionIndex < foundMSVCInstallsCount; versionIndex++ ) {
+		builderMSVCInstall_t *install = &foundMSVCInstalls[versionIndex];
+
+		uint32_t missingFoldersCount = 0;
+		const char *missingFolders[2] = {};
+
+		if ( !Builder_FolderExists( install->includePath ) ) {
+			missingFolders[missingFoldersCount++] = install->includePath;
+		}
+
+		if ( !Builder_FolderExists( install->libPath ) ) {
+			missingFolders[missingFoldersCount++] = install->libPath;
+		}
+
+		if ( missingFoldersCount > 0 ) {
+			stringBuilder_t sb = {};
+			StringBuilder_Appendf( &sb, "Version %d.%d.%d of your MSVC installation is malformed because the following folders could not be found:\n", install->version.v0, install->version.v1, install->version.v2 );
+
+			for ( uint32_t missingFolderIndex = 0; missingFolderIndex < missingFoldersCount; missingFolderIndex++ ) {
+				StringBuilder_Appendf( &sb, " - %s\n", missingFolders[missingFolderIndex] );
+			}
+
+			StringBuilder_Appendf( &sb, "If you want to use this version of MSVC specifically, you will need to fix this yourself.\n" );
+
+			BuilderWarning( "%s", StringBuilder_ToString( &sb ) );
+
+			continue;
+		}
+
+		useVersionIndex = versionIndex;
+		found = true;
+
+		break;
+	}
+
+	if ( !found ) {
+		success = Builder_MSVCNotInstalled();
+		goto cleanup;
+	}
+
+	*outInstall = foundMSVCInstalls[useVersionIndex];
+
+	printf( "Using latest valid MSVC version that was found, which was: %d.%d.%d\n", outInstall->version.v0, outInstall->version.v1, outInstall->version.v2 );
+
+	success = true;
+
+cleanup:
+	if ( instances ) {
+		instances->vtable->Release( instances );
+	}
+
+	if ( setupConfig ) {
+		setupConfig->vtable->Release( setupConfig );
+	}
+
+	CoUninitialize();
+
+	return success;
+}
+#endif // _WIN32
 
 static int Build( BuilderOptions *options ) {
 	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
@@ -429,6 +1068,18 @@ static int Build( BuilderOptions *options ) {
 		}
 	}
 
+#ifdef _WIN32
+	builderWindowsSDKInstall_t windowsSDKInstall = {};
+	if ( !Builder_GetWindowsSDKInstall( &windowsSDKInstall ) ) {
+		return 1;
+	}
+
+	builderMSVCInstall_t msvcInstall = {};
+	if ( !Builder_GetMSVCInstall( &msvcInstall ) ) {
+		return 1;
+	}
+#endif
+
 	printf( "Building config:\n" );
 
 	// build the config
@@ -461,11 +1112,13 @@ static int Build( BuilderOptions *options ) {
 		{
 			stringBuilder_t linkerArgs = {};
 #if defined( _WIN32 )
-			// TODO: DM: 30/07/2026: remove hardcoded path
 			if ( configToBuild->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
-				StringBuilder_Appendf( &linkerArgs, "lib.exe " );
+				StringBuilder_Appendf( &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\lib.exe\" ", msvcInstall.rootFolder );
 			} else {
-				StringBuilder_Appendf( &linkerArgs, "link.exe " );
+				StringBuilder_Appendf( &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\link.exe\" ", msvcInstall.rootFolder );
+				StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", msvcInstall.libPath );
+				StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.umLibPath );
+				StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.ucrtLibPath );
 			}
 
 			StringBuilder_Appendf( &linkerArgs, "/OUT:%s%s ", configToBuild->binaryName, GetFileExtensionFromBinaryType( configToBuild->binaryType ) );
@@ -486,6 +1139,12 @@ static int Build( BuilderOptions *options ) {
 				StringBuilder_Appendf( &linkerArgs, "%s ", *additionalLib );
 
 				additionalLib++;
+			}
+
+			if ( configToBuild->binaryType != BINARY_TYPE_STATIC_LIBRARY ) {
+				// clang doesn't embed /DEFAULTLIB directives the way cl.exe does, so link.exe has no idea
+				// which CRT/SDK libs to pull in unless we name them ourselves
+				StringBuilder_Appendf( &linkerArgs, "libcmt.lib libvcruntime.lib libucrt.lib kernel32.lib " );
 			}
 #elif defined( __linux__ )
 			if ( configToBuild->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {

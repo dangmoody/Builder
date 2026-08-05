@@ -68,6 +68,7 @@ const char	*StringBuilder_ToString( stringBuilder_t *builder );
 #elif defined( __linux__ )
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <errno.h>
 #else
 #error Unrecognised platform.
@@ -186,6 +187,35 @@ const char *StringBuilder_ToString( stringBuilder_t *builder ) {
 	result[totalLength - 1] = 0;
 
 	return result;
+}
+
+static bool FS_GetLastWriteTime( const char *path, uint64_t *outTime ) {
+	BUILDER_ASSERT( path );
+	BUILDER_ASSERT( outTime );
+
+#if defined( _WIN32 )
+	WIN32_FILE_ATTRIBUTE_DATA attributeData;
+
+	if ( !GetFileAttributesEx( path, GetFileExInfoStandard, &attributeData ) ) {
+		return false;
+	}
+
+	*outTime = ( (uint64_t) attributeData.ftLastWriteTime.dwHighDateTime << 32 ) | attributeData.ftLastWriteTime.dwLowDateTime;
+
+	return true;
+#elif defined( __linux__ )
+	struct stat fileStat;
+
+	if ( stat( path, &fileStat ) != 0 ) {
+		return false;
+	}
+
+	*outTime = (uint64_t) fileStat.st_mtime;
+
+	return true;
+#else
+#error Unrecognised platform.
+#endif
 }
 
 static void SetCmdLineArgs( BuilderOptions *options, const int argc, char **argv ) {
@@ -359,6 +389,106 @@ static int32_t RunProcess( const char *processAndArgs ) {
 #endif
 }
 
+#define Builder_RebuildSelf( argc, argv ) Builder_RebuildSelfInternal( (argc), (argv), __FILE__ )
+
+// DO NOT CALL THIS DIRECTLY
+// CALL THE MACRO VERSION INSTEAD
+static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sourceFile ) {
+	const char *binaryPath = argv[0];
+
+	uint64_t sourceTime = 0;
+	uint64_t binaryTime = 0;
+
+	if ( !FS_GetLastWriteTime( sourceFile, &sourceTime ) ) {
+		BuilderError( "Couldn't stat source file '%s'.\n", sourceFile );
+		exit( 1 );
+	}
+
+	// binary missing/unstatable, treat as "always rebuild" rather than erroring
+	const bool binaryExists = FS_GetLastWriteTime( binaryPath, &binaryTime );
+
+	if ( binaryExists && binaryTime >= sourceTime ) {
+		// already up to date, fall through and let main() continue as normal
+		return;
+	}
+
+	printf( "'%s' is stale, rebuilding...\n", binaryPath );
+
+	stringBuilder_t tempPathBuilder = {};
+	StringBuilder_Appendf( &tempPathBuilder, "%s.rebuild.tmp", binaryPath );
+	const char *tempBinaryPath = StringBuilder_ToString( &tempPathBuilder );
+
+	stringBuilder_t compileArgs = {};
+	StringBuilder_Appendf( &compileArgs, "clang " );
+	StringBuilder_Appendf( &compileArgs, "-o %s ", tempBinaryPath );
+	StringBuilder_Appendf( &compileArgs, "%s ", sourceFile );
+
+	const char *compileCmd = StringBuilder_ToString( &compileArgs );
+
+	printf( "%s\n", compileCmd );
+
+	if ( RunProcess( compileCmd ) != 0 ) {
+		BuilderError( "failed to rebuild '%s'.\n", binaryPath );
+
+#if defined( _WIN32 )
+		DeleteFile( tempBinaryPath );
+#elif defined( __linux__ )
+		unlink( tempBinaryPath );
+#endif
+
+		exit( 1 );
+	}
+
+	// atomically swap the freshly built binary into place
+	// never overwrite binaryPath in place since writing directly into a currently-executing image fails
+#if defined( _WIN32 )
+	// a currently-running process cant MoveFileEx-replace its own on-disk image directly (fails with ERROR_ACCESS_DENIED)
+	// rename it out of the way first, then move the freshly built binary into the now-vacated name
+	// the running image stays mapped and executing under its backup name until this process re-execs below
+	stringBuilder_t backupPathBuilder = {};
+	StringBuilder_Appendf( &backupPathBuilder, "%s.rebuild.old", binaryPath );
+	const char *backupBinaryPath = StringBuilder_ToString( &backupPathBuilder );
+
+	if ( !MoveFileEx( binaryPath, backupBinaryPath, MOVEFILE_REPLACE_EXISTING ) ) {
+		BuilderError( "Failed to move currently-running '%s' out of the way: 0x%X\n", binaryPath, GetLastError() );
+		exit( 1 );
+	}
+
+	if ( !MoveFileEx( tempBinaryPath, binaryPath, MOVEFILE_REPLACE_EXISTING ) ) {
+		BuilderError( "Failed to replace '%s' with rebuilt binary: 0x%X\n", binaryPath, GetLastError() );
+		exit( 1 );
+	}
+#elif defined( __linux__ )
+	if ( rename( tempBinaryPath, binaryPath ) != 0 ) {
+		BuilderError( "Failed to replace '%s' with rebuilt binary: %s\n", binaryPath, strerror( errno ) );
+		exit( 1 );
+	}
+#endif
+
+	// re-exec the freshly rebuilt binary with the original argv
+	// never fall through to running the (now stale-in-memory) code of the process currently executing
+#if defined( _WIN32 )
+	stringBuilder_t execArgs = {};
+	StringBuilder_Appendf( &execArgs, "\"%s\" ", binaryPath );
+
+	for ( int argIndex = 1; argIndex < argc; argIndex++ ) {
+		StringBuilder_Appendf( &execArgs, "\"%s\" ", argv[argIndex] );
+	}
+
+	const char *execCmd = StringBuilder_ToString( &execArgs );
+
+	const int32_t exitCode = RunProcess( execCmd );
+
+	exit( exitCode );
+#elif defined( __linux__ )
+	execv( binaryPath, argv );
+
+	// only reachable if execv failed
+	BuilderError( "Failed to re-exec '%s': %s\n", binaryPath, strerror( errno ) );
+	exit( 1 );
+#endif
+}
+
 static int ShowUsage( const int exitCode ) {
 	// TODO: DM: 30/07/2026: write the usage/help text here
 	printf(
@@ -494,9 +624,9 @@ static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t 
 }
 
 #ifdef _WIN32
-// the Windows SDK only ships these Setup.Configuration interfaces as C++ (STDMETHOD/DECLSPEC_UUID
-// expand to virtual methods via inheritance), so for plain C we declare the vtables by hand instead -
-// same memory layout, called as This->lpVtbl->Method( This, ... )
+// the Windows SDK only ships these Setup.Configuration interfaces as C++ (STDMETHOD/DECLSPEC_UUID expand to virtual methods via inheritance)
+// so for plain C we declare the vtables by hand instead
+// same memory layout, called as This->vtable->Method( This, ... )
 typedef struct ISetupInstance ISetupInstance;
 typedef struct {
 	HRESULT	( STDMETHODCALLTYPE *QueryInterface )( ISetupInstance *This, REFIID riid, void **ppvObject );
@@ -513,7 +643,7 @@ typedef struct {
 } ISetupInstanceVTable;
 
 struct ISetupInstance {
-	ISetupInstanceVTable *vtable;
+	ISetupInstanceVTable	*vtable;
 };
 
 typedef struct IEnumSetupInstances IEnumSetupInstances;
@@ -528,7 +658,7 @@ typedef struct {
 } IEnumSetupInstancesVTable;
 
 struct IEnumSetupInstances {
-	IEnumSetupInstancesVTable *vtable;
+	IEnumSetupInstancesVTable	*vtable;
 };
 
 typedef struct ISetupConfiguration ISetupConfiguration;
@@ -542,7 +672,7 @@ typedef struct {
 } ISetupConfigurationVTable;
 
 struct ISetupConfiguration {
-	ISetupConfigurationVTable *vtable;
+	ISetupConfigurationVTable	*vtable;
 };
 
 typedef struct {
@@ -557,9 +687,10 @@ typedef struct {
 	builderMSVCVersion_t	version;
 } builderMSVCInstall_t;
 
+// TODO: DM: 05/08/2026: Tom's chunked array
 typedef struct {
-	builderMSVCInstall_t	**installs;
-	uint32_t				*installsCount;
+	builderMSVCInstall_t	*installs;
+	uint32_t				installsCount;
 } builderFoundMSVCInstallData_t;
 
 static bool Builder_FolderExists( const char *path ) {
@@ -583,9 +714,10 @@ typedef struct {
 	builderWindowsSDKVersion_t	version;
 } builderWindowsSDKInstall_t;
 
+// TODO: DM: 05/08/2026: Tom's chunked array
 typedef struct {
-	builderWindowsSDKVersion_t	**versions;
-	uint32_t					*versionsCount;
+	builderWindowsSDKVersion_t	*versions;
+	uint32_t					versionsCount;
 } builderFoundWindowsSDKVersionData_t;
 
 static void OnWindowsSDKVersionFound( fileInfo_t *fileInfo, void *data ) {
@@ -597,10 +729,8 @@ static void OnWindowsSDKVersionFound( fileInfo_t *fileInfo, void *data ) {
 		return;
 	}
 
-	*foundData->versions = (builderWindowsSDKVersion_t *) realloc( *foundData->versions, ( *foundData->versionsCount + 1 ) * sizeof( builderWindowsSDKVersion_t ) );
-	( *foundData->versions )[*foundData->versionsCount] = version;
-
-	( *foundData->versionsCount )++;
+	foundData->versions = (builderWindowsSDKVersion_t *) realloc( foundData->versions, ( ++foundData->versionsCount ) * sizeof( builderWindowsSDKVersion_t ) );
+	foundData->versions[foundData->versionsCount - 1] = version;
 }
 
 static int CompareWindowsSDKVersions( const void *a, const void *b ) {
@@ -674,13 +804,16 @@ static bool Builder_GetWindowsSDKInstall( builderWindowsSDKInstall_t *outSDK ) {
 		char *windowsSDKLibFolder = Builder_FormatString( "%sLib", windowsSDKRoot );
 
 		builderFoundWindowsSDKVersionData_t foundData = {
-			.versions		= &versions,
-			.versionsCount	= &versionsCount,
+			.versions		= versions,
+			.versionsCount	= versionsCount,
 		};
 
 		const bool visited = Builder_VisitFiles( windowsSDKLibFolder, BUILDER_FILE_VISIT_FOLDERS, OnWindowsSDKVersionFound, &foundData );
 
 		free( windowsSDKLibFolder );
+
+		versions = foundData.versions;
+		versionsCount = foundData.versionsCount;
 
 		if ( !visited ) {
 			BuilderError( "Failed to query your Windows SDK root folder for the version of the Windows SDK that you asked for.  Do you definitely have at least one version of the Windows SDK installed?\n" );
@@ -803,10 +936,8 @@ static void OnMSVCInstallFound( fileInfo_t *fileInfo, void *data ) {
 		.version		= version,
 	};
 
-	*foundData->installs = (builderMSVCInstall_t *) realloc( *foundData->installs, ( *foundData->installsCount + 1 ) * sizeof( builderMSVCInstall_t ) );
-	( *foundData->installs )[*foundData->installsCount] = install;
-
-	( *foundData->installsCount )++;
+	foundData->installs = (builderMSVCInstall_t *) realloc( foundData->installs, ( ++foundData->installsCount ) * sizeof( builderMSVCInstall_t ) );
+	foundData->installs[foundData->installsCount - 1] = install;
 }
 
 static bool Builder_MSVCNotInstalled( void ) {
@@ -929,8 +1060,8 @@ static bool Builder_GetMSVCInstall( builderMSVCInstall_t *outInstall ) {
 		free( visualStudioInstallationPath );
 
 		builderFoundMSVCInstallData_t foundData = {
-			.installs		= &foundMSVCInstalls,
-			.installsCount	= &foundMSVCInstallsCount,
+			.installs		= foundMSVCInstalls,
+			.installsCount	= foundMSVCInstallsCount,
 		};
 
 		if ( !Builder_VisitFiles( msvcRootFolder, BUILDER_FILE_VISIT_FOLDERS, OnMSVCInstallFound, &foundData ) ) {
@@ -939,6 +1070,9 @@ static bool Builder_GetMSVCInstall( builderMSVCInstall_t *outInstall ) {
 			instance->vtable->Release( instance );
 			goto cleanup;
 		}
+
+		foundMSVCInstalls = foundData.installs;
+		foundMSVCInstallsCount = foundData.installsCount;
 
 		free( msvcRootFolder );
 
@@ -1142,8 +1276,8 @@ static int Build( BuilderOptions *options ) {
 			}
 
 			if ( configToBuild->binaryType != BINARY_TYPE_STATIC_LIBRARY ) {
-				// clang doesn't embed /DEFAULTLIB directives the way cl.exe does, so link.exe has no idea
-				// which CRT/SDK libs to pull in unless we name them ourselves
+				// clang doesn't embed /DEFAULTLIB directives the way cl.exe does
+				// so link.exe has no idea which CRT/SDK libs to pull in unless we name them ourselves
 				StringBuilder_Appendf( &linkerArgs, "libcmt.lib libvcruntime.lib libucrt.lib kernel32.lib " );
 			}
 #elif defined( __linux__ )

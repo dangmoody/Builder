@@ -2,6 +2,8 @@
 #include "../../builder.h"
 
 int main( int argc, char **argv ) {
+	Builder_RebuildSelf( argc, argv );
+
 	BuilderOptions options = {};
 
 	const char *sourceFiles[] = { "main.c", NULL };

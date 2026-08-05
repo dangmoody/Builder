@@ -560,6 +560,7 @@ static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t 
 	BUILDER_ASSERT( path );
 	BUILDER_ASSERT( callback );
 
+	// TODO: DM: 05/08/2026: Tom's chunked array
 	uint32_t directoriesCount = 0;
 	const char **directories = malloc( 1 * sizeof( char * ) );
 	directories[directoriesCount++] = path;

@@ -69,6 +69,7 @@ const char	*StringBuilder_ToString( stringBuilder_t *builder );
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <dirent.h>
 #include <errno.h>
 #else
 #error Unrecognised platform.
@@ -94,15 +95,15 @@ enum {
 #define ARG_HELP_LONG	"--help"
 #define ARG_CONFIG		"--config="
 
-static bool StringEquals( const char *a, const char *b ) {
+static bool Builder_StringEquals( const char *a, const char *b ) {
 	return strcmp( a, b ) == 0;
 }
 
-static bool StringStartsWith( const char *str, const char *prefix ) {
+static bool Builder_StringStartsWith( const char *str, const char *prefix ) {
 	return strncmp( str, prefix, strlen( prefix ) ) == 0;
 }
 
-static void BuilderWarning( const char *fmt, ... ) {
+static void Builder_Warning( const char *fmt, ... ) {
 	printf( "WARNING: " );
 
 	va_list args;
@@ -111,7 +112,7 @@ static void BuilderWarning( const char *fmt, ... ) {
 	va_end( args );
 }
 
-static void BuilderError( const char *fmt, ... ) {
+static void Builder_Error( const char *fmt, ... ) {
 	printf( "ERROR: " );
 
 	va_list args;
@@ -189,7 +190,7 @@ const char *StringBuilder_ToString( stringBuilder_t *builder ) {
 	return result;
 }
 
-static bool FS_GetLastWriteTime( const char *path, uint64_t *outTime ) {
+static bool Builder_GetFileLastWriteTime( const char *path, uint64_t *outTime ) {
 	BUILDER_ASSERT( path );
 	BUILDER_ASSERT( outTime );
 
@@ -225,7 +226,7 @@ static void SetCmdLineArgs( BuilderOptions *options, const int argc, char **argv
 
 static bool HasCommandLineArg( BuilderOptions *options, const char *arg ) {
 	for ( int argIndex = 0; argIndex < options->argc; argIndex++ ) {
-		if ( StringEquals( options->argv[argIndex], arg ) ) {
+		if ( Builder_StringEquals( options->argv[argIndex], arg ) ) {
 			return true;
 		}
 	}
@@ -241,7 +242,7 @@ static void AddBuildConfig( BuilderOptions *options, BuildConfig *config ) {
 	memcpy( dst, config, sizeof( BuildConfig ) );
 }
 
-static int32_t RunProcess( const char *processAndArgs ) {
+static int32_t Builder_RunProcess( const char *processAndArgs ) {
 #if defined( _WIN32 )
 	SECURITY_ATTRIBUTES secAttr = { sizeof( SECURITY_ATTRIBUTES ), NULL, TRUE };
 
@@ -250,7 +251,7 @@ static int32_t RunProcess( const char *processAndArgs ) {
 
 	HANDLE stdoutWrite = NULL;
 	if ( !CreatePipe( &stdoutRead, &stdoutWrite, &secAttr, 0 ) ) {
-		BuilderError( "CreatePipe call failed for stdout: 0x%X.\n", GetLastError() );
+		Builder_Error( "CreatePipe call failed for stdout: 0x%X.\n", GetLastError() );
 		return 1;
 	}
 
@@ -273,7 +274,7 @@ static int32_t RunProcess( const char *processAndArgs ) {
 		&startInfo,
 		&processInfo
 	) ) {
-		BuilderError( "Failed to create process: 0x%X.\n", GetLastError() );
+		Builder_Error( "Failed to create process: 0x%X.\n", GetLastError() );
 		return 1;
 	}
 
@@ -281,7 +282,7 @@ static int32_t RunProcess( const char *processAndArgs ) {
 	// the child inherited its own copies so this must happen before we start reading
 	// otherwise the parents dangling copy keeps the pipe "open" and ReadFile below blocks forever once the child exits
 	if ( !CloseHandle( stdoutWrite ) ) {
-		BuilderError( "Failed to close stdout write handle: 0x%X\n", GetLastError() );
+		Builder_Error( "Failed to close stdout write handle: 0x%X\n", GetLastError() );
 		return 1;
 	}
 
@@ -299,26 +300,26 @@ static int32_t RunProcess( const char *processAndArgs ) {
 
 		// the child closing its end of the pipe (e.g. on exit) surfaces as ERROR_BROKEN_PIPE here - that's expected EOF, not a real failure
 		if ( lastError != ERROR_BROKEN_PIPE ) {
-			BuilderError( "Failed to read stdout of subprocess: 0x%X.\n", lastError );
+			Builder_Error( "Failed to read stdout of subprocess: 0x%X.\n", lastError );
 		}
 	}
 
 	// wait for process to finish
 	if ( !CloseHandle( stdoutRead ) ) {
-		BuilderError( "Failed to close stdout read handle: Windows error code: 0x%X\n", GetLastError() );
+		Builder_Error( "Failed to close stdout read handle: Windows error code: 0x%X\n", GetLastError() );
 		return false;
 	}
 	stdoutRead = NULL;
 
 	if ( WaitForSingleObject( processInfo.hProcess, INFINITE ) != WAIT_OBJECT_0 ) {
-		BuilderError( "Failed to wait for subprocess to finish: 0x%X\n", GetLastError() );
+		Builder_Error( "Failed to wait for subprocess to finish: 0x%X\n", GetLastError() );
 		return -1;
 	}
 
 	DWORD exitCode = 0;
 
 	if ( !GetExitCodeProcess( processInfo.hProcess, &exitCode ) ) {
-		BuilderError( "Failed to get exit code of subprocess: 0x%X\n", GetLastError() );
+		Builder_Error( "Failed to get exit code of subprocess: 0x%X\n", GetLastError() );
 		return -1;
 	}
 
@@ -327,14 +328,14 @@ static int32_t RunProcess( const char *processAndArgs ) {
 	int stdoutPipe[2];
 
 	if ( pipe( stdoutPipe ) != 0 ) {
-		BuilderError( "Failed to create pipe for subprocess stdout: %s.\n", strerror( errno ) );
+		Builder_Error( "Failed to create pipe for subprocess stdout: %s.\n", strerror( errno ) );
 		return -1;
 	}
 
 	const pid_t pid = fork();
 
 	if ( pid < 0 ) {
-		BuilderError( "Failed to fork subprocess: %s.\n", strerror( errno ) );
+		Builder_Error( "Failed to fork subprocess: %s.\n", strerror( errno ) );
 		return -1;
 	}
 
@@ -370,7 +371,7 @@ static int32_t RunProcess( const char *processAndArgs ) {
 	int status = 0;
 
 	if ( waitpid( pid, &status, 0 ) < 0 ) {
-		BuilderError( "Failed to wait for subprocess: %s.\n", strerror( errno ) );
+		Builder_Error( "Failed to wait for subprocess: %s.\n", strerror( errno ) );
 		return -1;
 	}
 
@@ -379,7 +380,7 @@ static int32_t RunProcess( const char *processAndArgs ) {
 	}
 
 	if ( WIFSIGNALED( status ) ) {
-		BuilderError( "Subprocess was terminated by signal %d.\n", WTERMSIG( status ) );
+		Builder_Error( "Subprocess was terminated by signal %d.\n", WTERMSIG( status ) );
 		return -1;
 	}
 
@@ -399,13 +400,13 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 	uint64_t sourceTime = 0;
 	uint64_t binaryTime = 0;
 
-	if ( !FS_GetLastWriteTime( sourceFile, &sourceTime ) ) {
-		BuilderError( "Couldn't stat source file '%s'.\n", sourceFile );
+	if ( !Builder_GetFileLastWriteTime( sourceFile, &sourceTime ) ) {
+		Builder_Error( "Couldn't stat source file '%s'.\n", sourceFile );
 		exit( 1 );
 	}
 
 	// binary missing/unstatable, treat as "always rebuild" rather than erroring
-	const bool binaryExists = FS_GetLastWriteTime( binaryPath, &binaryTime );
+	const bool binaryExists = Builder_GetFileLastWriteTime( binaryPath, &binaryTime );
 
 	if ( binaryExists && binaryTime >= sourceTime ) {
 		// already up to date, fall through and let main() continue as normal
@@ -427,8 +428,8 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 
 	printf( "%s\n", compileCmd );
 
-	if ( RunProcess( compileCmd ) != 0 ) {
-		BuilderError( "failed to rebuild '%s'.\n", binaryPath );
+	if ( Builder_RunProcess( compileCmd ) != 0 ) {
+		Builder_Error( "failed to rebuild '%s'.\n", binaryPath );
 
 #if defined( _WIN32 )
 		DeleteFile( tempBinaryPath );
@@ -450,17 +451,17 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 	const char *backupBinaryPath = StringBuilder_ToString( &backupPathBuilder );
 
 	if ( !MoveFileEx( binaryPath, backupBinaryPath, MOVEFILE_REPLACE_EXISTING ) ) {
-		BuilderError( "Failed to move currently-running '%s' out of the way: 0x%X\n", binaryPath, GetLastError() );
+		Builder_Error( "Failed to move currently-running '%s' out of the way: 0x%X\n", binaryPath, GetLastError() );
 		exit( 1 );
 	}
 
 	if ( !MoveFileEx( tempBinaryPath, binaryPath, MOVEFILE_REPLACE_EXISTING ) ) {
-		BuilderError( "Failed to replace '%s' with rebuilt binary: 0x%X\n", binaryPath, GetLastError() );
+		Builder_Error( "Failed to replace '%s' with rebuilt binary: 0x%X\n", binaryPath, GetLastError() );
 		exit( 1 );
 	}
 #elif defined( __linux__ )
 	if ( rename( tempBinaryPath, binaryPath ) != 0 ) {
-		BuilderError( "Failed to replace '%s' with rebuilt binary: %s\n", binaryPath, strerror( errno ) );
+		Builder_Error( "Failed to replace '%s' with rebuilt binary: %s\n", binaryPath, strerror( errno ) );
 		exit( 1 );
 	}
 #endif
@@ -477,14 +478,14 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 
 	const char *execCmd = StringBuilder_ToString( &execArgs );
 
-	const int32_t exitCode = RunProcess( execCmd );
+	const int32_t exitCode = Builder_RunProcess( execCmd );
 
 	exit( exitCode );
 #elif defined( __linux__ )
 	execv( binaryPath, argv );
 
 	// only reachable if execv failed
-	BuilderError( "Failed to re-exec '%s': %s\n", binaryPath, strerror( errno ) );
+	Builder_Error( "Failed to re-exec '%s': %s\n", binaryPath, strerror( errno ) );
 	exit( 1 );
 #endif
 }
@@ -500,7 +501,7 @@ static int ShowUsage( const int exitCode ) {
 	return exitCode;
 }
 
-static const char *GetFileExtensionFromBinaryType( const BinaryType binaryType ) {
+static const char *Builder_GetFileExtensionFromBinaryType( const BinaryType binaryType ) {
 #if defined( _WIN32 )
 	switch ( binaryType ) {
 		case BINARY_TYPE_EXE:				return ".exe";
@@ -575,6 +576,7 @@ static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t 
 		const size_t dirLength = strlen( dir );
 		const bool dirHasTrailingSeparator = dirLength > 0 && ( dir[dirLength - 1] == '\\' || dir[dirLength - 1] == '/' );
 
+#if defined( _WIN32 )
 		char *searchPath = Builder_FormatString( dirHasTrailingSeparator ? "%s*" : "%s\\*", dir );
 
 		WIN32_FIND_DATA findData = {};
@@ -594,7 +596,7 @@ static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t 
 			};
 
 			if ( fileInfo.isDirectory ) {
-				if ( !StringEquals( findData.cFileName, "." ) && !StringEquals( findData.cFileName, ".." ) ) {
+				if ( !Builder_StringEquals( findData.cFileName, "." ) && !Builder_StringEquals( findData.cFileName, ".." ) ) {
 					if ( visitFlags & BUILDER_FILE_VISIT_FOLDERS ) {
 						callback( &fileInfo, data );
 					}
@@ -616,6 +618,54 @@ static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t 
 		if ( !FindClose( handle ) ) {
 			return false;
 		}
+#elif defined( __linux__ )
+		DIR *handle = opendir( dir );
+
+		if ( !handle ) {
+			return false;
+		}
+
+		struct dirent *entry = NULL;
+
+		while ( ( entry = readdir( handle ) ) != NULL ) {
+			if ( Builder_StringEquals( entry->d_name, "." ) || Builder_StringEquals( entry->d_name, ".." ) ) {
+				continue;
+			}
+
+			char *fullFilename = Builder_FormatString( dirHasTrailingSeparator ? "%s%s" : "%s/%s", dir, entry->d_name );
+
+			struct stat fileStat = {};
+
+			if ( stat( fullFilename, &fileStat ) != 0 ) {
+				return false;
+			}
+
+			fileInfo_t fileInfo = {
+				.sizeBytes		= (uint64_t) fileStat.st_size,
+				.lastWriteTime	= (uint64_t) fileStat.st_mtime,
+				.isDirectory	= (bool) S_ISDIR( fileStat.st_mode ),
+				.filename		= entry->d_name,
+				.fullFilename	= fullFilename,
+			};
+
+			if ( fileInfo.isDirectory ) {
+				if ( visitFlags & BUILDER_FILE_VISIT_FOLDERS ) {
+					callback( &fileInfo, data );
+				}
+
+				if ( visitFlags & BUILDER_FILE_VISIT_RECURSIVE ) {
+					directories = realloc( directories, ++directoriesCount * sizeof( char * ) );
+					directories[directoriesCount - 1] = fileInfo.fullFilename;
+				}
+			} else if ( visitFlags & BUILDER_FILE_VISIT_FILES ) {
+				callback( &fileInfo, data );
+			}
+		}
+
+		if ( closedir( handle ) != 0 ) {
+			return false;
+		}
+#endif
 	}
 
 	free( directories );
@@ -734,7 +784,7 @@ static void OnWindowsSDKVersionFound( fileInfo_t *fileInfo, void *data ) {
 	foundData->versions[foundData->versionsCount - 1] = version;
 }
 
-static int CompareWindowsSDKVersions( const void *a, const void *b ) {
+static int Builder_CompareWindowsSDKVersions( const void *a, const void *b ) {
 	const builderWindowsSDKVersion_t *versionA = (const builderWindowsSDKVersion_t *) a;
 	const builderWindowsSDKVersion_t *versionB = (const builderWindowsSDKVersion_t *) b;
 
@@ -759,7 +809,7 @@ static bool Builder_GetWindowsSDKInstall( builderWindowsSDKInstall_t *outSDK ) {
 	LSTATUS status = RegOpenKeyExA( HKEY_LOCAL_MACHINE, winSDKRegPath, 0, KEY_QUERY_VALUE | KEY_WOW64_32KEY | KEY_ENUMERATE_SUB_KEYS, &key );
 
 	if ( status != ERROR_SUCCESS ) {
-		BuilderError(
+		Builder_Error(
 			"Failed to get Windows SDK installation directory from your Windows registry.  The registry path \"%s\" doesn't seem to exist on your machine.\n"
 			"This likely means you don't have the Windows SDK installed on your machine.\n"
 			"In order to build using MSVC (which you asked me to do) then you will need to install a version of the Windows SDK on your PC.\n"
@@ -790,7 +840,7 @@ static bool Builder_GetWindowsSDKInstall( builderWindowsSDKInstall_t *outSDK ) {
 	}
 
 	if ( !windowsSDKRoot ) {
-		BuilderError(
+		Builder_Error(
 			"Failed to get Windows SDK installation directory from your Windows registry.  The registry key \"%s\" couldn't be queried from the registry path: \"%s\"\n"
 			"This likely means you don't have the Windows SDK installed on your machine.\n"
 			"In order to build using MSVC (which you asked me to do) then you will need to install a version of the Windows SDK on your PC.\n"
@@ -817,18 +867,18 @@ static bool Builder_GetWindowsSDKInstall( builderWindowsSDKInstall_t *outSDK ) {
 		versionsCount = foundData.versionsCount;
 
 		if ( !visited ) {
-			BuilderError( "Failed to query your Windows SDK root folder for the version of the Windows SDK that you asked for.  Do you definitely have at least one version of the Windows SDK installed?\n" );
+			Builder_Error( "Failed to query your Windows SDK root folder for the version of the Windows SDK that you asked for.  Do you definitely have at least one version of the Windows SDK installed?\n" );
 			goto cleanup;
 		}
 	}
 
 	if ( versionsCount == 0 ) {
-		BuilderError( "Failed to find any versions of the Windows SDK installed under \"%s\".\n", windowsSDKRoot );
+		Builder_Error( "Failed to find any versions of the Windows SDK installed under \"%s\".\n", windowsSDKRoot );
 		goto cleanup;
 	}
 
 	// newest version first
-	qsort( versions, versionsCount, sizeof( builderWindowsSDKVersion_t ), CompareWindowsSDKVersions );
+	qsort( versions, versionsCount, sizeof( builderWindowsSDKVersion_t ), Builder_CompareWindowsSDKVersions );
 
 	// find the first windows SDK folder that isnt malformed
 	for ( uint32_t versionIndex = 0; versionIndex < versionsCount; versionIndex++ ) {
@@ -873,7 +923,7 @@ static bool Builder_GetWindowsSDKInstall( builderWindowsSDKInstall_t *outSDK ) {
 
 			StringBuilder_Appendf( &sb, "If you want to use this version of the Windows SDK specifically, you will need to fix this yourself.\n" );
 
-			BuilderWarning( "%s", StringBuilder_ToString( &sb ) );
+			Builder_Warning( "%s", StringBuilder_ToString( &sb ) );
 
 			free( ucrtIncludeFolder );
 			free( umIncludeFolder );
@@ -898,7 +948,7 @@ static bool Builder_GetWindowsSDKInstall( builderWindowsSDKInstall_t *outSDK ) {
 	}
 
 	if ( !found ) {
-		BuilderError(
+		Builder_Error(
 			"Failed to find a valid installation of the Windows SDK on your machine.\n"
 			"You have %u versions of the Windows SDK installed on your machine, and somehow all of them appear to be malformed.\n"
 			"You need to install a version through the Visual Studio Installer, or via the separate Build Tools installer from Microsoft.\n"
@@ -921,7 +971,7 @@ cleanup:
 }
 
 // MSVC toolset folders are named like "14.44.35207" - that's the only part of each entry we need to parse ourselves
-static void OnMSVCInstallFound( fileInfo_t *fileInfo, void *data ) {
+static void Builder_OnMSVCInstallFound( fileInfo_t *fileInfo, void *data ) {
 	builderFoundMSVCInstallData_t *foundData = (builderFoundMSVCInstallData_t *) data;
 
 	builderMSVCVersion_t version = {};
@@ -942,11 +992,11 @@ static void OnMSVCInstallFound( fileInfo_t *fileInfo, void *data ) {
 }
 
 static bool Builder_MSVCNotInstalled( void ) {
-	BuilderError( "No valid MSVC installation found on your PC.  You need to install one through either the Visual Studio Installer or through the MS Build Tools.\n" );
+	Builder_Error( "No valid MSVC installation found on your PC.  You need to install one through either the Visual Studio Installer or through the MS Build Tools.\n" );
 	return false;
 }
 
-static int CompareMSVCInstallVersions( const void *a, const void *b ) {
+static int Builder_CompareMSVCInstallVersions( const void *a, const void *b ) {
 	const builderMSVCInstall_t *installA = (const builderMSVCInstall_t *) a;
 	const builderMSVCInstall_t *installB = (const builderMSVCInstall_t *) b;
 
@@ -977,7 +1027,7 @@ static bool Builder_GetMSVCInstall( builderMSVCInstall_t *outInstall ) {
 	hr = CoInitializeEx( NULL, COINIT_MULTITHREADED );
 
 	if ( FAILED( hr ) ) {
-		BuilderError( "CoInitializeEx() call failed: 0x%X\n", hr );
+		Builder_Error( "CoInitializeEx() call failed: 0x%X\n", hr );
 		return false;
 	}
 
@@ -991,7 +1041,7 @@ static bool Builder_GetMSVCInstall( builderMSVCInstall_t *outInstall ) {
 	}
 
 	if ( FAILED( hr ) ) {
-		BuilderError( "CoCreateInstance() call failed: 0x%X\n", hr );
+		Builder_Error( "CoCreateInstance() call failed: 0x%X\n", hr );
 		goto cleanup;
 	}
 
@@ -1001,12 +1051,12 @@ static bool Builder_GetMSVCInstall( builderMSVCInstall_t *outInstall ) {
 	hr = setupConfig->vtable->EnumInstances( setupConfig, &instances );
 
 	if ( FAILED( hr ) ) {
-		BuilderError( "setupConfig->EnumInstances() call failed: 0x%X\n", hr );
+		Builder_Error( "setupConfig->EnumInstances() call failed: 0x%X\n", hr );
 		goto cleanup;
 	}
 
 	if ( !instances ) {
-		BuilderError( "setupConfig->EnumInstances() returned no instances.  Bailing...\n" );
+		Builder_Error( "setupConfig->EnumInstances() returned no instances.  Bailing...\n" );
 		goto cleanup;
 	}
 
@@ -1021,7 +1071,7 @@ static bool Builder_GetMSVCInstall( builderMSVCInstall_t *outInstall ) {
 		hr = instance->vtable->GetInstallationPath( instance, &visualStudioInstallationPathWide );
 
 		if ( FAILED( hr ) ) {
-			BuilderError( "instance->GetInstallationPath() call failed: 0x%X\n", hr );
+			Builder_Error( "instance->GetInstallationPath() call failed: 0x%X\n", hr );
 			instance->vtable->Release( instance );
 			goto cleanup;
 		}
@@ -1034,7 +1084,7 @@ static bool Builder_GetMSVCInstall( builderMSVCInstall_t *outInstall ) {
 			const int utf8Length = WideCharToMultiByte( CP_UTF8, 0, visualStudioInstallationPathWide, (int) wideLength, NULL, 0, NULL, NULL );
 
 			if ( utf8Length <= 0 ) {
-				BuilderError( "First WideCharToMultiByte() call failed: WinAPI error code 0x%X\n", GetLastError() );
+				Builder_Error( "First WideCharToMultiByte() call failed: WinAPI error code 0x%X\n", GetLastError() );
 				SysFreeString( visualStudioInstallationPathWide );
 				instance->vtable->Release( instance );
 				goto cleanup;
@@ -1045,7 +1095,7 @@ static bool Builder_GetMSVCInstall( builderMSVCInstall_t *outInstall ) {
 			const int converted = WideCharToMultiByte( CP_UTF8, 0, visualStudioInstallationPathWide, (int) wideLength, visualStudioInstallationPath, utf8Length, NULL, NULL );
 
 			if ( !converted ) {
-				BuilderError( "Second WideCharToMultiByte() call failed: WinAPI error code 0x%X\n", GetLastError() );
+				Builder_Error( "Second WideCharToMultiByte() call failed: WinAPI error code 0x%X\n", GetLastError() );
 				SysFreeString( visualStudioInstallationPathWide );
 				instance->vtable->Release( instance );
 				goto cleanup;
@@ -1065,8 +1115,8 @@ static bool Builder_GetMSVCInstall( builderMSVCInstall_t *outInstall ) {
 			.installsCount	= foundMSVCInstallsCount,
 		};
 
-		if ( !Builder_VisitFiles( msvcRootFolder, BUILDER_FILE_VISIT_FOLDERS, OnMSVCInstallFound, &foundData ) ) {
-			BuilderError( "Failed to query for MSVC installation folders under \"%s\".\n", msvcRootFolder );
+		if ( !Builder_VisitFiles( msvcRootFolder, BUILDER_FILE_VISIT_FOLDERS, Builder_OnMSVCInstallFound, &foundData ) ) {
+			Builder_Error( "Failed to query for MSVC installation folders under \"%s\".\n", msvcRootFolder );
 			free( msvcRootFolder );
 			instance->vtable->Release( instance );
 			goto cleanup;
@@ -1088,7 +1138,7 @@ static bool Builder_GetMSVCInstall( builderMSVCInstall_t *outInstall ) {
 	}
 
 	// newest version first
-	qsort( foundMSVCInstalls, foundMSVCInstallsCount, sizeof( builderMSVCInstall_t ), CompareMSVCInstallVersions );
+	qsort( foundMSVCInstalls, foundMSVCInstallsCount, sizeof( builderMSVCInstall_t ), Builder_CompareMSVCInstallVersions );
 
 	bool found = false;
 	uint32_t useVersionIndex = 0;
@@ -1117,7 +1167,7 @@ static bool Builder_GetMSVCInstall( builderMSVCInstall_t *outInstall ) {
 
 			StringBuilder_Appendf( &sb, "If you want to use this version of MSVC specifically, you will need to fix this yourself.\n" );
 
-			BuilderWarning( "%s", StringBuilder_ToString( &sb ) );
+			Builder_Warning( "%s", StringBuilder_ToString( &sb ) );
 
 			continue;
 		}
@@ -1162,15 +1212,15 @@ static int Build( BuilderOptions *options ) {
 	for ( int argIndex = 0; argIndex < options->argc; argIndex++ ) {
 		const char *arg = options->argv[argIndex];
 
-		if ( StringStartsWith( arg, ARG_HELP_SHORT ) || StringStartsWith( arg, ARG_HELP_LONG ) ) {
+		if ( Builder_StringStartsWith( arg, ARG_HELP_SHORT ) || Builder_StringStartsWith( arg, ARG_HELP_LONG ) ) {
 			return ShowUsage( 0 );
 		}
 
-		if ( StringStartsWith( arg, ARG_CONFIG ) ) {
+		if ( Builder_StringStartsWith( arg, ARG_CONFIG ) ) {
 			const char *equals = strchr( arg, '=' );
 
 			if ( !equals ) {
-				BuilderError( "I detected that you want to set a config, but you never gave me the equals (=) immediately after it.  You need to do that.\n" );
+				Builder_Error( "I detected that you want to set a config, but you never gave me the equals (=) immediately after it.  You need to do that.\n" );
 
 				return 1;
 			}
@@ -1178,7 +1228,7 @@ static int Build( BuilderOptions *options ) {
 			const char *configName = equals + 1;
 
 			if ( strlen( configName ) < 1 ) {
-				BuilderError( "You specified the start of the config arg, but you never actually gave me a name for the config.  I need that.\n" );
+				Builder_Error( "You specified the start of the config arg, but you never actually gave me a name for the config.  I need that.\n" );
 
 				return 1;
 			}
@@ -1197,7 +1247,7 @@ static int Build( BuilderOptions *options ) {
 			configToBuild = &options->configs[0];
 		} else {
 			if ( !inputConfigName ) {
-				BuilderError( "No input config specified.  You must specify at least one!\n" );
+				Builder_Error( "No input config specified.  You must specify at least one!\n" );
 				return 1;
 			}
 		}
@@ -1234,8 +1284,8 @@ static int Build( BuilderOptions *options ) {
 
 				printf( "%s\n", args );
 
-				if ( RunProcess( args ) != 0 ) {
-					BuilderError( "Build failed.\n" );
+				if ( Builder_RunProcess( args ) != 0 ) {
+					Builder_Error( "Build failed.\n" );
 					return 1;
 				}
 
@@ -1256,7 +1306,7 @@ static int Build( BuilderOptions *options ) {
 				StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.ucrtLibPath );
 			}
 
-			StringBuilder_Appendf( &linkerArgs, "/OUT:%s%s ", configToBuild->binaryName, GetFileExtensionFromBinaryType( configToBuild->binaryType ) );
+			StringBuilder_Appendf( &linkerArgs, "/OUT:%s%s ", configToBuild->binaryName, Builder_GetFileExtensionFromBinaryType( configToBuild->binaryType ) );
 
 			if ( configToBuild->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
 				StringBuilder_Appendf( &linkerArgs, "/shared " );
@@ -1284,7 +1334,7 @@ static int Build( BuilderOptions *options ) {
 #elif defined( __linux__ )
 			if ( configToBuild->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
 				StringBuilder_Appendf( &linkerArgs, "ar rcs " );
-				StringBuilder_Appendf( &linkerArgs, "%s%s ", configToBuild->binaryName, GetFileExtensionFromBinaryType( configToBuild->binaryType ) );
+				StringBuilder_Appendf( &linkerArgs, "%s%s ", configToBuild->binaryName, Builder_GetFileExtensionFromBinaryType( configToBuild->binaryType ) );
 
 				const char **sourceFile = configToBuild->sourceFiles;
 				while ( *sourceFile ) {
@@ -1299,7 +1349,7 @@ static int Build( BuilderOptions *options ) {
 					StringBuilder_Appendf( &linkerArgs, "-shared " );
 				}
 
-				StringBuilder_Appendf( &linkerArgs, "-o %s%s ", configToBuild->binaryName, GetFileExtensionFromBinaryType( configToBuild->binaryType ) );
+				StringBuilder_Appendf( &linkerArgs, "-o %s%s ", configToBuild->binaryName, Builder_GetFileExtensionFromBinaryType( configToBuild->binaryType ) );
 
 				const char **sourceFile = configToBuild->sourceFiles;
 				while ( *sourceFile ) {
@@ -1321,8 +1371,8 @@ static int Build( BuilderOptions *options ) {
 
 			printf( "%s\n", args );
 
-			if ( RunProcess( args ) != 0 ) {
-				BuilderError( "Link failed.\n" );
+			if ( Builder_RunProcess( args ) != 0 ) {
+				Builder_Error( "Link failed.\n" );
 				return 1;
 			}
 		}

@@ -154,6 +154,7 @@ static bool Builder_PathHasFileExtension( const char *path, const char *extensio
 #endif
 }
 
+// TODO: DM: 07/08/2026: replace malloc calls with a custom "Alloc()" function ptr that users can override themselves
 static char *Builder_FormatString( const char *fmt, ... ) {
 	va_list args;
 	va_start( args, fmt );

@@ -6,11 +6,12 @@ int main( int argc, char **argv ) {
 
 	BuilderOptions options = {};
 
-	const char *sourceFiles[] = { "main.c", NULL };
+	const char *sourceFiles[] = { "mathlib.c", NULL };
 
 	BuildConfig config = {
-		.binaryName		= "test_single_file",
+		.binaryName		= "test_dynamic_lib",
 		.sourceFiles	= sourceFiles,
+		.binaryType		= BINARY_TYPE_DYNAMIC_LIBRARY,
 	};
 
 	AddBuildConfig( &options, &config );

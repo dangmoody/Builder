@@ -8,13 +8,11 @@ int main( int argc, char **argv ) {
 
 	BuilderOptions options = {};
 
-	const char *sourceFiles[] = { "main.c", NULL };
-
 	BuildConfig config = {
 		.binaryName		= "test_build_single_file",
-		.sourceFiles	= (const char *[]) {
+		.sourceFiles = STRING_LIST(
 			"main.c"
-		},
+		),
 	};
 
 	AddBuildConfig( &options, &config );

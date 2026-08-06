@@ -6,7 +6,6 @@ extern "C" {
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#pragma clang diagnostic ignored "-Wswitch"
 
 #include <stdint.h>
 #ifndef __cplusplus
@@ -45,7 +44,7 @@ typedef struct BuildConfig {
 	const char		**sourceFiles;
 	const char		**defines;
 	const char		**additionalIncludes;
-	const char		*additionalLibPaths;
+	const char		**additionalLibPaths;
 	const char		**additionalLibs;
 	const char		**warningLevels;
 	const char		**ignoreWarnings;
@@ -113,6 +112,10 @@ const char	*StringBuilder_ToString( stringBuilder_t *builder );
 #ifndef BUILDER_ASSERT
 #include <assert.h>
 #define BUILDER_ASSERT assert
+#endif
+
+#ifndef BUILDER_COUNT_OF
+#define BUILDER_COUNT_OF( array )	( sizeof( array ) / sizeof( array[0] ) )
 #endif
 
 enum {
@@ -1276,6 +1279,7 @@ cleanup:
 
 static const char *GetLanguageVersionString( const LanguageVersion version ) {
 	switch ( version ) {
+		case LANGUAGE_VERSION_UNSET:	return NULL;
 		case LANGUAGE_VERSION_C89:		return "c89";
 		case LANGUAGE_VERSION_C99:		return "c99";
 		case LANGUAGE_VERSION_C11:		return "c11";

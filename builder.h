@@ -989,11 +989,19 @@ static bool Builder_GetWindowsSDKInstall( builderWindowsSDKInstall_t *outSDK ) {
 
 		if ( missingFoldersCount > 0 ) {
 			stringBuilder_t sb = {};
-			StringBuilder_Appendf( &sb, "Version %d.%d.%d.%d of your Windows SDK installation is malformed because the following folders could not be found:\n", version->v0, version->v1, version->v2, version->v3 );
+			StringBuilder_Appendf( &sb, "Version %d.%d.%d.%d of your Windows SDK installation is malformed because the following folder(s) could not be found:\n", version->v0, version->v1, version->v2, version->v3 );
 
 			for ( uint32_t missingFolderIndex = 0; missingFolderIndex < missingFoldersCount; missingFolderIndex++ ) {
 				StringBuilder_Appendf( &sb, " - %s\n", missingFolders[missingFolderIndex] );
 			}
+
+			StringBuilder_Appendf( &sb, "You must have the following folders in your Windows SDK install:\n"
+				"    include/<version>/ucrt\n"
+				"    include/<version>/um\n"
+				"    include/<version>/shared\n"
+				"    Lib/<version>/ucrt/x64\n"
+				"    Lib/<version>/um/x64\n"
+			);
 
 			StringBuilder_Appendf( &sb, "If you want to use this version of the Windows SDK specifically, you will need to fix this yourself.\n" );
 
@@ -1233,11 +1241,18 @@ static bool Builder_GetMSVCInstall( builderMSVCInstall_t *outInstall ) {
 
 		if ( missingFoldersCount > 0 ) {
 			stringBuilder_t sb = {};
-			StringBuilder_Appendf( &sb, "Version %d.%d.%d of your MSVC installation is malformed because the following folders could not be found:\n", install->version.v0, install->version.v1, install->version.v2 );
+			StringBuilder_Appendf( &sb, "Version %d.%d.%d of your MSVC installation is malformed because the following folder(s) could not be found:\n", install->version.v0, install->version.v1, install->version.v2 );
 
 			for ( uint32_t missingFolderIndex = 0; missingFolderIndex < missingFoldersCount; missingFolderIndex++ ) {
 				StringBuilder_Appendf( &sb, " - %s\n", missingFolders[missingFolderIndex] );
 			}
+
+			StringBuilder_Appendf( &sb, "You must have the following folders in your MSVC install:\n"
+				"    %s\n"
+				"    %s\n"
+				, install->includePath
+				, install->libPath
+			);
 
 			StringBuilder_Appendf( &sb, "If you want to use this version of MSVC specifically, you will need to fix this yourself.\n" );
 

@@ -6,6 +6,7 @@ extern "C" {
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#pragma clang diagnostic ignored "-Wswitch"
 
 #include <stdint.h>
 #ifndef __cplusplus
@@ -18,15 +19,41 @@ typedef enum BinaryType {
 	BINARY_TYPE_STATIC_LIBRARY,
 } BinaryType;
 
+typedef enum LanguageVersion {
+	LANGUAGE_VERSION_UNSET	= 0,
+	LANGUAGE_VERSION_C89,
+	LANGUAGE_VERSION_C99,
+	LANGUAGE_VERSION_C11,
+	LANGUAGE_VERSION_C17,
+	LANGUAGE_VERSION_C23,
+	LANGUAGE_VERSION_CPP11,
+	LANGUAGE_VERSION_CPP14,
+	LANGUAGE_VERSION_CPP17,
+	LANGUAGE_VERSION_CPP20,
+	LANGUAGE_VERSION_CPP23,
+} LanguageVersion;
+
+typedef enum Optimization {
+	OPTIMIZATION_DISABLED	= 0,
+	OPTIMIZATION_PROGRAM_SIZE,
+	OPTIMIZATION_PROGRAM_SPEED,
+} Optimization;
+
 typedef struct BuildConfig {
-	BinaryType	binaryType;
-	const char	*name;
-	const char	*binaryName;
-	const char	**sourceFiles;
-	const char	**defines;
-	const char	**additionalIncludes;
-	const char	**additionalLibPaths;
-	const char	**additionalLibs;
+	const char			*name;
+	const char			*binaryName;
+	const char			**sourceFiles;
+	const char			**defines;
+	const char			**additionalIncludes;
+	const char			**additionalLibPaths;
+	const char			**additionalLibs;
+	const char			**warningLevels;
+	const char			**ignoreWarnings;
+	const char			**additionalLinkerArguments;
+	BinaryType			binaryType;
+	LanguageVersion		languageVersion;
+	Optimization		optimization;
+	bool				removeSymbols;
 } BuildConfig;
 
 typedef struct BuilderOptions {
@@ -100,6 +127,41 @@ static bool StringEquals( const char *a, const char *b ) {
 
 static bool StringStartsWith( const char *str, const char *prefix ) {
 	return strncmp( str, prefix, strlen( prefix ) ) == 0;
+}
+
+static bool Builder_PathHasFileExtension( const char *path, const char *extension ) {
+	const uint64_t pathLen = strlen( path );
+	const uint64_t extensionLen = strlen( extension );
+
+	if ( pathLen < extensionLen ) {
+		return false;
+	}
+
+#if defined( _WIN32 )
+	// filenames are case-insensitive on Windows, so ".exe" and ".EXE" must be treated as the same extension
+	return _strnicmp( path + pathLen - extensionLen, extension, extensionLen ) == 0;
+#elif defined( __linux__ )
+	return strncmp( path + pathLen - extensionLen, extension, extensionLen ) == 0;
+#else
+#error Unrecognised platform.
+#endif
+}
+
+static char *Builder_FormatString( const char *fmt, ... ) {
+	va_list args;
+	va_start( args, fmt );
+
+	va_list argsCopy;
+	va_copy( argsCopy, args );
+
+	const int length = vsnprintf( NULL, 0, fmt, args );
+	va_end( args );
+
+	char *result = (char *) malloc( (size_t) length + 1 );
+	vsnprintf( result, (size_t) length + 1, fmt, argsCopy );
+	va_end( argsCopy );
+
+	return result;
 }
 
 static void BuilderWarning( const char *fmt, ... ) {
@@ -396,6 +458,14 @@ static int32_t RunProcess( const char *processAndArgs ) {
 static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sourceFile ) {
 	const char *binaryPath = argv[0];
 
+	// we need the exe filename on windows to end with ".exe"
+	// otherwise the file will fail to be found
+#ifdef _WIN32
+	if ( !Builder_PathHasFileExtension( binaryPath, ".exe" ) ) {
+		binaryPath = Builder_FormatString( "%s.exe", argv[0] );
+	}
+#endif
+
 	uint64_t sourceTime = 0;
 	uint64_t binaryTime = 0;
 
@@ -520,23 +590,6 @@ static const char *GetFileExtensionFromBinaryType( const BinaryType binaryType )
 	BUILDER_ASSERT( false && "Bad BinaryType.\n" );
 
 	return NULL;
-}
-
-static char *Builder_FormatString( const char *fmt, ... ) {
-	va_list args;
-	va_start( args, fmt );
-
-	va_list argsCopy;
-	va_copy( argsCopy, args );
-
-	const int length = vsnprintf( NULL, 0, fmt, args );
-	va_end( args );
-
-	char *result = (char *) malloc( (size_t) length + 1 );
-	vsnprintf( result, (size_t) length + 1, fmt, argsCopy );
-	va_end( argsCopy );
-
-	return result;
 }
 
 typedef struct {
@@ -1154,6 +1207,37 @@ cleanup:
 }
 #endif // _WIN32
 
+static const char *GetLanguageVersionString( const LanguageVersion version ) {
+	switch ( version ) {
+		case LANGUAGE_VERSION_C89:		return "c89";
+		case LANGUAGE_VERSION_C99:		return "c99";
+		case LANGUAGE_VERSION_C11:		return "c11";
+		case LANGUAGE_VERSION_C17:		return "c17";
+		case LANGUAGE_VERSION_C23:		return "c23";
+		case LANGUAGE_VERSION_CPP11:	return "cpp11";
+		case LANGUAGE_VERSION_CPP14:	return "cpp14";
+		case LANGUAGE_VERSION_CPP17:	return "cpp17";
+		case LANGUAGE_VERSION_CPP20:	return "cpp20";
+		case LANGUAGE_VERSION_CPP23:	return "cpp23";
+	}
+
+	BUILDER_ASSERT( "Unrecognised language version specified!\n" );
+
+	return NULL;
+}
+
+static const char *GetOptimizationString( const Optimization optimization ) {
+	switch ( optimization ) {
+		case OPTIMIZATION_DISABLED:			return "-O0";
+		case OPTIMIZATION_PROGRAM_SIZE:		return "-O2";
+		case OPTIMIZATION_PROGRAM_SPEED:	return "-O3";
+	}
+
+	BUILDER_ASSERT( "Unrecognised optimization mode specified!\n" );
+
+	return NULL;
+}
+
 static int Build( BuilderOptions *options ) {
 	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
@@ -1226,9 +1310,41 @@ static int Build( BuilderOptions *options ) {
 			while ( *sourceFile ) {
 				stringBuilder_t compileArgs = {};
 				StringBuilder_Appendf( &compileArgs, "clang " );
+
+				if ( configToBuild->languageVersion != LANGUAGE_VERSION_UNSET ) {
+					StringBuilder_Appendf( &compileArgs, "-std=%s ", GetLanguageVersionString( configToBuild->languageVersion ) );
+				}
+
+				if ( !configToBuild->removeSymbols ) {
+					StringBuilder_Appendf( &compileArgs, "-g " );
+				}
+
+				StringBuilder_Appendf( &compileArgs, "%s ", GetOptimizationString( configToBuild->optimization ) );
+
 				StringBuilder_Appendf( &compileArgs, "-c " );
 				StringBuilder_Appendf( &compileArgs, "-o %s.o ", *sourceFile );
 				StringBuilder_Appendf( &compileArgs, "%s ", *sourceFile );
+
+				const char **define = configToBuild->defines;
+				while ( define && *define ) {
+					StringBuilder_Appendf( &compileArgs, "-D%s ", *define );
+
+					define++;
+				}
+
+				const char **additionalInclude = configToBuild->additionalIncludes;
+				while ( additionalInclude && *additionalInclude ) {
+					StringBuilder_Appendf( &compileArgs, "-I%s ", *additionalInclude );
+
+					additionalInclude++;
+				}
+
+				const char **ignoreWarning = configToBuild->ignoreWarnings;
+				while ( ignoreWarning && *ignoreWarning ) {
+					StringBuilder_Appendf( &compileArgs, "%s ", *ignoreWarning );
+
+					ignoreWarning++;
+				}
 
 				const char *args = StringBuilder_ToString( &compileArgs );
 
@@ -1251,22 +1367,30 @@ static int Build( BuilderOptions *options ) {
 				StringBuilder_Appendf( &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\lib.exe\" ", msvcInstall.rootFolder );
 			} else {
 				StringBuilder_Appendf( &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\link.exe\" ", msvcInstall.rootFolder );
-				StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", msvcInstall.libPath );
-				StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.umLibPath );
-				StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.ucrtLibPath );
+			}
+
+			if ( configToBuild->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
+				StringBuilder_Appendf( &linkerArgs, "/DLL " );
 			}
 
 			StringBuilder_Appendf( &linkerArgs, "/OUT:%s%s ", configToBuild->binaryName, GetFileExtensionFromBinaryType( configToBuild->binaryType ) );
 
-			if ( configToBuild->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
-				StringBuilder_Appendf( &linkerArgs, "/shared " );
-			}
+			StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", msvcInstall.libPath );
+			StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.umLibPath );
+			StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.ucrtLibPath );
 
 			const char **sourceFile = configToBuild->sourceFiles;
 			while ( *sourceFile ) {
 				StringBuilder_Appendf( &linkerArgs, "%s.o ", *sourceFile );
 
 				sourceFile++;
+			}
+
+			const char **additionalLibPath = configToBuild->additionalLibPaths;
+			while ( additionalLibPath && *additionalLibPath ) {
+				StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", *additionalLibPath );
+
+				additionalLibPath++;
 			}
 
 			const char **additionalLib = configToBuild->additionalLibs;
@@ -1280,6 +1404,13 @@ static int Build( BuilderOptions *options ) {
 				// clang doesn't embed /DEFAULTLIB directives the way cl.exe does
 				// so link.exe has no idea which CRT/SDK libs to pull in unless we name them ourselves
 				StringBuilder_Appendf( &linkerArgs, "libcmt.lib libvcruntime.lib libucrt.lib kernel32.lib " );
+			}
+
+			const char **additionalLinkerArgument = configToBuild->additionalLinkerArguments;
+			while ( additionalLinkerArgument && *additionalLinkerArgument ) {
+				StringBuilder_Appendf( &linkerArgs, "%s ", *additionalLinkerArgument );
+
+				additionalLinkerArgument++;
 			}
 #elif defined( __linux__ )
 			if ( configToBuild->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
@@ -1308,11 +1439,25 @@ static int Build( BuilderOptions *options ) {
 					sourceFile++;
 				}
 
+				const char **additionalLibPath = configToBuild->additionalLibPaths;
+				while ( additionalLibPath && *additionalLibPath ) {
+					StringBuilder_Appendf( &linkerArgs, "-L%s ", *additionalLibPath );
+
+					additionalLibPath++;
+				}
+
 				const char **additionalLib = configToBuild->additionalLibs;
 				while ( additionalLib && *additionalLib ) {
-					StringBuilder_Appendf( &linkerArgs, "%s ", *additionalLib );
+					StringBuilder_Appendf( &linkerArgs, "-l%s ", *additionalLib );
 
 					additionalLib++;
+				}
+
+				const char **additionalLinkerArgument = configToBuild->additionalLinkerArguments;
+				while ( additionalLinkerArgument && *additionalLinkerArgument ) {
+					StringBuilder_Appendf( &linkerArgs, "%s ", *additionalLinkerArgument );
+
+					additionalLinkerArgument++;
 				}
 			}
 #endif

@@ -40,20 +40,23 @@ typedef enum Optimization {
 } Optimization;
 
 typedef struct BuildConfig {
-	const char			*name;
-	const char			*binaryName;
-	const char			**sourceFiles;
-	const char			**defines;
-	const char			**additionalIncludes;
-	const char			**additionalLibPaths;
-	const char			**additionalLibs;
-	const char			**warningLevels;
-	const char			**ignoreWarnings;
-	const char			**additionalLinkerArguments;
-	BinaryType			binaryType;
-	LanguageVersion		languageVersion;
-	Optimization		optimization;
-	bool				removeSymbols;
+	const char		*name;
+	const char		*binaryName;
+	const char		**sourceFiles;
+	const char		**defines;
+	const char		**additionalIncludes;
+	const char		*additionalLibPaths;
+	const char		**additionalLibs;
+	const char		**warningLevels;
+	const char		**ignoreWarnings;
+	const char		**additionalLinkerArguments;
+	BinaryType		binaryType;
+	LanguageVersion	languageVersion;
+	Optimization	optimization;
+	bool			removeSymbols;
+	bool			warningsAsErrors;
+	void			( *OnPreBuild )( struct BuildConfig *config );
+	void			( *OnPostBuild )( struct BuildConfig *config );
 } BuildConfig;
 
 typedef struct BuilderOptions {
@@ -181,6 +184,20 @@ static void Builder_Error( const char *fmt, ... ) {
 	va_start( args, fmt );
 	vprintf( fmt, args );
 	va_end( args );
+}
+
+static bool Builder_IsWarningLevelAllowed( const char *warningLevel ) {
+	static const char *allowedWarningLevels[] = { "-Wall", "-Weverything", "-Wextra", "-Wpedantic" };
+
+	for ( size_t warningLevelIndex = 0; warningLevelIndex < BUILDER_COUNT_OF( allowedWarningLevels ); warningLevelIndex++ ) {
+		// TODO: DM: 06/08/2026: string checking like this is slow
+		// do we hash the input string and keep a list of hashes of warning level strings and check those instead?
+		if ( Builder_StringEquals( warningLevel, allowedWarningLevels[warningLevelIndex] ) ) {
+			return true;
+		}
+	}
+
+	return false;
 }
 
 // TODO: DM: 30/07/2026: replace malloc calls with a custom "Alloc()" function ptr that users can override themselves
@@ -1349,10 +1366,14 @@ static int Build( BuilderOptions *options ) {
 	}
 #endif
 
-	printf( "Building config:\n" );
+	if ( configToBuild->OnPreBuild ) {
+		configToBuild->OnPreBuild( configToBuild );
+	}
 
 	// build the config
 	{
+		printf( "Building config:\n" );
+
 		// compilation step
 		{
 			const char **sourceFile = configToBuild->sourceFiles;
@@ -1387,6 +1408,30 @@ static int Build( BuilderOptions *options ) {
 					StringBuilder_Appendf( &compileArgs, "-I%s ", *additionalInclude );
 
 					additionalInclude++;
+				}
+
+				if ( configToBuild->warningsAsErrors ) {
+					StringBuilder_Appendf( &compileArgs, "-Werror " );
+				}
+
+				const char **warningLevel = configToBuild->warningLevels;
+				while ( warningLevel && *warningLevel ) {
+					if ( Builder_IsWarningLevelAllowed( *warningLevel ) ) {
+						Builder_Error(
+							"Warning level \"%s\" is not a valid one.  Allowed warning levels are:\n"
+							"    -Wall\n"
+							"    -Weverything\n"
+							"    -Wextra\n"
+							"    -Wpedantic\n"
+							, *warningLevel
+						);
+
+						return 1;
+					}
+
+					StringBuilder_Appendf( &compileArgs, "%s ", *warningLevel );
+
+					warningLevel++;
 				}
 
 				const char **ignoreWarning = configToBuild->ignoreWarnings;
@@ -1521,6 +1566,10 @@ static int Build( BuilderOptions *options ) {
 				return 1;
 			}
 		}
+	}
+
+	if ( configToBuild->OnPostBuild ) {
+		configToBuild->OnPostBuild( configToBuild );
 	}
 
 	printf( "Done\n" );

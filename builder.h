@@ -70,6 +70,7 @@ typedef enum Optimization {
 
 typedef struct BuildConfig {
 	const char		*name;
+	// TODO: DM: 07/08/2026: re-add binaryFolder, intermediateFolder
 	const char		*binaryName;
 	const char		**sourceFiles;
 	const char		**defines;

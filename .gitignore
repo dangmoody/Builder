@@ -16,6 +16,8 @@ tools/*
 !tools/7zip_win64
 
 # ignore test files
+tests/**/*.exe
+!tests/**/build.exe
 tests/**/*.ilk
 tests/**/*.pdb
 tests/**/*.sln

@@ -586,6 +586,13 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 	if ( !Builder_PathHasFileExtension( binaryPath, ".exe" ) ) {
 		binaryPath = Builder_FormatString( "%s.exe", argv[0] );
 	}
+
+	// if the old binary was left around from the previous build, clean it up now
+	{
+		char *oldBackupPath = Builder_FormatString( "%s.rebuild.old", binaryPath );
+		DeleteFile( oldBackupPath );
+		free( oldBackupPath );
+	}
 #endif
 
 	uint64_t sourceTime = 0;

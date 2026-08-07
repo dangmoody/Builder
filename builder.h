@@ -102,6 +102,11 @@ typedef struct BuilderOptions {
 	// On Windows, you can set this to "cl" or "cl.exe" to build with MSVC instead - Builder will locate your MSVC install automatically.
 	const char	*compilerPath;
 
+	// What version of your compiler are you expecting to build with, if any?
+	// If the compiler Builder ends up using doesn't match this, Builder will log a warning but carry on building anyway.
+	// Leave NULL to skip this check entirely.
+	const char	*compilerVersion;
+
 	BuildConfig	*configs;
 	uint32_t	configsCount;
 
@@ -183,6 +188,10 @@ static bool Builder_StringEquals( const char *a, const char *b ) {
 
 static bool Builder_StringStartsWith( const char *str, const char *prefix ) {
 	return strncmp( str, prefix, strlen( prefix ) ) == 0;
+}
+
+static bool Builder_StringContains( const char *str, const char *substring ) {
+	return strstr( str, substring ) != NULL;
 }
 
 static bool Builder_PathHasFileExtension( const char *path, const char *extension ) {
@@ -442,7 +451,7 @@ static void AddBuildConfig( BuilderOptions *options, BuildConfig *config ) {
 	memcpy( dst, config, sizeof( BuildConfig ) );
 }
 
-static int32_t Builder_RunProcess( const char *processAndArgs ) {
+static int32_t Builder_RunProcess( const char *processAndArgs, char **outCapturedOutput ) {
 #if defined( _WIN32 )
 	SECURITY_ATTRIBUTES secAttr = { sizeof( SECURITY_ATTRIBUTES ), NULL, TRUE };
 
@@ -490,9 +499,20 @@ static int32_t Builder_RunProcess( const char *processAndArgs ) {
 	DWORD bytesRead = 0;
 	BOOL read = true;
 
+	stringBuilder_t capturedOutput = {};
+
 	while ( ( read = ReadFile( stdoutRead, buffer, sizeof( buffer ) - 1, &bytesRead, NULL ) ) && bytesRead != 0 ) {
 		buffer[bytesRead] = 0;
-		printf( "%s", buffer );
+
+		if ( outCapturedOutput ) {
+			StringBuilder_Appendf( &capturedOutput, "%s", buffer );
+		} else {
+			printf( "%s", buffer );
+		}
+	}
+
+	if ( outCapturedOutput ) {
+		*outCapturedOutput = (char *) StringBuilder_ToString( &capturedOutput );
 	}
 
 	if ( !read ) {
@@ -561,9 +581,20 @@ static int32_t Builder_RunProcess( const char *processAndArgs ) {
 	char buffer[1024] = {};
 	ssize_t bytesRead = 0;
 
+	stringBuilder_t capturedOutput = {};
+
 	while ( ( bytesRead = read( stdoutPipe[0], buffer, sizeof( buffer ) - 1 ) ) > 0 ) {
 		buffer[bytesRead] = 0;
-		printf( "%s", buffer );
+
+		if ( outCapturedOutput ) {
+			StringBuilder_Appendf( &capturedOutput, "%s", buffer );
+		} else {
+			printf( "%s", buffer );
+		}
+	}
+
+	if ( outCapturedOutput ) {
+		*outCapturedOutput = (char *) StringBuilder_ToString( &capturedOutput );
 	}
 
 	close( stdoutPipe[0] );
@@ -643,7 +674,7 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 
 	printf( "%s\n", compileCmd );
 
-	if ( Builder_RunProcess( compileCmd ) != 0 ) {
+	if ( Builder_RunProcess( compileCmd, NULL ) != 0 ) {
 		Builder_Error( "failed to rebuild '%s'.\n", binaryPath );
 
 #if defined( _WIN32 )
@@ -693,7 +724,7 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 
 	const char *execCmd = StringBuilder_ToString( &execArgs );
 
-	const int32_t exitCode = Builder_RunProcess( execCmd );
+	const int32_t exitCode = Builder_RunProcess( execCmd, NULL );
 
 	exit( exitCode );
 #elif defined( __linux__ )
@@ -1484,6 +1515,38 @@ static const char *Builder_GetOptimizationString_MSVC( const Optimization optimi
 	return NULL;
 }
 
+static char *Builder_ExtractVersionNumber( const char *text ) {
+	for ( const char *c = text; *c; c++ ) {
+		if ( !isdigit( (unsigned char) *c ) ) {
+			continue;
+		}
+
+		const char *start = c;
+		const char *end = c;
+		bool sawDot = false;
+
+		while ( *end && ( isdigit( (unsigned char) *end ) || *end == '.' ) ) {
+			if ( *end == '.' ) {
+				sawDot = true;
+			}
+
+			end++;
+		}
+
+		while ( end > start && *( end - 1 ) == '.' ) {
+			end--;
+		}
+
+		if ( sawDot ) {
+			return Builder_FormatString( "%.*s", (int) ( end - start ), start );
+		}
+
+		c = end - 1;
+	}
+
+	return NULL;
+}
+
 static int Build( BuilderOptions *options ) {
 	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
@@ -1557,6 +1620,36 @@ static int Build( BuilderOptions *options ) {
 	const bool useMSVC = false;
 #endif
 
+	if ( options->compilerVersion && options->compilerVersion[0] ) {
+		if ( useMSVC ) {
+#if defined( _WIN32 )
+			char *actualVersion = Builder_FormatString( "%d.%d.%d", msvcInstall.version.v0, msvcInstall.version.v1, msvcInstall.version.v2 );
+
+			if ( !Builder_StringEquals( actualVersion, options->compilerVersion ) ) {
+				Builder_Warning( "You are using compiler version \"%s\", but \"%s\" was set as BuilderOptions::compilerVersion.  I will continue building anyway, but you may not get what you expect.\n", actualVersion, options->compilerVersion );
+			}
+
+			free( actualVersion );
+#endif
+		} else {
+			char *versionCmd = Builder_FormatString( "\"%s\" --version", compilerPath );
+			char *versionOutput = NULL;
+
+			Builder_RunProcess( versionCmd, &versionOutput );
+
+			if ( !Builder_StringContains( versionOutput, options->compilerVersion ) ) {
+				char *actualVersion = Builder_ExtractVersionNumber( versionOutput );
+
+				Builder_Warning( "You are using compiler version \"%s\", but \"%s\" was set as BuilderOptions::compilerVersion.  I will continue building anyway, but you may not get what you expect.\n", actualVersion, options->compilerVersion );
+
+				free( actualVersion );
+			}
+
+			free( versionCmd );
+			free( versionOutput );
+		}
+	}
+
 	if ( configToBuild->OnPreBuild ) {
 		configToBuild->OnPreBuild( configToBuild );
 	}
@@ -1614,7 +1707,10 @@ static int Build( BuilderOptions *options ) {
 
 					// cl.exe doesn't know where the CRT/Windows SDK headers live unless you're in a Developer Command Prompt, so point it there ourselves
 					StringBuilder_Appendf( &compileArgs, "/I\"%s\" /I\"%s\" /I\"%s\" /I\"%s\" "
-						, msvcInstall.includePath, windowsSDKInstall.ucrtIncludePath, windowsSDKInstall.umIncludePath, windowsSDKInstall.sharedIncludePath );
+						, msvcInstall.includePath
+						, windowsSDKInstall.ucrtIncludePath
+						, windowsSDKInstall.umIncludePath
+						, windowsSDKInstall.sharedIncludePath );
 
 					const char **additionalInclude = configToBuild->additionalIncludes;
 					while ( additionalInclude && *additionalInclude ) {
@@ -1722,7 +1818,7 @@ static int Build( BuilderOptions *options ) {
 
 				printf( "%s\n", args );
 
-				if ( Builder_RunProcess( args ) != 0 ) {
+				if ( Builder_RunProcess( args, NULL ) != 0 ) {
 					Builder_Error( "Build failed.\n" );
 					return 1;
 				}
@@ -1845,7 +1941,7 @@ static int Build( BuilderOptions *options ) {
 
 			printf( "%s\n", args );
 
-			if ( Builder_RunProcess( args ) != 0 ) {
+			if ( Builder_RunProcess( args, NULL ) != 0 ) {
 				Builder_Error( "Link failed.\n" );
 				return 1;
 			}

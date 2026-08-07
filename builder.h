@@ -71,13 +71,13 @@ typedef enum Optimization {
 typedef struct BuildConfig {
 	const char		*name;
 	const char		*binaryName;
-	// the folder the binary is placed into, relative to the file you pass into Builder
-	// if this folder doesn't exist then Builder will create it for you
-	// leave NULL to put the binary alongside the source file
+	// The folder the binary is placed into, relative to the file you pass into Builder.
+	// If this folder doesn't exist then Builder will create it for you.
+	// Leave NULL to put the binary alongside the source file.
 	const char		*binaryFolder;
-	// the folder that intermediate build files (object files) are placed into, relative to binaryFolder
-	// if this folder doesn't exist then Builder will create it for you
-	// leave NULL to put intermediate files alongside the binary
+	// The folder that intermediate build files (object files) are placed into, relative to binaryFolder.
+	// If this folder doesn't exist then Builder will create it for you.
+	// Leave NULL to put intermediate files alongside the binary.
 	const char		*intermediateFolder;
 	const char		**sourceFiles;
 	const char		**defines;
@@ -97,6 +97,11 @@ typedef struct BuildConfig {
 } BuildConfig;
 
 typedef struct BuilderOptions {
+	// The path to the compiler you want to build with.
+	// Leave NULL to use "clang" and assume it's on your PATH.
+	// On Windows, you can set this to "cl" or "cl.exe" to build with MSVC instead - Builder will locate your MSVC install automatically.
+	const char	*compilerPath;
+
 	BuildConfig	*configs;
 	uint32_t	configsCount;
 
@@ -234,12 +239,24 @@ static void Builder_Error( const char *fmt, ... ) {
 	va_end( args );
 }
 
-static bool Builder_IsWarningLevelAllowed( const char *warningLevel ) {
+static bool Builder_IsWarningLevelAllowed_Clang( const char *warningLevel ) {
 	static const char *allowedWarningLevels[] = { "-Wall", "-Weverything", "-Wextra", "-Wpedantic" };
 
 	for ( size_t warningLevelIndex = 0; warningLevelIndex < BUILDER_COUNT_OF( allowedWarningLevels ); warningLevelIndex++ ) {
 		// TODO: DM: 06/08/2026: string checking like this is slow
 		// do we hash the input string and keep a list of hashes of warning level strings and check those instead?
+		if ( Builder_StringEquals( warningLevel, allowedWarningLevels[warningLevelIndex] ) ) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static bool Builder_IsWarningLevelAllowed_MSVC( const char *warningLevel ) {
+	static const char *allowedWarningLevels[] = { "/W0", "/W1", "/W2", "/W3", "/W4", "/Wall" };
+
+	for ( size_t warningLevelIndex = 0; warningLevelIndex < BUILDER_COUNT_OF( allowedWarningLevels ); warningLevelIndex++ ) {
 		if ( Builder_StringEquals( warningLevel, allowedWarningLevels[warningLevelIndex] ) ) {
 			return true;
 		}
@@ -1443,11 +1460,23 @@ static const char *GetLanguageVersionString( const LanguageVersion version ) {
 	return NULL;
 }
 
-static const char *GetOptimizationString( const Optimization optimization ) {
+static const char *Builder_GetOptimizationString_Clang( const Optimization optimization ) {
 	switch ( optimization ) {
 		case OPTIMIZATION_DISABLED:			return "-O0";
 		case OPTIMIZATION_PROGRAM_SIZE:		return "-O2";
 		case OPTIMIZATION_PROGRAM_SPEED:	return "-O3";
+	}
+
+	BUILDER_ASSERT( "Unrecognised optimization mode specified!\n" );
+
+	return NULL;
+}
+
+static const char *Builder_GetOptimizationString_MSVC( const Optimization optimization ) {
+	switch ( optimization ) {
+		case OPTIMIZATION_DISABLED:			return "/Od";
+		case OPTIMIZATION_PROGRAM_SIZE:		return "/O1";
+		case OPTIMIZATION_PROGRAM_SPEED:	return "/O2";
 	}
 
 	BUILDER_ASSERT( "Unrecognised optimization mode specified!\n" );
@@ -1516,6 +1545,18 @@ static int Build( BuilderOptions *options ) {
 	}
 #endif
 
+	const char *compilerPath = ( options->compilerPath && options->compilerPath[0] ) ? options->compilerPath : "clang";
+
+#if defined( _WIN32 )
+	const bool useMSVC = Builder_StringEquals( compilerPath, "cl" ) || Builder_StringEquals( compilerPath, "cl.exe" );
+
+	if ( useMSVC ) {
+		compilerPath = Builder_FormatString( "%s\\bin\\Hostx64\\x64\\cl.exe", msvcInstall.rootFolder );
+	}
+#else
+	const bool useMSVC = false;
+#endif
+
 	if ( configToBuild->OnPreBuild ) {
 		configToBuild->OnPreBuild( configToBuild );
 	}
@@ -1543,59 +1584,131 @@ static int Build( BuilderOptions *options ) {
 
 			while ( *sourceFile ) {
 				stringBuilder_t compileArgs = {};
-				StringBuilder_Appendf( &compileArgs, "clang " );
+				StringBuilder_Appendf( &compileArgs, "\"%s\" ", compilerPath );
 
-				if ( configToBuild->languageVersion != LANGUAGE_VERSION_UNSET ) {
-					StringBuilder_Appendf( &compileArgs, "-std=%s ", GetLanguageVersionString( configToBuild->languageVersion ) );
-				}
+				if ( useMSVC ) {
+#if defined( _WIN32 )
+					StringBuilder_Appendf( &compileArgs, "/nologo " );	// disable MSVC spamming its copyright banner for every compilation unit
+					StringBuilder_Appendf( &compileArgs, "/c " );
 
-				if ( !configToBuild->removeSymbols ) {
-					StringBuilder_Appendf( &compileArgs, "-g " );
-				}
-
-				StringBuilder_Appendf( &compileArgs, "%s ", GetOptimizationString( configToBuild->optimization ) );
-
-				StringBuilder_Appendf( &compileArgs, "-c " );
-				StringBuilder_Appendf( &compileArgs, "-o " );
-				Builder_AppendIntermediateFilePath( &compileArgs, intermediateFolder, *sourceFile );
-				StringBuilder_Appendf( &compileArgs, "%s ", *sourceFile );
-
-				const char **define = configToBuild->defines;
-				while ( define && *define ) {
-					StringBuilder_Appendf( &compileArgs, "-D%s ", *define );
-
-					define++;
-				}
-
-				const char **additionalInclude = configToBuild->additionalIncludes;
-				while ( additionalInclude && *additionalInclude ) {
-					StringBuilder_Appendf( &compileArgs, "-I%s ", *additionalInclude );
-
-					additionalInclude++;
-				}
-
-				if ( configToBuild->warningsAsErrors ) {
-					StringBuilder_Appendf( &compileArgs, "-Werror " );
-				}
-
-				const char **warningLevel = configToBuild->warningLevels;
-				while ( warningLevel && *warningLevel ) {
-					if ( Builder_IsWarningLevelAllowed( *warningLevel ) ) {
-						Builder_Error(
-							"Warning level \"%s\" is not a valid one.  Allowed warning levels are:\n"
-							"    -Wall\n"
-							"    -Weverything\n"
-							"    -Wextra\n"
-							"    -Wpedantic\n"
-							, *warningLevel
-						);
-
-						return 1;
+					if ( configToBuild->languageVersion != LANGUAGE_VERSION_UNSET ) {
+						StringBuilder_Appendf( &compileArgs, "/std:%s ", GetLanguageVersionString( configToBuild->languageVersion ) );
 					}
 
-					StringBuilder_Appendf( &compileArgs, "%s ", *warningLevel );
+					if ( !configToBuild->removeSymbols ) {
+						StringBuilder_Appendf( &compileArgs, "/Z7 " );
+					}
 
-					warningLevel++;
+					StringBuilder_Appendf( &compileArgs, "%s ", Builder_GetOptimizationString_MSVC( configToBuild->optimization ) );
+
+					StringBuilder_Appendf( &compileArgs, "/Fo" );
+					Builder_AppendIntermediateFilePath( &compileArgs, intermediateFolder, *sourceFile );
+					StringBuilder_Appendf( &compileArgs, "%s ", *sourceFile );
+
+					const char **define = configToBuild->defines;
+					while ( define && *define ) {
+						StringBuilder_Appendf( &compileArgs, "/D%s ", *define );
+
+						define++;
+					}
+
+					// cl.exe doesn't know where the CRT/Windows SDK headers live unless you're in a Developer Command Prompt, so point it there ourselves
+					StringBuilder_Appendf( &compileArgs, "/I\"%s\" /I\"%s\" /I\"%s\" /I\"%s\" "
+						, msvcInstall.includePath, windowsSDKInstall.ucrtIncludePath, windowsSDKInstall.umIncludePath, windowsSDKInstall.sharedIncludePath );
+
+					const char **additionalInclude = configToBuild->additionalIncludes;
+					while ( additionalInclude && *additionalInclude ) {
+						StringBuilder_Appendf( &compileArgs, "/I%s ", *additionalInclude );
+
+						additionalInclude++;
+					}
+
+					if ( configToBuild->warningsAsErrors ) {
+						StringBuilder_Appendf( &compileArgs, "/WX " );
+					}
+
+					bool sawWarningLevel = false;
+					const char **warningLevel = configToBuild->warningLevels;
+					while ( warningLevel && *warningLevel ) {
+						if ( sawWarningLevel ) {
+							Builder_Error( "MSVC only allows one warning level to be set at a time, but you specified more than one.\n" );
+							return 1;
+						}
+
+						if ( !Builder_IsWarningLevelAllowed_MSVC( *warningLevel ) ) {
+							Builder_Error(
+								"Warning level \"%s\" is not a valid one.  Allowed warning levels are:\n"
+								"    /W0\n"
+								"    /W1\n"
+								"    /W2\n"
+								"    /W3\n"
+								"    /W4\n"
+								"    /Wall\n"
+								, *warningLevel
+							);
+
+							return 1;
+						}
+
+						StringBuilder_Appendf( &compileArgs, "%s ", *warningLevel );
+
+						sawWarningLevel = true;
+						warningLevel++;
+					}
+#endif
+				} else {
+					if ( configToBuild->languageVersion != LANGUAGE_VERSION_UNSET ) {
+						StringBuilder_Appendf( &compileArgs, "-std=%s ", GetLanguageVersionString( configToBuild->languageVersion ) );
+					}
+
+					if ( !configToBuild->removeSymbols ) {
+						StringBuilder_Appendf( &compileArgs, "-g " );
+					}
+
+					StringBuilder_Appendf( &compileArgs, "%s ", Builder_GetOptimizationString_Clang( configToBuild->optimization ) );
+
+					StringBuilder_Appendf( &compileArgs, "-c " );
+					StringBuilder_Appendf( &compileArgs, "-o " );
+					Builder_AppendIntermediateFilePath( &compileArgs, intermediateFolder, *sourceFile );
+					StringBuilder_Appendf( &compileArgs, "%s ", *sourceFile );
+
+					const char **define = configToBuild->defines;
+					while ( define && *define ) {
+						StringBuilder_Appendf( &compileArgs, "-D%s ", *define );
+
+						define++;
+					}
+
+					const char **additionalInclude = configToBuild->additionalIncludes;
+					while ( additionalInclude && *additionalInclude ) {
+						StringBuilder_Appendf( &compileArgs, "-I%s ", *additionalInclude );
+
+						additionalInclude++;
+					}
+
+					if ( configToBuild->warningsAsErrors ) {
+						StringBuilder_Appendf( &compileArgs, "-Werror " );
+					}
+
+					const char **warningLevel = configToBuild->warningLevels;
+					while ( warningLevel && *warningLevel ) {
+						if ( !Builder_IsWarningLevelAllowed_Clang( *warningLevel ) ) {
+							Builder_Error(
+								"Warning level \"%s\" is not a valid one.  Allowed warning levels are:\n"
+								"    -Wall\n"
+								"    -Weverything\n"
+								"    -Wextra\n"
+								"    -Wpedantic\n"
+								, *warningLevel
+							);
+
+							return 1;
+						}
+
+						StringBuilder_Appendf( &compileArgs, "%s ", *warningLevel );
+
+						warningLevel++;
+					}
 				}
 
 				const char **ignoreWarning = configToBuild->ignoreWarnings;
@@ -1689,7 +1802,7 @@ static int Build( BuilderOptions *options ) {
 					sourceFile++;
 				}
 			} else {
-				StringBuilder_Appendf( &linkerArgs, "clang " );
+				StringBuilder_Appendf( &linkerArgs, "\"%s\" ", compilerPath );
 
 				if ( configToBuild->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
 					StringBuilder_Appendf( &linkerArgs, "-shared " );

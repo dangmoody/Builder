@@ -11,7 +11,8 @@ int main( int argc, char **argv ) {
 		.sourceFiles	= (const char *[]) {
 			"src/main.c",
 			"src/test1.c",
-			"src/test2.c"
+			"src/test2.c",
+			NULL
 		},
 	};
 

@@ -158,6 +158,10 @@ char		*StringBuilder_ToString( stringBuilder_t *builder );
 #include <stdarg.h>
 #include <string.h>
 
+#ifdef __linux__
+#include <ctype.h>
+#endif
+
 #ifndef BUILDER_ASSERT
 #include <assert.h>
 #define BUILDER_ASSERT assert

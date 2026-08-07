@@ -6,15 +6,42 @@ int main( int argc, char **argv ) {
 
 	BuilderOptions options = {};
 
-	const char *sourceFiles[] = { "mathlib.c", NULL };
-
-	BuildConfig config = {
+	BuildConfig libConfig = {
+		.name			= "lib",
 		.binaryName		= "test_static_lib",
-		.sourceFiles	= sourceFiles,
 		.binaryType		= BINARY_TYPE_STATIC_LIBRARY,
+		.sourceFiles	= (const char *[]) {
+			"lib/mathlib.c",
+			NULL
+		},
 	};
 
-	AddBuildConfig( &options, &config );
+	BuildConfig programConfig = {
+		.name			= "program",
+		.binaryName		= "test_static_lib_program",
+		.dependsOn		= (BuildConfig *[]) {
+			&libConfig,
+			NULL
+		},
+		.sourceFiles	= (const char *[]) {
+			"program/main.c",
+			NULL
+		},
+		.additionalIncludes = (const char *[]) {
+			"lib",
+			NULL
+		},
+		.additionalLinkerArguments = (const char *[]) {
+#if defined( _WIN32 )
+			"test_static_lib.lib",
+#else
+			"./test_static_lib.a",
+#endif
+			NULL
+		},
+	};
+
+	AddBuildConfig( &options, &programConfig );
 
 	return Build( &options );
 }

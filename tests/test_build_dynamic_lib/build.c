@@ -6,15 +6,47 @@ int main( int argc, char **argv ) {
 
 	BuilderOptions options = {};
 
-	const char *sourceFiles[] = { "mathlib.c", NULL };
-
-	BuildConfig config = {
+	BuildConfig libConfig = {
+		.name			= "lib",
 		.binaryName		= "test_dynamic_lib",
-		.sourceFiles	= sourceFiles,
 		.binaryType		= BINARY_TYPE_DYNAMIC_LIBRARY,
+		.sourceFiles	= (const char *[]) {
+			"lib/mathlib.c",
+			NULL
+		},
+		.defines		= (const char *[]) {
+			"MATHLIB_BUILDING",
+			NULL
+		},
 	};
 
-	AddBuildConfig( &options, &config );
+	BuildConfig programConfig = {
+		.name			= "program",
+		.binaryName		= "test_dynamic_lib_program",
+		.dependsOn		= (BuildConfig *[]) {
+			&libConfig,
+			NULL
+		},
+		.sourceFiles	= (const char *[]) {
+			"program/main.c",
+			NULL
+		},
+		.additionalIncludes = (const char *[]) {
+			"lib",
+			NULL
+		},
+		.additionalLinkerArguments = (const char *[]) {
+#if defined( _WIN32 )
+			"test_dynamic_lib.lib",
+#else
+			"./test_dynamic_lib.so",
+			"-Wl,-rpath,$ORIGIN",
+#endif
+			NULL
+		},
+	};
+
+	AddBuildConfig( &options, &programConfig );
 
 	return Build( &options );
 }

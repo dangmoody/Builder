@@ -70,8 +70,15 @@ typedef enum Optimization {
 
 typedef struct BuildConfig {
 	const char		*name;
-	// TODO: DM: 07/08/2026: re-add binaryFolder, intermediateFolder
 	const char		*binaryName;
+	// the folder the binary is placed into, relative to the file you pass into Builder
+	// if this folder doesn't exist then Builder will create it for you
+	// leave NULL to put the binary alongside the source file
+	const char		*binaryFolder;
+	// the folder that intermediate build files (object files) are placed into, relative to binaryFolder
+	// if this folder doesn't exist then Builder will create it for you
+	// leave NULL to put intermediate files alongside the binary
+	const char		*intermediateFolder;
 	const char		**sourceFiles;
 	const char		**defines;
 	const char		**additionalIncludes;
@@ -147,6 +154,12 @@ const char	*StringBuilder_ToString( stringBuilder_t *builder );
 
 #ifndef BUILDER_COUNT_OF
 #define BUILDER_COUNT_OF( array )	( sizeof( array ) / sizeof( array[0] ) )
+#endif
+
+#if defined( _WIN32 )
+#define BUILDER_PATH_SEPARATOR '\\'
+#elif defined( __linux__ )
+#define BUILDER_PATH_SEPARATOR '/'
 #endif
 
 enum {
@@ -331,6 +344,62 @@ static bool Builder_GetFileLastWriteTime( const char *path, uint64_t *outTime ) 
 #else
 #error Unrecognised platform.
 #endif
+}
+
+static bool Builder_FolderExists( const char *path ) {
+#if defined( _WIN32 )
+	const DWORD attributes = GetFileAttributesA( path );
+
+	return attributes != INVALID_FILE_ATTRIBUTES && ( attributes & FILE_ATTRIBUTE_DIRECTORY );
+#elif defined( __linux__ )
+	struct stat fileStat;
+
+	return stat( path, &fileStat ) == 0 && S_ISDIR( fileStat.st_mode );
+#else
+#error Unrecognised platform.
+#endif
+}
+
+// creates every folder in a relative path that doesn't already exist, including any missing parent folders
+// e.g. "bin/win64" will create "bin" first if needed, then "bin/win64"
+static bool Builder_CreateFolderIfItDoesntExist( const char *path ) {
+	BUILDER_ASSERT( path );
+
+	if ( Builder_FolderExists( path ) ) {
+		return true;
+	}
+
+	const size_t pathLength = strlen( path );
+
+	char *pathCopy = (char *) malloc( pathLength + 1 );
+	memcpy( pathCopy, path, pathLength + 1 );
+
+	bool success = true;
+
+	// temporarily truncate the copy at each path separator so parent folders get created before their children
+	for ( size_t charIndex = 1; charIndex <= pathLength && success; charIndex++ ) {
+		const char c = pathCopy[charIndex];
+
+		if ( c != '/' && c != '\\' && c != 0 ) {
+			continue;
+		}
+
+		pathCopy[charIndex] = 0;
+
+		if ( !Builder_FolderExists( pathCopy ) ) {
+#if defined( _WIN32 )
+			success = CreateDirectoryA( pathCopy, NULL ) != 0;
+#elif defined( __linux__ )
+			success = mkdir( pathCopy, 0755 ) == 0;
+#endif
+		}
+
+		pathCopy[charIndex] = c;
+	}
+
+	free( pathCopy );
+
+	return success;
 }
 
 static void SetCmdLineArgs( BuilderOptions *options, const int argc, char **argv ) {
@@ -645,6 +714,35 @@ static const char *Builder_GetFileExtensionFromBinaryType( const BinaryType bina
 	return NULL;
 }
 
+static void Builder_AppendBinaryPath( stringBuilder_t *sb, const BuildConfig *config ) {
+	if ( config->binaryFolder ) {
+		StringBuilder_Appendf( sb, "%s%c", config->binaryFolder, BUILDER_PATH_SEPARATOR );
+	}
+
+	StringBuilder_Appendf( sb, "%s%s ", config->binaryName, Builder_GetFileExtensionFromBinaryType( config->binaryType ) );
+}
+
+// intermediateFolder may be NULL, in which case the intermediate file is placed alongside sourceFile instead
+static void Builder_AppendIntermediateFilePath( stringBuilder_t *sb, const char *intermediateFolder, const char *sourceFile ) {
+	if ( !intermediateFolder ) {
+		StringBuilder_Appendf( sb, "%s.o ", sourceFile );
+		return;
+	}
+
+	const char *fileName = sourceFile;
+
+	for ( const char *c = sourceFile; *c; c++ ) {
+		if ( *c == '/' || *c == '\\' ) {
+			fileName = c + 1;
+		}
+	}
+
+	const char *extension = strrchr( fileName, '.' );
+	const size_t fileNameLength = extension ? (size_t) ( extension - fileName ) : strlen( fileName );
+
+	StringBuilder_Appendf( sb, "%s%c%.*s.o ", intermediateFolder, BUILDER_PATH_SEPARATOR, (int) fileNameLength, fileName );
+}
+
 typedef struct {
 	uint64_t	sizeBytes;
 	uint64_t	lastWriteTime;
@@ -848,12 +946,6 @@ typedef struct {
 	builderMSVCInstall_t	*installs;
 	uint32_t				installsCount;
 } builderFoundMSVCInstallData_t;
-
-static bool Builder_FolderExists( const char *path ) {
-	const DWORD attributes = GetFileAttributesA( path );
-
-	return attributes != INVALID_FILE_ATTRIBUTES && ( attributes & FILE_ATTRIBUTE_DIRECTORY );
-}
 
 typedef struct {
 	int32_t	v0, v1, v2, v3;
@@ -1425,6 +1517,19 @@ static int Build( BuilderOptions *options ) {
 	{
 		printf( "Building config:\n" );
 
+		const char *intermediateFolder = configToBuild->intermediateFolder;
+
+		if ( intermediateFolder && configToBuild->binaryFolder ) {
+			intermediateFolder = Builder_FormatString( "%s%c%s", configToBuild->binaryFolder, BUILDER_PATH_SEPARATOR, intermediateFolder );
+		} else if ( !intermediateFolder ) {
+			intermediateFolder = configToBuild->binaryFolder;
+		}
+
+		if ( intermediateFolder && !Builder_CreateFolderIfItDoesntExist( intermediateFolder ) ) {
+			Builder_Error( "Failed to create the intermediate folder \"%s\".\n", intermediateFolder );
+			return 1;
+		}
+
 		// compilation step
 		{
 			const char **sourceFile = configToBuild->sourceFiles;
@@ -1444,7 +1549,8 @@ static int Build( BuilderOptions *options ) {
 				StringBuilder_Appendf( &compileArgs, "%s ", GetOptimizationString( configToBuild->optimization ) );
 
 				StringBuilder_Appendf( &compileArgs, "-c " );
-				StringBuilder_Appendf( &compileArgs, "-o %s.o ", *sourceFile );
+				StringBuilder_Appendf( &compileArgs, "-o " );
+				Builder_AppendIntermediateFilePath( &compileArgs, intermediateFolder, *sourceFile );
 				StringBuilder_Appendf( &compileArgs, "%s ", *sourceFile );
 
 				const char **define = configToBuild->defines;
@@ -1507,6 +1613,11 @@ static int Build( BuilderOptions *options ) {
 
 		// link step
 		{
+			if ( configToBuild->binaryFolder && !Builder_CreateFolderIfItDoesntExist( configToBuild->binaryFolder ) ) {
+				Builder_Error( "Failed to create the binary folder \"%s\".\n", configToBuild->binaryFolder );
+				return 1;
+			}
+
 			stringBuilder_t linkerArgs = {};
 #if defined( _WIN32 )
 			if ( configToBuild->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
@@ -1519,7 +1630,8 @@ static int Build( BuilderOptions *options ) {
 				StringBuilder_Appendf( &linkerArgs, "/DLL " );
 			}
 
-			StringBuilder_Appendf( &linkerArgs, "/OUT:%s%s ", configToBuild->binaryName, Builder_GetFileExtensionFromBinaryType( configToBuild->binaryType ) );
+			StringBuilder_Appendf( &linkerArgs, "/OUT:" );
+			Builder_AppendBinaryPath( &linkerArgs, configToBuild );
 
 			StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", msvcInstall.libPath );
 			StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.umLibPath );
@@ -1527,7 +1639,7 @@ static int Build( BuilderOptions *options ) {
 
 			const char **sourceFile = configToBuild->sourceFiles;
 			while ( *sourceFile ) {
-				StringBuilder_Appendf( &linkerArgs, "%s.o ", *sourceFile );
+				Builder_AppendIntermediateFilePath( &linkerArgs, intermediateFolder, *sourceFile );
 
 				sourceFile++;
 			}
@@ -1561,11 +1673,11 @@ static int Build( BuilderOptions *options ) {
 #elif defined( __linux__ )
 			if ( configToBuild->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
 				StringBuilder_Appendf( &linkerArgs, "ar rcs " );
-				StringBuilder_Appendf( &linkerArgs, "%s%s ", configToBuild->binaryName, Builder_GetFileExtensionFromBinaryType( configToBuild->binaryType ) );
+				Builder_AppendBinaryPath( &linkerArgs, configToBuild );
 
 				const char **sourceFile = configToBuild->sourceFiles;
 				while ( *sourceFile ) {
-					StringBuilder_Appendf( &linkerArgs, "%s.o ", *sourceFile );
+					Builder_AppendIntermediateFilePath( &linkerArgs, intermediateFolder, *sourceFile );
 
 					sourceFile++;
 				}
@@ -1576,11 +1688,12 @@ static int Build( BuilderOptions *options ) {
 					StringBuilder_Appendf( &linkerArgs, "-shared " );
 				}
 
-				StringBuilder_Appendf( &linkerArgs, "-o %s%s ", configToBuild->binaryName, Builder_GetFileExtensionFromBinaryType( configToBuild->binaryType ) );
+				StringBuilder_Appendf( &linkerArgs, "-o " );
+				Builder_AppendBinaryPath( &linkerArgs, configToBuild );
 
 				const char **sourceFile = configToBuild->sourceFiles;
 				while ( *sourceFile ) {
-					StringBuilder_Appendf( &linkerArgs, "%s.o ", *sourceFile );
+					Builder_AppendIntermediateFilePath( &linkerArgs, intermediateFolder, *sourceFile );
 
 					sourceFile++;
 				}

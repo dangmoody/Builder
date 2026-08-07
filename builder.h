@@ -126,8 +126,9 @@ typedef struct stringBuilder_t {
 	stringBuilderBuffer_t	*tail;
 } stringBuilder_t;
 
+void		StringBuilder_Destroy( stringBuilder_t *builder );
 void		StringBuilder_Appendf( stringBuilder_t *builder, const char *fmt, ... );
-const char	*StringBuilder_ToString( stringBuilder_t *builder );
+char		*StringBuilder_ToString( stringBuilder_t *builder );
 
 
 #ifdef BUILDER_IMPLEMENTATION
@@ -274,6 +275,22 @@ static bool Builder_IsWarningLevelAllowed_MSVC( const char *warningLevel ) {
 	return false;
 }
 
+void StringBuilder_Destroy( stringBuilder_t *builder ) {
+	stringBuilderBuffer_t *current = builder->head;
+
+	while ( current ) {
+		stringBuilderBuffer_t *next = current->next;
+
+		free( current->data );
+		free( current );
+
+		current = next;
+	}
+
+	builder->head = NULL;
+	builder->tail = NULL;
+}
+
 // TODO: DM: 30/07/2026: replace malloc calls with a custom "Alloc()" function ptr that users can override themselves
 void StringBuilder_Appendf( stringBuilder_t *builder, const char *fmt, ... ) {
 	BUILDER_ASSERT( builder );
@@ -307,7 +324,7 @@ void StringBuilder_Appendf( stringBuilder_t *builder, const char *fmt, ... ) {
 	va_end( args );
 }
 
-const char *StringBuilder_ToString( stringBuilder_t *builder ) {
+char *StringBuilder_ToString( stringBuilder_t *builder ) {
 	char *result = NULL;
 	uint64_t totalLength = 0;
 	uint64_t offset = 0;
@@ -512,8 +529,10 @@ static int32_t Builder_RunProcess( const char *processAndArgs, char **outCapture
 	}
 
 	if ( outCapturedOutput ) {
-		*outCapturedOutput = (char *) StringBuilder_ToString( &capturedOutput );
+		*outCapturedOutput = StringBuilder_ToString( &capturedOutput );
 	}
+
+	StringBuilder_Destroy( &capturedOutput );
 
 	if ( !read ) {
 		DWORD lastError = GetLastError();
@@ -594,8 +613,10 @@ static int32_t Builder_RunProcess( const char *processAndArgs, char **outCapture
 	}
 
 	if ( outCapturedOutput ) {
-		*outCapturedOutput = (char *) StringBuilder_ToString( &capturedOutput );
+		*outCapturedOutput = StringBuilder_ToString( &capturedOutput );
 	}
+
+	StringBuilder_Destroy( &capturedOutput );
 
 	close( stdoutPipe[0] );
 
@@ -1183,7 +1204,11 @@ static bool Builder_GetWindowsSDKInstall( builderWindowsSDKInstall_t *outSDK ) {
 
 			StringBuilder_Appendf( &sb, "If you want to use this version of the Windows SDK specifically, you will need to fix this yourself.\n" );
 
-			Builder_Warning( "%s", StringBuilder_ToString( &sb ) );
+			char *message = StringBuilder_ToString( &sb );
+			Builder_Warning( "%s", message );
+			free( message );
+
+			StringBuilder_Destroy( &sb );
 
 			free( ucrtIncludeFolder );
 			free( umIncludeFolder );
@@ -1434,7 +1459,11 @@ static bool Builder_GetMSVCInstall( builderMSVCInstall_t *outInstall ) {
 
 			StringBuilder_Appendf( &sb, "If you want to use this version of MSVC specifically, you will need to fix this yourself.\n" );
 
-			Builder_Warning( "%s", StringBuilder_ToString( &sb ) );
+			char *message = StringBuilder_ToString( &sb );
+			Builder_Warning( "%s", message );
+			free( message );
+
+			StringBuilder_Destroy( &sb );
 
 			continue;
 		}
@@ -1816,6 +1845,8 @@ static int Build( BuilderOptions *options ) {
 
 				const char *args = StringBuilder_ToString( &compileArgs );
 
+				StringBuilder_Destroy( &compileArgs );
+
 				printf( "%s\n", args );
 
 				if ( Builder_RunProcess( args, NULL ) != 0 ) {
@@ -1938,6 +1969,8 @@ static int Build( BuilderOptions *options ) {
 #endif
 
 			const char *args = StringBuilder_ToString( &linkerArgs );
+
+			StringBuilder_Destroy( &linkerArgs );
 
 			printf( "%s\n", args );
 

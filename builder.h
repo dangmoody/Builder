@@ -1332,11 +1332,11 @@ static const char *GetLanguageVersionString( const LanguageVersion version ) {
 		case LANGUAGE_VERSION_C11:		return "c11";
 		case LANGUAGE_VERSION_C17:		return "c17";
 		case LANGUAGE_VERSION_C23:		return "c23";
-		case LANGUAGE_VERSION_CPP11:	return "cpp11";
-		case LANGUAGE_VERSION_CPP14:	return "cpp14";
-		case LANGUAGE_VERSION_CPP17:	return "cpp17";
-		case LANGUAGE_VERSION_CPP20:	return "cpp20";
-		case LANGUAGE_VERSION_CPP23:	return "cpp23";
+		case LANGUAGE_VERSION_CPP11:	return "c++11";
+		case LANGUAGE_VERSION_CPP14:	return "c++14";
+		case LANGUAGE_VERSION_CPP17:	return "c++17";
+		case LANGUAGE_VERSION_CPP20:	return "c++20";
+		case LANGUAGE_VERSION_CPP23:	return "c++23";
 	}
 
 	BUILDER_ASSERT( "Unrecognised language version specified!\n" );

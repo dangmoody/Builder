@@ -149,6 +149,7 @@ char		*StringBuilder_ToString( stringBuilder_t *builder );
 #include <sys/stat.h>
 #include <dirent.h>
 #include <errno.h>
+#include <time.h>
 #else
 #error Unrecognised platform.
 #endif
@@ -1580,7 +1581,31 @@ static char *Builder_ExtractVersionNumber( const char *text ) {
 	return NULL;
 }
 
+static double Builder_TimeMS( void ) {
+#if defined( _WIN32 )
+	static LARGE_INTEGER frequency = { 0 };
+	static bool haveFrequency = false;
+
+	if ( !haveFrequency ) {
+		QueryPerformanceFrequency( &frequency );
+		haveFrequency = true;
+	}
+
+	LARGE_INTEGER counter;
+	QueryPerformanceCounter( &counter );
+
+	return ( (double) counter.QuadPart * 1000.0 ) / (double) frequency.QuadPart;
+#elif defined( __linux__ )
+	struct timespec ts;
+	clock_gettime( CLOCK_MONOTONIC, &ts );
+
+	return ( (double) ts.tv_sec * 1000.0 ) + ( (double) ts.tv_nsec / 1000000.0 );
+#endif
+}
+
 static int Build( BuilderOptions *options ) {
+	const double totalTimeStart = Builder_TimeMS();
+
 	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
 	const char *inputConfigName = NULL;
@@ -1687,6 +1712,9 @@ static int Build( BuilderOptions *options ) {
 		configToBuild->OnPreBuild( configToBuild );
 	}
 
+	double compileTimeMS = 0.0;
+	double linkTimeMS = 0.0;
+
 	// build the config
 	{
 		printf( "Building config:\n" );
@@ -1706,6 +1734,8 @@ static int Build( BuilderOptions *options ) {
 
 		// compilation step
 		{
+			const double compileTimeStart = Builder_TimeMS();
+
 			const char **sourceFile = configToBuild->sourceFiles;
 
 			while ( *sourceFile ) {
@@ -1860,10 +1890,14 @@ static int Build( BuilderOptions *options ) {
 
 				sourceFile++;
 			}
+
+			compileTimeMS = Builder_TimeMS() - compileTimeStart;
 		}
 
 		// link step
 		{
+			const double linkTimeStart = Builder_TimeMS();
+
 			if ( configToBuild->binaryFolder && !Builder_CreateFolderIfItDoesntExist( configToBuild->binaryFolder ) ) {
 				Builder_Error( "Failed to create the binary folder \"%s\".\n", configToBuild->binaryFolder );
 				return 1;
@@ -1982,6 +2016,8 @@ static int Build( BuilderOptions *options ) {
 				Builder_Error( "Link failed.\n" );
 				return 1;
 			}
+
+			linkTimeMS = Builder_TimeMS() - linkTimeStart;
 		}
 	}
 
@@ -1989,7 +2025,14 @@ static int Build( BuilderOptions *options ) {
 		configToBuild->OnPostBuild( configToBuild );
 	}
 
-	printf( "Done\n" );
+	// build summary
+	{
+		printf( "\n" );
+		printf( "Finished:\n" );
+		printf( "    Compile : %f ms\n", compileTimeMS );
+		printf( "    Link    : %f ms\n", linkTimeMS );
+		printf( "    Total   : %f ms\n", Builder_TimeMS() - totalTimeStart );
+	}
 
 	return 0;
 }

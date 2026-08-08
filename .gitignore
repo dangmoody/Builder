@@ -18,6 +18,9 @@ tools/*
 # ignore test files
 tests/**/*.exe
 !tests/**/build.exe
+tests/**/*.dll
+tests/**/*.exp
+tests/**/*.lib
 tests/**/*.ilk
 tests/**/*.pdb
 tests/**/*.sln

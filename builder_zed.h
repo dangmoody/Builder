@@ -74,11 +74,10 @@ typedef struct ZedDebugConfig {
 } ZedDebugConfig;
 
 typedef struct ZedJSONOptions {
-	// The path to the Builder executable that Zed will invoke when running a task.
-	// If left empty, defaults to "builder", which assumes Builder is on your PATH.
-	// If you/your team doesn't put Builder on PATH, set this to wherever it lives
-	// (e.g. "${ZED_WORKTREE_ROOT}/tools/builder").
-	const char		*builderPath;
+	// The command that Zed will invoke when running a task - this is your build script's own
+	// compiled binary (there is no separate standalone "Builder" executable).
+	// Leave NULL to default to argv[0], i.e. however this build script was itself invoked.
+	const char		*buildCommand;
 
 	// The configs that will go into tasks.json.
 	// Leave NULL (and taskConfigsCount at 0) to default to one task per BuilderOptions::configs entry.
@@ -111,7 +110,9 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 		return false;
 	}
 
-	const char *builderPath = ( zedOptions->builderPath && zedOptions->builderPath[0] ) ? zedOptions->builderPath : "builder";
+	BUILDER_ASSERT( options->argc > 0 && options->argv );
+
+	const char *buildCommand = ( zedOptions->buildCommand && zedOptions->buildCommand[0] ) ? zedOptions->buildCommand : options->argv[0];
 
 	// tasks.json
 	{
@@ -146,7 +147,7 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 
 			StringBuilder_Appendf( &tasksJSONContent, "\t{\n" );
 			StringBuilder_Appendf( &tasksJSONContent, "\t\t\"label\": \"Build %s\",\n", taskConfig->config->name );
-			StringBuilder_Appendf( &tasksJSONContent, "\t\t\"command\": \"%s\",\n", builderPath );
+			StringBuilder_Appendf( &tasksJSONContent, "\t\t\"command\": \"%s\",\n", buildCommand );
 			StringBuilder_Appendf( &tasksJSONContent, "\t\t\"args\": [\n" );
 			{
 				StringBuilder_Appendf( &tasksJSONContent, "\t\t\t\"%s%s\"", ARG_CONFIG, taskConfig->config->name );

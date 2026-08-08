@@ -111,13 +111,18 @@ typedef struct BuilderOptions {
 	// Leave NULL to skip this check entirely.
 	const char	*compilerVersion;
 
-	BuildConfig	*configs;
-	uint32_t	configsCount;
-
+	// If no config is specified at the command line via --config=, what config do you want Builder to build by default?
 	BuildConfig	*defaultConfig;
 
+	// The command line args that come in from main().
+	// You can and should set these.
 	int			argc;
 	char		**argv;
+
+	// The list of configs that gets populated when calling AddBuildConfig().
+	// Don't write to this directly unless you know what you're doing.
+	BuildConfig	*configs;
+	uint32_t	configsCount;
 } BuilderOptions;
 
 void	AddBuildConfig( BuilderOptions *options, BuildConfig *config );

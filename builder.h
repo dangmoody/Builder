@@ -476,6 +476,22 @@ static bool Builder_CreateFolderIfItDoesntExist( const char *path ) {
 	return success;
 }
 
+static bool Builder_WriteEntireFile( const char *filename, const char *content ) {
+	FILE *file = fopen( filename, "wb" );
+
+	size_t result = fwrite( content, strlen( content ), 1, file );
+
+	if ( !result ) {
+		Builder_Error( "Failed to write to file \"%s\".\n", filename );
+		fclose( file );
+		return false;
+	}
+
+	fclose( file );
+
+	return true;
+}
+
 static void SetCmdLineArgs( BuilderOptions *options, const int argc, char **argv ) {
 	options->argc = argc;
 	options->argv = argv;

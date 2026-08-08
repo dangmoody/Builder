@@ -120,6 +120,9 @@ typedef struct BuilderOptions {
 	char		**argv;
 } BuilderOptions;
 
+void	AddBuildConfig( BuilderOptions *options, BuildConfig *config );
+int		Build( BuilderOptions *options );
+
 typedef struct stringBuilderBuffer_t {
 	uint32_t						length;
 	char							*data;
@@ -554,7 +557,7 @@ static void AddBuildConfigInternal( BuilderOptions *options, BuildConfig *config
 	memcpy( dst, config, sizeof( BuildConfig ) );
 }
 
-static void AddBuildConfig( BuilderOptions *options, BuildConfig *config ) {
+void AddBuildConfig( BuilderOptions *options, BuildConfig *config ) {
 	const char *nameOfConfigToBuild = Builder_GetNameOfConfigToBuild( options );
 
 	// a specific config was requested and this isn't it - its whole dependsOn tree is irrelevant to this invocation, so don't register any of it
@@ -1699,7 +1702,7 @@ static double Builder_TimeMS( void ) {
 #endif
 }
 
-static int Build( BuilderOptions *options ) {
+int Build( BuilderOptions *options ) {
 	const double totalTimeStart = Builder_TimeMS();
 
 	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );

@@ -1732,7 +1732,7 @@ int Build( BuilderOptions *options ) {
 
 			return 1;
 		} else if ( options->configsCount > 1 && !nameOfConfigToBuild ) {
-			Builder_Error( "You have more than 1 BuildConfig defined, but you never told me which you wanted me to build via \"" ARG_CONFIG "\".  You need to tell me what config you want me to build.\n" );
+			Builder_Error( "You have more than 1 BuildConfig defined, but you never told me which you wanted me to build via \"" ARG_CONFIG "\".  You need to tell me what config you want me to build, or set a default via BuilderOptions::defaultConfig.\n" );
 			return 1;
 		}
 	}

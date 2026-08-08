@@ -132,7 +132,7 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 			}
 		}
 
-		const char *tasksJSONFilename = Builder_FormatString( "%s%ctasks.json", dotZedFolder, BUILDER_PATH_SEPARATOR );
+		char *tasksJSONFilename = Builder_FormatString( "%s%ctasks.json", dotZedFolder, BUILDER_PATH_SEPARATOR );
 
 		printf( "Generating %s ... ", tasksJSONFilename );
 
@@ -186,6 +186,7 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 
 		free( tasksJSONString );
 		StringBuilder_Destroy( &tasksJSONContent );
+		free( tasksJSONFilename );
 
 		if ( freeTaskConfigs ) {
 			free( zedOptions->taskConfigs );
@@ -234,7 +235,7 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 			}
 		}
 
-		const char *debugJSONFilename = Builder_FormatString( "%s%cdebug.json", dotZedFolder, BUILDER_PATH_SEPARATOR );
+		char *debugJSONFilename = Builder_FormatString( "%s%cdebug.json", dotZedFolder, BUILDER_PATH_SEPARATOR );
 
 		printf( "Generating %s ... ", debugJSONFilename );
 
@@ -321,6 +322,7 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 		}
 
 		StringBuilder_Destroy( &debugJSONContent );
+		free( debugJSONFilename );
 
 		if ( freeDebugConfigs ) {
 			free( zedOptions->debugConfigs );

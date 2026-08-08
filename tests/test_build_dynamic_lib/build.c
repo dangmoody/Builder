@@ -4,30 +4,33 @@
 int main( int argc, char **argv ) {
 	Builder_RebuildSelf( argc, argv );
 
-	BuilderOptions options = {};
+	BuilderOptions options = {
+		.argc = argc,
+		.argv = argv,
+	};
 
 	BuildConfig libConfig = {
 		.name			= "lib",
 		.binaryName		= "test_dynamic_lib",
 		.binaryType		= BINARY_TYPE_DYNAMIC_LIBRARY,
-		.sourceFiles	= (const char *[]) {
+		.sourceFiles = (const char *[]) {
 			"lib/mathlib.c",
 			NULL
 		},
-		.defines		= (const char *[]) {
+		.defines = (const char *[]) {
 			"MATHLIB_BUILDING",
 			NULL
 		},
 	};
 
 	BuildConfig programConfig = {
-		.name			= "program",
-		.binaryName		= "test_dynamic_lib_program",
-		.dependsOn		= (BuildConfig *[]) {
+		.name				= "program",
+		.binaryName			= "test_dynamic_lib_program",
+		.dependsOn = (BuildConfig *[]) {
 			&libConfig,
 			NULL
 		},
-		.sourceFiles	= (const char *[]) {
+		.sourceFiles = (const char *[]) {
 			"program/main.c",
 			NULL
 		},
@@ -35,16 +38,23 @@ int main( int argc, char **argv ) {
 			"lib",
 			NULL
 		},
-		.additionalLinkerArguments = (const char *[]) {
+		.additionalLibs = (const char *[]) {
 #if defined( _WIN32 )
 			"test_dynamic_lib.lib",
 #else
 			"./test_dynamic_lib.so",
+#endif
+			NULL
+		},
+		.additionalLinkerArguments = (const char *[]) {
+#ifdef __linux__
 			"-Wl,-rpath,$ORIGIN",
 #endif
 			NULL
 		},
 	};
+
+	options.defaultConfig = &programConfig;
 
 	AddBuildConfig( &options, &programConfig );
 

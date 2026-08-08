@@ -69,31 +69,35 @@ typedef enum Optimization {
 } Optimization;
 
 typedef struct BuildConfig {
-	const char		*name;
-	const char		*binaryName;
+	const char			*name;
+	// Other BuildConfigs that need to be built before this one.  NULL-terminated array.
+	// You only need to call AddBuildConfig() on the top-level config - its dependencies are registered and built automatically.
+	// Every BuildConfig you put in here must have BuildConfig::name set.
+	struct BuildConfig	**dependsOn;
+	const char			*binaryName;
 	// The folder the binary is placed into, relative to the file you pass into Builder.
 	// If this folder doesn't exist then Builder will create it for you.
 	// Leave NULL to put the binary alongside the source file.
-	const char		*binaryFolder;
+	const char			*binaryFolder;
 	// The folder that intermediate build files (object files) are placed into, relative to binaryFolder.
 	// If this folder doesn't exist then Builder will create it for you.
 	// Leave NULL to put intermediate files alongside the binary.
-	const char		*intermediateFolder;
-	const char		**sourceFiles;
-	const char		**defines;
-	const char		**additionalIncludes;
-	const char		**additionalLibPaths;
-	const char		**additionalLibs;
-	const char		**warningLevels;
-	const char		**ignoreWarnings;
-	const char		**additionalLinkerArguments;
-	BinaryType		binaryType;
-	LanguageVersion	languageVersion;
-	Optimization	optimization;
-	bool			removeSymbols;
-	bool			warningsAsErrors;
-	void			( *OnPreBuild )( struct BuildConfig *config );
-	void			( *OnPostBuild )( struct BuildConfig *config );
+	const char			*intermediateFolder;
+	const char			**sourceFiles;
+	const char			**defines;
+	const char			**additionalIncludes;
+	const char			**additionalLibPaths;
+	const char			**additionalLibs;
+	const char			**warningLevels;
+	const char			**ignoreWarnings;
+	const char			**additionalLinkerArguments;
+	BinaryType			binaryType;
+	LanguageVersion		languageVersion;
+	Optimization		optimization;
+	bool				removeSymbols;
+	bool				warningsAsErrors;
+	void				( *OnPreBuild )( struct BuildConfig *config );
+	void				( *OnPostBuild )( struct BuildConfig *config );
 } BuildConfig;
 
 typedef struct BuilderOptions {
@@ -109,6 +113,8 @@ typedef struct BuilderOptions {
 
 	BuildConfig	*configs;
 	uint32_t	configsCount;
+
+	BuildConfig	*defaultConfig;
 
 	int			argc;
 	char		**argv;
@@ -252,6 +258,18 @@ static void Builder_Error( const char *fmt, ... ) {
 	va_start( args, fmt );
 	vprintf( fmt, args );
 	va_end( args );
+}
+
+// name of the BuildConfig the user wants built: whatever --config=<name> says, or BuilderOptions::defaultConfig if that arg wasn't given
+// requires BuilderOptions::argc/argv to already be set (e.g. via BuilderOptions{ .argc = argc, .argv = argv }) before this is called
+static const char *Builder_GetNameOfConfigToBuild( const BuilderOptions *options ) {
+	for ( int argIndex = 0; argIndex < options->argc; argIndex++ ) {
+		if ( Builder_StringStartsWith( options->argv[argIndex], ARG_CONFIG ) ) {
+			return options->argv[argIndex] + strlen( ARG_CONFIG );
+		}
+	}
+
+	return options->defaultConfig ? options->defaultConfig->name : NULL;
 }
 
 static bool Builder_IsWarningLevelAllowed_Clang( const char *warningLevel ) {
@@ -465,12 +483,90 @@ static bool HasCommandLineArg( BuilderOptions *options, const char *arg ) {
 	return false;
 }
 
-static void AddBuildConfig( BuilderOptions *options, BuildConfig *config ) {
+// growable stack of the configs currently being registered (config -> config->dependsOn[i] -> ...), used to detect cycles
+// bundling the pointer/count/capacity together means only a single pointer to this struct needs to be threaded through the
+// recursion below - growing builderConfigAncestry_t::items is then just a field mutation every recursive call already sees
+// TODO: DM: 08/08/2026: Tom's growable array
+typedef struct builderConfigAncestry_t {
+	BuildConfig	**items;
+	uint32_t	count;
+	uint32_t	capacity;
+} builderConfigAncestry_t;
+
+static void Builder_ConfigStackPush( builderConfigAncestry_t *stack, BuildConfig *config ) {
+	if ( stack->count == stack->capacity ) {
+		stack->capacity = stack->capacity ? stack->capacity * 2 : 8;
+		stack->items = (BuildConfig **) realloc( stack->items, stack->capacity * sizeof( BuildConfig * ) );
+	}
+
+	stack->items[stack->count++] = config;
+}
+
+static void AddBuildConfigInternal( BuilderOptions *options, BuildConfig *config, builderConfigAncestry_t *ancestry ) {
+	for ( uint32_t ancestorIndex = 0; ancestorIndex < ancestry->count; ancestorIndex++ ) {
+		if ( ancestry->items[ancestorIndex] == config ) {
+			stringBuilder_t cycle = {};
+
+			for ( uint32_t cycleIndex = ancestorIndex; cycleIndex < ancestry->count; cycleIndex++ ) {
+				const char *cycleConfigName = ancestry->items[cycleIndex]->name;
+				StringBuilder_Appendf( &cycle, "%s -> ", cycleConfigName ? cycleConfigName : "(unnamed config)" );
+			}
+
+			StringBuilder_Appendf( &cycle, "%s", config->name ? config->name : "(unnamed config)" );
+
+			char *cycleString = StringBuilder_ToString( &cycle );
+			Builder_Error( "Cyclic BuildConfig::dependsOn detected: %s\n", cycleString );
+			free( cycleString );
+
+			StringBuilder_Destroy( &cycle );
+
+			exit( 1 );
+		}
+	}
+
+	Builder_ConfigStackPush( ancestry, config );
+
+	// register dependencies first so they show up (and get built) ahead of the config that needs them
+	{
+		BuildConfig **dependency = config->dependsOn;
+
+		while ( dependency && *dependency ) {
+			AddBuildConfigInternal( options, *dependency, ancestry );
+
+			dependency++;
+		}
+	}
+
+	ancestry->count--;
+
+	// multiple configs can rely on the same config (e.g. configs A and B may both rely on config C)
+	// so we still need this duplicate check anyway
+	for ( uint32_t configIndex = 0; configIndex < options->configsCount; configIndex++ ) {
+		if ( options->configs[configIndex].name && config->name && Builder_StringEquals( options->configs[configIndex].name, config->name ) ) {
+			return;
+		}
+	}
+
 	options->configs = (BuildConfig *) realloc( options->configs, ++options->configsCount * sizeof( BuildConfig ) );
 
 	BuildConfig *dst = &options->configs[options->configsCount - 1];
 
 	memcpy( dst, config, sizeof( BuildConfig ) );
+}
+
+static void AddBuildConfig( BuilderOptions *options, BuildConfig *config ) {
+	const char *nameOfConfigToBuild = Builder_GetNameOfConfigToBuild( options );
+
+	// a specific config was requested and this isn't it - its whole dependsOn tree is irrelevant to this invocation, so don't register any of it
+	if ( nameOfConfigToBuild && !( config->name && Builder_StringEquals( config->name, nameOfConfigToBuild ) ) ) {
+		return;
+	}
+
+	builderConfigAncestry_t ancestry = {};
+
+	AddBuildConfigInternal( options, config, &ancestry );
+
+	free( ancestry.items );
 }
 
 static int32_t Builder_RunProcess( const char *processAndArgs, char **outCapturedOutput ) {
@@ -1608,52 +1704,32 @@ static int Build( BuilderOptions *options ) {
 
 	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
 
-	const char *inputConfigName = NULL;
-
 	for ( int argIndex = 0; argIndex < options->argc; argIndex++ ) {
-		const char *arg = options->argv[argIndex];
-
-		if ( Builder_StringStartsWith( arg, ARG_HELP_SHORT ) || Builder_StringStartsWith( arg, ARG_HELP_LONG ) ) {
+		if ( Builder_StringStartsWith( options->argv[argIndex], ARG_HELP_SHORT ) || Builder_StringStartsWith( options->argv[argIndex], ARG_HELP_LONG ) ) {
 			return ShowUsage( 0 );
 		}
-
-		if ( Builder_StringStartsWith( arg, ARG_CONFIG ) ) {
-			const char *equals = strchr( arg, '=' );
-
-			if ( !equals ) {
-				Builder_Error( "I detected that you want to set a config, but you never gave me the equals (=) immediately after it.  You need to do that.\n" );
-
-				return 1;
-			}
-
-			const char *configName = equals + 1;
-
-			if ( strlen( configName ) < 1 ) {
-				Builder_Error( "You specified the start of the config arg, but you never actually gave me a name for the config.  I need that.\n" );
-
-				return 1;
-			}
-
-			inputConfigName = configName;
-
-			continue;
-		}
 	}
 
-	BuildConfig *configToBuild = NULL;
-
-	// validate input args
+	// AddBuildConfig() already filters options->configs down to whatever was asked for (by name or BuilderOptions::defaultConfig)
+	// if nothing made it in, that request didnt match anything (or nothing was ever registered)
 	{
-		if ( options->configsCount == 1 ) {
-			configToBuild = &options->configs[0];
-		} else {
-			if ( !inputConfigName ) {
-				Builder_Error( "No input config specified.  You must specify at least one!\n" );
-				return 1;
+		const char *nameOfConfigToBuild = Builder_GetNameOfConfigToBuild( options );
+
+		if ( options->configsCount == 0 ) {
+			if ( nameOfConfigToBuild ) {
+				Builder_Error( "No BuildConfig found with the name \"%s\".\n", nameOfConfigToBuild );
+			} else {
+				Builder_Error( "No BuildConfig was registered.  You must call AddBuildConfig() at least once.\n" );
 			}
+
+			return 1;
+		} else if ( options->configsCount > 1 && !nameOfConfigToBuild ) {
+			Builder_Error( "You have more than 1 BuildConfig defined, but you never told me which you wanted me to build via \"" ARG_CONFIG "\".  You need to tell me what config you want me to build.\n" );
+			return 1;
 		}
 	}
 
+	// only query for windows SDK and MSVC installations after verifying cmd line args and
 #ifdef _WIN32
 	builderWindowsSDKInstall_t windowsSDKInstall = {};
 	if ( !Builder_GetWindowsSDKInstall( &windowsSDKInstall ) ) {
@@ -1708,329 +1784,343 @@ static int Build( BuilderOptions *options ) {
 		}
 	}
 
-	if ( configToBuild->OnPreBuild ) {
-		configToBuild->OnPreBuild( configToBuild );
-	}
+	double totalCompileTimeMS = 0.0;
+	double totalLinkTimeMS = 0.0;
 
-	double compileTimeMS = 0.0;
-	double linkTimeMS = 0.0;
+	for ( uint32_t configIndex = 0; configIndex < options->configsCount; configIndex++ ) {
+		BuildConfig *config = &options->configs[configIndex];
 
-	// build the config
-	{
-		printf( "Building config:\n" );
+		double compileTimeMS = 0.0;
+		double linkTimeMS = 0.0;
 
-		const char *intermediateFolder = configToBuild->intermediateFolder;
-
-		if ( intermediateFolder && configToBuild->binaryFolder ) {
-			intermediateFolder = Builder_FormatString( "%s%c%s", configToBuild->binaryFolder, BUILDER_PATH_SEPARATOR, intermediateFolder );
-		} else if ( !intermediateFolder ) {
-			intermediateFolder = configToBuild->binaryFolder;
+		if ( config->OnPreBuild ) {
+			config->OnPreBuild( config );
 		}
 
-		if ( intermediateFolder && !Builder_CreateFolderIfItDoesntExist( intermediateFolder ) ) {
-			Builder_Error( "Failed to create the intermediate folder \"%s\".\n", intermediateFolder );
-			return 1;
-		}
-
-		// compilation step
+		// build the config
 		{
-			const double compileTimeStart = Builder_TimeMS();
+			printf( "Building config \"%s\":\n", config->name ? config->name : "" );
 
-			const char **sourceFile = configToBuild->sourceFiles;
+			const char *intermediateFolder = config->intermediateFolder;
 
-			while ( *sourceFile ) {
-				stringBuilder_t compileArgs = {};
-				StringBuilder_Appendf( &compileArgs, "\"%s\" ", compilerPath );
-
-				if ( useMSVC ) {
-#if defined( _WIN32 )
-					StringBuilder_Appendf( &compileArgs, "/nologo " );	// disable MSVC spamming its copyright banner for every compilation unit
-					StringBuilder_Appendf( &compileArgs, "/c " );
-
-					if ( configToBuild->languageVersion != LANGUAGE_VERSION_UNSET ) {
-						StringBuilder_Appendf( &compileArgs, "/std:%s ", GetLanguageVersionString( configToBuild->languageVersion ) );
-					}
-
-					if ( !configToBuild->removeSymbols ) {
-						StringBuilder_Appendf( &compileArgs, "/Z7 " );
-					}
-
-					StringBuilder_Appendf( &compileArgs, "%s ", Builder_GetOptimizationString_MSVC( configToBuild->optimization ) );
-
-					StringBuilder_Appendf( &compileArgs, "/Fo" );
-					Builder_AppendIntermediateFilePath( &compileArgs, intermediateFolder, *sourceFile );
-					StringBuilder_Appendf( &compileArgs, "%s ", *sourceFile );
-
-					const char **define = configToBuild->defines;
-					while ( define && *define ) {
-						StringBuilder_Appendf( &compileArgs, "/D%s ", *define );
-
-						define++;
-					}
-
-					// cl.exe doesn't know where the CRT/Windows SDK headers live unless you're in a Developer Command Prompt, so point it there ourselves
-					StringBuilder_Appendf( &compileArgs, "/I\"%s\" /I\"%s\" /I\"%s\" /I\"%s\" "
-						, msvcInstall.includePath
-						, windowsSDKInstall.ucrtIncludePath
-						, windowsSDKInstall.umIncludePath
-						, windowsSDKInstall.sharedIncludePath );
-
-					const char **additionalInclude = configToBuild->additionalIncludes;
-					while ( additionalInclude && *additionalInclude ) {
-						StringBuilder_Appendf( &compileArgs, "/I%s ", *additionalInclude );
-
-						additionalInclude++;
-					}
-
-					if ( configToBuild->warningsAsErrors ) {
-						StringBuilder_Appendf( &compileArgs, "/WX " );
-					}
-
-					bool sawWarningLevel = false;
-					const char **warningLevel = configToBuild->warningLevels;
-					while ( warningLevel && *warningLevel ) {
-						if ( sawWarningLevel ) {
-							Builder_Error( "MSVC only allows one warning level to be set at a time, but you specified more than one.\n" );
-							return 1;
-						}
-
-						if ( !Builder_IsWarningLevelAllowed_MSVC( *warningLevel ) ) {
-							Builder_Error(
-								"Warning level \"%s\" is not a valid one.  Allowed warning levels are:\n"
-								"    /W0\n"
-								"    /W1\n"
-								"    /W2\n"
-								"    /W3\n"
-								"    /W4\n"
-								"    /Wall\n"
-								, *warningLevel
-							);
-
-							return 1;
-						}
-
-						StringBuilder_Appendf( &compileArgs, "%s ", *warningLevel );
-
-						sawWarningLevel = true;
-						warningLevel++;
-					}
-#endif
-				} else {
-					if ( configToBuild->languageVersion != LANGUAGE_VERSION_UNSET ) {
-						StringBuilder_Appendf( &compileArgs, "-std=%s ", GetLanguageVersionString( configToBuild->languageVersion ) );
-					}
-
-					if ( !configToBuild->removeSymbols ) {
-						StringBuilder_Appendf( &compileArgs, "-g " );
-					}
-
-					StringBuilder_Appendf( &compileArgs, "%s ", Builder_GetOptimizationString_Clang( configToBuild->optimization ) );
-
-					StringBuilder_Appendf( &compileArgs, "-c " );
-					StringBuilder_Appendf( &compileArgs, "-o " );
-					Builder_AppendIntermediateFilePath( &compileArgs, intermediateFolder, *sourceFile );
-					StringBuilder_Appendf( &compileArgs, "%s ", *sourceFile );
-
-					const char **define = configToBuild->defines;
-					while ( define && *define ) {
-						StringBuilder_Appendf( &compileArgs, "-D%s ", *define );
-
-						define++;
-					}
-
-					const char **additionalInclude = configToBuild->additionalIncludes;
-					while ( additionalInclude && *additionalInclude ) {
-						StringBuilder_Appendf( &compileArgs, "-I%s ", *additionalInclude );
-
-						additionalInclude++;
-					}
-
-					if ( configToBuild->warningsAsErrors ) {
-						StringBuilder_Appendf( &compileArgs, "-Werror " );
-					}
-
-					const char **warningLevel = configToBuild->warningLevels;
-					while ( warningLevel && *warningLevel ) {
-						if ( !Builder_IsWarningLevelAllowed_Clang( *warningLevel ) ) {
-							Builder_Error(
-								"Warning level \"%s\" is not a valid one.  Allowed warning levels are:\n"
-								"    -Wall\n"
-								"    -Weverything\n"
-								"    -Wextra\n"
-								"    -Wpedantic\n"
-								, *warningLevel
-							);
-
-							return 1;
-						}
-
-						StringBuilder_Appendf( &compileArgs, "%s ", *warningLevel );
-
-						warningLevel++;
-					}
-				}
-
-				const char **ignoreWarning = configToBuild->ignoreWarnings;
-				while ( ignoreWarning && *ignoreWarning ) {
-					StringBuilder_Appendf( &compileArgs, "%s ", *ignoreWarning );
-
-					ignoreWarning++;
-				}
-
-				const char *args = StringBuilder_ToString( &compileArgs );
-
-				StringBuilder_Destroy( &compileArgs );
-
-				printf( "%s\n", args );
-
-				if ( Builder_RunProcess( args, NULL ) != 0 ) {
-					Builder_Error( "Build failed.\n" );
-					return 1;
-				}
-
-				sourceFile++;
+			if ( intermediateFolder && config->binaryFolder ) {
+				intermediateFolder = Builder_FormatString( "%s%c%s", config->binaryFolder, BUILDER_PATH_SEPARATOR, intermediateFolder );
+			} else if ( !intermediateFolder ) {
+				intermediateFolder = config->binaryFolder;
 			}
 
-			compileTimeMS = Builder_TimeMS() - compileTimeStart;
-		}
-
-		// link step
-		{
-			const double linkTimeStart = Builder_TimeMS();
-
-			if ( configToBuild->binaryFolder && !Builder_CreateFolderIfItDoesntExist( configToBuild->binaryFolder ) ) {
-				Builder_Error( "Failed to create the binary folder \"%s\".\n", configToBuild->binaryFolder );
+			if ( intermediateFolder && !Builder_CreateFolderIfItDoesntExist( intermediateFolder ) ) {
+				Builder_Error( "Failed to create the intermediate folder \"%s\".\n", intermediateFolder );
 				return 1;
 			}
 
-			stringBuilder_t linkerArgs = {};
+			// compilation step
+			{
+				const double compileTimeStart = Builder_TimeMS();
+
+				const char **sourceFile = config->sourceFiles;
+
+				while ( *sourceFile ) {
+					stringBuilder_t compileArgs = {};
+					StringBuilder_Appendf( &compileArgs, "\"%s\" ", compilerPath );
+
+					if ( useMSVC ) {
 #if defined( _WIN32 )
-			if ( configToBuild->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
-				StringBuilder_Appendf( &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\lib.exe\" ", msvcInstall.rootFolder );
-			} else {
-				StringBuilder_Appendf( &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\link.exe\" ", msvcInstall.rootFolder );
+						StringBuilder_Appendf( &compileArgs, "/nologo " );	// disable MSVC spamming its copyright banner for every compilation unit
+						StringBuilder_Appendf( &compileArgs, "/c " );
+
+						if ( config->languageVersion != LANGUAGE_VERSION_UNSET ) {
+							StringBuilder_Appendf( &compileArgs, "/std:%s ", GetLanguageVersionString( config->languageVersion ) );
+						}
+
+						if ( !config->removeSymbols ) {
+							StringBuilder_Appendf( &compileArgs, "/Z7 " );
+						}
+
+						StringBuilder_Appendf( &compileArgs, "%s ", Builder_GetOptimizationString_MSVC( config->optimization ) );
+
+						StringBuilder_Appendf( &compileArgs, "/Fo" );
+						Builder_AppendIntermediateFilePath( &compileArgs, intermediateFolder, *sourceFile );
+						StringBuilder_Appendf( &compileArgs, "%s ", *sourceFile );
+
+						const char **define = config->defines;
+						while ( define && *define ) {
+							StringBuilder_Appendf( &compileArgs, "/D%s ", *define );
+
+							define++;
+						}
+
+						// cl.exe doesn't know where the CRT/Windows SDK headers live unless you're in a Developer Command Prompt, so point it there ourselves
+						StringBuilder_Appendf( &compileArgs, "/I\"%s\" /I\"%s\" /I\"%s\" /I\"%s\" "
+							, msvcInstall.includePath
+							, windowsSDKInstall.ucrtIncludePath
+							, windowsSDKInstall.umIncludePath
+							, windowsSDKInstall.sharedIncludePath );
+
+						const char **additionalInclude = config->additionalIncludes;
+						while ( additionalInclude && *additionalInclude ) {
+							StringBuilder_Appendf( &compileArgs, "/I%s ", *additionalInclude );
+
+							additionalInclude++;
+						}
+
+						if ( config->warningsAsErrors ) {
+							StringBuilder_Appendf( &compileArgs, "/WX " );
+						}
+
+						bool sawWarningLevel = false;
+						const char **warningLevel = config->warningLevels;
+						while ( warningLevel && *warningLevel ) {
+							if ( sawWarningLevel ) {
+								Builder_Error( "MSVC only allows one warning level to be set at a time, but you specified more than one.\n" );
+								return 1;
+							}
+
+							if ( !Builder_IsWarningLevelAllowed_MSVC( *warningLevel ) ) {
+								Builder_Error(
+									"Warning level \"%s\" is not a valid one.  Allowed warning levels are:\n"
+									"    /W0\n"
+									"    /W1\n"
+									"    /W2\n"
+									"    /W3\n"
+									"    /W4\n"
+									"    /Wall\n"
+									, *warningLevel
+								);
+
+								return 1;
+							}
+
+							StringBuilder_Appendf( &compileArgs, "%s ", *warningLevel );
+
+							sawWarningLevel = true;
+							warningLevel++;
+						}
+#endif
+					} else {
+						if ( config->languageVersion != LANGUAGE_VERSION_UNSET ) {
+							StringBuilder_Appendf( &compileArgs, "-std=%s ", GetLanguageVersionString( config->languageVersion ) );
+						}
+
+						if ( !config->removeSymbols ) {
+							StringBuilder_Appendf( &compileArgs, "-g " );
+						}
+
+						StringBuilder_Appendf( &compileArgs, "%s ", Builder_GetOptimizationString_Clang( config->optimization ) );
+
+						StringBuilder_Appendf( &compileArgs, "-c " );
+						StringBuilder_Appendf( &compileArgs, "-o " );
+						Builder_AppendIntermediateFilePath( &compileArgs, intermediateFolder, *sourceFile );
+						StringBuilder_Appendf( &compileArgs, "%s ", *sourceFile );
+
+						const char **define = config->defines;
+						while ( define && *define ) {
+							StringBuilder_Appendf( &compileArgs, "-D%s ", *define );
+
+							define++;
+						}
+
+						const char **additionalInclude = config->additionalIncludes;
+						while ( additionalInclude && *additionalInclude ) {
+							StringBuilder_Appendf( &compileArgs, "-I%s ", *additionalInclude );
+
+							additionalInclude++;
+						}
+
+						if ( config->warningsAsErrors ) {
+							StringBuilder_Appendf( &compileArgs, "-Werror " );
+						}
+
+						const char **warningLevel = config->warningLevels;
+						while ( warningLevel && *warningLevel ) {
+							if ( !Builder_IsWarningLevelAllowed_Clang( *warningLevel ) ) {
+								Builder_Error(
+									"Warning level \"%s\" is not a valid one.  Allowed warning levels are:\n"
+									"    -Wall\n"
+									"    -Weverything\n"
+									"    -Wextra\n"
+									"    -Wpedantic\n"
+									, *warningLevel
+								);
+
+								return 1;
+							}
+
+							StringBuilder_Appendf( &compileArgs, "%s ", *warningLevel );
+
+							warningLevel++;
+						}
+					}
+
+					const char **ignoreWarning = config->ignoreWarnings;
+					while ( ignoreWarning && *ignoreWarning ) {
+						StringBuilder_Appendf( &compileArgs, "%s ", *ignoreWarning );
+
+						ignoreWarning++;
+					}
+
+					const char *args = StringBuilder_ToString( &compileArgs );
+
+					StringBuilder_Destroy( &compileArgs );
+
+					printf( "%s\n", args );
+
+					if ( Builder_RunProcess( args, NULL ) != 0 ) {
+						Builder_Error( "Build failed.\n" );
+						return 1;
+					}
+
+					sourceFile++;
+				}
+
+				compileTimeMS = Builder_TimeMS() - compileTimeStart;
 			}
 
-			if ( configToBuild->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
-				StringBuilder_Appendf( &linkerArgs, "/DLL " );
-			}
+			// link step
+			{
+				const double linkTimeStart = Builder_TimeMS();
 
-			StringBuilder_Appendf( &linkerArgs, "/OUT:" );
-			Builder_AppendBinaryPath( &linkerArgs, configToBuild );
+				if ( config->binaryFolder && !Builder_CreateFolderIfItDoesntExist( config->binaryFolder ) ) {
+					Builder_Error( "Failed to create the binary folder \"%s\".\n", config->binaryFolder );
+					return 1;
+				}
 
-			StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", msvcInstall.libPath );
-			StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.umLibPath );
-			StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.ucrtLibPath );
+				stringBuilder_t linkerArgs = {};
+#if defined( _WIN32 )
+				if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
+					StringBuilder_Appendf( &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\lib.exe\" ", msvcInstall.rootFolder );
+				} else {
+					StringBuilder_Appendf( &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\link.exe\" ", msvcInstall.rootFolder );
+				}
 
-			const char **sourceFile = configToBuild->sourceFiles;
-			while ( *sourceFile ) {
-				Builder_AppendIntermediateFilePath( &linkerArgs, intermediateFolder, *sourceFile );
+				if ( config->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
+					StringBuilder_Appendf( &linkerArgs, "/DLL " );
+				}
 
-				sourceFile++;
-			}
+				StringBuilder_Appendf( &linkerArgs, "/OUT:" );
+				Builder_AppendBinaryPath( &linkerArgs, config );
 
-			const char **additionalLibPath = configToBuild->additionalLibPaths;
-			while ( additionalLibPath && *additionalLibPath ) {
-				StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", *additionalLibPath );
+				StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", msvcInstall.libPath );
+				StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.umLibPath );
+				StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.ucrtLibPath );
 
-				additionalLibPath++;
-			}
-
-			const char **additionalLib = configToBuild->additionalLibs;
-			while ( additionalLib && *additionalLib ) {
-				StringBuilder_Appendf( &linkerArgs, "%s ", *additionalLib );
-
-				additionalLib++;
-			}
-
-			if ( configToBuild->binaryType != BINARY_TYPE_STATIC_LIBRARY ) {
-				// clang doesn't embed /DEFAULTLIB directives the way cl.exe does
-				// so link.exe has no idea which CRT/SDK libs to pull in unless we name them ourselves
-				StringBuilder_Appendf( &linkerArgs, "libcmt.lib libvcruntime.lib libucrt.lib kernel32.lib " );
-			}
-
-			const char **additionalLinkerArgument = configToBuild->additionalLinkerArguments;
-			while ( additionalLinkerArgument && *additionalLinkerArgument ) {
-				StringBuilder_Appendf( &linkerArgs, "%s ", *additionalLinkerArgument );
-
-				additionalLinkerArgument++;
-			}
-#elif defined( __linux__ )
-			if ( configToBuild->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
-				StringBuilder_Appendf( &linkerArgs, "ar rcs " );
-				Builder_AppendBinaryPath( &linkerArgs, configToBuild );
-
-				const char **sourceFile = configToBuild->sourceFiles;
+				const char **sourceFile = config->sourceFiles;
 				while ( *sourceFile ) {
 					Builder_AppendIntermediateFilePath( &linkerArgs, intermediateFolder, *sourceFile );
 
 					sourceFile++;
 				}
-			} else {
-				StringBuilder_Appendf( &linkerArgs, "\"%s\" ", compilerPath );
 
-				if ( configToBuild->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
-					StringBuilder_Appendf( &linkerArgs, "-shared " );
-				}
-
-				StringBuilder_Appendf( &linkerArgs, "-o " );
-				Builder_AppendBinaryPath( &linkerArgs, configToBuild );
-
-				const char **sourceFile = configToBuild->sourceFiles;
-				while ( *sourceFile ) {
-					Builder_AppendIntermediateFilePath( &linkerArgs, intermediateFolder, *sourceFile );
-
-					sourceFile++;
-				}
-
-				const char **additionalLibPath = configToBuild->additionalLibPaths;
+				const char **additionalLibPath = config->additionalLibPaths;
 				while ( additionalLibPath && *additionalLibPath ) {
-					StringBuilder_Appendf( &linkerArgs, "-L%s ", *additionalLibPath );
+					StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", *additionalLibPath );
 
 					additionalLibPath++;
 				}
 
-				const char **additionalLib = configToBuild->additionalLibs;
+				const char **additionalLib = config->additionalLibs;
 				while ( additionalLib && *additionalLib ) {
-					StringBuilder_Appendf( &linkerArgs, "-l%s ", *additionalLib );
+					StringBuilder_Appendf( &linkerArgs, "%s ", *additionalLib );
 
 					additionalLib++;
 				}
 
-				const char **additionalLinkerArgument = configToBuild->additionalLinkerArguments;
+				if ( config->binaryType != BINARY_TYPE_STATIC_LIBRARY ) {
+					// clang doesn't embed /DEFAULTLIB directives the way cl.exe does
+					// so link.exe has no idea which CRT/SDK libs to pull in unless we name them ourselves
+					StringBuilder_Appendf( &linkerArgs, "libcmt.lib libvcruntime.lib libucrt.lib kernel32.lib " );
+				}
+
+				const char **additionalLinkerArgument = config->additionalLinkerArguments;
 				while ( additionalLinkerArgument && *additionalLinkerArgument ) {
 					StringBuilder_Appendf( &linkerArgs, "%s ", *additionalLinkerArgument );
 
 					additionalLinkerArgument++;
 				}
-			}
+#elif defined( __linux__ )
+				if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
+					StringBuilder_Appendf( &linkerArgs, "ar rcs " );
+					Builder_AppendBinaryPath( &linkerArgs, config );
+
+					const char **sourceFile = config->sourceFiles;
+					while ( *sourceFile ) {
+						Builder_AppendIntermediateFilePath( &linkerArgs, intermediateFolder, *sourceFile );
+
+						sourceFile++;
+					}
+				} else {
+					StringBuilder_Appendf( &linkerArgs, "\"%s\" ", compilerPath );
+
+					if ( config->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
+						StringBuilder_Appendf( &linkerArgs, "-shared " );
+					}
+
+					StringBuilder_Appendf( &linkerArgs, "-o " );
+					Builder_AppendBinaryPath( &linkerArgs, config );
+
+					const char **sourceFile = config->sourceFiles;
+					while ( *sourceFile ) {
+						Builder_AppendIntermediateFilePath( &linkerArgs, intermediateFolder, *sourceFile );
+
+						sourceFile++;
+					}
+
+					const char **additionalLibPath = config->additionalLibPaths;
+					while ( additionalLibPath && *additionalLibPath ) {
+						StringBuilder_Appendf( &linkerArgs, "-L%s ", *additionalLibPath );
+
+						additionalLibPath++;
+					}
+
+					const char **additionalLib = config->additionalLibs;
+					while ( additionalLib && *additionalLib ) {
+						StringBuilder_Appendf( &linkerArgs, "-l%s ", *additionalLib );
+
+						additionalLib++;
+					}
+
+					const char **additionalLinkerArgument = config->additionalLinkerArguments;
+					while ( additionalLinkerArgument && *additionalLinkerArgument ) {
+						StringBuilder_Appendf( &linkerArgs, "%s ", *additionalLinkerArgument );
+
+						additionalLinkerArgument++;
+					}
+				}
 #endif
 
-			const char *args = StringBuilder_ToString( &linkerArgs );
+				const char *args = StringBuilder_ToString( &linkerArgs );
 
-			StringBuilder_Destroy( &linkerArgs );
+				StringBuilder_Destroy( &linkerArgs );
 
-			printf( "%s\n", args );
+				printf( "%s\n", args );
 
-			if ( Builder_RunProcess( args, NULL ) != 0 ) {
-				Builder_Error( "Link failed.\n" );
-				return 1;
+				if ( Builder_RunProcess( args, NULL ) != 0 ) {
+					Builder_Error( "Link failed.\n" );
+					return 1;
+				}
+
+				linkTimeMS = Builder_TimeMS() - linkTimeStart;
 			}
-
-			linkTimeMS = Builder_TimeMS() - linkTimeStart;
 		}
-	}
 
-	if ( configToBuild->OnPostBuild ) {
-		configToBuild->OnPostBuild( configToBuild );
+		if ( config->OnPostBuild ) {
+			config->OnPostBuild( config );
+		}
+
+		printf( "Finished config \"%s\":\n", config->name ? config->name : "" );
+		printf( "    Compile : %f ms\n", compileTimeMS );
+		printf( "    Link    : %f ms\n", linkTimeMS );
+		printf( "\n" );
+
+		totalCompileTimeMS += compileTimeMS;
+		totalLinkTimeMS += linkTimeMS;
 	}
 
 	// build summary
 	{
-		printf( "\n" );
 		printf( "Finished:\n" );
-		printf( "    Compile : %f ms\n", compileTimeMS );
-		printf( "    Link    : %f ms\n", linkTimeMS );
+		printf( "    Compile : %f ms\n", totalCompileTimeMS );
+		printf( "    Link    : %f ms\n", totalLinkTimeMS );
 		printf( "    Total   : %f ms\n", Builder_TimeMS() - totalTimeStart );
 	}
 

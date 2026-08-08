@@ -4,7 +4,10 @@
 int main( int argc, char **argv ) {
 	Builder_RebuildSelf( argc, argv );
 
-	BuilderOptions options = {};
+	BuilderOptions options = {
+		.argc = argc,
+		.argv = argv,
+	};
 
 	BuildConfig libConfig = {
 		.name			= "lib",
@@ -40,6 +43,8 @@ int main( int argc, char **argv ) {
 			NULL
 		},
 	};
+
+	options.defaultConfig = &programConfig;
 
 	AddBuildConfig( &options, &programConfig );
 

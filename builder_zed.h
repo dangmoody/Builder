@@ -286,7 +286,7 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 
 				switch ( debugConfig->adapter ) {
 					case ZED_DEBUGGER_ADAPTER_CODELLDB:	adapterStr = "CodeLLDB";	break;
-					case ZED_DEBUGGER_ADAPTER_GDB:		adapterStr = "GDB";		break;
+					case ZED_DEBUGGER_ADAPTER_GDB:		adapterStr = "GDB";			break;
 				}
 
 				StringBuilder_Appendf( &debugJSONContent, "\t\t\"adapter\": \"%s\",\n", adapterStr );

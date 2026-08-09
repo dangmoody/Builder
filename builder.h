@@ -1983,13 +1983,17 @@ int Build( BuilderOptions *options ) {
 						ignoreWarning++;
 					}
 
-					const char *args = StringBuilder_ToString( &compileArgs );
+					char *args = StringBuilder_ToString( &compileArgs );
 
 					StringBuilder_Destroy( &compileArgs );
 
 					printf( "%s\n", args );
 
-					if ( Builder_RunProcess( args, NULL ) != 0 ) {
+					const int32_t compileResult = Builder_RunProcess( args, NULL );
+
+					free( args );
+
+					if ( compileResult != 0 ) {
 						Builder_Error( "Build failed.\n" );
 						return 1;
 					}
@@ -2112,13 +2116,17 @@ int Build( BuilderOptions *options ) {
 				}
 #endif
 
-				const char *args = StringBuilder_ToString( &linkerArgs );
+				char *args = StringBuilder_ToString( &linkerArgs );
 
 				StringBuilder_Destroy( &linkerArgs );
 
 				printf( "%s\n", args );
 
-				if ( Builder_RunProcess( args, NULL ) != 0 ) {
+				const int32_t linkResult = Builder_RunProcess( args, NULL );
+
+				free( args );
+
+				if ( linkResult != 0 ) {
 					Builder_Error( "Link failed.\n" );
 					return 1;
 				}

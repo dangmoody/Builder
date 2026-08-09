@@ -116,13 +116,12 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 
 	// tasks.json
 	{
-		bool ok = true;
-		bool freeTaskConfigs = false;
+		bool shouldFreeTaskConfigs = false;
 
 		if ( zedOptions->taskConfigsCount == 0 ) {
 			zedOptions->taskConfigs = (ZedTaskConfig *) malloc( options->configsCount * sizeof( ZedTaskConfig ) );
 			zedOptions->taskConfigsCount = options->configsCount;
-			freeTaskConfigs = true;
+			shouldFreeTaskConfigs = true;
 
 			for ( uint32_t configIndex = 0; configIndex < options->configsCount; configIndex++ ) {
 				zedOptions->taskConfigs[configIndex] = (ZedTaskConfig) {
@@ -177,22 +176,23 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 
 		char *tasksJSONString = StringBuilder_ToString( &tasksJSONContent );
 
-		if ( !Builder_WriteEntireFile( tasksJSONFilename, tasksJSONString ) ) {
-			Builder_Error( "Failed to write \"%s\".\n", tasksJSONFilename );
-			ok = false;
-		} else {
+		bool wroteFile = Builder_WriteEntireFile( tasksJSONFilename, tasksJSONString );
+
+		if ( wroteFile ) {
 			printf( "Done\n" );
+		} else {
+			Builder_Error( "Failed to write \"%s\".\n", tasksJSONFilename );
 		}
 
 		free( tasksJSONString );
 		StringBuilder_Destroy( &tasksJSONContent );
 		free( tasksJSONFilename );
 
-		if ( freeTaskConfigs ) {
+		if ( shouldFreeTaskConfigs ) {
 			free( zedOptions->taskConfigs );
 		}
 
-		if ( !ok ) {
+		if ( !wroteFile ) {
 			return false;
 		}
 	}
@@ -200,12 +200,12 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 	// debug.json
 	{
 		bool ok = true;
-		bool freeDebugConfigs = false;
+		bool shouldFreeDebugConfigs = false;
 
 		if ( zedOptions->debugConfigsCount == 0 ) {
 			zedOptions->debugConfigs = (ZedDebugConfig *) malloc( options->configsCount * sizeof( ZedDebugConfig ) );
 			zedOptions->debugConfigsCount = options->configsCount;
-			freeDebugConfigs = true;
+			shouldFreeDebugConfigs = true;
 
 			for ( uint32_t configIndex = 0; configIndex < options->configsCount; configIndex++ ) {
 				const BuildConfig *config = &options->configs[configIndex];
@@ -324,7 +324,7 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 		StringBuilder_Destroy( &debugJSONContent );
 		free( debugJSONFilename );
 
-		if ( freeDebugConfigs ) {
+		if ( shouldFreeDebugConfigs ) {
 			free( zedOptions->debugConfigs );
 		}
 

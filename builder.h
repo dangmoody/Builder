@@ -527,71 +527,67 @@ static void Builder_ConfigStackPush( builderConfigAncestry_t *stack, BuildConfig
 	stack->items[stack->count++] = config;
 }
 
-static void AddBuildConfigInternal( BuilderOptions *options, BuildConfig *config, builderConfigAncestry_t *ancestry ) {
-	for ( uint32_t ancestorIndex = 0; ancestorIndex < ancestry->count; ancestorIndex++ ) {
-		if ( ancestry->items[ancestorIndex] == config ) {
-			stringBuilder_t cycle = {};
+static void AddBuildConfigInternal( BuilderOptions *options, BuildConfig *config, builderConfigAncestry_t *ancestry, BuildConfig **outConfigs, uint32_t *outConfigsCount ) {
+	// if no ancestry then dont do circular dependency checking
+	if ( ancestry ) {
+		for ( uint32_t ancestorIndex = 0; ancestorIndex < ancestry->count; ancestorIndex++ ) {
+			if ( ancestry->items[ancestorIndex] == config ) {
+				stringBuilder_t cycle = {};
 
-			for ( uint32_t cycleIndex = ancestorIndex; cycleIndex < ancestry->count; cycleIndex++ ) {
-				const char *cycleConfigName = ancestry->items[cycleIndex]->name;
-				StringBuilder_Appendf( &cycle, "%s -> ", cycleConfigName ? cycleConfigName : "(unnamed config)" );
+				for ( uint32_t cycleIndex = ancestorIndex; cycleIndex < ancestry->count; cycleIndex++ ) {
+					const char *cycleConfigName = ancestry->items[cycleIndex]->name;
+					StringBuilder_Appendf( &cycle, "%s -> ", cycleConfigName ? cycleConfigName : "(unnamed config)" );
+				}
+
+				StringBuilder_Appendf( &cycle, "%s", config->name ? config->name : "(unnamed config)" );
+
+				char *cycleString = StringBuilder_ToString( &cycle );
+				Builder_Error( "Cyclic BuildConfig::dependsOn detected: %s\n", cycleString );
+				free( cycleString );
+
+				StringBuilder_Destroy( &cycle );
+
+				exit( 1 );
 			}
-
-			StringBuilder_Appendf( &cycle, "%s", config->name ? config->name : "(unnamed config)" );
-
-			char *cycleString = StringBuilder_ToString( &cycle );
-			Builder_Error( "Cyclic BuildConfig::dependsOn detected: %s\n", cycleString );
-			free( cycleString );
-
-			StringBuilder_Destroy( &cycle );
-
-			exit( 1 );
 		}
-	}
 
-	Builder_ConfigStackPush( ancestry, config );
+		Builder_ConfigStackPush( ancestry, config );
+	}
 
 	// register dependencies first so they show up (and get built) ahead of the config that needs them
 	{
 		BuildConfig **dependency = config->dependsOn;
 
 		while ( dependency && *dependency ) {
-			AddBuildConfigInternal( options, *dependency, ancestry );
+			AddBuildConfigInternal( options, *dependency, ancestry, outConfigs, outConfigsCount );
 
 			dependency++;
 		}
 	}
 
-	ancestry->count--;
+	if ( ancestry ) {
+		ancestry->count--;
+	}
 
 	// multiple configs can rely on the same config (e.g. configs A and B may both rely on config C)
 	// so we still need this duplicate check anyway
-	for ( uint32_t configIndex = 0; configIndex < options->configsCount; configIndex++ ) {
-		if ( options->configs[configIndex].name && config->name && Builder_StringEquals( options->configs[configIndex].name, config->name ) ) {
+	for ( uint32_t configIndex = 0; configIndex < *outConfigsCount; configIndex++ ) {
+		if ( ( *outConfigs )[configIndex].name && config->name && Builder_StringEquals( ( *outConfigs )[configIndex].name, config->name ) ) {
 			return;
 		}
 	}
 
-	options->configs = (BuildConfig *) realloc( options->configs, ++options->configsCount * sizeof( BuildConfig ) );
+	*outConfigs = (BuildConfig *) realloc( *outConfigs, ++(*outConfigsCount) * sizeof( BuildConfig ) );
 
-	BuildConfig *dst = &options->configs[options->configsCount - 1];
+	BuildConfig *dst = &( *outConfigs )[(*outConfigsCount) - 1];
 
 	memcpy( dst, config, sizeof( BuildConfig ) );
 }
 
 void AddBuildConfig( BuilderOptions *options, BuildConfig *config ) {
-	// TODO: DM: 09/08/2026: I was wrong, this isnt what we want
-	// add all BuildConfigs indiscriminately and then do a linear search and copy later like Tom said
-	const char *nameOfConfigToBuild = Builder_GetNameOfConfigToBuild( options );
-
-	// a specific config was requested and this isn't it - its whole dependsOn tree is irrelevant to this invocation, so don't register any of it
-	if ( nameOfConfigToBuild && !( config->name && Builder_StringEquals( config->name, nameOfConfigToBuild ) ) ) {
-		return;
-	}
-
 	builderConfigAncestry_t ancestry = {};
 
-	AddBuildConfigInternal( options, config, &ancestry );
+	AddBuildConfigInternal( options, config, &ancestry, &options->configs, &options->configsCount );
 
 	free( ancestry.items );
 }
@@ -2066,22 +2062,32 @@ int Build( BuilderOptions *options ) {
 		}
 	}
 
-	// AddBuildConfig() already filters options->configs down to whatever was asked for (by name or BuilderOptions::defaultConfig)
-	// if nothing made it in, that request didnt match anything (or nothing was ever registered)
+	// validate cmd line args
+	const char *nameOfConfigToBuild = Builder_GetNameOfConfigToBuild( options );
+	BuildConfig *targetConfig = NULL;
 	{
-		const char *nameOfConfigToBuild = Builder_GetNameOfConfigToBuild( options );
-
 		if ( options->configsCount == 0 ) {
-			if ( nameOfConfigToBuild ) {
-				Builder_Error( "No BuildConfig found with the name \"%s\".\n", nameOfConfigToBuild );
-			} else {
-				Builder_Error( "No BuildConfig was registered.  You must call AddBuildConfig() at least once.\n" );
-			}
-
+			Builder_Error( "No BuildConfig was registered.  You must call AddBuildConfig() at least once.\n" );
 			return 1;
 		} else if ( options->configsCount > 1 && !nameOfConfigToBuild ) {
 			Builder_Error( "You have more than 1 BuildConfig defined, but you never told me which you wanted me to build via \"" ARG_CONFIG "\".  You need to tell me what config you want me to build, or set a default via BuilderOptions::defaultConfig.\n" );
 			return 1;
+		}
+
+		if ( nameOfConfigToBuild ) {
+			for ( uint32_t configIndex = 0; configIndex < options->configsCount; configIndex++ ) {
+				if ( options->configs[configIndex].name && Builder_StringEquals( options->configs[configIndex].name, nameOfConfigToBuild ) ) {
+					targetConfig = &options->configs[configIndex];
+					break;
+				}
+			}
+
+			if ( !targetConfig ) {
+				Builder_Error( "No BuildConfig found with the name \"%s\".\n", nameOfConfigToBuild );
+				return 1;
+			}
+		} else {
+			targetConfig = &options->configs[0];
 		}
 	}
 
@@ -2140,11 +2146,17 @@ int Build( BuilderOptions *options ) {
 		}
 	}
 
+	// TODO: DM: 10/08/2026: either do proper cleanup ourselves via goto to account for all cases
+	// or wait for Tom's linear allocator
+	uint32_t configsToBuildCount = 0;
+	BuildConfig *configsToBuild = NULL;
+	AddBuildConfigInternal( options, targetConfig, NULL, &configsToBuild, &configsToBuildCount );
+
 	double totalCompileTimeMS = 0.0;
 	double totalLinkTimeMS = 0.0;
 
-	for ( uint32_t configIndex = 0; configIndex < options->configsCount; configIndex++ ) {
-		BuildConfig *config = &options->configs[configIndex];
+	for ( uint32_t configIndex = 0; configIndex < configsToBuildCount; configIndex++ ) {
+		BuildConfig *config = &configsToBuild[configIndex];
 
 		double compileTimeMS = 0.0;
 		double linkTimeMS = 0.0;

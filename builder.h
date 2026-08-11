@@ -906,7 +906,7 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 
 	int32_t exitCode = Builder_RunProcess( execCmd, NULL );
 
-	free( execCmd );
+	free( (void*)execCmd );
 
 	exit( exitCode );
 #elif defined( __linux__ )
@@ -1004,7 +1004,7 @@ static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t 
 
 	// TODO: DM: 05/08/2026: Tom's chunked array
 	uint32_t directoriesCount = 0;
-	const char **directories = malloc( 1 * sizeof( char * ) );
+	const char **directories = (const char **)malloc( 1 * sizeof( char * ) );
 	directories[directoriesCount++] = path;
 
 	uint32_t dirIndex = 0;
@@ -1043,7 +1043,7 @@ static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t 
 					}
 
 					if ( visitFlags & BUILDER_FILE_VISIT_RECURSIVE ) {
-						directories = realloc( directories, ++directoriesCount * sizeof( char * ) );
+						directories = (const char **)realloc( directories, ++directoriesCount * sizeof( char * ) );
 						directories[directoriesCount - 1] = fileInfo.fullFilename;
 					}
 				}
@@ -1225,7 +1225,7 @@ static bool Builder_SliceMatchesPattern( const builderStringSlice_t *patternSlic
 			}
 		}
 
-		// consume match resetting if match fails (TODO: explain this better?)
+		// consume match resetting if match fails (TODO: AK: 11/08/2026: explain this better?)
 		if ( patternSlice->begin[patternIndex++] != pathSlice->begin[pathIndex] ) {
 			patternIndex = afterLastWildcard;
 		}
@@ -1736,7 +1736,11 @@ static bool Builder_GetMSVCInstall( builderMSVCInstall_t *outInstall ) {
 
 	ISetupConfiguration *setupConfig = NULL;
 
-	hr = CoCreateInstance( &CLSID_SetupConfiguration, NULL, CLSCTX_INPROC_SERVER, &IID_ISetupConfiguration, (void **) &setupConfig );
+#ifdef __cplusplus
+    hr = CoCreateInstance( CLSID_SetupConfiguration, NULL, CLSCTX_INPROC_SERVER, IID_ISetupConfiguration, (void **) &setupConfig );
+#else
+    hr = CoCreateInstance( &CLSID_SetupConfiguration, NULL, CLSCTX_INPROC_SERVER, &IID_ISetupConfiguration, (void **) &setupConfig );
+#endif
 
 	if ( hr == REGDB_E_CLASSNOTREG ) {
 		success = Builder_MSVCNotInstalled();
@@ -2540,15 +2544,30 @@ int Build( BuilderOptions *options ) {
 
 				const char **additionalLib = config->additionalLibs;
 				while ( additionalLib && *additionalLib ) {
-					StringBuilder_Appendf( &linkerArgs, "%s ", *additionalLib );
+					StringBuilder_Appendf( &linkerArgs, "%s.lib ", *additionalLib );
 
 					additionalLib++;
 				}
 
+				// TODO: AK: 11/08/2026: handle this better
+				bool debugDefineSet = false;
+				const char **define = config->defines;
+				while ( define && *define ) {
+					if ( !debugDefineSet && _strnicmp( "_DEBUG", *(define++), sizeof("_DEBUG") ) == 0 ) {
+						debugDefineSet = true;
+						break;
+					}
+				}
+				
 				if ( config->binaryType != BINARY_TYPE_STATIC_LIBRARY ) {
 					// clang doesn't embed /DEFAULTLIB directives the way cl.exe does
 					// so link.exe has no idea which CRT/SDK libs to pull in unless we name them ourselves
-					StringBuilder_Appendf( &linkerArgs, "libcmt.lib libvcruntime.lib libucrt.lib kernel32.lib " );
+					// TODO: AK: 11/08/2026: we need dynamic runtime support too
+					if (debugDefineSet) {
+						StringBuilder_Appendf( &linkerArgs, "libcmtd.lib libcpmtd.lib libvcruntimed.lib libucrtd.lib kernel32.lib " );
+					} else {
+						StringBuilder_Appendf( &linkerArgs, "libcmt.lib libcpmt.lib libvcruntime.lib libucrt.lib kernel32.lib " );
+					}
 				}
 
 				const char **additionalLinkerArgument = config->additionalLinkerArguments;

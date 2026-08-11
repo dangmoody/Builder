@@ -168,9 +168,19 @@ typedef struct arena_t
 scratch_t getScratch(arena_t* activeArena);
 void rewindScratch(scratch_t* scratch);
 
+// alignof is only a keyword in C++ and C23. C11 and C17 have it as a macro in <stdalign.h>, which we'd rather not
+// pull in (or clash with), and _Alignof has been a keyword since C11 anyway.
+#ifdef __cplusplus
+#define BUILDER_ALIGNOF( type ) alignof( type )
+#elif defined( __STDC_VERSION__ ) && __STDC_VERSION__ >= 201112L
+#define BUILDER_ALIGNOF( type ) _Alignof( type )
+#else
+#define BUILDER_ALIGNOF( type ) __alignof__( type )
+#endif
+
 // Builder only uses scratch arenas as it's a short running program
 void* scratchAllocate(scratch_t* scratch, u64 size, u64 alignment);
-#define scratchPush(scratch_t, type, count) ((type*)scratchAllocate(scratch_t, sizeof(type) * (count), alignof(type)))
+#define scratchPush(scratch_t, type, count) ((type*)scratchAllocate(scratch_t, sizeof(type) * (count), BUILDER_ALIGNOF(type)))
 
 // Frees this thread's scratch arena block chains. Scratch arenas live in thread_local
 // storage, and plain thread_local variables have no destructor in C - nothing runs
@@ -194,10 +204,6 @@ char		*StringBuilder_ToString( stringBuilder_t *builder );
 
 #if defined( _MSC_VER ) && !defined( __cplusplus )
 #define thread_local __declspec( thread )
-#endif
-
-#if !defined( __cplusplus ) && !( defined( __STDC_VERSION__ ) && __STDC_VERSION__ >= 201112L )
-#define alignof( type ) __alignof__( type )
 #endif
 
 #ifndef BUILDER_COUNT_OF

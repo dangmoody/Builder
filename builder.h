@@ -68,6 +68,7 @@ typedef enum Optimization {
 	OPTIMIZATION_PROGRAM_SPEED,
 } Optimization;
 
+
 typedef struct BuildConfig {
 	const char			*name;
 	// Other BuildConfigs that need to be built before this one.  NULL-terminated array.
@@ -136,7 +137,7 @@ typedef struct arenaBlock_t {
 	void				*block;
 	u64					position;
 	u64					capacity;
-	// Orders two blocks without walking the chain - see rewindScratch().
+	// Orders two blocks without walking the chain - see scratchRewind().
 	// Only valid because blocks are always appended to the end, never spliced into the middle.
 	u64					index;
 	struct arenaBlock_t	*next;
@@ -153,11 +154,15 @@ typedef struct arena_t {
 	arenaBlock_t	*tail;
 } arena_t;
 
-// Rule: functions may only take one arena parameter. This keeps getScratch()'s
-// single-arena-to-avoid exclusion sufficient - if that stops holding, getScratch()
+// Rule: functions may only take one arena parameter. This keeps scratchGet()'s
+// single-arena-to-avoid exclusion sufficient - if that stops holding, scratchGet()
 // needs to take a list of arenas to avoid instead.
-scratch_t	getScratch( arena_t *activeArena );
-void		rewindScratch( scratch_t *scratch );
+// Pass the scratch you were handed (or NULL if you weren't handed one) so you don't get given the same one back.
+scratch_t	scratchGet( scratch_t *activeScratch );
+// Marks where a scratch has got to right now.  Use this when you want to keep allocating into somebody else's scratch
+// but be able to throw away just your own attempt - their allocations sit below the marker and a rewind can't reach them.
+scratch_t	scratchTell( scratch_t *scratch );
+void		scratchRewind( scratch_t *scratch );
 
 // alignof is only a keyword in C++ and C23. C11 and C17 have it as a macro in <stdalign.h>, which we'd rather not
 // pull in (or clash with), and _Alignof has been a keyword since C11 anyway.
@@ -179,7 +184,7 @@ void	*scratchAllocate( scratch_t *scratch, u64 size, u64 alignment );
 // this at process exit, but if you spin up short-lived threads and you really really care,
 // call this on each one before it exits or its scratch blocks will leak for the life of 
 // the process. Note(Tom): for this tool this is really optional
-void	scratch_free( void );
+void	scratchFree( void );
 
 
 #ifdef BUILDER_IMPLEMENTATION
@@ -203,18 +208,30 @@ void	scratch_free( void );
 
 thread_local arena_t scratches[NUM_SCRATCH_ARENAS];
 
-scratch_t getScratch( scratch_t *activeScratch ) {
-	arena_t* activeArena = activeScratch->arena;
+scratch_t scratchTell( scratch_t *scratch ) {
+	BUILDER_ASSERT( scratch );
+	BUILDER_ASSERT( scratch->arena );
+
+	arena_t *arena = scratch->arena;
+
+	scratch_t marker;
+	marker.arena = arena;
+	marker.block = arena->tail;
+	marker.position = arena->tail ? arena->tail->position : 0;
+
+	return marker;
+}
+
+scratch_t scratchGet( scratch_t *activeScratch ) {
+	// NULL means the caller isn't holding one, so there's nothing to avoid
+	arena_t *activeArena = activeScratch ? activeScratch->arena : NULL;
 	for ( int scratchIndex = 0; scratchIndex < NUM_SCRATCH_ARENAS; scratchIndex++ ) {
 		arena_t *scratchArena = &scratches[scratchIndex];
 
 		if ( activeArena != scratchArena ) {
-			scratch_t scratch;
-			scratch.arena = scratchArena;
-			scratch.block = scratchArena->tail;
-			scratch.position = scratchArena->tail ? scratchArena->tail->position : 0;
+			scratch_t onThisArena = { scratchArena, NULL, 0 };
 
-			return scratch;
+			return scratchTell( &onThisArena );
 		}
 	}
 
@@ -225,7 +242,7 @@ scratch_t getScratch( scratch_t *activeScratch ) {
 	return empty;
 }
 
-void rewindScratch( scratch_t *scratch ) {
+void scratchRewind( scratch_t *scratch ) {
 	// A marker can only wind backwards. A NULL block is the arena's earliest state, so it's always valid.
 	BUILDER_ASSERT( ( scratch->block == NULL
 		|| ( scratch->arena->tail != NULL
@@ -287,7 +304,7 @@ void *scratchAllocate( scratch_t *scratch, u64 size, u64 alignment ) {
 		}
 
 		// Doesn't fit in the current block (or there is no current block yet) -
-		// move forward to the next one, reusing it if rewindScratch() already left one there.
+		// move forward to the next one, reusing it if scratchRewind() already left one there.
 		arenaBlock_t *next = block ? block->next : arena->head;
 
 		if ( next == NULL ) {
@@ -315,7 +332,7 @@ void *scratchAllocate( scratch_t *scratch, u64 size, u64 alignment ) {
 				arena->head = next;
 			}
 		} else {
-			// Left behind by rewindScratch(). Anything past the tail is dead, so resetting it here is safe.
+			// Left behind by scratchRewind(). Anything past the tail is dead, so resetting it here is safe.
 			next->position = 0;
 		}
 
@@ -399,8 +416,7 @@ static bool Builder_PathHasFileExtension( const char *path, const char *extensio
 #endif
 }
 
-// TODO: DM: 07/08/2026: replace malloc calls with a custom "Alloc()" function ptr that users can override themselves
-static char *Builder_FormatString( const char *fmt, ... ) {
+static char *Builder_FormatString(scratch_t* scratch, const char *fmt, ... ) {
 	va_list args;
 	va_start( args, fmt );
 
@@ -410,7 +426,7 @@ static char *Builder_FormatString( const char *fmt, ... ) {
 	int length = vsnprintf( NULL, 0, fmt, args );
 	va_end( args );
 
-	char *result = (char *) malloc( (size_t) length + 1 );
+	char *result = scratchPush( scratch, char, (uint64_t) length + 1 );
 	vsnprintf( result, (size_t) length + 1, fmt, argsCopy );
 	va_end( argsCopy );
 
@@ -484,31 +500,16 @@ typedef struct stringBuilder_t {
 	stringBuilderBuffer_t	*tail;
 } stringBuilder_t;
 
-static void StringBuilder_Destroy( stringBuilder_t *builder ) {
-	stringBuilderBuffer_t *current = builder->head;
 
-	while ( current ) {
-		stringBuilderBuffer_t *next = current->next;
-
-		free( current->data );
-		free( current );
-
-		current = next;
-	}
-
-	builder->head = NULL;
-	builder->tail = NULL;
-}
-
-// TODO: DM: 30/07/2026: replace malloc calls with a custom "Alloc()" function ptr that users can override themselves
-static void StringBuilder_Appendf( stringBuilder_t *builder, const char *fmt, ... ) {
+static void StringBuilder_Appendf( scratch_t *scratch, stringBuilder_t *builder, const char *fmt, ... ) {
+	BUILDER_ASSERT( scratch );
 	BUILDER_ASSERT( builder );
 	BUILDER_ASSERT( fmt );
 
 	va_list args;
 	va_start( args, fmt );
 
-	stringBuilderBuffer_t *buffer = (stringBuilderBuffer_t *) malloc( sizeof( stringBuilderBuffer_t ) );
+	stringBuilderBuffer_t *buffer = scratchPush(scratch, stringBuilderBuffer_t, 1);
 	memset( buffer, 0, sizeof( stringBuilderBuffer_t ) );
 
 	va_list argsCopy;
@@ -516,7 +517,7 @@ static void StringBuilder_Appendf( stringBuilder_t *builder, const char *fmt, ..
 
 	buffer->length = (uint32_t) vsnprintf( NULL, 0, fmt, args );
 
-	buffer->data = (char *) malloc( buffer->length + 1 );
+	buffer->data = scratchPush( scratch, char, buffer->length + 1 );
 	vsnprintf( buffer->data, buffer->length + 1, fmt, argsCopy );
 	va_end( argsCopy );
 	buffer->data[buffer->length] = 0;
@@ -533,7 +534,10 @@ static void StringBuilder_Appendf( stringBuilder_t *builder, const char *fmt, ..
 	va_end( args );
 }
 
-static char *StringBuilder_ToString( stringBuilder_t *builder ) {
+static char *StringBuilder_ToString( scratch_t *scratch, stringBuilder_t *builder ) {
+	BUILDER_ASSERT( scratch );
+	BUILDER_ASSERT( builder );
+
 	char *result = NULL;
 	uint64_t totalLength = 0;
 	uint64_t offset = 0;
@@ -552,7 +556,7 @@ static char *StringBuilder_ToString( stringBuilder_t *builder ) {
 
 	totalLength += 1;
 
-	result = (char *) malloc( totalLength * sizeof( char ) );
+	result = scratchPush( scratch, char, totalLength );
 
 	current = builder->head;
 
@@ -622,8 +626,8 @@ static bool Builder_CreateFolderIfItDoesntExist( const char *path ) {
 	}
 
 	size_t pathLength = strlen( path );
-
-	char *pathCopy = (char *) malloc( pathLength + 1 );
+	scratch_t scratch = scratchGet( NULL );
+	char *pathCopy = scratchPush( &scratch, char, pathLength + 1 );
 	memcpy( pathCopy, path, pathLength + 1 );
 
 	bool success = true;
@@ -654,7 +658,7 @@ static bool Builder_CreateFolderIfItDoesntExist( const char *path ) {
 		pathCopy[charIndex] = c;
 	}
 
-	free( pathCopy );
+	scratchRewind( &scratch );
 
 	return success;
 }
@@ -714,20 +718,19 @@ static void AddBuildConfigInternal( BuilderOptions *options, BuildConfig *config
 	if ( ancestry ) {
 		for ( uint32_t ancestorIndex = 0; ancestorIndex < ancestry->count; ancestorIndex++ ) {
 			if ( ancestry->items[ancestorIndex] == config ) {
+				//Throwaway scratch; we're about to exit
+				scratch_t scratch = scratchGet( NULL );
 				stringBuilder_t cycle = {};
 
 				for ( uint32_t cycleIndex = ancestorIndex; cycleIndex < ancestry->count; cycleIndex++ ) {
 					const char *cycleConfigName = ancestry->items[cycleIndex]->name;
-					StringBuilder_Appendf( &cycle, "%s -> ", cycleConfigName ? cycleConfigName : "(unnamed config)" );
+					StringBuilder_Appendf( &scratch, &cycle, "%s -> ", cycleConfigName ? cycleConfigName : "(unnamed config)" );
 				}
 
-				StringBuilder_Appendf( &cycle, "%s", config->name ? config->name : "(unnamed config)" );
+				StringBuilder_Appendf( &scratch, &cycle, "%s", config->name ? config->name : "(unnamed config)" );
 
-				char *cycleString = StringBuilder_ToString( &cycle );
+				char *cycleString = StringBuilder_ToString( &scratch, &cycle );
 				Builder_Error( "Cyclic BuildConfig::dependsOn detected: %s\n", cycleString );
-				free( cycleString );
-
-				StringBuilder_Destroy( &cycle );
 
 				exit( 1 );
 			}
@@ -774,7 +777,7 @@ void AddBuildConfig( BuilderOptions *options, BuildConfig *config ) {
 	free( ancestry.items );
 }
 
-static int32_t Builder_RunProcess( const char *processAndArgs, char **outCapturedOutput ) {
+static int32_t Builder_RunProcess( scratch_t* resultsScratch, const char *processAndArgs, char **outCapturedOutput ) {
 #if defined( _WIN32 )
 	SECURITY_ATTRIBUTES secAttr = { sizeof( SECURITY_ATTRIBUTES ), NULL, TRUE };
 
@@ -824,21 +827,26 @@ static int32_t Builder_RunProcess( const char *processAndArgs, char **outCapture
 
 	stringBuilder_t capturedOutput = {};
 
+	// the builder's own buffers are throwaway, so they go somewhere other than the scratch the caller wants the result in
+	scratch_t temporaryScratch = scratchGet( resultsScratch );
+
 	while ( ( read = ReadFile( stdoutRead, buffer, sizeof( buffer ) - 1, &bytesRead, NULL ) ) && bytesRead != 0 ) {
 		buffer[bytesRead] = 0;
 
 		if ( outCapturedOutput ) {
-			StringBuilder_Appendf( &capturedOutput, "%s", buffer );
+			StringBuilder_Appendf( &temporaryScratch, &capturedOutput, "%s", buffer );
 		} else {
 			printf( "%s", buffer );
 		}
 	}
 
 	if ( outCapturedOutput ) {
-		*outCapturedOutput = StringBuilder_ToString( &capturedOutput );
+		BUILDER_ASSERT( resultsScratch && "capturing output needs a scratch to put the result in" );
+
+		*outCapturedOutput = StringBuilder_ToString( resultsScratch, &capturedOutput );
 	}
 
-	StringBuilder_Destroy( &capturedOutput );
+	scratchRewind( &temporaryScratch );
 
 	if ( !read ) {
 		DWORD lastError = GetLastError();
@@ -927,11 +935,14 @@ static int32_t Builder_RunProcess( const char *processAndArgs, char **outCapture
 
 	stringBuilder_t capturedOutput = {};
 
+	// the builder's own buffers are throwaway, so they go somewhere other than the scratch the caller wants the result in
+	scratch_t temporaryScratch = scratchGet( resultsScratch );
+
 	while ( ( bytesRead = read( stdoutPipe[0], buffer, sizeof( buffer ) - 1 ) ) > 0 ) {
 		buffer[bytesRead] = 0;
 
 		if ( outCapturedOutput ) {
-			StringBuilder_Appendf( &capturedOutput, "%s", buffer );
+			StringBuilder_Appendf( &temporaryScratch, &capturedOutput, "%s", buffer );
 		} else {
 			printf( "%s", buffer );
 		}
@@ -945,10 +956,12 @@ static int32_t Builder_RunProcess( const char *processAndArgs, char **outCapture
 	}
 
 	if ( outCapturedOutput ) {
-		*outCapturedOutput = StringBuilder_ToString( &capturedOutput );
+		BUILDER_ASSERT( resultsScratch && "capturing output needs a scratch to put the result in" );
+
+		*outCapturedOutput = StringBuilder_ToString( resultsScratch, &capturedOutput );
 	}
 
-	StringBuilder_Destroy( &capturedOutput );
+	scratchRewind( &temporaryScratch );
 
 	if ( close( stdoutPipe[0] ) == -1 ) {
 		err = errno;
@@ -985,19 +998,18 @@ static int32_t Builder_RunProcess( const char *processAndArgs, char **outCapture
 // CALL THE MACRO VERSION INSTEAD
 static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sourceFile ) {
 	const char *binaryPath = argv[0];
-
+	scratch_t scratch = scratchGet( NULL );
 	// we need the exe filename on windows to end with ".exe"
 	// otherwise the file will fail to be found
 #ifdef _WIN32
 	if ( !Builder_PathHasFileExtension( binaryPath, ".exe" ) ) {
-		binaryPath = Builder_FormatString( "%s.exe", argv[0] );
+		binaryPath = Builder_FormatString( &scratch, "%s.exe", argv[0] );
 	}
 
 	// if the old binary was left around from the previous build, clean it up now
 	{
-		char *oldBackupPath = Builder_FormatString( "%s.rebuild.old", binaryPath );
+		char *oldBackupPath = Builder_FormatString( &scratch, "%s.rebuild.old", binaryPath );
 		DeleteFile( oldBackupPath );
-		free( oldBackupPath );
 	}
 #endif
 
@@ -1014,25 +1026,26 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 
 	if ( binaryExists && binaryTime >= sourceTime ) {
 		// already up to date, fall through and let main() continue as normal
+		scratchRewind( &scratch );
 		return;
 	}
 
 	printf( "'%s' is stale, rebuilding...\n", binaryPath );
 
 	stringBuilder_t tempPathBuilder = {};
-	StringBuilder_Appendf( &tempPathBuilder, "%s.rebuild.tmp", binaryPath );
-	const char *tempBinaryPath = StringBuilder_ToString( &tempPathBuilder );
+	StringBuilder_Appendf( &scratch, &tempPathBuilder, "%s.rebuild.tmp", binaryPath );
+	const char *tempBinaryPath = StringBuilder_ToString( &scratch, &tempPathBuilder );
 
 	stringBuilder_t compileArgs = {};
-	StringBuilder_Appendf( &compileArgs, "clang " );
-	StringBuilder_Appendf( &compileArgs, "-o %s ", tempBinaryPath );
-	StringBuilder_Appendf( &compileArgs, "%s ", sourceFile );
+	StringBuilder_Appendf( &scratch, &compileArgs, "clang " );
+	StringBuilder_Appendf( &scratch, &compileArgs, "-o %s ", tempBinaryPath );
+	StringBuilder_Appendf( &scratch, &compileArgs, "%s ", sourceFile );
 
-	const char *compileCmd = StringBuilder_ToString( &compileArgs );
+	const char *compileCmd = StringBuilder_ToString( &scratch, &compileArgs );
 
 	printf( "%s\n", compileCmd );
 
-	if ( Builder_RunProcess( compileCmd, NULL ) != 0 ) {
+	if ( Builder_RunProcess( NULL, compileCmd, NULL ) != 0 ) {
 		Builder_Error( "failed to rebuild '%s'.\n", binaryPath );
 
 #if defined( _WIN32 )
@@ -1054,8 +1067,8 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 	// rename it out of the way first, then move the freshly built binary into the now-vacated name
 	// the running image stays mapped and executing under its backup name until this process re-execs below
 	stringBuilder_t backupPathBuilder = {};
-	StringBuilder_Appendf( &backupPathBuilder, "%s.rebuild.old", binaryPath );
-	const char *backupBinaryPath = StringBuilder_ToString( &backupPathBuilder );
+	StringBuilder_Appendf( &scratch, &backupPathBuilder, "%s.rebuild.old", binaryPath );
+	const char *backupBinaryPath = StringBuilder_ToString( &scratch, &backupPathBuilder );
 
 	if ( !MoveFileEx( binaryPath, backupBinaryPath, MOVEFILE_REPLACE_EXISTING ) ) {
 		Builder_Error( "Failed to move currently-running '%s' out of the way: 0x%X\n", binaryPath, GetLastError() );
@@ -1078,17 +1091,16 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 	// never fall through to running the (now stale-in-memory) code of the process currently executing
 #if defined( _WIN32 )
 	stringBuilder_t execArgs = {};
-	StringBuilder_Appendf( &execArgs, "\"%s\" ", binaryPath );
+	StringBuilder_Appendf( &scratch, &execArgs, "\"%s\" ", binaryPath );
 
 	for ( int argIndex = 1; argIndex < argc; argIndex++ ) {
-		StringBuilder_Appendf( &execArgs, "\"%s\" ", argv[argIndex] );
+		StringBuilder_Appendf( &scratch, &execArgs, "\"%s\" ", argv[argIndex] );
 	}
 
-	const char *execCmd = StringBuilder_ToString( &execArgs );
+	const char *execCmd = StringBuilder_ToString( &scratch, &execArgs );
 
-	int32_t exitCode = Builder_RunProcess( execCmd, NULL );
+	int32_t exitCode = Builder_RunProcess( NULL, execCmd, NULL );
 
-	free( execCmd );
 
 	exit( exitCode );
 #elif defined( __linux__ )
@@ -1099,6 +1111,7 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 		exit( 1 );
 	}
 #endif
+	scratchRewind( &scratch );
 }
 
 static int ShowUsage( const int exitCode ) {
@@ -1134,18 +1147,18 @@ static const char *Builder_GetFileExtensionFromBinaryType( const BinaryType bina
 	return NULL;
 }
 
-static void Builder_AppendBinaryPath( stringBuilder_t *sb, const BuildConfig *config ) {
+static void Builder_AppendBinaryPath( scratch_t *scratch, stringBuilder_t *sb, const BuildConfig *config ) {
 	if ( config->binaryFolder ) {
-		StringBuilder_Appendf( sb, "%s%c", config->binaryFolder, BUILDER_PATH_SEPARATOR );
+		StringBuilder_Appendf( scratch, sb, "%s%c", config->binaryFolder, BUILDER_PATH_SEPARATOR );
 	}
 
-	StringBuilder_Appendf( sb, "%s%s ", config->binaryName, Builder_GetFileExtensionFromBinaryType( config->binaryType ) );
+	StringBuilder_Appendf( scratch, sb, "%s%s ", config->binaryName, Builder_GetFileExtensionFromBinaryType( config->binaryType ) );
 }
 
 // intermediateFolder may be NULL, in which case the intermediate file is placed alongside sourceFile instead
-static void Builder_AppendIntermediateFilePath( stringBuilder_t *sb, const char *intermediateFolder, const char *sourceFile ) {
+static void Builder_AppendIntermediateFilePath( scratch_t *resultsScratch, stringBuilder_t *sb, const char *intermediateFolder, const char *sourceFile ) {
 	if ( !intermediateFolder ) {
-		StringBuilder_Appendf( sb, "%s.o ", sourceFile );
+		StringBuilder_Appendf( resultsScratch, sb, "%s.o ", sourceFile );
 		return;
 	}
 
@@ -1160,7 +1173,7 @@ static void Builder_AppendIntermediateFilePath( stringBuilder_t *sb, const char 
 	const char *extension = strrchr( fileName, '.' );
 	size_t fileNameLength = extension ? (size_t) ( extension - fileName ) : strlen( fileName );
 
-	StringBuilder_Appendf( sb, "%s%c%.*s.o ", intermediateFolder, BUILDER_PATH_SEPARATOR, (int) fileNameLength, fileName );
+	StringBuilder_Appendf( resultsScratch, sb, "%s%c%.*s.o ", intermediateFolder, BUILDER_PATH_SEPARATOR, (int) fileNameLength, fileName );
 }
 
 typedef struct {
@@ -1171,7 +1184,9 @@ typedef struct {
 	const char	*fullFilename;
 } fileInfo_t;
 
-typedef void ( *builderFileVisitCallback_t )( fileInfo_t *fileInfo, void *data );
+// resultsScratch is for anything the callback allocates that has to outlive the walk.  It's optional - pass NULL if the
+// callback doesn't allocate.  Builder_VisitFiles() never allocates from it itself.
+typedef void ( *builderFileVisitCallback_t )( scratch_t *resultsScratch, fileInfo_t *fileInfo, void *data );
 
 typedef enum {
 	BUILDER_FILE_VISIT_FILES		= 1 << 0,
@@ -1180,9 +1195,12 @@ typedef enum {
 } builderFileVisitFlagBits_t;
 typedef uint32_t builderFileVisitFlags_t;
 
-static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t visitFlags, builderFileVisitCallback_t callback, void *data ) {
+static bool Builder_VisitFiles( scratch_t *resultsScratch, const char *path, const builderFileVisitFlags_t visitFlags, builderFileVisitCallback_t callback, void *data ) {
 	BUILDER_ASSERT( path );
 	BUILDER_ASSERT( callback );
+
+	// the paths we build to walk the tree are ours alone - only the callback's allocations outlive us, and those go on resultsScratch
+	scratch_t scratch = scratchGet( resultsScratch );
 
 	// TODO: DM: 05/08/2026: Tom's chunked array
 	uint32_t directoriesCount = 0;
@@ -1200,12 +1218,13 @@ static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t 
 		bool dirHasTrailingSeparator = dirLength > 0 && ( dir[dirLength - 1] == '\\' || dir[dirLength - 1] == '/' );
 
 #if defined( _WIN32 )
-		char *searchPath = Builder_FormatString( dirHasTrailingSeparator ? "%s*" : "%s\\*", dir );
+		char *searchPath = Builder_FormatString( &scratch, dirHasTrailingSeparator ? "%s*" : "%s\\*", dir );
 
 		WIN32_FIND_DATA findData = {};
 		HANDLE handle = FindFirstFile( searchPath, &findData );
 
 		if ( handle == INVALID_HANDLE_VALUE ) {
+			scratchRewind( &scratch );
 			return false;
 		}
 
@@ -1215,13 +1234,13 @@ static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t 
 				.lastWriteTime	= ( (uint64_t) findData.ftLastWriteTime.dwHighDateTime << 32 ) | findData.ftLastWriteTime.dwLowDateTime,
 				.isDirectory	= (bool) ( findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ),
 				.filename		= findData.cFileName,
-				.fullFilename	= Builder_FormatString( dirHasTrailingSeparator ? "%s%s" : "%s\\%s", dir, findData.cFileName ),
+				.fullFilename	= Builder_FormatString( &scratch, dirHasTrailingSeparator ? "%s%s" : "%s\\%s", dir, findData.cFileName ),
 			};
 
 			if ( fileInfo.isDirectory ) {
 				if ( !Builder_StringEquals( findData.cFileName, "." ) && !Builder_StringEquals( findData.cFileName, ".." ) ) {
 					if ( visitFlags & BUILDER_FILE_VISIT_FOLDERS ) {
-						callback( &fileInfo, data );
+						callback( resultsScratch, &fileInfo, data );
 					}
 
 					if ( visitFlags & BUILDER_FILE_VISIT_RECURSIVE ) {
@@ -1230,7 +1249,7 @@ static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t 
 					}
 				}
 			} else if ( visitFlags & BUILDER_FILE_VISIT_FILES ) {
-				callback( &fileInfo, data );
+				callback( resultsScratch, &fileInfo, data );
 			}
 
 			if ( !FindNextFile( handle, &findData ) ) {
@@ -1239,6 +1258,7 @@ static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t 
 		}
 
 		if ( !FindClose( handle ) ) {
+			scratchRewind( &scratch );
 			return false;
 		}
 #elif defined( __linux__ )
@@ -1247,6 +1267,7 @@ static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t 
 
 		if ( !handle ) {
 			Builder_Error( "Failed to open folder \"%s\": %s\n", dir, strerror( err ) );
+			scratchRewind( &scratch );
 			return false;
 		}
 
@@ -1257,13 +1278,14 @@ static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t 
 				continue;
 			}
 
-			char *fullFilename = Builder_FormatString( dirHasTrailingSeparator ? "%s%s" : "%s/%s", dir, entry->d_name );
+			char *fullFilename = Builder_FormatString( &scratch, dirHasTrailingSeparator ? "%s%s" : "%s/%s", dir, entry->d_name );
 
 			struct stat fileStat = {};
 
 			if ( stat( fullFilename, &fileStat ) != 0 ) {
 				err = errno;
 				Builder_Error( "Failed to stat \"%s\": %s\n", fullFilename, strerror( err ) );
+				scratchRewind( &scratch );
 				return false;
 			}
 
@@ -1277,7 +1299,7 @@ static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t 
 
 			if ( fileInfo.isDirectory ) {
 				if ( visitFlags & BUILDER_FILE_VISIT_FOLDERS ) {
-					callback( &fileInfo, data );
+					callback( resultsScratch, &fileInfo, data );
 				}
 
 				if ( visitFlags & BUILDER_FILE_VISIT_RECURSIVE ) {
@@ -1285,13 +1307,14 @@ static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t 
 					directories[directoriesCount - 1] = fileInfo.fullFilename;
 				}
 			} else if ( visitFlags & BUILDER_FILE_VISIT_FILES ) {
-				callback( &fileInfo, data );
+				callback( resultsScratch, &fileInfo, data );
 			}
 		}
 
 		if ( closedir( handle ) != 0 ) {
 			err = errno;
 			Builder_Error( "Failed to close folder \"%s\": %s\n", dir, strerror( err ) );
+			scratchRewind( &scratch );
 			return false;
 		}
 #endif
@@ -1299,6 +1322,8 @@ static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t 
 
 	free( directories );
 	directories = NULL;
+
+	scratchRewind( &scratch );
 
 	return true;
 }
@@ -1394,7 +1419,10 @@ typedef struct {
 	uint32_t					versionsCount;
 } builderFoundWindowsSDKVersionData_t;
 
-static void OnWindowsSDKVersionFound( fileInfo_t *fileInfo, void *data ) {
+// only parses the version out of the folder name, so it has nothing to allocate
+static void OnWindowsSDKVersionFound( scratch_t *resultsScratch, fileInfo_t *fileInfo, void *data ) {
+	(void) resultsScratch;
+
 	builderFoundWindowsSDKVersionData_t *foundData = (builderFoundWindowsSDKVersionData_t *) data;
 
 	builderWindowsSDKVersion_t version = {};
@@ -1418,7 +1446,8 @@ static int Builder_CompareWindowsSDKVersions( const void *a, const void *b ) {
 	return versionB->v3 - versionA->v3;
 }
 
-static bool Builder_GetWindowsSDKInstall( builderWindowsSDKInstall_t *outSDK ) {
+// The paths this hands back via outSDK live for the whole build, so they go on the caller's scratch.
+static bool Builder_GetWindowsSDKInstall( scratch_t *resultsScratch, builderWindowsSDKInstall_t *outSDK ) {
 	BUILDER_ASSERT( outSDK );
 
 	bool success = false;
@@ -1475,16 +1504,16 @@ static bool Builder_GetWindowsSDKInstall( builderWindowsSDKInstall_t *outSDK ) {
 	}
 
 	{
-		char *windowsSDKLibFolder = Builder_FormatString( "%sLib", windowsSDKRoot );
+		char *windowsSDKLibFolder = Builder_FormatString( resultsScratch, "%sLib", windowsSDKRoot );
 
 		builderFoundWindowsSDKVersionData_t foundData = {
 			.versions		= versions,
 			.versionsCount	= versionsCount,
 		};
 
-		bool visited = Builder_VisitFiles( windowsSDKLibFolder, BUILDER_FILE_VISIT_FOLDERS, OnWindowsSDKVersionFound, &foundData );
+		// NULL because OnWindowsSDKVersionFound() only reads the folder names - it allocates nothing
+		bool visited = Builder_VisitFiles( NULL, windowsSDKLibFolder, BUILDER_FILE_VISIT_FOLDERS, OnWindowsSDKVersionFound, &foundData );
 
-		free( windowsSDKLibFolder );
 
 		versions = foundData.versions;
 		versionsCount = foundData.versionsCount;
@@ -1507,11 +1536,15 @@ static bool Builder_GetWindowsSDKInstall( builderWindowsSDKInstall_t *outSDK ) {
 	for ( uint32_t versionIndex = 0; versionIndex < versionsCount; versionIndex++ ) {
 		builderWindowsSDKVersion_t *version = &versions[versionIndex];
 
-		char *ucrtIncludeFolder = Builder_FormatString( "%sinclude\\%d.%d.%d.%d\\ucrt", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
-		char *umIncludeFolder = Builder_FormatString( "%sinclude\\%d.%d.%d.%d\\um", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
-		char *sharedIncludeFolder = Builder_FormatString( "%sinclude\\%d.%d.%d.%d\\shared", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
-		char *ucrtLibFolder = Builder_FormatString( "%sLib\\%d.%d.%d.%d\\ucrt\\x64", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
-		char *umLibFolder = Builder_FormatString( "%sLib\\%d.%d.%d.%d\\um\\x64", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
+		// these go straight onto the results scratch because they're what we hand back if this version turns out to be the one.
+		// if it isn't, this marker lets us drop just this attempt without touching whatever the caller already had in there
+		scratch_t attempt = scratchTell( resultsScratch );
+
+		char *ucrtIncludeFolder = Builder_FormatString( resultsScratch, "%sinclude\\%d.%d.%d.%d\\ucrt", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
+		char *umIncludeFolder = Builder_FormatString( resultsScratch, "%sinclude\\%d.%d.%d.%d\\um", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
+		char *sharedIncludeFolder = Builder_FormatString( resultsScratch, "%sinclude\\%d.%d.%d.%d\\shared", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
+		char *ucrtLibFolder = Builder_FormatString( resultsScratch, "%sLib\\%d.%d.%d.%d\\ucrt\\x64", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
+		char *umLibFolder = Builder_FormatString( resultsScratch, "%sLib\\%d.%d.%d.%d\\um\\x64", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
 
 		uint32_t missingFoldersCount = 0;
 		const char *missingFolders[5] = {};
@@ -1537,14 +1570,16 @@ static bool Builder_GetWindowsSDKInstall( builderWindowsSDKInstall_t *outSDK ) {
 		}
 
 		if ( missingFoldersCount > 0 ) {
+			scratch_t scratch = scratchGet( &attempt );
 			stringBuilder_t sb = {};
-			StringBuilder_Appendf( &sb, "Version %d.%d.%d.%d of your Windows SDK installation is malformed because the following folder(s) could not be found:\n", version->v0, version->v1, version->v2, version->v3 );
+
+			StringBuilder_Appendf( &scratch, &sb, "Version %d.%d.%d.%d of your Windows SDK installation is malformed because the following folder(s) could not be found:\n", version->v0, version->v1, version->v2, version->v3 );
 
 			for ( uint32_t missingFolderIndex = 0; missingFolderIndex < missingFoldersCount; missingFolderIndex++ ) {
-				StringBuilder_Appendf( &sb, " - %s\n", missingFolders[missingFolderIndex] );
+				StringBuilder_Appendf( &scratch, &sb, " - %s\n", missingFolders[missingFolderIndex] );
 			}
 
-			StringBuilder_Appendf( &sb, "You must have the following folders in your Windows SDK install:\n"
+			StringBuilder_Appendf( &scratch, &sb, "You must have the following folders in your Windows SDK install:\n"
 				"    include/<version>/ucrt\n"
 				"    include/<version>/um\n"
 				"    include/<version>/shared\n"
@@ -1552,19 +1587,15 @@ static bool Builder_GetWindowsSDKInstall( builderWindowsSDKInstall_t *outSDK ) {
 				"    Lib/<version>/um/x64\n"
 			);
 
-			StringBuilder_Appendf( &sb, "If you want to use this version of the Windows SDK specifically, you will need to fix this yourself.\n" );
+			StringBuilder_Appendf( &scratch, &sb, "If you want to use this version of the Windows SDK specifically, you will need to fix this yourself.\n" );
 
-			char *message = StringBuilder_ToString( &sb );
+			char *message = StringBuilder_ToString( &scratch, &sb );
 			Builder_Warning( "%s", message );
-			free( message );
 
-			StringBuilder_Destroy( &sb );
+			scratchRewind( &scratch );
 
-			free( ucrtIncludeFolder );
-			free( umIncludeFolder );
-			free( sharedIncludeFolder );
-			free( ucrtLibFolder );
-			free( umLibFolder );
+			// this version is no good, so drop the paths we speculatively built for it
+			scratchRewind( &attempt );
 
 			continue;
 		}
@@ -1606,7 +1637,10 @@ cleanup:
 }
 
 // MSVC toolset folders are named like "14.44.35207" - that's the only part of each entry we need to parse ourselves
-static void Builder_OnMSVCInstallFound( fileInfo_t *fileInfo, void *data ) {
+// the paths built here end up in the install we hand back, so they go on the caller's scratch
+static void Builder_OnMSVCInstallFound( scratch_t *resultsScratch, fileInfo_t *fileInfo, void *data ) {
+	BUILDER_ASSERT( resultsScratch );
+
 	builderFoundMSVCInstallData_t *foundData = (builderFoundMSVCInstallData_t *) data;
 
 	builderMSVCVersion_t version = {};
@@ -1616,9 +1650,9 @@ static void Builder_OnMSVCInstallFound( fileInfo_t *fileInfo, void *data ) {
 	}
 
 	builderMSVCInstall_t install = {
-		.rootFolder		= Builder_FormatString( "%s", fileInfo->fullFilename ),
-		.includePath	= Builder_FormatString( "%s\\include", fileInfo->fullFilename ),
-		.libPath		= Builder_FormatString( "%s\\lib\\x64", fileInfo->fullFilename ),
+		.rootFolder		= Builder_FormatString( resultsScratch, "%s", fileInfo->fullFilename ),
+		.includePath	= Builder_FormatString( resultsScratch, "%s\\include", fileInfo->fullFilename ),
+		.libPath		= Builder_FormatString( resultsScratch, "%s\\lib\\x64", fileInfo->fullFilename ),
 		.version		= version,
 	};
 
@@ -1648,8 +1682,13 @@ static int Builder_CompareMSVCInstallVersions( const void *a, const void *b ) {
 
 // get all versions of MSVC
 // thanks to Microsoft we will be doing that in the most retarded way possible
-static bool Builder_GetMSVCInstall( builderMSVCInstall_t *outInstall ) {
+// The paths this hands back via outInstall live for the whole build, so they go on the caller's scratch.
+static bool Builder_GetMSVCInstall( scratch_t *resultsScratch, builderMSVCInstall_t *outInstall ) {
+	BUILDER_ASSERT( resultsScratch );
 	BUILDER_ASSERT( outInstall );
+
+	// the VS install paths we search through are only needed while we're searching, so they don't go on the caller's scratch
+	scratch_t scratch = scratchGet( resultsScratch );
 
 	bool success = false;
 
@@ -1725,7 +1764,7 @@ static bool Builder_GetMSVCInstall( builderMSVCInstall_t *outInstall ) {
 				goto cleanup;
 			}
 
-			visualStudioInstallationPath = (char *) malloc( ( (size_t) utf8Length + 1 ) * sizeof( char ) );
+			visualStudioInstallationPath = scratchPush( &scratch, char, (uint64_t) utf8Length + 1 );
 
 			int converted = WideCharToMultiByte( CP_UTF8, 0, visualStudioInstallationPathWide, (int) wideLength, visualStudioInstallationPath, utf8Length, NULL, NULL );
 
@@ -1741,26 +1780,21 @@ static bool Builder_GetMSVCInstall( builderMSVCInstall_t *outInstall ) {
 
 		SysFreeString( visualStudioInstallationPathWide );
 
-		char *msvcRootFolder = Builder_FormatString( "%s\\VC\\Tools\\MSVC", visualStudioInstallationPath );
-
-		free( visualStudioInstallationPath );
+		char *msvcRootFolder = Builder_FormatString( &scratch, "%s\\VC\\Tools\\MSVC", visualStudioInstallationPath );
 
 		builderFoundMSVCInstallData_t foundData = {
 			.installs		= foundMSVCInstalls,
 			.installsCount	= foundMSVCInstallsCount,
 		};
 
-		if ( !Builder_VisitFiles( msvcRootFolder, BUILDER_FILE_VISIT_FOLDERS, Builder_OnMSVCInstallFound, &foundData ) ) {
+		if ( !Builder_VisitFiles( resultsScratch, msvcRootFolder, BUILDER_FILE_VISIT_FOLDERS, Builder_OnMSVCInstallFound, &foundData ) ) {
 			Builder_Error( "Failed to query for MSVC installation folders under \"%s\".\n", msvcRootFolder );
-			free( msvcRootFolder );
 			instance->vtable->Release( instance );
 			goto cleanup;
 		}
 
 		foundMSVCInstalls = foundData.installs;
 		foundMSVCInstallsCount = foundData.installsCount;
-
-		free( msvcRootFolder );
 
 		instance->vtable->Release( instance );
 
@@ -1794,26 +1828,26 @@ static bool Builder_GetMSVCInstall( builderMSVCInstall_t *outInstall ) {
 
 		if ( missingFoldersCount > 0 ) {
 			stringBuilder_t sb = {};
-			StringBuilder_Appendf( &sb, "Version %d.%d.%d of your MSVC installation is malformed because the following folder(s) could not be found:\n", install->version.v0, install->version.v1, install->version.v2 );
+
+			StringBuilder_Appendf( &scratch, &sb, "Version %d.%d.%d of your MSVC installation is malformed because the following folder(s) could not be found:\n", install->version.v0, install->version.v1, install->version.v2 );
 
 			for ( uint32_t missingFolderIndex = 0; missingFolderIndex < missingFoldersCount; missingFolderIndex++ ) {
-				StringBuilder_Appendf( &sb, " - %s\n", missingFolders[missingFolderIndex] );
+				StringBuilder_Appendf( &scratch, &sb, " - %s\n", missingFolders[missingFolderIndex] );
 			}
 
-			StringBuilder_Appendf( &sb, "You must have the following folders in your MSVC install:\n"
+			StringBuilder_Appendf( &scratch, &sb, "You must have the following folders in your MSVC install:\n"
 				"    %s\n"
 				"    %s\n"
 				, install->includePath
 				, install->libPath
 			);
 
-			StringBuilder_Appendf( &sb, "If you want to use this version of MSVC specifically, you will need to fix this yourself.\n" );
+			StringBuilder_Appendf( &scratch, &sb, "If you want to use this version of MSVC specifically, you will need to fix this yourself.\n" );
 
-			char *message = StringBuilder_ToString( &sb );
+			char *message = StringBuilder_ToString( &scratch, &sb );
 			Builder_Warning( "%s", message );
-			free( message );
 
-			StringBuilder_Destroy( &sb );
+			scratchRewind( &scratch );
 
 			continue;
 		}
@@ -1894,7 +1928,8 @@ static const char *Builder_GetOptimizationString_MSVC( const Optimization optimi
 	return NULL;
 }
 
-static char *Builder_ExtractVersionNumber( const char *text ) {
+// the version string it finds is handed back to the caller, so it goes on their scratch
+static char *Builder_ExtractVersionNumber( scratch_t *resultsScratch, const char *text ) {
 	for ( const char *c = text; *c; c++ ) {
 		if ( !isdigit( (unsigned char) *c ) ) {
 			continue;
@@ -1917,7 +1952,7 @@ static char *Builder_ExtractVersionNumber( const char *text ) {
 		}
 
 		if ( sawDot ) {
-			return Builder_FormatString( "%.*s", (int) ( end - start ), start );
+			return Builder_FormatString( resultsScratch, "%.*s", (int) ( end - start ), start );
 		}
 
 		c = end - 1;
@@ -2001,40 +2036,43 @@ typedef struct builderCompileContext_t {
 static bool Builder_CompileSourceFile( const builderCompileContext_t *context, const char *sourceFile ) {
 	BuildConfig *config = context->config;
 
+	// this runs on the compile job threads, and the scratch arenas are thread_local, so each thread gets its own
+	scratch_t scratch = scratchGet( NULL );
+
 	stringBuilder_t compileArgs = {};
-	StringBuilder_Appendf( &compileArgs, "\"%s\" ", context->compilerPath );
+	StringBuilder_Appendf( &scratch, &compileArgs, "\"%s\" ", context->compilerPath );
 
 	if ( context->useMSVC ) {
 #if defined( _WIN32 )
 		builderMSVCInstall_t *msvcInstall = context->msvcInstall;
 		builderWindowsSDKInstall_t *windowsSDKInstall = context->windowsSDKInstall;
 
-		StringBuilder_Appendf( &compileArgs, "/nologo " );	// disable MSVC spamming its copyright banner for every compilation unit
-		StringBuilder_Appendf( &compileArgs, "/c " );
+		StringBuilder_Appendf( &scratch, &compileArgs, "/nologo " );	// disable MSVC spamming its copyright banner for every compilation unit
+		StringBuilder_Appendf( &scratch, &compileArgs, "/c " );
 
 		if ( config->languageVersion != LANGUAGE_VERSION_UNSET ) {
-			StringBuilder_Appendf( &compileArgs, "/std:%s ", GetLanguageVersionString( config->languageVersion ) );
+			StringBuilder_Appendf( &scratch, &compileArgs, "/std:%s ", GetLanguageVersionString( config->languageVersion ) );
 		}
 
 		if ( !config->removeSymbols ) {
-			StringBuilder_Appendf( &compileArgs, "/Z7 " );
+			StringBuilder_Appendf( &scratch, &compileArgs, "/Z7 " );
 		}
 
-		StringBuilder_Appendf( &compileArgs, "%s ", Builder_GetOptimizationString_MSVC( config->optimization ) );
+		StringBuilder_Appendf( &scratch, &compileArgs, "%s ", Builder_GetOptimizationString_MSVC( config->optimization ) );
 
-		StringBuilder_Appendf( &compileArgs, "/Fo" );
-		Builder_AppendIntermediateFilePath( &compileArgs, context->intermediateFolder, sourceFile );
-		StringBuilder_Appendf( &compileArgs, "%s ", sourceFile );
+		StringBuilder_Appendf( &scratch, &compileArgs, "/Fo" );
+		Builder_AppendIntermediateFilePath( &scratch, &compileArgs, context->intermediateFolder, sourceFile );
+		StringBuilder_Appendf( &scratch, &compileArgs, "%s ", sourceFile );
 
 		const char **define = config->defines;
 		while ( define && *define ) {
-			StringBuilder_Appendf( &compileArgs, "/D%s ", *define );
+			StringBuilder_Appendf( &scratch, &compileArgs, "/D%s ", *define );
 
 			define++;
 		}
 
 		// cl.exe doesn't know where the CRT/Windows SDK headers live unless you're in a Developer Command Prompt, so point it there ourselves
-		StringBuilder_Appendf( &compileArgs, "/I\"%s\" /I\"%s\" /I\"%s\" /I\"%s\" "
+		StringBuilder_Appendf( &scratch, &compileArgs, "/I\"%s\" /I\"%s\" /I\"%s\" /I\"%s\" "
 			, msvcInstall->includePath
 			, windowsSDKInstall->ucrtIncludePath
 			, windowsSDKInstall->umIncludePath
@@ -2042,13 +2080,13 @@ static bool Builder_CompileSourceFile( const builderCompileContext_t *context, c
 
 		const char **additionalInclude = config->additionalIncludes;
 		while ( additionalInclude && *additionalInclude ) {
-			StringBuilder_Appendf( &compileArgs, "/I%s ", *additionalInclude );
+			StringBuilder_Appendf( &scratch, &compileArgs, "/I%s ", *additionalInclude );
 
 			additionalInclude++;
 		}
 
 		if ( config->warningsAsErrors ) {
-			StringBuilder_Appendf( &compileArgs, "/WX " );
+			StringBuilder_Appendf( &scratch, &compileArgs, "/WX " );
 		}
 
 		bool sawWarningLevel = false;
@@ -2056,7 +2094,7 @@ static bool Builder_CompileSourceFile( const builderCompileContext_t *context, c
 		while ( warningLevel && *warningLevel ) {
 			if ( sawWarningLevel ) {
 				Builder_Error( "MSVC only allows one warning level to be set at a time, but you specified more than one.\n" );
-				StringBuilder_Destroy( &compileArgs );
+				scratchRewind( &scratch );
 				return false;
 			}
 
@@ -2072,11 +2110,11 @@ static bool Builder_CompileSourceFile( const builderCompileContext_t *context, c
 					, *warningLevel
 				);
 
-				StringBuilder_Destroy( &compileArgs );
+				scratchRewind( &scratch );
 				return false;
 			}
 
-			StringBuilder_Appendf( &compileArgs, "%s ", *warningLevel );
+			StringBuilder_Appendf( &scratch, &compileArgs, "%s ", *warningLevel );
 
 			sawWarningLevel = true;
 			warningLevel++;
@@ -2084,36 +2122,36 @@ static bool Builder_CompileSourceFile( const builderCompileContext_t *context, c
 #endif
 	} else {
 		if ( config->languageVersion != LANGUAGE_VERSION_UNSET ) {
-			StringBuilder_Appendf( &compileArgs, "-std=%s ", GetLanguageVersionString( config->languageVersion ) );
+			StringBuilder_Appendf( &scratch, &compileArgs, "-std=%s ", GetLanguageVersionString( config->languageVersion ) );
 		}
 
 		if ( !config->removeSymbols ) {
-			StringBuilder_Appendf( &compileArgs, "-g " );
+			StringBuilder_Appendf( &scratch, &compileArgs, "-g " );
 		}
 
-		StringBuilder_Appendf( &compileArgs, "%s ", Builder_GetOptimizationString_Clang( config->optimization ) );
+		StringBuilder_Appendf( &scratch, &compileArgs, "%s ", Builder_GetOptimizationString_Clang( config->optimization ) );
 
-		StringBuilder_Appendf( &compileArgs, "-c " );
-		StringBuilder_Appendf( &compileArgs, "-o " );
-		Builder_AppendIntermediateFilePath( &compileArgs, context->intermediateFolder, sourceFile );
-		StringBuilder_Appendf( &compileArgs, "%s ", sourceFile );
+		StringBuilder_Appendf( &scratch, &compileArgs, "-c " );
+		StringBuilder_Appendf( &scratch, &compileArgs, "-o " );
+		Builder_AppendIntermediateFilePath( &scratch, &compileArgs, context->intermediateFolder, sourceFile );
+		StringBuilder_Appendf( &scratch, &compileArgs, "%s ", sourceFile );
 
 		const char **define = config->defines;
 		while ( define && *define ) {
-			StringBuilder_Appendf( &compileArgs, "-D%s ", *define );
+			StringBuilder_Appendf( &scratch, &compileArgs, "-D%s ", *define );
 
 			define++;
 		}
 
 		const char **additionalInclude = config->additionalIncludes;
 		while ( additionalInclude && *additionalInclude ) {
-			StringBuilder_Appendf( &compileArgs, "-I%s ", *additionalInclude );
+			StringBuilder_Appendf( &scratch, &compileArgs, "-I%s ", *additionalInclude );
 
 			additionalInclude++;
 		}
 
 		if ( config->warningsAsErrors ) {
-			StringBuilder_Appendf( &compileArgs, "-Werror " );
+			StringBuilder_Appendf( &scratch, &compileArgs, "-Werror " );
 		}
 
 		const char **warningLevel = config->warningLevels;
@@ -2128,11 +2166,11 @@ static bool Builder_CompileSourceFile( const builderCompileContext_t *context, c
 					, *warningLevel
 				);
 
-				StringBuilder_Destroy( &compileArgs );
+				scratchRewind( &scratch );
 				return false;
 			}
 
-			StringBuilder_Appendf( &compileArgs, "%s ", *warningLevel );
+			StringBuilder_Appendf( &scratch, &compileArgs, "%s ", *warningLevel );
 
 			warningLevel++;
 		}
@@ -2140,20 +2178,18 @@ static bool Builder_CompileSourceFile( const builderCompileContext_t *context, c
 
 	const char **ignoreWarning = config->ignoreWarnings;
 	while ( ignoreWarning && *ignoreWarning ) {
-		StringBuilder_Appendf( &compileArgs, "%s ", *ignoreWarning );
+		StringBuilder_Appendf( &scratch, &compileArgs, "%s ", *ignoreWarning );
 
 		ignoreWarning++;
 	}
 
-	char *args = StringBuilder_ToString( &compileArgs );
-
-	StringBuilder_Destroy( &compileArgs );
+	char *args = StringBuilder_ToString( &scratch, &compileArgs );
 
 	printf( "%s\n", args );
 
-	int32_t compileResult = Builder_RunProcess( args, NULL );
+	int32_t compileResult = Builder_RunProcess( NULL, args, NULL );
 
-	free( args );
+	scratchRewind( &scratch );
 
 	return compileResult == 0;
 }
@@ -2179,6 +2215,9 @@ static void Builder_RunCompileJobPool( builderCompileJobPool_t *pool ) {
 			Builder_AtomicIncrement( &pool->numFailed );
 		}
 	}
+
+	// End of thread, teardown any scratch memory used
+	scratchFree();
 }
 
 #if defined( _WIN32 )
@@ -2233,6 +2272,36 @@ static void Builder_ThreadJoin( builderThread_t thread ) {
 #endif
 }
 
+// TODO: TW: 11/08/2026: UNFINISHED - the scratch conversion compiles but crashes at runtime.
+//
+// Symptoms, running the tests from tests/<name>/ with clang on PATH:
+//   - all four test_build_* scripts segfault. stdout is block-buffered when redirected so the output is lost on the
+//     crash - run them without redirecting, or probe with fprintf( stderr ), or you'll think nothing ran at all.
+//   - before the most recent edits, test_build_static_lib and test_build_dynamic_lib got as far as the link step and
+//     emitted empty toolchain paths: "\bin\Hostx64\x64\lib.exe" and /LIBPATH:"" x3. So msvcInstall/windowsSDKInstall
+//     were reading as empty strings by the time the link step ran.
+//
+// Already ruled out, each verified with a standalone probe program:
+//   - the scratch primitives themselves. scratchGet/scratchTell/scratchRewind, Builder_FormatString and the
+//     StringBuilder pair all behave correctly in isolation.
+//   - Builder_GetWindowsSDKInstall() and Builder_GetMSVCInstall(). Called back to back on one buildScratch they return
+//     correct paths, and the SDK paths survive the MSVC call.
+//   - Builder_RunProcess( NULL, ... ) and a nested scratchGet( NULL )/scratchRewind() pair. Neither clobbers anything
+//     already on the arena, which is expected - the marker is taken at the current position, so a rewind can only
+//     reach what was allocated after it.
+//
+// What's left to look at:
+//   - a stderr probe at the top of the link step never fired, so the crash happens somewhere before it, inside Build().
+//   - NUM_SCRATCH_ARENAS is 2 and several callers pass NULL to scratchGet(), which always hands back scratches[0] -
+//     the same arena buildScratch is on. That's safe as long as every use is strictly stack ordered, so a place where
+//     it isn't would explain this.
+//   - the compile job pool. scratches is thread_local so the worker threads get their own, but the main thread runs
+//     jobs too, and there it shares arena[0] with buildScratch.
+//
+// Also still outstanding: builder_vs_code.h and builder_zed.h have had the scratch arguments added to their
+// StringBuilder calls but no scratch is declared in either generator function, so neither header compiles yet.
+// Each needs one scratch for the whole function, the StringBuilder_Destroy() calls removed (that function is gone),
+// and the free() calls on what are now scratch allocations removed.
 int Build( BuilderOptions *options ) {
 	double totalTimeStart = Builder_TimeMS();
 
@@ -2273,15 +2342,18 @@ int Build( BuilderOptions *options ) {
 		}
 	}
 
+	// toolchain and compiler paths are used right through to the link step
+	scratch_t buildScratch = scratchGet( NULL );
+
 	// only query for windows SDK and MSVC installations after verifying cmd line args and
 #ifdef _WIN32
 	builderWindowsSDKInstall_t windowsSDKInstall = {};
-	if ( !Builder_GetWindowsSDKInstall( &windowsSDKInstall ) ) {
+	if ( !Builder_GetWindowsSDKInstall( &buildScratch, &windowsSDKInstall ) ) {
 		return 1;
 	}
 
 	builderMSVCInstall_t msvcInstall = {};
-	if ( !Builder_GetMSVCInstall( &msvcInstall ) ) {
+	if ( !Builder_GetMSVCInstall( &buildScratch, &msvcInstall ) ) {
 		return 1;
 	}
 #endif
@@ -2292,7 +2364,7 @@ int Build( BuilderOptions *options ) {
 	bool useMSVC = Builder_StringEquals( compilerPath, "cl" ) || Builder_StringEquals( compilerPath, "cl.exe" );
 
 	if ( useMSVC ) {
-		compilerPath = Builder_FormatString( "%s\\bin\\Hostx64\\x64\\cl.exe", msvcInstall.rootFolder );
+		compilerPath = Builder_FormatString( &buildScratch, "%s\\bin\\Hostx64\\x64\\cl.exe", msvcInstall.rootFolder );
 	}
 #else
 	bool useMSVC = false;
@@ -2301,30 +2373,23 @@ int Build( BuilderOptions *options ) {
 	if ( options->compilerVersion && options->compilerVersion[0] ) {
 		if ( useMSVC ) {
 #if defined( _WIN32 )
-			char *actualVersion = Builder_FormatString( "%d.%d.%d", msvcInstall.version.v0, msvcInstall.version.v1, msvcInstall.version.v2 );
+			char *actualVersion = Builder_FormatString( &buildScratch, "%d.%d.%d", msvcInstall.version.v0, msvcInstall.version.v1, msvcInstall.version.v2 );
 
 			if ( !Builder_StringEquals( actualVersion, options->compilerVersion ) ) {
 				Builder_Warning( "You are using compiler version \"%s\", but \"%s\" was set as BuilderOptions::compilerVersion.  I will continue building anyway, but you may not get what you expect.\n", actualVersion, options->compilerVersion );
 			}
-
-			free( actualVersion );
 #endif
 		} else {
-			char *versionCmd = Builder_FormatString( "\"%s\" --version", compilerPath );
+			char *versionCmd = Builder_FormatString( &buildScratch, "\"%s\" --version", compilerPath );
 			char *versionOutput = NULL;
 
-			Builder_RunProcess( versionCmd, &versionOutput );
+			Builder_RunProcess( &buildScratch, versionCmd, &versionOutput );
 
 			if ( !Builder_StringContains( versionOutput, options->compilerVersion ) ) {
-				char *actualVersion = Builder_ExtractVersionNumber( versionOutput );
+				char *actualVersion = Builder_ExtractVersionNumber( &buildScratch, versionOutput );
 
 				Builder_Warning( "You are using compiler version \"%s\", but \"%s\" was set as BuilderOptions::compilerVersion.  I will continue building anyway, but you may not get what you expect.\n", actualVersion, options->compilerVersion );
-
-				free( actualVersion );
 			}
-
-			free( versionCmd );
-			free( versionOutput );
 		}
 	}
 
@@ -2354,7 +2419,7 @@ int Build( BuilderOptions *options ) {
 			const char *intermediateFolder = config->intermediateFolder;
 
 			if ( intermediateFolder && config->binaryFolder ) {
-				intermediateFolder = Builder_FormatString( "%s%c%s", config->binaryFolder, BUILDER_PATH_SEPARATOR, intermediateFolder );
+				intermediateFolder = Builder_FormatString( &buildScratch, "%s%c%s", config->binaryFolder, BUILDER_PATH_SEPARATOR, intermediateFolder );
 			} else if ( !intermediateFolder ) {
 				intermediateFolder = config->binaryFolder;
 			}
@@ -2408,7 +2473,7 @@ int Build( BuilderOptions *options ) {
 					uint32_t numCreatedThreads = 0;
 
 					if ( numAdditionalThreads > 0 ) {
-						additionalThreads = (builderThread_t *) malloc( numAdditionalThreads * sizeof( builderThread_t ) );
+						additionalThreads = scratchPush( &buildScratch, builderThread_t, numAdditionalThreads );
 
 						for ( uint32_t threadIndex = 0; threadIndex < numAdditionalThreads; threadIndex++ ) {
 							if ( Builder_CreateCompileJobThread( &pool, &additionalThreads[numCreatedThreads] ) ) {
@@ -2424,12 +2489,9 @@ int Build( BuilderOptions *options ) {
 						Builder_ThreadJoin( additionalThreads[threadIndex] );
 					}
 
-					if ( additionalThreads ) {
-						free( additionalThreads );
-					}
-
 					if ( pool.numFailed > 0 ) {
 						Builder_Error( "Build failed.\n" );
+						scratchRewind( &buildScratch );
 						return 1;
 					}
 				}
@@ -2443,45 +2505,46 @@ int Build( BuilderOptions *options ) {
 
 				if ( config->binaryFolder && !Builder_CreateFolderIfItDoesntExist( config->binaryFolder ) ) {
 					Builder_Error( "Failed to create the binary folder \"%s\".\n", config->binaryFolder );
+					scratchRewind( &buildScratch );
 					return 1;
 				}
 
 				stringBuilder_t linkerArgs = {};
 #if defined( _WIN32 )
 				if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
-					StringBuilder_Appendf( &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\lib.exe\" ", msvcInstall.rootFolder );
+					StringBuilder_Appendf( &buildScratch, &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\lib.exe\" ", msvcInstall.rootFolder );
 				} else {
-					StringBuilder_Appendf( &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\link.exe\" ", msvcInstall.rootFolder );
+					StringBuilder_Appendf( &buildScratch, &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\link.exe\" ", msvcInstall.rootFolder );
 				}
 
 				if ( config->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
-					StringBuilder_Appendf( &linkerArgs, "/DLL " );
+					StringBuilder_Appendf( &buildScratch, &linkerArgs, "/DLL " );
 				}
 
-				StringBuilder_Appendf( &linkerArgs, "/OUT:" );
-				Builder_AppendBinaryPath( &linkerArgs, config );
+				StringBuilder_Appendf( &buildScratch, &linkerArgs, "/OUT:" );
+				Builder_AppendBinaryPath( &buildScratch, &linkerArgs, config );
 
-				StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", msvcInstall.libPath );
-				StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.umLibPath );
-				StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.ucrtLibPath );
+				StringBuilder_Appendf( &buildScratch, &linkerArgs, "/LIBPATH:\"%s\" ", msvcInstall.libPath );
+				StringBuilder_Appendf( &buildScratch, &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.umLibPath );
+				StringBuilder_Appendf( &buildScratch, &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.ucrtLibPath );
 
 				const char **sourceFile = config->sourceFiles;
 				while ( *sourceFile ) {
-					Builder_AppendIntermediateFilePath( &linkerArgs, intermediateFolder, *sourceFile );
+					Builder_AppendIntermediateFilePath( &buildScratch, &linkerArgs, intermediateFolder, *sourceFile );
 
 					sourceFile++;
 				}
 
 				const char **additionalLibPath = config->additionalLibPaths;
 				while ( additionalLibPath && *additionalLibPath ) {
-					StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", *additionalLibPath );
+					StringBuilder_Appendf( &buildScratch, &linkerArgs, "/LIBPATH:\"%s\" ", *additionalLibPath );
 
 					additionalLibPath++;
 				}
 
 				const char **additionalLib = config->additionalLibs;
 				while ( additionalLib && *additionalLib ) {
-					StringBuilder_Appendf( &linkerArgs, "%s ", *additionalLib );
+					StringBuilder_Appendf( &buildScratch, &linkerArgs, "%s ", *additionalLib );
 
 					additionalLib++;
 				}
@@ -2489,78 +2552,75 @@ int Build( BuilderOptions *options ) {
 				if ( config->binaryType != BINARY_TYPE_STATIC_LIBRARY ) {
 					// clang doesn't embed /DEFAULTLIB directives the way cl.exe does
 					// so link.exe has no idea which CRT/SDK libs to pull in unless we name them ourselves
-					StringBuilder_Appendf( &linkerArgs, "libcmt.lib libvcruntime.lib libucrt.lib kernel32.lib " );
+					StringBuilder_Appendf( &buildScratch, &linkerArgs, "libcmt.lib libvcruntime.lib libucrt.lib kernel32.lib " );
 				}
 
 				const char **additionalLinkerArgument = config->additionalLinkerArguments;
 				while ( additionalLinkerArgument && *additionalLinkerArgument ) {
-					StringBuilder_Appendf( &linkerArgs, "%s ", *additionalLinkerArgument );
+					StringBuilder_Appendf( &buildScratch, &linkerArgs, "%s ", *additionalLinkerArgument );
 
 					additionalLinkerArgument++;
 				}
 #elif defined( __linux__ )
 				if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
-					StringBuilder_Appendf( &linkerArgs, "ar rcs " );
-					Builder_AppendBinaryPath( &linkerArgs, config );
+					StringBuilder_Appendf( &buildScratch, &linkerArgs, "ar rcs " );
+					Builder_AppendBinaryPath( &buildScratch, &linkerArgs, config );
 
 					const char **sourceFile = config->sourceFiles;
 					while ( *sourceFile ) {
-						Builder_AppendIntermediateFilePath( &linkerArgs, intermediateFolder, *sourceFile );
+						Builder_AppendIntermediateFilePath( &buildScratch, &linkerArgs, intermediateFolder, *sourceFile );
 
 						sourceFile++;
 					}
 				} else {
-					StringBuilder_Appendf( &linkerArgs, "\"%s\" ", compilerPath );
+					StringBuilder_Appendf( &buildScratch, &linkerArgs, "\"%s\" ", compilerPath );
 
 					if ( config->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
-						StringBuilder_Appendf( &linkerArgs, "-shared " );
+						StringBuilder_Appendf( &buildScratch, &linkerArgs, "-shared " );
 					}
 
-					StringBuilder_Appendf( &linkerArgs, "-o " );
-					Builder_AppendBinaryPath( &linkerArgs, config );
+					StringBuilder_Appendf( &buildScratch, &linkerArgs, "-o " );
+					Builder_AppendBinaryPath( &buildScratch, &linkerArgs, config );
 
 					const char **sourceFile = config->sourceFiles;
 					while ( *sourceFile ) {
-						Builder_AppendIntermediateFilePath( &linkerArgs, intermediateFolder, *sourceFile );
+						Builder_AppendIntermediateFilePath( &buildScratch, &linkerArgs, intermediateFolder, *sourceFile );
 
 						sourceFile++;
 					}
 
 					const char **additionalLibPath = config->additionalLibPaths;
 					while ( additionalLibPath && *additionalLibPath ) {
-						StringBuilder_Appendf( &linkerArgs, "-L%s ", *additionalLibPath );
+						StringBuilder_Appendf( &buildScratch, &linkerArgs, "-L%s ", *additionalLibPath );
 
 						additionalLibPath++;
 					}
 
 					const char **additionalLib = config->additionalLibs;
 					while ( additionalLib && *additionalLib ) {
-						StringBuilder_Appendf( &linkerArgs, "-l%s ", *additionalLib );
+						StringBuilder_Appendf( &buildScratch, &linkerArgs, "-l%s ", *additionalLib );
 
 						additionalLib++;
 					}
 
 					const char **additionalLinkerArgument = config->additionalLinkerArguments;
 					while ( additionalLinkerArgument && *additionalLinkerArgument ) {
-						StringBuilder_Appendf( &linkerArgs, "%s ", *additionalLinkerArgument );
+						StringBuilder_Appendf( &buildScratch, &linkerArgs, "%s ", *additionalLinkerArgument );
 
 						additionalLinkerArgument++;
 					}
 				}
 #endif
 
-				char *args = StringBuilder_ToString( &linkerArgs );
-
-				StringBuilder_Destroy( &linkerArgs );
+				char *args = StringBuilder_ToString( &buildScratch, &linkerArgs );
 
 				printf( "%s\n", args );
 
-				int32_t linkResult = Builder_RunProcess( args, NULL );
-
-				free( args );
+				int32_t linkResult = Builder_RunProcess( NULL, args, NULL );
 
 				if ( linkResult != 0 ) {
 					Builder_Error( "Link failed.\n" );
+					scratchRewind( &buildScratch );
 					return 1;
 				}
 
@@ -2589,6 +2649,7 @@ int Build( BuilderOptions *options ) {
 		printf( "    Total   : %f ms\n", Builder_TimeMS() - totalTimeStart );
 	}
 
+	scratchRewind( &buildScratch );
 	return 0;
 }
 

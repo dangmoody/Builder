@@ -203,7 +203,8 @@ void	scratch_free( void );
 
 thread_local arena_t scratches[NUM_SCRATCH_ARENAS];
 
-scratch_t getScratch( arena_t *activeArena ) {
+scratch_t getScratch( scratch_t *activeScratch ) {
+	arena_t* activeArena = activeScratch->arena;
 	for ( int scratchIndex = 0; scratchIndex < NUM_SCRATCH_ARENAS; scratchIndex++ ) {
 		arena_t *scratchArena = &scratches[scratchIndex];
 

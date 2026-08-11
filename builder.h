@@ -178,6 +178,15 @@ void		scratchRewind( scratch_t *scratch );
 void	*scratchAllocate( scratch_t *scratch, u64 size, u64 alignment );
 #define scratchPush( scratch, type, count )	( (type *) scratchAllocate( ( scratch ), sizeof( type ) * ( count ), BUILDER_ALIGNOF( type ) ) )
 
+// Temporary stand-in until we have a proper growable array. There's no portable way to recover
+// "type" from an old pointer alone (no typeof in plain C11/C17, and MSVC/GCC/Clang don't agree on
+// any extension for it), so it has to be passed in explicitly like scratchPush's. oldCount is
+// needed too - scratch arenas only ever grow forward, so the new block has no idea how much of
+// the old one was live and memcpy needs a length. This leaks the old block, same as every other
+// scratch allocation - nothing here is individually freed until the whole arena rewinds.
+#define scratchRealloc( scratch, old, type, oldCount, newCount ) \
+	( (type *) memcpy( scratchPush( ( scratch ), type, ( newCount ) ), ( old ), sizeof( type ) * ( u64 ) ( oldCount ) ) )
+
 // Frees this thread's scratch arena block chains. Scratch arenas live in thread_local
 // storage, and plain thread_local variables have no destructor in C - nothing runs
 // automatically when a thread exits. The main thread can rely on the OS reclaiming
@@ -704,10 +713,19 @@ typedef struct builderConfigAncestry_t {
 	uint32_t	capacity;
 } builderConfigAncestry_t;
 
-static void Builder_ConfigStackPush( builderConfigAncestry_t *stack, BuildConfig *config ) {
+// scratch is scoped to a single AddBuildConfig() call and gets rewound the moment it returns - it's owned and
+// passed in by AddBuildConfigInternal rather than fetched in here, so that call can also exclude this arena
+// when it puts *outConfigs (which has to survive well past that) on the other one.
+static void Builder_ConfigStackPush( scratch_t *scratch, builderConfigAncestry_t *stack, BuildConfig *config ) {
 	if ( stack->count == stack->capacity ) {
-		stack->capacity = stack->capacity ? stack->capacity * 2 : 8;
-		stack->items = (BuildConfig **) realloc( stack->items, stack->capacity * sizeof( BuildConfig * ) );
+		uint32_t newCapacity = stack->capacity ? stack->capacity * 2 : 8;
+
+		// stack->count (not the old capacity) - anything between count and capacity was never written
+		stack->items = stack->capacity
+			? scratchRealloc( scratch, stack->items, BuildConfig *, stack->count, newCapacity )
+			: scratchPush( scratch, BuildConfig *, newCapacity );
+
+		stack->capacity = newCapacity;
 	}
 
 	stack->items[stack->count++] = config;
@@ -762,7 +780,15 @@ static void AddBuildConfigInternal( BuilderOptions *options, BuildConfig *config
 		}
 	}
 
-	*outConfigs = (BuildConfig *) realloc( *outConfigs, ++(*outConfigsCount) * sizeof( BuildConfig ) );
+	// options->configs has to outlive AddBuildConfig() itself - it's read for the whole build - so this can't share
+	// an arena with ancestry->scratch, which gets rewound (and would take outConfigs down with it) the moment
+	// AddBuildConfig() returns. Excluding it here is what guarantees that.
+	scratch_t configsScratch = scratchGet( ancestry ? &ancestry->scratch : NULL );
+
+	*outConfigs = *outConfigsCount
+		? scratchRealloc( &configsScratch, *outConfigs, BuildConfig, *outConfigsCount, *outConfigsCount + 1 )
+		: scratchPush( &configsScratch, BuildConfig, 1 );
+	( *outConfigsCount )++;
 
 	BuildConfig *dst = &( *outConfigs )[(*outConfigsCount) - 1];
 
@@ -774,7 +800,7 @@ void AddBuildConfig( BuilderOptions *options, BuildConfig *config ) {
 
 	AddBuildConfigInternal( options, config, &ancestry, &options->configs, &options->configsCount );
 
-	free( ancestry.items );
+	scratchRewind( &ancestry.scratch );
 }
 
 static int32_t Builder_RunProcess( scratch_t* resultsScratch, const char *processAndArgs, char **outCapturedOutput ) {
@@ -1204,7 +1230,7 @@ static bool Builder_VisitFiles( scratch_t *resultsScratch, const char *path, con
 
 	// TODO: DM: 05/08/2026: Tom's chunked array
 	uint32_t directoriesCount = 0;
-	const char **directories = malloc( 1 * sizeof( char * ) );
+	const char **directories = scratchPush( &scratch, const char *, 1 );
 	directories[directoriesCount++] = path;
 
 	uint32_t dirIndex = 0;
@@ -1244,8 +1270,9 @@ static bool Builder_VisitFiles( scratch_t *resultsScratch, const char *path, con
 					}
 
 					if ( visitFlags & BUILDER_FILE_VISIT_RECURSIVE ) {
-						directories = realloc( directories, ++directoriesCount * sizeof( char * ) );
-						directories[directoriesCount - 1] = fileInfo.fullFilename;
+						directories = scratchRealloc( &scratch, directories, const char *, directoriesCount, directoriesCount + 1 );
+						directories[directoriesCount] = fileInfo.fullFilename;
+						directoriesCount++;
 					}
 				}
 			} else if ( visitFlags & BUILDER_FILE_VISIT_FILES ) {
@@ -1303,8 +1330,9 @@ static bool Builder_VisitFiles( scratch_t *resultsScratch, const char *path, con
 				}
 
 				if ( visitFlags & BUILDER_FILE_VISIT_RECURSIVE ) {
-					directories = realloc( directories, ++directoriesCount * sizeof( char * ) );
-					directories[directoriesCount - 1] = fileInfo.fullFilename;
+					directories = scratchRealloc( &scratch, directories, const char *, directoriesCount, directoriesCount + 1 );
+					directories[directoriesCount] = fileInfo.fullFilename;
+					directoriesCount++;
 				}
 			} else if ( visitFlags & BUILDER_FILE_VISIT_FILES ) {
 				callback( resultsScratch, &fileInfo, data );
@@ -1319,9 +1347,6 @@ static bool Builder_VisitFiles( scratch_t *resultsScratch, const char *path, con
 		}
 #endif
 	}
-
-	free( directories );
-	directories = NULL;
 
 	scratchRewind( &scratch );
 
@@ -1419,10 +1444,7 @@ typedef struct {
 	uint32_t					versionsCount;
 } builderFoundWindowsSDKVersionData_t;
 
-// only parses the version out of the folder name, so it has nothing to allocate
 static void OnWindowsSDKVersionFound( scratch_t *resultsScratch, fileInfo_t *fileInfo, void *data ) {
-	(void) resultsScratch;
-
 	builderFoundWindowsSDKVersionData_t *foundData = (builderFoundWindowsSDKVersionData_t *) data;
 
 	builderWindowsSDKVersion_t version = {};
@@ -1431,8 +1453,10 @@ static void OnWindowsSDKVersionFound( scratch_t *resultsScratch, fileInfo_t *fil
 		return;
 	}
 
-	foundData->versions = (builderWindowsSDKVersion_t *) realloc( foundData->versions, ( ++foundData->versionsCount ) * sizeof( builderWindowsSDKVersion_t ) );
-	foundData->versions[foundData->versionsCount - 1] = version;
+	foundData->versions = foundData->versionsCount
+		? scratchRealloc( resultsScratch, foundData->versions, builderWindowsSDKVersion_t, foundData->versionsCount, foundData->versionsCount + 1 )
+		: scratchPush( resultsScratch, builderWindowsSDKVersion_t, 1 );
+	foundData->versions[foundData->versionsCount++] = version;
 }
 
 static int Builder_CompareWindowsSDKVersions( const void *a, const void *b ) {
@@ -1478,7 +1502,10 @@ static bool Builder_GetWindowsSDKInstall( scratch_t *resultsScratch, builderWind
 
 	if ( status == ERROR_SUCCESS ) {
 		// valueStrLength from RegQueryValueExA includes the null terminator for REG_SZ strings
-		char *windowsSDKRootStr = (char *) malloc( windowsSDKRootLength * sizeof( char ) );
+		// snapshot resultsScratch first - if this doesn't pan out (wrong type, or the read fails) we rewind
+		// back to here rather than leaving the failed attempt sat on it
+		scratch_t attempt = scratchTell( resultsScratch );
+		char *windowsSDKRootStr = scratchPush( resultsScratch, char, windowsSDKRootLength );
 
 		DWORD windowsSDKRootType = 0;
 
@@ -1487,7 +1514,7 @@ static bool Builder_GetWindowsSDKInstall( scratch_t *resultsScratch, builderWind
 		if ( status == ERROR_SUCCESS && windowsSDKRootType == REG_SZ ) {
 			windowsSDKRoot = windowsSDKRootStr;
 		} else {
-			free( windowsSDKRootStr );
+			scratchRewind( &attempt );
 		}
 	}
 
@@ -1511,8 +1538,8 @@ static bool Builder_GetWindowsSDKInstall( scratch_t *resultsScratch, builderWind
 			.versionsCount	= versionsCount,
 		};
 
-		// NULL because OnWindowsSDKVersionFound() only reads the folder names - it allocates nothing
-		bool visited = Builder_VisitFiles( NULL, windowsSDKLibFolder, BUILDER_FILE_VISIT_FOLDERS, OnWindowsSDKVersionFound, &foundData );
+		// resultsScratch, not a local scratch - foundData.versions has to survive past this block, down to the qsort() below
+		bool visited = Builder_VisitFiles( resultsScratch, windowsSDKLibFolder, BUILDER_FILE_VISIT_FOLDERS, OnWindowsSDKVersionFound, &foundData );
 
 
 		versions = foundData.versions;
@@ -1656,8 +1683,10 @@ static void Builder_OnMSVCInstallFound( scratch_t *resultsScratch, fileInfo_t *f
 		.version		= version,
 	};
 
-	foundData->installs = (builderMSVCInstall_t *) realloc( foundData->installs, ( ++foundData->installsCount ) * sizeof( builderMSVCInstall_t ) );
-	foundData->installs[foundData->installsCount - 1] = install;
+	foundData->installs = foundData->installsCount
+		? scratchRealloc( resultsScratch, foundData->installs, builderMSVCInstall_t, foundData->installsCount, foundData->installsCount + 1 )
+		: scratchPush( resultsScratch, builderMSVCInstall_t, 1 );
+	foundData->installs[foundData->installsCount++] = install;
 }
 
 static bool Builder_MSVCNotInstalled( void ) {

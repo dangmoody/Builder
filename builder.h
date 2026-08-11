@@ -128,12 +128,6 @@ typedef struct BuilderOptions {
 void	AddBuildConfig( BuilderOptions *options, BuildConfig *config );
 int		Build( BuilderOptions *options );
 
-typedef struct stringBuilderBuffer_t {
-	uint32_t						length;
-	char							*data;
-	struct stringBuilderBuffer_t	*next;
-} stringBuilderBuffer_t;
-
 typedef uint64_t u64;
 
 typedef struct arena_t arena_t;
@@ -186,10 +180,6 @@ void	*scratchAllocate( scratch_t *scratch, u64 size, u64 alignment );
 // call this on each one before it exits or its scratch blocks will leak for the life of 
 // the process. Note(Tom): for this tool this is really optional
 void	scratch_free( void );
-
-void		StringBuilder_Destroy( stringBuilder_t *builder );
-void		StringBuilder_Appendf( stringBuilder_t *builder, const char *fmt, ... );
-char		*StringBuilder_ToString( stringBuilder_t *builder );
 
 
 #ifdef BUILDER_IMPLEMENTATION

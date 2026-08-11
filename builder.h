@@ -713,9 +713,6 @@ typedef struct builderConfigAncestry_t {
 	uint32_t	capacity;
 } builderConfigAncestry_t;
 
-// scratch is scoped to a single AddBuildConfig() call and gets rewound the moment it returns - it's owned and
-// passed in by AddBuildConfigInternal rather than fetched in here, so that call can also exclude this arena
-// when it puts *outConfigs (which has to survive well past that) on the other one.
 static void Builder_ConfigStackPush( scratch_t *scratch, builderConfigAncestry_t *stack, BuildConfig *config ) {
 	if ( stack->count == stack->capacity ) {
 		uint32_t newCapacity = stack->capacity ? stack->capacity * 2 : 8;
@@ -731,30 +728,33 @@ static void Builder_ConfigStackPush( scratch_t *scratch, builderConfigAncestry_t
 	stack->items[stack->count++] = config;
 }
 
-static void AddBuildConfigInternal( BuilderOptions *options, BuildConfig *config, builderConfigAncestry_t *ancestry, BuildConfig **outConfigs, uint32_t *outConfigsCount ) {
+// scratch backs ancestry->items - its lifetime is exactly one AddBuildConfig() call (see AddBuildConfig() below,
+// which gets it and rewinds it), so every function that touches ancestry takes it too, as the first argument.
+// scratch and ancestry are NULL together - Build()'s second-pass call further down needs neither.
+static void AddBuildConfigInternal( scratch_t *scratch, BuilderOptions *options, BuildConfig *config, builderConfigAncestry_t *ancestry, BuildConfig **outConfigs, uint32_t *outConfigsCount ) {
 	// if no ancestry then dont do circular dependency checking
 	if ( ancestry ) {
 		for ( uint32_t ancestorIndex = 0; ancestorIndex < ancestry->count; ancestorIndex++ ) {
 			if ( ancestry->items[ancestorIndex] == config ) {
 				//Throwaway scratch; we're about to exit
-				scratch_t scratch = scratchGet( NULL );
+				scratch_t errorScratch = scratchGet( NULL );
 				stringBuilder_t cycle = {};
 
 				for ( uint32_t cycleIndex = ancestorIndex; cycleIndex < ancestry->count; cycleIndex++ ) {
 					const char *cycleConfigName = ancestry->items[cycleIndex]->name;
-					StringBuilder_Appendf( &scratch, &cycle, "%s -> ", cycleConfigName ? cycleConfigName : "(unnamed config)" );
+					StringBuilder_Appendf( &errorScratch, &cycle, "%s -> ", cycleConfigName ? cycleConfigName : "(unnamed config)" );
 				}
 
-				StringBuilder_Appendf( &scratch, &cycle, "%s", config->name ? config->name : "(unnamed config)" );
+				StringBuilder_Appendf( &errorScratch, &cycle, "%s", config->name ? config->name : "(unnamed config)" );
 
-				char *cycleString = StringBuilder_ToString( &scratch, &cycle );
+				char *cycleString = StringBuilder_ToString( &errorScratch, &cycle );
 				Builder_Error( "Cyclic BuildConfig::dependsOn detected: %s\n", cycleString );
 
 				exit( 1 );
 			}
 		}
 
-		Builder_ConfigStackPush( ancestry, config );
+		Builder_ConfigStackPush( scratch, ancestry, config );
 	}
 
 	// register dependencies first so they show up (and get built) ahead of the config that needs them
@@ -762,7 +762,7 @@ static void AddBuildConfigInternal( BuilderOptions *options, BuildConfig *config
 		BuildConfig **dependency = config->dependsOn;
 
 		while ( dependency && *dependency ) {
-			AddBuildConfigInternal( options, *dependency, ancestry, outConfigs, outConfigsCount );
+			AddBuildConfigInternal( scratch, options, *dependency, ancestry, outConfigs, outConfigsCount );
 
 			dependency++;
 		}
@@ -780,10 +780,10 @@ static void AddBuildConfigInternal( BuilderOptions *options, BuildConfig *config
 		}
 	}
 
-	// options->configs has to outlive AddBuildConfig() itself - it's read for the whole build - so this can't share
-	// an arena with ancestry->scratch, which gets rewound (and would take outConfigs down with it) the moment
-	// AddBuildConfig() returns. Excluding it here is what guarantees that.
-	scratch_t configsScratch = scratchGet( ancestry ? &ancestry->scratch : NULL );
+	// *outConfigs has to outlive this whole call chain - it can't share an arena with scratch, which gets rewound
+	// (and would take it down too) the moment the top-level AddBuildConfig() call returns. Excluding scratch here
+	// is what guarantees that.
+	scratch_t configsScratch = scratchGet( scratch );
 
 	*outConfigs = *outConfigsCount
 		? scratchRealloc( &configsScratch, *outConfigs, BuildConfig, *outConfigsCount, *outConfigsCount + 1 )
@@ -796,11 +796,12 @@ static void AddBuildConfigInternal( BuilderOptions *options, BuildConfig *config
 }
 
 void AddBuildConfig( BuilderOptions *options, BuildConfig *config ) {
+	scratch_t scratch = scratchGet( NULL );
 	builderConfigAncestry_t ancestry = {};
 
-	AddBuildConfigInternal( options, config, &ancestry, &options->configs, &options->configsCount );
+	AddBuildConfigInternal( &scratch, options, config, &ancestry, &options->configs, &options->configsCount );
 
-	scratchRewind( &ancestry.scratch );
+	scratchRewind( &scratch );
 }
 
 static int32_t Builder_RunProcess( scratch_t* resultsScratch, const char *processAndArgs, char **outCapturedOutput ) {
@@ -2426,7 +2427,7 @@ int Build( BuilderOptions *options ) {
 	// or wait for Tom's linear allocator
 	uint32_t configsToBuildCount = 0;
 	BuildConfig *configsToBuild = NULL;
-	AddBuildConfigInternal( options, targetConfig, NULL, &configsToBuild, &configsToBuildCount );
+	AddBuildConfigInternal( NULL, options, targetConfig, NULL, &configsToBuild, &configsToBuildCount );
 
 	double totalCompileTimeMS = 0.0;
 	double totalLinkTimeMS = 0.0;

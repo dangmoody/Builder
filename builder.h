@@ -241,7 +241,7 @@ void rewindScratch( scratch_t *scratch ) {
 	}
 }
 
-void scratch_free( void ) {
+void scratchFree( void ) {
 	for ( int scratchIndex = 0; scratchIndex < NUM_SCRATCH_ARENAS; scratchIndex++ ) {
 		arena_t *arena = &scratches[scratchIndex];
 		arenaBlock_t *block = arena->head;

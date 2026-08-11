@@ -1225,9 +1225,12 @@ static bool Builder_SliceMatchesPattern( const builderStringSlice_t *patternSlic
 			}
 		}
 
-		// consume match resetting if match fails (TODO: AK: 11/08/2026: explain this better?)
-		if ( patternSlice->begin[patternIndex++] != pathSlice->begin[pathIndex] ) {
+		// consume match, resetting if the match fails (TODO: AK: 11/08/2026: explain this better?)
+		if ( patternSlice->begin[patternIndex] != '?' // can match any one character
+			&& patternSlice->begin[patternIndex] != pathSlice->begin[pathIndex] ) {
 			patternIndex = afterLastWildcard;
+		} else {
+			++patternIndex;
 		}
 	}
 

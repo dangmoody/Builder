@@ -7,6 +7,8 @@ int main( int argc, char **argv ) {
 		.argv = argv,
 	};
 
+	Builder_RebuildSelf(argc,argv);
+
 	const char *sdlBinaryName = "SDL";
 	const char *sdlBinaryFolder = "bin/demos/SDL3";
 
@@ -32,6 +34,7 @@ int main( int argc, char **argv ) {
 			"src/filesystem/*.c",
 			"src/gpu/*.c",
 			"src/haptic/*.c",
+			"src/haptic/hidapi/*.c",
 			"src/hidapi/*.c",
 			"src/io/*.c",
 			"src/io/generic/*.c",
@@ -97,6 +100,7 @@ int main( int argc, char **argv ) {
 			"src/thread/windows/*.c",
 			"src/tray/windows/*.c",
 			"src/video/windows/*.c",
+			"src/video/windows/*.cpp",
 #elif defined( __linux__ )
 			"src/render/gpu/*.c",
 			"src/render/opengl/*.c",
@@ -132,6 +136,7 @@ int main( int argc, char **argv ) {
 			"Gdi32.lib",
 			"SetupAPI.lib",
 			"Version.lib",
+			"user32.lib",
 #elif defined( __linux__ )
 #endif
 			NULL

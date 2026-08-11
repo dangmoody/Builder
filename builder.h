@@ -138,35 +138,32 @@ typedef uint64_t u64;
 
 typedef struct arena_t arena_t;
 
-typedef struct arenaBlock_t
-{
-	void* 					block;
-	u64 					position;
-	u64 					capacity;
+typedef struct arenaBlock_t {
+	void				*block;
+	u64					position;
+	u64					capacity;
 	// Orders two blocks without walking the chain - see rewindScratch().
 	// Only valid because blocks are always appended to the end, never spliced into the middle.
-	u64						index;
-	struct arenaBlock_t*	next;
+	u64					index;
+	struct arenaBlock_t	*next;
 } arenaBlock_t;
 
-typedef struct scratch_t
-{
-	arena_t*		arena;
-	arenaBlock_t* 	block;
-	u64			   	position;
+typedef struct scratch_t {
+	arena_t			*arena;
+	arenaBlock_t	*block;
+	u64				position;
 } scratch_t;
 
-typedef struct arena_t
-{
-	arenaBlock_t* head;
-	arenaBlock_t* tail;
+typedef struct arena_t {
+	arenaBlock_t	*head;
+	arenaBlock_t	*tail;
 } arena_t;
 
 // Rule: functions may only take one arena parameter. This keeps getScratch()'s
 // single-arena-to-avoid exclusion sufficient - if that stops holding, getScratch()
 // needs to take a list of arenas to avoid instead.
-scratch_t getScratch(arena_t* activeArena);
-void rewindScratch(scratch_t* scratch);
+scratch_t	getScratch( arena_t *activeArena );
+void		rewindScratch( scratch_t *scratch );
 
 // alignof is only a keyword in C++ and C23. C11 and C17 have it as a macro in <stdalign.h>, which we'd rather not
 // pull in (or clash with), and _Alignof has been a keyword since C11 anyway.
@@ -179,8 +176,8 @@ void rewindScratch(scratch_t* scratch);
 #endif
 
 // Builder only uses scratch arenas as it's a short running program
-void* scratchAllocate(scratch_t* scratch, u64 size, u64 alignment);
-#define scratchPush(scratch_t, type, count) ((type*)scratchAllocate(scratch_t, sizeof(type) * (count), BUILDER_ALIGNOF(type)))
+void	*scratchAllocate( scratch_t *scratch, u64 size, u64 alignment );
+#define scratchPush( scratch, type, count )	( (type *) scratchAllocate( ( scratch ), sizeof( type ) * ( count ), BUILDER_ALIGNOF( type ) ) )
 
 // Frees this thread's scratch arena block chains. Scratch arenas live in thread_local
 // storage, and plain thread_local variables have no destructor in C - nothing runs
@@ -188,7 +185,7 @@ void* scratchAllocate(scratch_t* scratch, u64 size, u64 alignment);
 // this at process exit, but if you spin up short-lived threads and you really really care,
 // call this on each one before it exits or its scratch blocks will leak for the life of 
 // the process. Note(Tom): for this tool this is really optional
-void scratch_free(void);
+void	scratch_free( void );
 
 typedef struct stringBuilder_t {
 	stringBuilderBuffer_t	*head;
@@ -221,28 +218,28 @@ char		*StringBuilder_ToString( stringBuilder_t *builder );
 
 thread_local arena_t scratches[NUM_SCRATCH_ARENAS];
 
-scratch_t getScratch(arena_t* activeArena)
-{
-	for (int scratchIndex = 0; scratchIndex < NUM_SCRATCH_ARENAS; scratchIndex++)
-	{
-		arena_t* scratchArena = &scratches[scratchIndex];
-		if (activeArena != scratchArena)
-		{
+scratch_t getScratch( arena_t *activeArena ) {
+	for ( int scratchIndex = 0; scratchIndex < NUM_SCRATCH_ARENAS; scratchIndex++ ) {
+		arena_t *scratchArena = &scratches[scratchIndex];
+
+		if ( activeArena != scratchArena ) {
 			scratch_t scratch;
 			scratch.arena = scratchArena;
 			scratch.block = scratchArena->tail;
 			scratch.position = scratchArena->tail ? scratchArena->tail->position : 0;
+
 			return scratch;
 		}
 	}
 
 	BUILDER_ASSERT( false && "No free scratch arena - activeArena occupied every slot" );
+
 	scratch_t empty = { NULL, NULL, 0 };
+
 	return empty;
 }
 
-void rewindScratch(scratch_t* scratch)
-{
+void rewindScratch( scratch_t *scratch ) {
 	// A marker can only wind backwards. A NULL block is the arena's earliest state, so it's always valid.
 	BUILDER_ASSERT( ( scratch->block == NULL
 		|| ( scratch->arena->tail != NULL
@@ -253,22 +250,21 @@ void rewindScratch(scratch_t* scratch)
 	// scratchAllocate() zeroes the blocks past this one as it moves back onto them.
 	scratch->arena->tail = scratch->block;
 
-	if (scratch->block != NULL)
-	{
+	if ( scratch->block != NULL ) {
 		scratch->block->position = scratch->position;
 	}
 }
 
-void scratch_free(void)
-{
-	for (int scratchIndex = 0; scratchIndex < NUM_SCRATCH_ARENAS; scratchIndex++)
-	{
-		arena_t* arena = &scratches[scratchIndex];
-		arenaBlock_t* block = arena->head;
-		while (block != NULL)
-		{
-			arenaBlock_t* next = block->next;
-			free(block); // block->block was allocated as part of this same malloc - see arena_allocate.
+void scratch_free( void ) {
+	for ( int scratchIndex = 0; scratchIndex < NUM_SCRATCH_ARENAS; scratchIndex++ ) {
+		arena_t *arena = &scratches[scratchIndex];
+		arenaBlock_t *block = arena->head;
+
+		while ( block != NULL ) {
+			arenaBlock_t *next = block->next;
+
+			free( block );	// block->block was allocated as part of this same malloc - see scratchAllocate().
+
 			block = next;
 		}
 
@@ -279,71 +275,67 @@ void scratch_free(void)
 
 #define ARENA_DEFAULT_BLOCK_SIZE ( 2 * 1024 * 1024 )
 
-static u64 AlignUp( u64 value, u64 alignment )
-{
+static u64 AlignUp( u64 value, u64 alignment ) {
 	return ( value + alignment - 1 ) & ~( alignment - 1 );
 }
 
-void* scratchAllocate(scratch_t* scratch, u64 size, u64 alignment)
-{
-	arena_t* arena = scratch->arena;
-	BUILDER_ASSERT(arena);
-	arenaBlock_t* block = arena->tail;
+void *scratchAllocate( scratch_t *scratch, u64 size, u64 alignment ) {
+	arena_t *arena = scratch->arena;
 
-	for ( ;; )
-	{
-		if ( block != NULL )
-		{
+	BUILDER_ASSERT( arena );
+
+	arenaBlock_t *block = arena->tail;
+
+	for ( ;; ) {
+		if ( block != NULL ) {
 			u64 alignedPosition = AlignUp( block->position, alignment );
-			if ( alignedPosition + size <= block->capacity )
-			{
-				void* result = (char*)block->block + alignedPosition;
+
+			if ( alignedPosition + size <= block->capacity ) {
+				void *result = (char *) block->block + alignedPosition;
+
 				block->position = alignedPosition + size;
 				arena->tail = block;
+
 				return result;
 			}
 		}
 
 		// Doesn't fit in the current block (or there is no current block yet) -
 		// move forward to the next one, reusing it if rewindScratch() already left one there.
-		arenaBlock_t* next = block ? block->next : arena->head;
-		if ( next == NULL )
-		{
+		arenaBlock_t *next = block ? block->next : arena->head;
+
+		if ( next == NULL ) {
 			// Nothing left to reuse - lazily allocate a new block.
 			// The extra `alignment` bytes guarantee this block fits `size` even after
 			// AlignUp() padding pushes the start position forward.
 			u64 capacity = size + alignment;
-			if ( capacity < ARENA_DEFAULT_BLOCK_SIZE )
-			{
+
+			if ( capacity < ARENA_DEFAULT_BLOCK_SIZE ) {
 				capacity = ARENA_DEFAULT_BLOCK_SIZE;
 			}
 
-			next = (arenaBlock_t*) malloc( sizeof( arenaBlock_t ) + capacity );
+			next = (arenaBlock_t *) malloc( sizeof( arenaBlock_t ) + capacity );
 			BUILDER_ASSERT( next != NULL && "Out of memory." );
-			next->block    = (void*)( next + 1 );
-			next->position = 0;
-			next->capacity = capacity;
-			next->index    = block ? block->index + 1 : 0;
-			next->next     = NULL;
 
-			if ( block != NULL )
-			{
+			next->block		= (void *) ( next + 1 );
+			next->position	= 0;
+			next->capacity	= capacity;
+			next->index		= block ? block->index + 1 : 0;
+			next->next		= NULL;
+
+			if ( block != NULL ) {
 				block->next = next;
-			}
-			else
-			{
+			} else {
 				arena->head = next;
 			}
-		}
-		else
-		{
+		} else {
 			// Left behind by rewindScratch(). Anything past the tail is dead, so resetting it here is safe.
 			next->position = 0;
 		}
 
 		block = next;
 	}
-} 
+}
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN 1

@@ -1118,7 +1118,6 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 
 	int32_t exitCode = Builder_RunProcess( NULL, execCmd, NULL );
 
-
 	exit( exitCode );
 #elif defined( __linux__ )
 	if ( execv( binaryPath, argv ) == -1 ) {
@@ -1342,6 +1341,259 @@ static bool Builder_VisitFiles( arena_t *results, const char *path, const builde
 	scratchRewind( &scratch );
 
 	return true;
+}
+
+typedef struct {
+	const char **files;
+	uint32_t count;
+	uint32_t capacity;
+} builderFileGlobResult_t;
+
+// There could be an optimisation here if we store whether there is an asterisk
+// As slice comparison can early out if count is not equal for the price of more memory?
+// We should wait for some more consistent performance benchmarks to test the difference
+typedef struct {
+	const char *begin;
+	uint32_t count;
+} builderStringSlice_t;
+
+typedef struct {
+	builderStringSlice_t *data;
+	uint32_t count;
+} builderStringSliceArray_t;
+
+typedef struct {
+	const builderStringSliceArray_t patternSlices;
+	const uint32_t searchPathLen;
+	builderFileGlobResult_t *globResults;
+} builderGlobVisitCallbackData_t;
+
+static void Builder_AddGlobbedFile( builderFileGlobResult_t *fileResults, const char *file ) {
+	if ( fileResults->count == fileResults->capacity ) {
+		fileResults->capacity = fileResults->capacity ? fileResults->capacity * 2 : 8;
+		fileResults->files = (const char **) realloc( fileResults->files, fileResults->capacity * sizeof( const char * ) );
+	}
+
+	fileResults->files[fileResults->count++] = file;
+}
+
+// remember to free sliceArray.data
+static builderStringSliceArray_t Builder_SliceFilePath( const char *filePath ) {
+	const char *pathIterator = filePath; 
+	builderStringSliceArray_t sliceArray = {
+		.data = NULL,
+		.count = 0
+	};
+
+	// we currently iterate over it twice as it fits with the allocation strategy, this is not the best way
+	// another contender for chunked array?
+	uint32_t numSlices = (*pathIterator != '\\' && *pathIterator != '/') ? 1 : 0; // the first bit is also a slice that could be missed if no slash at front
+	while( *pathIterator != '\0' ) {
+		// since this is supposed to be a file it shouldn't end in a slash so each time we hit a slash
+		// there is a slice between the current slashes and the next slash / end of full filename
+		if ( *pathIterator == '\\' || *pathIterator == '/' ) {
+			while ( *pathIterator == '\\' || *pathIterator == '/' ) {
+				++pathIterator;
+				if ( *pathIterator == '\0' ) {
+					printf( "Error: Tried to slice path that ended in a slash \"%s\", this shouldn't be happening.\n", filePath );
+					return sliceArray;
+				}
+			}
+			++numSlices;
+		} else {
+			++pathIterator;
+		}
+	}
+
+	// I don't like that we are somewhat hiding this allocation
+	sliceArray.data = (builderStringSlice_t *) malloc( numSlices * sizeof( builderStringSlice_t ) );
+	sliceArray.count = numSlices;
+
+	pathIterator = filePath;
+	for (uint32_t slice = 0; slice < numSlices; ++slice) {
+		while ( *pathIterator == '\\' || *pathIterator == '/' ) {
+			++pathIterator;
+		}
+
+		sliceArray.data[slice].begin = pathIterator;
+		sliceArray.data[slice].count = 0;
+		while ( *pathIterator != '\\' && *pathIterator != '/' && *pathIterator != '\0' ) {
+			++sliceArray.data[slice].count;
+			++pathIterator;
+		}
+	}
+
+	return sliceArray;
+}
+
+static bool Builder_SliceMatchesPattern( const builderStringSlice_t *patternSlice, const builderStringSlice_t *pathSlice ) {
+	if ( pathSlice->count == 0 ) {
+		return false;
+	}
+
+	uint32_t afterLastWildcard = 0;
+	uint32_t patternIndex = 0;
+	for (uint32_t pathIndex = 0; pathIndex < pathSlice->count; ++pathIndex ) {
+		// there are more characters that haven't been matched
+		if ( patternIndex == patternSlice->count ) {
+			return false;
+		}
+
+		// keep consuming wildcards to reach next match
+		while ( patternSlice->begin[patternIndex] == '*' ) {
+			afterLastWildcard = ++patternIndex;
+			if ( patternIndex == patternSlice->count ) {
+				return true; // rest of the characters are matched via wildcard
+			}
+		}
+
+		// consume match, resetting if the match fails (TODO: AK: 11/08/2026: explain this better?)
+		if ( patternSlice->begin[patternIndex] != '?' // can match any one character
+			&& patternSlice->begin[patternIndex] != pathSlice->begin[pathIndex] ) {
+			patternIndex = afterLastWildcard;
+		} else {
+			++patternIndex;
+		}
+	}
+
+	// since we consumed all characters in match and filename it's a match
+	return patternIndex == patternSlice->count;
+}
+
+static bool Builder_PathMatchesPattern( const builderStringSliceArray_t *patternSliceArray, const builderStringSliceArray_t *pathSliceArray ) {
+	if ( pathSliceArray == NULL || patternSliceArray == NULL || 
+		pathSliceArray->count == 0 || patternSliceArray->count == 0 ) {
+		return false;
+	}
+
+	bool inRecursiveGlob = false;
+	uint32_t patternIndex = 0;
+	uint32_t pathIndex = 0;
+	while ( patternIndex < patternSliceArray->count ) {
+		const builderStringSlice_t *patternSlice = &patternSliceArray->data[patternIndex++];
+
+		if ( patternSlice->count == 1 && patternSlice->begin[0] == '*' ) { // case of /*/ - we should just check this in Builder_SliceMatchesPattern
+			if ( pathIndex++ == pathSliceArray->count ) {
+				return false; // no more folders to consume
+			}
+		} else if ( patternSlice->count == 2 && patternSlice->begin[0] == '*' &&  patternSlice->begin[1] == '*' ) { // case of /**/
+			inRecursiveGlob = true;
+		} else {
+			bool foundMatch = false;
+			while ( pathIndex < pathSliceArray->count ) {
+				const builderStringSlice_t *pathSlice = &pathSliceArray->data[pathIndex++];
+
+				if ( Builder_SliceMatchesPattern( patternSlice, pathSlice) ) {
+					foundMatch = true;
+					break;
+				} else if ( !inRecursiveGlob ) { // we can't fail a match if not globbing recursively
+					return false;
+				}
+			}
+
+			// there was something to match and we didn't match it
+			if ( !foundMatch ) {
+				return false;
+			}
+
+			// if we have reached the end then we actually matched everything and we are done
+			if (pathIndex == pathSliceArray->count && patternIndex == patternSliceArray->count) {
+				return true;
+			}
+		}
+	}
+
+	// if the pattern ended in a recursive glob then
+	// we can match anything remaining in the path
+	return inRecursiveGlob;
+}
+
+static void Builder_GlobVisitCallback( fileInfo_t *fileInfo, void *data ) {
+	builderGlobVisitCallbackData_t *callbackData = (builderGlobVisitCallbackData_t *)data;
+
+	uint32_t filenameLen = strnlen( fileInfo->filename, 255 ); // filename length maxes here I think?
+	uint32_t fullFilenameLen = strnlen( fileInfo->fullFilename, MAX_PATH + filenameLen );
+
+	if ( fullFilenameLen - filenameLen < callbackData->searchPathLen ) {
+		printf( "Error: Search path length was longer than full file path for file %s\n", fileInfo->fullFilename );
+		return;
+	}
+
+	// we could do a heavyweight verification that the search path matches here,
+	// but really it should match from the call sites
+	const char* matchStart = fileInfo->fullFilename + callbackData->searchPathLen;
+	const builderStringSliceArray_t pathSlices = Builder_SliceFilePath( matchStart );
+
+	if ( Builder_PathMatchesPattern( &callbackData->patternSlices, &pathSlices ) ) {
+		Builder_AddGlobbedFile( callbackData->globResults, fileInfo->fullFilename ); // Do we need to copy the filename string?
+	}
+
+	free( pathSlices.data );
+}
+
+static builderFileGlobResult_t Builder_GlobFiles( const char **globPatterns ) {
+	builderFileGlobResult_t globResult = {
+		.files = NULL,
+		.count = 0,
+		.capacity = 0
+	};
+	
+	// setup re-usable search path allocation
+	char *const searchPath = (char *const) malloc( ( MAX_PATH + 1 ) * sizeof( const char ) );
+	while ( globPatterns && *globPatterns) {
+		// start by copying and seeking to find if there is an asterisk, and then rewind to just after the preceding slash (or start if it is say **/*.cpp)
+		const char* pattern = *globPatterns;
+		while ( *pattern != '\0' )  {  // we could also early out if they put any erroneous characters
+			if ( *(pattern++) == '*' ) {
+				while ( --pattern != *globPatterns ) {
+					if ( *pattern == '\\' || *pattern == '/' ) {
+						++pattern;
+						break;
+					}
+				}
+				break;
+			}
+		}
+
+		if ( *pattern == '\0' ) {
+			// should I just let the compile step handle the empty strings?
+			if ( pattern != *globPatterns ) {
+				Builder_AddGlobbedFile( &globResult, *globPatterns ); // yes I realise this wasn't globbed \_O_O_/
+				++globPatterns;
+			}
+			continue;
+		}
+
+		const uint32_t globPathLen = pattern - *globPatterns;
+		if ( globPathLen != 0 ) {
+			if ( globPathLen > MAX_PATH ) {
+				printf( "Warning: Skipping pattern %s, path was larger than max path.\n", *globPatterns );
+				continue;
+			}
+			memcpy( searchPath, *globPatterns, globPathLen );	
+		}
+		searchPath[globPathLen] = '\0';
+		
+		builderGlobVisitCallbackData_t callbackData = {
+			.patternSlices = Builder_SliceFilePath(pattern),
+			.globResults = &globResult,
+			.searchPathLen = globPathLen
+		};
+
+		builderFileVisitFlags_t visitFlags = BUILDER_FILE_VISIT_FILES;
+		if (callbackData.patternSlices.count > 1) { // we are matching folders too
+			visitFlags |= BUILDER_FILE_VISIT_RECURSIVE;
+		}
+		if ( !Builder_VisitFiles( searchPath, visitFlags, &Builder_GlobVisitCallback, &callbackData ) ) {
+			printf( "Warning: Found no matches for pattern %s, at search path %s.\n", *globPatterns, searchPath );
+		}
+
+		free( callbackData.patternSlices.data );
+		++globPatterns;
+	}
+
+	free( searchPath );
+	return globResult;
 }
 
 #ifdef _WIN32
@@ -1727,7 +1979,11 @@ static bool Builder_GetMSVCInstall( arena_t *results, builderMSVCInstall_t *outI
 
 	ISetupConfiguration *setupConfig = NULL;
 
-	hr = CoCreateInstance( &CLSID_SetupConfiguration, NULL, CLSCTX_INPROC_SERVER, &IID_ISetupConfiguration, (void **) &setupConfig );
+#ifdef __cplusplus
+    hr = CoCreateInstance( CLSID_SetupConfiguration, NULL, CLSCTX_INPROC_SERVER, IID_ISetupConfiguration, (void **) &setupConfig );
+#else
+    hr = CoCreateInstance( &CLSID_SetupConfiguration, NULL, CLSCTX_INPROC_SERVER, &IID_ISetupConfiguration, (void **) &setupConfig );
+#endif
 
 	if ( hr == REGDB_E_CLASSNOTREG ) {
 		success = Builder_MSVCNotInstalled();
@@ -2420,20 +2676,14 @@ int Build( BuilderOptions *options ) {
 				return 1;
 			}
 
+			// glob step
+			builderFileGlobResult_t globResult = Builder_GlobFiles( config->sourceFiles );
+
 			// compilation step
 			{
 				const double compileTimeStart = Builder_TimeMS();
 
-				uint32_t sourceFilesCount = 0;
-				{
-					const char **sourceFile = config->sourceFiles;
-					while ( sourceFile && *sourceFile ) {
-						sourceFilesCount++;
-						sourceFile++;
-					}
-				}
-
-				if ( sourceFilesCount > 0 ) {
+				if ( globResult.count > 0 ) {
 					// TODO: DM: 09/08/2026: is it OK to create and destroy a bunch of threads for each config?
 					builderCompileContext_t compileContext = {
 						.config				= config,
@@ -2448,17 +2698,17 @@ int Build( BuilderOptions *options ) {
 
 					builderCompileJobPool_t pool = {
 						.context			= &compileContext,
-						.sourceFiles		= config->sourceFiles,
-						.sourceFilesCount	= sourceFilesCount,
+						.sourceFiles		= globResult.files,
+						.sourceFilesCount	= globResult.count,
 					};
 
 					// only spin up additional threads once theres more than one file
 					// limit the number of threads we spin up to no higher than the number of CPU cores we have
 					uint32_t numCPUCores = Builder_GetNumCPUCores();
-					uint32_t numWorkers = ( numCPUCores < sourceFilesCount ) ? numCPUCores : sourceFilesCount;
+					uint32_t numWorkers = ( numCPUCores < globResult.count ) ? numCPUCores : globResult.count;
 					uint32_t numAdditionalThreads = ( numWorkers > 1 ) ? numWorkers - 1 : 0;
 
-					printf( "Compiling %u files across %u threads.\n", sourceFilesCount, numWorkers );
+					printf( "Compiling %u files across %u threads.\n", globResult.count, numWorkers );
 
 					builderThread_t *additionalThreads = NULL;
 					uint32_t numCreatedThreads = 0;
@@ -2519,11 +2769,8 @@ int Build( BuilderOptions *options ) {
 				StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.umLibPath );
 				StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.ucrtLibPath );
 
-				const char **sourceFile = config->sourceFiles;
-				while ( *sourceFile ) {
-					Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, *sourceFile );
-
-					sourceFile++;
+				for ( uint32_t fileIndex = 0; fileIndex < globResult.count; ++fileIndex ) {
+					Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, globResult.files[fileIndex] );
 				}
 
 				const char **additionalLibPath = config->additionalLibPaths;
@@ -2535,15 +2782,30 @@ int Build( BuilderOptions *options ) {
 
 				const char **additionalLib = config->additionalLibs;
 				while ( additionalLib && *additionalLib ) {
-					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", *additionalLib );
+					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s.lib ", *additionalLib );
 
 					additionalLib++;
 				}
 
+				// TODO: AK: 11/08/2026: handle this better
+				bool debugDefineSet = false;
+				const char **define = config->defines;
+				while ( define && *define ) {
+					if ( !debugDefineSet && _strnicmp( "_DEBUG", *(define++), sizeof("_DEBUG") ) == 0 ) {
+						debugDefineSet = true;
+						break;
+					}
+				}
+				
 				if ( config->binaryType != BINARY_TYPE_STATIC_LIBRARY ) {
 					// clang doesn't embed /DEFAULTLIB directives the way cl.exe does
 					// so link.exe has no idea which CRT/SDK libs to pull in unless we name them ourselves
-					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "libcmt.lib libvcruntime.lib libucrt.lib kernel32.lib " );
+					// TODO: AK: 11/08/2026: we need dynamic runtime support too
+					if (debugDefineSet) {
+						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "libcmtd.lib libcpmtd.lib libvcruntimed.lib libucrtd.lib kernel32.lib " );
+					} else {
+						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "libcmt.lib libcpmt.lib libvcruntime.lib libucrt.lib kernel32.lib " );
+					}
 				}
 
 				const char **additionalLinkerArgument = config->additionalLinkerArguments;
@@ -2557,11 +2819,8 @@ int Build( BuilderOptions *options ) {
 					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "ar rcs " );
 					Builder_AppendBinaryPath( buildScratch.arena, &linkerArgs, config );
 
-					const char **sourceFile = config->sourceFiles;
-					while ( *sourceFile ) {
-						Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, *sourceFile );
-
-						sourceFile++;
+					for ( uint32_t fileIndex = 0; fileIndex < globResult.count; ++fileIndex ) {
+						Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, globResult.files[fileIndex] );
 					}
 				} else {
 					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "\"%s\" ", compilerPath );
@@ -2573,11 +2832,8 @@ int Build( BuilderOptions *options ) {
 					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-o " );
 					Builder_AppendBinaryPath( buildScratch.arena, &linkerArgs, config );
 
-					const char **sourceFile = config->sourceFiles;
-					while ( *sourceFile ) {
-						Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, *sourceFile );
-
-						sourceFile++;
+					for ( uint32_t fileIndex = 0; fileIndex < globResult.count; ++fileIndex ) {
+						Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, globResult.files[fileIndex] );
 					}
 
 					const char **additionalLibPath = config->additionalLibPaths;

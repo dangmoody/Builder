@@ -129,81 +129,6 @@ typedef struct BuilderOptions {
 void	AddBuildConfig( BuilderOptions *options, BuildConfig *config );
 int		Build( BuilderOptions *options );
 
-typedef uint64_t u64;
-
-typedef struct arena_t arena_t;
-
-typedef struct arenaBlock_t {
-	void				*block;
-	u64					position;
-	u64					capacity;
-	// Orders two blocks without walking the chain - see scratchRewind().
-	// Only valid because blocks are always appended to the end, never spliced into the middle.
-	u64					index;
-	struct arenaBlock_t	*next;
-	struct arena_t*		owner;
-} arenaBlock_t;
-
-
-typedef struct arena_t {
-	arenaBlock_t	*head;
-	arenaBlock_t	*tail;
-} arena_t;
-
-typedef struct arenaRewindSpot_t
-{
-	arenaBlock_t	*block;
-	u64				position;
-} arenaRewindSpot_t;
-
-typedef struct scratch_t {
-	arena_t				*arena;
-	arenaRewindSpot_t	rewind;
-} scratch_t;
-
-// Rule: functions may only take one arena parameter. This keeps scratchGet()'s
-// single-arena-to-avoid exclusion sufficient - if that stops holding, scratchGet()
-// needs to take a list of arenas to avoid instead.
-// Pass the scratch you were handed (or NULL if you weren't handed one) so you don't get given the same one back.
-scratch_t	scratchGet( arena_t *resultArena );
-// Marks where an arena has got to right now.  Use this when you want to keep allocating into an arena you were handed
-// but be able to throw away just your own attempt - anything already in there sits below the spot and a rewind can't reach it.
-arenaRewindSpot_t	arenaTell( arena_t *arena );
-void				arenaRewind( arena_t *arena, arenaRewindSpot_t *rewindLocation );
-void				scratchRewind( scratch_t *scratch );
-
-// alignof is only a keyword in C++ and C23. C11 and C17 have it as a macro in <stdalign.h>, which we'd rather not
-// pull in (or clash with), and _Alignof has been a keyword since C11 anyway.
-#ifdef __cplusplus
-#define BUILDER_ALIGNOF( type ) alignof( type )
-#elif defined( __STDC_VERSION__ ) && __STDC_VERSION__ >= 201112L
-#define BUILDER_ALIGNOF( type ) _Alignof( type )
-#else
-#define BUILDER_ALIGNOF( type ) __alignof__( type )
-#endif
-
-
-void	*arenaAllocate( arena_t *arena, u64 size, u64 alignment );
-#define arenaPush( arena, type, count )	( (type *) arenaAllocate( ( arena ), sizeof( type ) * ( count ), BUILDER_ALIGNOF( type ) ) )
-
-// Temporary stand-in until we have a proper growable array. There's no portable way to recover
-// "type" from an old pointer alone (no typeof in plain C11/C17, and MSVC/GCC/Clang don't agree on
-// any extension for it), so it has to be passed in explicitly like scratchPush's. oldCount is
-// needed too - scratch arenas only ever grow forward, so the new block has no idea how much of
-// the old one was live and memcpy needs a length. This leaks the old block, same as every other
-// scratch allocation - nothing here is individually freed until the whole arena rewinds.
-#define arenaRealloc( arena, old, type, oldCount, newCount ) \
-	( (type *) memcpy( arenaPush( ( arena ), type, ( newCount ) ), ( old ), sizeof( type ) * ( u64 ) ( oldCount ) ) )
-
-// Frees this thread's scratch arena block chains. Scratch arenas live in thread_local
-// storage, and plain thread_local variables have no destructor in C - nothing runs
-// automatically when a thread exits. The main thread can rely on the OS reclaiming
-// this at process exit, but if you spin up short-lived threads and you really really care,
-// call this on each one before it exits or its scratch blocks will leak for the life of 
-// the process. Note(Tom): for this tool this is really optional
-void	scratchFree( void );
-
-
 #ifdef BUILDER_IMPLEMENTATION
 
 #if defined( _MSC_VER ) && !defined( __cplusplus )
@@ -220,6 +145,37 @@ void	scratchFree( void );
 #endif
 
 #include <stdlib.h>
+
+typedef struct arena_t arena_t;
+
+typedef struct arenaBlock_t {
+	void				*block;
+	uint64_t			position;
+	size_t				capacity;
+	// Orders two blocks without walking the chain - see scratchRewind().
+	// Only valid because blocks are always appended to the end, never spliced into the middle.
+	uint64_t			index;
+	struct arenaBlock_t	*next;
+	struct arena_t*		owner;
+} arenaBlock_t;
+
+
+typedef struct arena_t {
+	arenaBlock_t	*head;
+	arenaBlock_t	*tail;
+} arena_t;
+
+typedef struct arenaRewindSpot_t
+{
+	arenaBlock_t	*block;
+	uint64_t		position;
+} arenaRewindSpot_t;
+
+typedef struct scratch_t {
+	arena_t				*arena;
+	arenaRewindSpot_t	rewind;
+} scratch_t;
+
 
 #define NUM_SCRATCH_ARENAS 2
 
@@ -305,18 +261,14 @@ void scratchFree( void ) {
 
 #define ARENA_DEFAULT_BLOCK_SIZE ( 2 * 1024 * 1024 )
 
-static u64 AlignUp( u64 value, u64 alignment ) {
-	return ( value + alignment - 1 ) & ~( alignment - 1 );
-}
-
-void *arenaAllocate( arena_t *arena, u64 size, u64 alignment ) {
+void *arenaAllocate( arena_t *arena,	size_t size,	size_t alignment ) {
 	BUILDER_ASSERT( arena );
 
 	arenaBlock_t *block = arena->tail;
 
 	for ( ;; ) {
 		if ( block != NULL ) {
-			u64 alignedPosition = AlignUp( block->position, alignment );
+			uint64_t alignedPosition = ( block->position + alignment - 1 ) & ~( alignment - 1 );
 
 			if ( alignedPosition + size <= block->capacity ) {
 				void *result = (char *) block->block + alignedPosition;
@@ -336,7 +288,7 @@ void *arenaAllocate( arena_t *arena, u64 size, u64 alignment ) {
 			// Nothing left to reuse - lazily allocate a new block.
 			// The extra `alignment` bytes guarantee this block fits `size` even after
 			// AlignUp() padding pushes the start position forward.
-			u64 capacity = size + alignment;
+			size_t capacity = size + alignment;
 
 			if ( capacity < ARENA_DEFAULT_BLOCK_SIZE ) {
 				capacity = ARENA_DEFAULT_BLOCK_SIZE;
@@ -365,6 +317,27 @@ void *arenaAllocate( arena_t *arena, u64 size, u64 alignment ) {
 		block = next;
 	}
 }
+
+// alignof is only a keyword in C++ and C23. C11 and C17 have it as a macro in <stdalign.h>, which we'd rather not
+// pull in (or clash with), and _Alignof has been a keyword since C11 anyway.
+#ifdef __cplusplus
+#define BUILDER_ALIGNOF( type ) alignof( type )
+#elif defined( __STDC_VERSION__ ) && __STDC_VERSION__ >= 201112L
+#define BUILDER_ALIGNOF( type ) _Alignof( type )
+#else
+#define BUILDER_ALIGNOF( type ) __alignof__( type )
+#endif
+
+#define arenaPush( arena, type, count )	( (type *) arenaAllocate( ( arena ), sizeof( type ) * ( count ), BUILDER_ALIGNOF( type ) ) )
+
+// Temporary stand-in until we have a proper growable array. There's no portable way to recover
+// "type" from an old pointer alone (no typeof in plain C11/C17, and MSVC/GCC/Clang don't agree on
+// any extension for it), so it has to be passed in explicitly like scratchPush's. oldCount is
+// needed too - scratch arenas only ever grow forward, so the new block has no idea how much of
+// the old one was live and memcpy needs a length. This leaks the old block, same as every other
+// scratch allocation - nothing here is individually freed until the whole arena rewinds.
+#define arenaRealloc( arena, old, type, oldCount, newCount ) \
+	( (type *) memcpy( arenaPush( ( arena ), type, ( newCount ) ), ( old ), sizeof( type ) * (	size_t ) ( oldCount ) ) )
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN 1
@@ -2320,36 +2293,6 @@ static void Builder_ThreadJoin( builderThread_t thread ) {
 #endif
 }
 
-// TODO: TW: 11/08/2026: UNFINISHED - the scratch conversion compiles but crashes at runtime.
-//
-// Symptoms, running the tests from tests/<name>/ with clang on PATH:
-//   - all four test_build_* scripts segfault. stdout is block-buffered when redirected so the output is lost on the
-//     crash - run them without redirecting, or probe with fprintf( stderr ), or you'll think nothing ran at all.
-//   - before the most recent edits, test_build_static_lib and test_build_dynamic_lib got as far as the link step and
-//     emitted empty toolchain paths: "\bin\Hostx64\x64\lib.exe" and /LIBPATH:"" x3. So msvcInstall/windowsSDKInstall
-//     were reading as empty strings by the time the link step ran.
-//
-// Already ruled out, each verified with a standalone probe program:
-//   - the scratch primitives themselves. scratchGet/scratchTell/scratchRewind, Builder_FormatString and the
-//     StringBuilder pair all behave correctly in isolation.
-//   - Builder_GetWindowsSDKInstall() and Builder_GetMSVCInstall(). Called back to back on one buildScratch they return
-//     correct paths, and the SDK paths survive the MSVC call.
-//   - Builder_RunProcess( NULL, ... ) and a nested scratchGet( NULL )/scratchRewind() pair. Neither clobbers anything
-//     already on the arena, which is expected - the marker is taken at the current position, so a rewind can only
-//     reach what was allocated after it.
-//
-// What's left to look at:
-//   - a stderr probe at the top of the link step never fired, so the crash happens somewhere before it, inside Build().
-//   - NUM_SCRATCH_ARENAS is 2 and several callers pass NULL to scratchGet(), which always hands back scratches[0] -
-//     the same arena buildScratch is on. That's safe as long as every use is strictly stack ordered, so a place where
-//     it isn't would explain this.
-//   - the compile job pool. scratches is thread_local so the worker threads get their own, but the main thread runs
-//     jobs too, and there it shares arena[0] with buildScratch.
-//
-// Also still outstanding: builder_vs_code.h and builder_zed.h have had the scratch arguments added to their
-// StringBuilder calls but no scratch is declared in either generator function, so neither header compiles yet.
-// Each needs one scratch for the whole function, the StringBuilder_Destroy() calls removed (that function is gone),
-// and the free() calls on what are now scratch allocations removed.
 int Build( BuilderOptions *options ) {
 	double totalTimeStart = Builder_TimeMS();
 

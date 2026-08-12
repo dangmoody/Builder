@@ -2785,7 +2785,15 @@ int Build( BuilderOptions *options ) {
 
 				const char **additionalLib = config->additionalLibs;
 				while ( additionalLib && *additionalLib ) {
-					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s.lib ", *additionalLib );
+					// callers sometimes already include the ".lib" extension themselves - don't double it up
+					size_t libNameLen = strlen( *additionalLib );
+					bool alreadyHasExtension = libNameLen >= 4 && _stricmp( *additionalLib + libNameLen - 4, ".lib" ) == 0;
+
+					if ( alreadyHasExtension ) {
+						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", *additionalLib );
+					} else {
+						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s.lib ", *additionalLib );
+					}
 
 					additionalLib++;
 				}

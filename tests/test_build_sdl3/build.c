@@ -126,17 +126,17 @@ int main( int argc, char **argv ) {
 		},
 		.additionalLibs = (const char *[]) {
 #if defined( _WIN32 )
-			"Ole32.lib",
-			"OleAut32.lib",
-			"Winmm.lib",
-			"Imm32.lib",
-			"Advapi32.lib",
-			"Shell32.lib",
-			"Cfgmgr32.lib",
-			"Gdi32.lib",
-			"SetupAPI.lib",
-			"Version.lib",
-			"user32.lib",
+			"Ole32",
+			"OleAut32",
+			"Winmm",
+			"Imm32",
+			"Advapi32",
+			"Shell32",
+			"Cfgmgr32",
+			"Gdi32",
+			"SetupAPI",
+			"Version",
+			"user32",
 #elif defined( __linux__ )
 #endif
 			NULL

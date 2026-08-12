@@ -68,6 +68,7 @@ typedef enum Optimization {
 	OPTIMIZATION_PROGRAM_SPEED,
 } Optimization;
 
+
 typedef struct BuildConfig {
 	const char			*name;
 	// Other BuildConfigs that need to be built before this one.  NULL-terminated array.
@@ -128,8 +129,215 @@ typedef struct BuilderOptions {
 void	AddBuildConfig( BuilderOptions *options, BuildConfig *config );
 int		Build( BuilderOptions *options );
 
-
 #ifdef BUILDER_IMPLEMENTATION
+
+#if defined( _MSC_VER ) && !defined( __cplusplus )
+#define thread_local __declspec( thread )
+#endif
+
+#ifndef BUILDER_COUNT_OF
+#define BUILDER_COUNT_OF( array )	( sizeof( array ) / sizeof( array[0] ) )
+#endif
+
+#ifndef BUILDER_ASSERT
+#include <assert.h>
+#define BUILDER_ASSERT assert
+#endif
+
+#include <stdlib.h>
+
+typedef struct arena_t arena_t;
+
+typedef struct arenaBlock_t {
+	void				*block;
+	uint64_t			position;
+	size_t				capacity;
+	// Orders two blocks without walking the chain - see scratchRewind().
+	// Only valid because blocks are always appended to the end, never spliced into the middle.
+	uint64_t			index;
+	struct arenaBlock_t	*next;
+	struct arena_t*		owner;
+} arenaBlock_t;
+
+
+typedef struct arena_t {
+	arenaBlock_t	*head;
+	arenaBlock_t	*tail;
+} arena_t;
+
+typedef struct arenaRewindSpot_t
+{
+	arenaBlock_t	*block;
+	uint64_t		position;
+} arenaRewindSpot_t;
+
+typedef struct scratch_t {
+	arena_t				*arena;
+	arenaRewindSpot_t	rewind;
+} scratch_t;
+
+
+#define NUM_SCRATCH_ARENAS 2
+
+thread_local arena_t scratches[NUM_SCRATCH_ARENAS];
+
+arenaRewindSpot_t arenaTell( arena_t *arena ) {
+	BUILDER_ASSERT( arena );
+
+	arenaRewindSpot_t marker;
+	marker.block = arena->tail;
+	marker.position = arena->tail ? arena->tail->position : 0;
+
+	return marker;
+}
+
+scratch_t scratchGet( arena_t *activeArena ) {
+	// NULL means the caller isn't holding one, so there's nothing to avoid
+	for ( int scratchIndex = 0; scratchIndex < NUM_SCRATCH_ARENAS; scratchIndex++ ) {
+		arena_t *scratchArena = &scratches[scratchIndex];
+
+		if ( activeArena != scratchArena ) {
+			scratch_t onThisArena;
+			onThisArena.arena = scratchArena;
+			onThisArena.rewind = arenaTell(scratchArena);
+
+			return onThisArena;
+		}
+	}
+
+	BUILDER_ASSERT( false && "No free scratch arena - activeArena occupied every slot" );
+
+	scratch_t empty = {0};
+
+	return empty;
+}
+
+void arenaRewind( arena_t *arena, arenaRewindSpot_t *rewindLocation ) {
+	BUILDER_ASSERT( arena );
+	BUILDER_ASSERT( rewindLocation );
+
+	if( rewindLocation->block ) {
+		BUILDER_ASSERT( rewindLocation->block->owner = arena );
+	}
+	
+	// A rewind spot can only wind backwards. A NULL block is the arena's earliest state, so it's always valid.
+	BUILDER_ASSERT( ( rewindLocation->block == NULL
+		|| ( arena->tail != NULL
+			&& ( rewindLocation->block->index < arena->tail->index
+				|| ( rewindLocation->block == arena->tail && rewindLocation->position <= rewindLocation->block->position ) ) ) )
+		&& "rewind spot is ahead of the arena - it was already rewound, or rewound out of order" );
+
+	// arenaAllocate() zeroes the blocks past this one as it moves back onto them.
+	arena->tail = rewindLocation->block;
+
+	if ( rewindLocation->block != NULL ) {
+		rewindLocation->block->position = rewindLocation->position;
+	}
+}
+
+void scratchRewind( scratch_t *scratch ) {
+	BUILDER_ASSERT( scratch );
+
+	arenaRewind( scratch->arena, &scratch->rewind );
+}
+
+void scratchFree( void ) {
+	for ( int scratchIndex = 0; scratchIndex < NUM_SCRATCH_ARENAS; scratchIndex++ ) {
+		arena_t *arena = &scratches[scratchIndex];
+		arenaBlock_t *block = arena->head;
+
+		while ( block != NULL ) {
+			arenaBlock_t *next = block->next;
+
+			free( block );	// block->block was allocated as part of this same malloc - see scratchAllocate().
+
+			block = next;
+		}
+
+		arena->head = NULL;
+		arena->tail = NULL;
+	}
+}
+
+#define ARENA_DEFAULT_BLOCK_SIZE ( 2 * 1024 * 1024 )
+
+void *arenaAllocate( arena_t *arena,	size_t size,	size_t alignment ) {
+	BUILDER_ASSERT( arena );
+
+	arenaBlock_t *block = arena->tail;
+
+	for ( ;; ) {
+		if ( block != NULL ) {
+			uint64_t alignedPosition = ( block->position + alignment - 1 ) & ~( alignment - 1 );
+
+			if ( alignedPosition + size <= block->capacity ) {
+				void *result = (char *) block->block + alignedPosition;
+
+				block->position = alignedPosition + size;
+				arena->tail = block;
+
+				return result;
+			}
+		}
+
+		// Doesn't fit in the current block (or there is no current block yet) -
+		// move forward to the next one, reusing it if scratchRewind() already left one there.
+		arenaBlock_t *next = block ? block->next : arena->head;
+
+		if ( next == NULL ) {
+			// Nothing left to reuse - lazily allocate a new block.
+			// The extra `alignment` bytes guarantee this block fits `size` even after
+			// AlignUp() padding pushes the start position forward.
+			size_t capacity = size + alignment;
+
+			if ( capacity < ARENA_DEFAULT_BLOCK_SIZE ) {
+				capacity = ARENA_DEFAULT_BLOCK_SIZE;
+			}
+
+			next = (arenaBlock_t *) malloc( sizeof( arenaBlock_t ) + capacity );
+			BUILDER_ASSERT( next != NULL && "Out of memory." );
+
+			next->block		= (void *) ( next + 1 );
+			next->position	= 0;
+			next->capacity	= capacity;
+			next->index		= block ? block->index + 1 : 0;
+			next->next		= NULL;
+			next->owner		= arena;
+
+			if ( block != NULL ) {
+				block->next = next;
+			} else {
+				arena->head = next;
+			}
+		} else {
+			// Left behind by scratchRewind(). Anything past the tail is dead, so resetting it here is safe.
+			next->position = 0;
+		}
+
+		block = next;
+	}
+}
+
+// alignof is only a keyword in C++ and C23. C11 and C17 have it as a macro in <stdalign.h>, which we'd rather not
+// pull in (or clash with), and _Alignof has been a keyword since C11 anyway.
+#ifdef __cplusplus
+#define BUILDER_ALIGNOF( type ) alignof( type )
+#elif defined( __STDC_VERSION__ ) && __STDC_VERSION__ >= 201112L
+#define BUILDER_ALIGNOF( type ) _Alignof( type )
+#else
+#define BUILDER_ALIGNOF( type ) __alignof__( type )
+#endif
+
+#define arenaPush( arena, type, count )	( (type *) arenaAllocate( ( arena ), sizeof( type ) * ( count ), BUILDER_ALIGNOF( type ) ) )
+
+// Temporary stand-in until we have a proper growable array. There's no portable way to recover
+// "type" from an old pointer alone (no typeof in plain C11/C17, and MSVC/GCC/Clang don't agree on
+// any extension for it), so it has to be passed in explicitly like scratchPush's. oldCount is
+// needed too - scratch arenas only ever grow forward, so the new block has no idea how much of
+// the old one was live and memcpy needs a length. This leaks the old block, same as every other
+// scratch allocation - nothing here is individually freed until the whole arena rewinds.
+#define arenaRealloc( arena, old, type, oldCount, newCount ) \
+	( (type *) memcpy( arenaPush( ( arena ), type, ( newCount ) ), ( old ), sizeof( type ) * (	size_t ) ( oldCount ) ) )
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN 1
@@ -154,21 +362,11 @@ int		Build( BuilderOptions *options );
 #endif
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
 
 #ifdef __linux__
 #include <ctype.h>
-#endif
-
-#ifndef BUILDER_ASSERT
-#include <assert.h>
-#define BUILDER_ASSERT assert
-#endif
-
-#ifndef BUILDER_COUNT_OF
-#define BUILDER_COUNT_OF( array )	( sizeof( array ) / sizeof( array[0] ) )
 #endif
 
 #if defined( _WIN32 )
@@ -217,8 +415,7 @@ static bool Builder_PathHasFileExtension( const char *path, const char *extensio
 #endif
 }
 
-// TODO: DM: 07/08/2026: replace malloc calls with a custom "Alloc()" function ptr that users can override themselves
-static char *Builder_FormatString( const char *fmt, ... ) {
+static char *Builder_FormatString( arena_t *arena, const char *fmt, ... ) {
 	va_list args;
 	va_start( args, fmt );
 
@@ -228,7 +425,7 @@ static char *Builder_FormatString( const char *fmt, ... ) {
 	int length = vsnprintf( NULL, 0, fmt, args );
 	va_end( args );
 
-	char *result = (char *) malloc( (size_t) length + 1 );
+	char *result = arenaPush( arena, char, (uint64_t) length + 1 );
 	vsnprintf( result, (size_t) length + 1, fmt, argsCopy );
 	va_end( argsCopy );
 
@@ -302,31 +499,16 @@ typedef struct stringBuilder_t {
 	stringBuilderBuffer_t	*tail;
 } stringBuilder_t;
 
-static void StringBuilder_Destroy( stringBuilder_t *builder ) {
-	stringBuilderBuffer_t *current = builder->head;
 
-	while ( current ) {
-		stringBuilderBuffer_t *next = current->next;
-
-		free( current->data );
-		free( current );
-
-		current = next;
-	}
-
-	builder->head = NULL;
-	builder->tail = NULL;
-}
-
-// TODO: DM: 30/07/2026: replace malloc calls with a custom "Alloc()" function ptr that users can override themselves
-static void StringBuilder_Appendf( stringBuilder_t *builder, const char *fmt, ... ) {
+static void StringBuilder_Appendf( arena_t *arena, stringBuilder_t *builder, const char *fmt, ... ) {
+	BUILDER_ASSERT( arena );
 	BUILDER_ASSERT( builder );
 	BUILDER_ASSERT( fmt );
 
 	va_list args;
 	va_start( args, fmt );
 
-	stringBuilderBuffer_t *buffer = (stringBuilderBuffer_t *) malloc( sizeof( stringBuilderBuffer_t ) );
+	stringBuilderBuffer_t *buffer = arenaPush( arena, stringBuilderBuffer_t, 1 );
 	memset( buffer, 0, sizeof( stringBuilderBuffer_t ) );
 
 	va_list argsCopy;
@@ -334,7 +516,7 @@ static void StringBuilder_Appendf( stringBuilder_t *builder, const char *fmt, ..
 
 	buffer->length = (uint32_t) vsnprintf( NULL, 0, fmt, args );
 
-	buffer->data = (char *) malloc( buffer->length + 1 );
+	buffer->data = arenaPush( arena, char, buffer->length + 1 );
 	vsnprintf( buffer->data, buffer->length + 1, fmt, argsCopy );
 	va_end( argsCopy );
 	buffer->data[buffer->length] = 0;
@@ -351,7 +533,10 @@ static void StringBuilder_Appendf( stringBuilder_t *builder, const char *fmt, ..
 	va_end( args );
 }
 
-static char *StringBuilder_ToString( stringBuilder_t *builder ) {
+static char *StringBuilder_ToString( arena_t *arena, stringBuilder_t *builder ) {
+	BUILDER_ASSERT( arena );
+	BUILDER_ASSERT( builder );
+
 	char *result = NULL;
 	uint64_t totalLength = 0;
 	uint64_t offset = 0;
@@ -370,7 +555,7 @@ static char *StringBuilder_ToString( stringBuilder_t *builder ) {
 
 	totalLength += 1;
 
-	result = (char *) malloc( totalLength * sizeof( char ) );
+	result = arenaPush( arena, char, totalLength );
 
 	current = builder->head;
 
@@ -440,8 +625,8 @@ static bool Builder_CreateFolderIfItDoesntExist( const char *path ) {
 	}
 
 	size_t pathLength = strlen( path );
-
-	char *pathCopy = (char *) malloc( pathLength + 1 );
+	scratch_t scratch = scratchGet( NULL );
+	char *pathCopy = arenaPush( scratch.arena, char, pathLength + 1 );
 	memcpy( pathCopy, path, pathLength + 1 );
 
 	bool success = true;
@@ -472,7 +657,7 @@ static bool Builder_CreateFolderIfItDoesntExist( const char *path ) {
 		pathCopy[charIndex] = c;
 	}
 
-	free( pathCopy );
+	scratchRewind( &scratch );
 
 	return success;
 }
@@ -518,40 +703,48 @@ typedef struct builderConfigAncestry_t {
 	uint32_t	capacity;
 } builderConfigAncestry_t;
 
-static void Builder_ConfigStackPush( builderConfigAncestry_t *stack, BuildConfig *config ) {
+static void Builder_ConfigStackPush( arena_t *arena, builderConfigAncestry_t *stack, BuildConfig *config ) {
 	if ( stack->count == stack->capacity ) {
-		stack->capacity = stack->capacity ? stack->capacity * 2 : 8;
-		stack->items = (BuildConfig **) realloc( stack->items, stack->capacity * sizeof( BuildConfig * ) );
+		uint32_t newCapacity = stack->capacity ? stack->capacity * 2 : 8;
+
+		// stack->count (not the old capacity) - anything between count and capacity was never written
+		stack->items = stack->capacity
+			? arenaRealloc( arena, stack->items, BuildConfig *, stack->count, newCapacity )
+			: arenaPush( arena, BuildConfig *, newCapacity );
+
+		stack->capacity = newCapacity;
 	}
 
 	stack->items[stack->count++] = config;
 }
 
-static void AddBuildConfigInternal( BuilderOptions *options, BuildConfig *config, builderConfigAncestry_t *ancestry, BuildConfig **outConfigs, uint32_t *outConfigsCount ) {
+// scratch backs ancestry->items - its lifetime is exactly one AddBuildConfig() call (see AddBuildConfig() below,
+// which gets it and rewinds it), so every function that touches ancestry takes it too, as the first argument.
+// scratch and ancestry are NULL together - Build()'s second-pass call further down needs neither.
+static void AddBuildConfigInternal( arena_t *arena, BuilderOptions *options, BuildConfig *config, builderConfigAncestry_t *ancestry, BuildConfig **outConfigs, uint32_t *outConfigsCount ) {
 	// if no ancestry then dont do circular dependency checking
 	if ( ancestry ) {
 		for ( uint32_t ancestorIndex = 0; ancestorIndex < ancestry->count; ancestorIndex++ ) {
 			if ( ancestry->items[ancestorIndex] == config ) {
-				stringBuilder_t cycle = {};
+				//Throwaway scratch; we're about to exit
+				scratch_t errorScratch = scratchGet( NULL );
+				stringBuilder_t cycle = {0};
 
 				for ( uint32_t cycleIndex = ancestorIndex; cycleIndex < ancestry->count; cycleIndex++ ) {
 					const char *cycleConfigName = ancestry->items[cycleIndex]->name;
-					StringBuilder_Appendf( &cycle, "%s -> ", cycleConfigName ? cycleConfigName : "(unnamed config)" );
+					StringBuilder_Appendf( errorScratch.arena, &cycle, "%s -> ", cycleConfigName ? cycleConfigName : "(unnamed config)" );
 				}
 
-				StringBuilder_Appendf( &cycle, "%s", config->name ? config->name : "(unnamed config)" );
+				StringBuilder_Appendf( errorScratch.arena, &cycle, "%s", config->name ? config->name : "(unnamed config)" );
 
-				char *cycleString = StringBuilder_ToString( &cycle );
+				char *cycleString = StringBuilder_ToString( errorScratch.arena, &cycle );
 				Builder_Error( "Cyclic BuildConfig::dependsOn detected: %s\n", cycleString );
-				free( cycleString );
-
-				StringBuilder_Destroy( &cycle );
 
 				exit( 1 );
 			}
 		}
 
-		Builder_ConfigStackPush( ancestry, config );
+		Builder_ConfigStackPush( arena, ancestry, config );
 	}
 
 	// register dependencies first so they show up (and get built) ahead of the config that needs them
@@ -559,7 +752,7 @@ static void AddBuildConfigInternal( BuilderOptions *options, BuildConfig *config
 		BuildConfig **dependency = config->dependsOn;
 
 		while ( dependency && *dependency ) {
-			AddBuildConfigInternal( options, *dependency, ancestry, outConfigs, outConfigsCount );
+			AddBuildConfigInternal( arena, options, *dependency, ancestry, outConfigs, outConfigsCount );
 
 			dependency++;
 		}
@@ -577,7 +770,15 @@ static void AddBuildConfigInternal( BuilderOptions *options, BuildConfig *config
 		}
 	}
 
-	*outConfigs = (BuildConfig *) realloc( *outConfigs, ++(*outConfigsCount) * sizeof( BuildConfig ) );
+	// *outConfigs has to outlive this whole call chain - it can't share an arena with results, which gets rewound
+	// (and would take it down too) the moment the top-level AddBuildConfig() call returns. Excluding arena here
+	// is what guarantees that.
+	scratch_t configsScratch = scratchGet( arena );
+
+	*outConfigs = *outConfigsCount
+		? arenaRealloc( configsScratch.arena, *outConfigs, BuildConfig, *outConfigsCount, *outConfigsCount + 1 )
+		: arenaPush( configsScratch.arena, BuildConfig, 1 );
+	( *outConfigsCount )++;
 
 	BuildConfig *dst = &( *outConfigs )[(*outConfigsCount) - 1];
 
@@ -585,14 +786,15 @@ static void AddBuildConfigInternal( BuilderOptions *options, BuildConfig *config
 }
 
 void AddBuildConfig( BuilderOptions *options, BuildConfig *config ) {
-	builderConfigAncestry_t ancestry = {};
+	scratch_t scratch = scratchGet( NULL );
+	builderConfigAncestry_t ancestry = {0};
 
-	AddBuildConfigInternal( options, config, &ancestry, &options->configs, &options->configsCount );
+	AddBuildConfigInternal( scratch.arena, options, config, &ancestry, &options->configs, &options->configsCount );
 
-	free( ancestry.items );
+	scratchRewind( &scratch );
 }
 
-static int32_t Builder_RunProcess( const char *processAndArgs, char **outCapturedOutput ) {
+static int32_t Builder_RunProcess( arena_t* results, const char *processAndArgs, char **outCapturedOutput ) {
 #if defined( _WIN32 )
 	SECURITY_ATTRIBUTES secAttr = { sizeof( SECURITY_ATTRIBUTES ), NULL, TRUE };
 
@@ -636,27 +838,32 @@ static int32_t Builder_RunProcess( const char *processAndArgs, char **outCapture
 		return 1;
 	}
 
-	char buffer[1024] = {};
+	char buffer[1024] = {0};
 	DWORD bytesRead = 0;
 	BOOL read = true;
 
-	stringBuilder_t capturedOutput = {};
+	stringBuilder_t capturedOutput = {0};
+
+	// the builder's own buffers are throwaway, so they go somewhere other than the scratch the caller wants the result in
+	scratch_t temporaryScratch = scratchGet( results );
 
 	while ( ( read = ReadFile( stdoutRead, buffer, sizeof( buffer ) - 1, &bytesRead, NULL ) ) && bytesRead != 0 ) {
 		buffer[bytesRead] = 0;
 
 		if ( outCapturedOutput ) {
-			StringBuilder_Appendf( &capturedOutput, "%s", buffer );
+			StringBuilder_Appendf( temporaryScratch.arena, &capturedOutput, "%s", buffer );
 		} else {
 			printf( "%s", buffer );
 		}
 	}
 
 	if ( outCapturedOutput ) {
-		*outCapturedOutput = StringBuilder_ToString( &capturedOutput );
+		BUILDER_ASSERT( results && "capturing output needs an arena to put the result in" );
+
+		*outCapturedOutput = StringBuilder_ToString( results, &capturedOutput );
 	}
 
-	StringBuilder_Destroy( &capturedOutput );
+	scratchRewind( &temporaryScratch );
 
 	if ( !read ) {
 		DWORD lastError = GetLastError();
@@ -745,11 +952,14 @@ static int32_t Builder_RunProcess( const char *processAndArgs, char **outCapture
 
 	stringBuilder_t capturedOutput = {};
 
+	// the builder's own buffers are throwaway, so they go somewhere other than the scratch the caller wants the result in
+	scratch_t temporaryScratch = scratchGet( results );
+
 	while ( ( bytesRead = read( stdoutPipe[0], buffer, sizeof( buffer ) - 1 ) ) > 0 ) {
 		buffer[bytesRead] = 0;
 
 		if ( outCapturedOutput ) {
-			StringBuilder_Appendf( &capturedOutput, "%s", buffer );
+			StringBuilder_Appendf( temporaryScratch.arena, &capturedOutput, "%s", buffer );
 		} else {
 			printf( "%s", buffer );
 		}
@@ -763,10 +973,12 @@ static int32_t Builder_RunProcess( const char *processAndArgs, char **outCapture
 	}
 
 	if ( outCapturedOutput ) {
-		*outCapturedOutput = StringBuilder_ToString( &capturedOutput );
+		BUILDER_ASSERT( results && "capturing output needs an arena to put the result in" );
+
+		*outCapturedOutput = StringBuilder_ToString( results, &capturedOutput );
 	}
 
-	StringBuilder_Destroy( &capturedOutput );
+	scratchRewind( &temporaryScratch );
 
 	if ( close( stdoutPipe[0] ) == -1 ) {
 		err = errno;
@@ -803,19 +1015,18 @@ static int32_t Builder_RunProcess( const char *processAndArgs, char **outCapture
 // CALL THE MACRO VERSION INSTEAD
 static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sourceFile ) {
 	const char *binaryPath = argv[0];
-
+	scratch_t scratch = scratchGet( NULL );
 	// we need the exe filename on windows to end with ".exe"
 	// otherwise the file will fail to be found
 #ifdef _WIN32
 	if ( !Builder_PathHasFileExtension( binaryPath, ".exe" ) ) {
-		binaryPath = Builder_FormatString( "%s.exe", argv[0] );
+		binaryPath = Builder_FormatString( scratch.arena, "%s.exe", argv[0] );
 	}
 
 	// if the old binary was left around from the previous build, clean it up now
 	{
-		char *oldBackupPath = Builder_FormatString( "%s.rebuild.old", binaryPath );
+		char *oldBackupPath = Builder_FormatString( scratch.arena, "%s.rebuild.old", binaryPath );
 		DeleteFile( oldBackupPath );
-		free( oldBackupPath );
 	}
 #endif
 
@@ -832,25 +1043,26 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 
 	if ( binaryExists && binaryTime >= sourceTime ) {
 		// already up to date, fall through and let main() continue as normal
+		scratchRewind( &scratch );
 		return;
 	}
 
 	printf( "'%s' is stale, rebuilding...\n", binaryPath );
 
-	stringBuilder_t tempPathBuilder = {};
-	StringBuilder_Appendf( &tempPathBuilder, "%s.rebuild.tmp", binaryPath );
-	const char *tempBinaryPath = StringBuilder_ToString( &tempPathBuilder );
+	stringBuilder_t tempPathBuilder = {0};
+	StringBuilder_Appendf( scratch.arena, &tempPathBuilder, "%s.rebuild.tmp", binaryPath );
+	const char *tempBinaryPath = StringBuilder_ToString( scratch.arena, &tempPathBuilder );
 
-	stringBuilder_t compileArgs = {};
-	StringBuilder_Appendf( &compileArgs, "clang " );
-	StringBuilder_Appendf( &compileArgs, "-o %s ", tempBinaryPath );
-	StringBuilder_Appendf( &compileArgs, "%s ", sourceFile );
+	stringBuilder_t compileArgs = {0};
+	StringBuilder_Appendf( scratch.arena, &compileArgs, "clang " );
+	StringBuilder_Appendf( scratch.arena, &compileArgs, "-o %s ", tempBinaryPath );
+	StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", sourceFile );
 
-	const char *compileCmd = StringBuilder_ToString( &compileArgs );
+	const char *compileCmd = StringBuilder_ToString( scratch.arena, &compileArgs );
 
 	printf( "%s\n", compileCmd );
 
-	if ( Builder_RunProcess( compileCmd, NULL ) != 0 ) {
+	if ( Builder_RunProcess( NULL, compileCmd, NULL ) != 0 ) {
 		Builder_Error( "failed to rebuild '%s'.\n", binaryPath );
 
 #if defined( _WIN32 )
@@ -871,9 +1083,9 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 	// a currently-running process cant MoveFileEx-replace its own on-disk image directly (fails with ERROR_ACCESS_DENIED)
 	// rename it out of the way first, then move the freshly built binary into the now-vacated name
 	// the running image stays mapped and executing under its backup name until this process re-execs below
-	stringBuilder_t backupPathBuilder = {};
-	StringBuilder_Appendf( &backupPathBuilder, "%s.rebuild.old", binaryPath );
-	const char *backupBinaryPath = StringBuilder_ToString( &backupPathBuilder );
+	stringBuilder_t backupPathBuilder = {0};
+	StringBuilder_Appendf( scratch.arena, &backupPathBuilder, "%s.rebuild.old", binaryPath );
+	const char *backupBinaryPath = StringBuilder_ToString( scratch.arena, &backupPathBuilder );
 
 	if ( !MoveFileEx( binaryPath, backupBinaryPath, MOVEFILE_REPLACE_EXISTING ) ) {
 		Builder_Error( "Failed to move currently-running '%s' out of the way: 0x%X\n", binaryPath, GetLastError() );
@@ -895,18 +1107,16 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 	// re-exec the freshly rebuilt binary with the original argv
 	// never fall through to running the (now stale-in-memory) code of the process currently executing
 #if defined( _WIN32 )
-	stringBuilder_t execArgs = {};
-	StringBuilder_Appendf( &execArgs, "\"%s\" ", binaryPath );
+	stringBuilder_t execArgs = {0};
+	StringBuilder_Appendf( scratch.arena, &execArgs, "\"%s\" ", binaryPath );
 
 	for ( int argIndex = 1; argIndex < argc; argIndex++ ) {
-		StringBuilder_Appendf( &execArgs, "\"%s\" ", argv[argIndex] );
+		StringBuilder_Appendf( scratch.arena, &execArgs, "\"%s\" ", argv[argIndex] );
 	}
 
-	const char *execCmd = StringBuilder_ToString( &execArgs );
+	const char *execCmd = StringBuilder_ToString( scratch.arena, &execArgs );
 
-	int32_t exitCode = Builder_RunProcess( execCmd, NULL );
-
-	free( (void*)execCmd );
+	int32_t exitCode = Builder_RunProcess( NULL, execCmd, NULL );
 
 	exit( exitCode );
 #elif defined( __linux__ )
@@ -917,6 +1127,7 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 		exit( 1 );
 	}
 #endif
+	scratchRewind( &scratch );
 }
 
 static int ShowUsage( const int exitCode ) {
@@ -952,18 +1163,18 @@ static const char *Builder_GetFileExtensionFromBinaryType( const BinaryType bina
 	return NULL;
 }
 
-static void Builder_AppendBinaryPath( stringBuilder_t *sb, const BuildConfig *config ) {
+static void Builder_AppendBinaryPath( arena_t *arena, stringBuilder_t *sb, const BuildConfig *config ) {
 	if ( config->binaryFolder ) {
-		StringBuilder_Appendf( sb, "%s%c", config->binaryFolder, BUILDER_PATH_SEPARATOR );
+		StringBuilder_Appendf( arena, sb,"%s%c", config->binaryFolder, BUILDER_PATH_SEPARATOR );
 	}
 
-	StringBuilder_Appendf( sb, "%s%s ", config->binaryName, Builder_GetFileExtensionFromBinaryType( config->binaryType ) );
+	StringBuilder_Appendf( arena, sb, "%s%s ", config->binaryName, Builder_GetFileExtensionFromBinaryType( config->binaryType ) );
 }
 
 // intermediateFolder may be NULL, in which case the intermediate file is placed alongside sourceFile instead
-static void Builder_AppendIntermediateFilePath( stringBuilder_t *sb, const char *intermediateFolder, const char *sourceFile ) {
+static void Builder_AppendIntermediateFilePath( arena_t *arena, stringBuilder_t *sb, const char *intermediateFolder, const char *sourceFile ) {
 	if ( !intermediateFolder ) {
-		StringBuilder_Appendf( sb, "%s.o ", sourceFile );
+		StringBuilder_Appendf( arena, sb,"%s.o ", sourceFile );
 		return;
 	}
 
@@ -978,7 +1189,7 @@ static void Builder_AppendIntermediateFilePath( stringBuilder_t *sb, const char 
 	const char *extension = strrchr( fileName, '.' );
 	size_t fileNameLength = extension ? (size_t) ( extension - fileName ) : strlen( fileName );
 
-	StringBuilder_Appendf( sb, "%s%c%.*s.o ", intermediateFolder, BUILDER_PATH_SEPARATOR, (int) fileNameLength, fileName );
+	StringBuilder_Appendf( arena, sb,"%s%c%.*s.o ", intermediateFolder, BUILDER_PATH_SEPARATOR, (int) fileNameLength, fileName );
 }
 
 typedef struct {
@@ -989,7 +1200,9 @@ typedef struct {
 	const char	*fullFilename;
 } fileInfo_t;
 
-typedef void ( *builderFileVisitCallback_t )( fileInfo_t *fileInfo, void *data );
+// resultsScratch is for anything the callback allocates that has to outlive the walk.  It's optional - pass NULL if the
+// callback doesn't allocate.  Builder_VisitFiles() never allocates from it itself.
+typedef void ( *builderFileVisitCallback_t )( arena_t *resultsArena, fileInfo_t *fileInfo, void *data );
 
 typedef enum {
 	BUILDER_FILE_VISIT_FILES		= 1 << 0,
@@ -998,13 +1211,16 @@ typedef enum {
 } builderFileVisitFlagBits_t;
 typedef uint32_t builderFileVisitFlags_t;
 
-static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t visitFlags, builderFileVisitCallback_t callback, void *data ) {
+static bool Builder_VisitFiles( arena_t *results, const char *path, const builderFileVisitFlags_t visitFlags, builderFileVisitCallback_t callback, void *data ) {
 	BUILDER_ASSERT( path );
 	BUILDER_ASSERT( callback );
 
+	// the paths we build to walk the tree are ours alone - only the callback's allocations outlive us, and those go on resultsScratch
+	scratch_t scratch = scratchGet( results );
+
 	// TODO: DM: 05/08/2026: Tom's chunked array
 	uint32_t directoriesCount = 0;
-	const char **directories = (const char **)malloc( 1 * sizeof( char * ) );
+	const char **directories = arenaPush( scratch.arena, const char *, 1 );
 	directories[directoriesCount++] = path;
 
 	uint32_t dirIndex = 0;
@@ -1018,12 +1234,13 @@ static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t 
 		bool dirHasTrailingSeparator = dirLength > 0 && ( dir[dirLength - 1] == '\\' || dir[dirLength - 1] == '/' );
 
 #if defined( _WIN32 )
-		char *searchPath = Builder_FormatString( dirHasTrailingSeparator ? "%s*" : "%s\\*", dir );
+		char *searchPath = Builder_FormatString( scratch.arena, dirHasTrailingSeparator ? "%s*" : "%s\\*", dir );
 
 		WIN32_FIND_DATA findData = {};
 		HANDLE handle = FindFirstFile( searchPath, &findData );
 
 		if ( handle == INVALID_HANDLE_VALUE ) {
+			scratchRewind( &scratch );
 			return false;
 		}
 
@@ -1033,22 +1250,23 @@ static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t 
 				.lastWriteTime	= ( (uint64_t) findData.ftLastWriteTime.dwHighDateTime << 32 ) | findData.ftLastWriteTime.dwLowDateTime,
 				.isDirectory	= (bool) ( findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ),
 				.filename		= findData.cFileName,
-				.fullFilename	= Builder_FormatString( dirHasTrailingSeparator ? "%s%s" : "%s\\%s", dir, findData.cFileName ),
+				.fullFilename	= Builder_FormatString( scratch.arena, dirHasTrailingSeparator ? "%s%s" : "%s\\%s", dir, findData.cFileName ),
 			};
 
 			if ( fileInfo.isDirectory ) {
 				if ( !Builder_StringEquals( findData.cFileName, "." ) && !Builder_StringEquals( findData.cFileName, ".." ) ) {
 					if ( visitFlags & BUILDER_FILE_VISIT_FOLDERS ) {
-						callback( &fileInfo, data );
+						callback( results, &fileInfo, data );
 					}
 
 					if ( visitFlags & BUILDER_FILE_VISIT_RECURSIVE ) {
-						directories = (const char **)realloc( directories, ++directoriesCount * sizeof( char * ) );
-						directories[directoriesCount - 1] = fileInfo.fullFilename;
+						directories = arenaRealloc( scratch.arena, directories, const char *, directoriesCount, directoriesCount + 1 );
+						directories[directoriesCount] = fileInfo.fullFilename;
+						directoriesCount++;
 					}
 				}
 			} else if ( visitFlags & BUILDER_FILE_VISIT_FILES ) {
-				callback( &fileInfo, data );
+				callback( results, &fileInfo, data );
 			}
 
 			if ( !FindNextFile( handle, &findData ) ) {
@@ -1057,6 +1275,7 @@ static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t 
 		}
 
 		if ( !FindClose( handle ) ) {
+			scratchRewind( &scratch );
 			return false;
 		}
 #elif defined( __linux__ )
@@ -1065,6 +1284,7 @@ static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t 
 
 		if ( !handle ) {
 			Builder_Error( "Failed to open folder \"%s\": %s\n", dir, strerror( err ) );
+			scratchRewind( &scratch );
 			return false;
 		}
 
@@ -1075,13 +1295,14 @@ static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t 
 				continue;
 			}
 
-			char *fullFilename = Builder_FormatString( dirHasTrailingSeparator ? "%s%s" : "%s/%s", dir, entry->d_name );
+			char *fullFilename = Builder_FormatString( scratch.arena, dirHasTrailingSeparator ? "%s%s" : "%s/%s", dir, entry->d_name );
 
 			struct stat fileStat = {};
 
 			if ( stat( fullFilename, &fileStat ) != 0 ) {
 				err = errno;
 				Builder_Error( "Failed to stat \"%s\": %s\n", fullFilename, strerror( err ) );
+				scratchRewind( &scratch );
 				return false;
 			}
 
@@ -1095,28 +1316,29 @@ static bool Builder_VisitFiles( const char *path, const builderFileVisitFlags_t 
 
 			if ( fileInfo.isDirectory ) {
 				if ( visitFlags & BUILDER_FILE_VISIT_FOLDERS ) {
-					callback( &fileInfo, data );
+					callback( results, &fileInfo, data );
 				}
 
 				if ( visitFlags & BUILDER_FILE_VISIT_RECURSIVE ) {
-					directories = realloc( directories, ++directoriesCount * sizeof( char * ) );
-					directories[directoriesCount - 1] = fileInfo.fullFilename;
+					directories = scratchRealloc( &scratch, directories, const char *, directoriesCount, directoriesCount + 1 );
+					directories[directoriesCount] = fileInfo.fullFilename;
+					directoriesCount++;
 				}
 			} else if ( visitFlags & BUILDER_FILE_VISIT_FILES ) {
-				callback( &fileInfo, data );
+				callback( results, &fileInfo, data );
 			}
 		}
 
 		if ( closedir( handle ) != 0 ) {
 			err = errno;
 			Builder_Error( "Failed to close folder \"%s\": %s\n", dir, strerror( err ) );
+			scratchRewind( &scratch );
 			return false;
 		}
 #endif
 	}
 
-	free( directories );
-	directories = NULL;
+	scratchRewind( &scratch );
 
 	return true;
 }
@@ -1156,7 +1378,7 @@ static void Builder_AddGlobbedFile( builderFileGlobResult_t *fileResults, const 
 }
 
 // remember to free sliceArray.data
-static builderStringSliceArray_t Builder_SliceFilePath( const char *filePath ) {
+static builderStringSliceArray_t Builder_SliceFilePath( arena_t* results, const char *filePath ) {
 	const char *pathIterator = filePath; 
 	builderStringSliceArray_t sliceArray = {
 		.data = NULL,
@@ -1183,8 +1405,7 @@ static builderStringSliceArray_t Builder_SliceFilePath( const char *filePath ) {
 		}
 	}
 
-	// I don't like that we are somewhat hiding this allocation
-	sliceArray.data = (builderStringSlice_t *) malloc( numSlices * sizeof( builderStringSlice_t ) );
+	sliceArray.data = arenaPush(results, builderStringSlice_t, numSlices);
 	sliceArray.count = numSlices;
 
 	pathIterator = filePath;
@@ -1286,7 +1507,7 @@ static bool Builder_PathMatchesPattern( const builderStringSliceArray_t *pattern
 	return inRecursiveGlob;
 }
 
-static void Builder_GlobVisitCallback( fileInfo_t *fileInfo, void *data ) {
+static void Builder_GlobVisitCallback( arena_t *resultsArena, fileInfo_t *fileInfo, void *data ) {
 	builderGlobVisitCallbackData_t *callbackData = (builderGlobVisitCallbackData_t *)data;
 
 	uint32_t filenameLen = strnlen( fileInfo->filename, 255 ); // filename length maxes here I think?
@@ -1300,24 +1521,29 @@ static void Builder_GlobVisitCallback( fileInfo_t *fileInfo, void *data ) {
 	// we could do a heavyweight verification that the search path matches here,
 	// but really it should match from the call sites
 	const char* matchStart = fileInfo->fullFilename + callbackData->searchPathLen;
-	const builderStringSliceArray_t pathSlices = Builder_SliceFilePath( matchStart );
+	scratch_t scratch = scratchGet( resultsArena );
+	const builderStringSliceArray_t pathSlices = Builder_SliceFilePath( scratch.arena, matchStart );
 
 	if ( Builder_PathMatchesPattern( &callbackData->patternSlices, &pathSlices ) ) {
-		Builder_AddGlobbedFile( callbackData->globResults, fileInfo->fullFilename ); // Do we need to copy the filename string?
+		// fileInfo->fullFilename lives on Builder_VisitFiles' internal scratch and won't survive past this
+		// call, so it has to be copied into resultsArena to outlive the walk.
+		const char *fullFilename = Builder_FormatString( resultsArena, "%s", fileInfo->fullFilename );
+		Builder_AddGlobbedFile( callbackData->globResults, fullFilename );
 	}
 
-	free( pathSlices.data );
+	scratchRewind( &scratch);
 }
 
-static builderFileGlobResult_t Builder_GlobFiles( const char **globPatterns ) {
+static builderFileGlobResult_t Builder_GlobFiles( arena_t *resultsArena, const char **globPatterns ) {
 	builderFileGlobResult_t globResult = {
 		.files = NULL,
 		.count = 0,
 		.capacity = 0
 	};
-	
+
+	scratch_t scratch = scratchGet( resultsArena );
 	// setup re-usable search path allocation
-	char *const searchPath = (char *const) malloc( ( MAX_PATH + 1 ) * sizeof( const char ) );
+	char *const searchPath = arenaPush( scratch.arena, char, (MAX_PATH + 1));
 	while ( globPatterns && *globPatterns) {
 		// start by copying and seeking to find if there is an asterisk, and then rewind to just after the preceding slash (or start if it is say **/*.cpp)
 		const char* pattern = *globPatterns;
@@ -1353,7 +1579,7 @@ static builderFileGlobResult_t Builder_GlobFiles( const char **globPatterns ) {
 		searchPath[globPathLen] = '\0';
 		
 		builderGlobVisitCallbackData_t callbackData = {
-			.patternSlices = Builder_SliceFilePath(pattern),
+			.patternSlices = Builder_SliceFilePath( scratch.arena, pattern),
 			.globResults = &globResult,
 			.searchPathLen = globPathLen
 		};
@@ -1362,15 +1588,14 @@ static builderFileGlobResult_t Builder_GlobFiles( const char **globPatterns ) {
 		if (callbackData.patternSlices.count > 1) { // we are matching folders too
 			visitFlags |= BUILDER_FILE_VISIT_RECURSIVE;
 		}
-		if ( !Builder_VisitFiles( searchPath, visitFlags, &Builder_GlobVisitCallback, &callbackData ) ) {
+		if ( !Builder_VisitFiles( resultsArena, searchPath, visitFlags, &Builder_GlobVisitCallback, &callbackData ) ) {
 			printf( "Warning: Found no matches for pattern %s, at search path %s.\n", *globPatterns, searchPath );
 		}
-
-		free( callbackData.patternSlices.data );
+		
 		++globPatterns;
 	}
 
-	free( searchPath );
+	scratchRewind( &scratch);
 	return globResult;
 }
 
@@ -1465,17 +1690,19 @@ typedef struct {
 	uint32_t					versionsCount;
 } builderFoundWindowsSDKVersionData_t;
 
-static void OnWindowsSDKVersionFound( fileInfo_t *fileInfo, void *data ) {
+static void OnWindowsSDKVersionFound( arena_t *results, fileInfo_t *fileInfo, void *data ) {
 	builderFoundWindowsSDKVersionData_t *foundData = (builderFoundWindowsSDKVersionData_t *) data;
 
-	builderWindowsSDKVersion_t version = {};
+	builderWindowsSDKVersion_t version = {0};
 
 	if ( sscanf( fileInfo->filename, "%d.%d.%d.%d", &version.v0, &version.v1, &version.v2, &version.v3 ) != 4 ) {
 		return;
 	}
 
-	foundData->versions = (builderWindowsSDKVersion_t *) realloc( foundData->versions, ( ++foundData->versionsCount ) * sizeof( builderWindowsSDKVersion_t ) );
-	foundData->versions[foundData->versionsCount - 1] = version;
+	foundData->versions = foundData->versionsCount
+		? arenaRealloc( results, foundData->versions, builderWindowsSDKVersion_t, foundData->versionsCount, foundData->versionsCount + 1 )
+		: arenaPush( results, builderWindowsSDKVersion_t, 1 );
+	foundData->versions[foundData->versionsCount++] = version;
 }
 
 static int Builder_CompareWindowsSDKVersions( const void *a, const void *b ) {
@@ -1489,7 +1716,8 @@ static int Builder_CompareWindowsSDKVersions( const void *a, const void *b ) {
 	return versionB->v3 - versionA->v3;
 }
 
-static bool Builder_GetWindowsSDKInstall( builderWindowsSDKInstall_t *outSDK ) {
+// The paths this hands back via outSDK live for the whole build, so they go on the caller's scratch.
+static bool Builder_GetWindowsSDKInstall( arena_t *results, builderWindowsSDKInstall_t *outSDK ) {
 	BUILDER_ASSERT( outSDK );
 
 	bool success = false;
@@ -1520,7 +1748,10 @@ static bool Builder_GetWindowsSDKInstall( builderWindowsSDKInstall_t *outSDK ) {
 
 	if ( status == ERROR_SUCCESS ) {
 		// valueStrLength from RegQueryValueExA includes the null terminator for REG_SZ strings
-		char *windowsSDKRootStr = (char *) malloc( windowsSDKRootLength * sizeof( char ) );
+		// snapshot resultsScratch first - if this doesn't pan out (wrong type, or the read fails) we rewind
+		// back to here rather than leaving the failed attempt sat on it
+		arenaRewindSpot_t attempt = arenaTell( results );
+		char *windowsSDKRootStr = arenaPush( results, char, windowsSDKRootLength );
 
 		DWORD windowsSDKRootType = 0;
 
@@ -1529,7 +1760,7 @@ static bool Builder_GetWindowsSDKInstall( builderWindowsSDKInstall_t *outSDK ) {
 		if ( status == ERROR_SUCCESS && windowsSDKRootType == REG_SZ ) {
 			windowsSDKRoot = windowsSDKRootStr;
 		} else {
-			free( windowsSDKRootStr );
+			arenaRewind( results, &attempt );
 		}
 	}
 
@@ -1546,16 +1777,16 @@ static bool Builder_GetWindowsSDKInstall( builderWindowsSDKInstall_t *outSDK ) {
 	}
 
 	{
-		char *windowsSDKLibFolder = Builder_FormatString( "%sLib", windowsSDKRoot );
+		char *windowsSDKLibFolder = Builder_FormatString( results, "%sLib", windowsSDKRoot );
 
 		builderFoundWindowsSDKVersionData_t foundData = {
 			.versions		= versions,
 			.versionsCount	= versionsCount,
 		};
 
-		bool visited = Builder_VisitFiles( windowsSDKLibFolder, BUILDER_FILE_VISIT_FOLDERS, OnWindowsSDKVersionFound, &foundData );
+		// resultsScratch, not a local scratch - foundData.versions has to survive past this block, down to the qsort() below
+		bool visited = Builder_VisitFiles( results, windowsSDKLibFolder, BUILDER_FILE_VISIT_FOLDERS, OnWindowsSDKVersionFound, &foundData );
 
-		free( windowsSDKLibFolder );
 
 		versions = foundData.versions;
 		versionsCount = foundData.versionsCount;
@@ -1578,14 +1809,18 @@ static bool Builder_GetWindowsSDKInstall( builderWindowsSDKInstall_t *outSDK ) {
 	for ( uint32_t versionIndex = 0; versionIndex < versionsCount; versionIndex++ ) {
 		builderWindowsSDKVersion_t *version = &versions[versionIndex];
 
-		char *ucrtIncludeFolder = Builder_FormatString( "%sinclude\\%d.%d.%d.%d\\ucrt", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
-		char *umIncludeFolder = Builder_FormatString( "%sinclude\\%d.%d.%d.%d\\um", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
-		char *sharedIncludeFolder = Builder_FormatString( "%sinclude\\%d.%d.%d.%d\\shared", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
-		char *ucrtLibFolder = Builder_FormatString( "%sLib\\%d.%d.%d.%d\\ucrt\\x64", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
-		char *umLibFolder = Builder_FormatString( "%sLib\\%d.%d.%d.%d\\um\\x64", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
+		// these go straight onto the results scratch because they're what we hand back if this version turns out to be the one.
+		// if it isn't, this marker lets us drop just this attempt without touching whatever the caller already had in there
+		arenaRewindSpot_t attempt = arenaTell( results );
+
+		char *ucrtIncludeFolder = Builder_FormatString( results, "%sinclude\\%d.%d.%d.%d\\ucrt", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
+		char *umIncludeFolder = Builder_FormatString( results, "%sinclude\\%d.%d.%d.%d\\um", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
+		char *sharedIncludeFolder = Builder_FormatString( results, "%sinclude\\%d.%d.%d.%d\\shared", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
+		char *ucrtLibFolder = Builder_FormatString( results, "%sLib\\%d.%d.%d.%d\\ucrt\\x64", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
+		char *umLibFolder = Builder_FormatString( results, "%sLib\\%d.%d.%d.%d\\um\\x64", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
 
 		uint32_t missingFoldersCount = 0;
-		const char *missingFolders[5] = {};
+		const char *missingFolders[5] = {0};
 
 		if ( !Builder_FolderExists( ucrtIncludeFolder ) ) {
 			missingFolders[missingFoldersCount++] = ucrtIncludeFolder;
@@ -1608,14 +1843,16 @@ static bool Builder_GetWindowsSDKInstall( builderWindowsSDKInstall_t *outSDK ) {
 		}
 
 		if ( missingFoldersCount > 0 ) {
-			stringBuilder_t sb = {};
-			StringBuilder_Appendf( &sb, "Version %d.%d.%d.%d of your Windows SDK installation is malformed because the following folder(s) could not be found:\n", version->v0, version->v1, version->v2, version->v3 );
+			scratch_t scratch = scratchGet( results );
+			stringBuilder_t sb = {0};
+
+			StringBuilder_Appendf( scratch.arena, &sb, "Version %d.%d.%d.%d of your Windows SDK installation is malformed because the following folder(s) could not be found:\n", version->v0, version->v1, version->v2, version->v3 );
 
 			for ( uint32_t missingFolderIndex = 0; missingFolderIndex < missingFoldersCount; missingFolderIndex++ ) {
-				StringBuilder_Appendf( &sb, " - %s\n", missingFolders[missingFolderIndex] );
+				StringBuilder_Appendf( scratch.arena, &sb, " - %s\n", missingFolders[missingFolderIndex] );
 			}
 
-			StringBuilder_Appendf( &sb, "You must have the following folders in your Windows SDK install:\n"
+			StringBuilder_Appendf( scratch.arena, &sb, "You must have the following folders in your Windows SDK install:\n"
 				"    include/<version>/ucrt\n"
 				"    include/<version>/um\n"
 				"    include/<version>/shared\n"
@@ -1623,19 +1860,15 @@ static bool Builder_GetWindowsSDKInstall( builderWindowsSDKInstall_t *outSDK ) {
 				"    Lib/<version>/um/x64\n"
 			);
 
-			StringBuilder_Appendf( &sb, "If you want to use this version of the Windows SDK specifically, you will need to fix this yourself.\n" );
+			StringBuilder_Appendf( scratch.arena, &sb, "If you want to use this version of the Windows SDK specifically, you will need to fix this yourself.\n" );
 
-			char *message = StringBuilder_ToString( &sb );
+			char *message = StringBuilder_ToString( scratch.arena, &sb );
 			Builder_Warning( "%s", message );
-			free( message );
 
-			StringBuilder_Destroy( &sb );
+			scratchRewind( &scratch );
 
-			free( ucrtIncludeFolder );
-			free( umIncludeFolder );
-			free( sharedIncludeFolder );
-			free( ucrtLibFolder );
-			free( umLibFolder );
+			// this version is no good, so drop the paths we speculatively built for it
+			arenaRewind( results, &attempt );
 
 			continue;
 		}
@@ -1677,24 +1910,29 @@ cleanup:
 }
 
 // MSVC toolset folders are named like "14.44.35207" - that's the only part of each entry we need to parse ourselves
-static void Builder_OnMSVCInstallFound( fileInfo_t *fileInfo, void *data ) {
+// the paths built here end up in the install we hand back, so they go on the caller's scratch
+static void Builder_OnMSVCInstallFound( arena_t *results, fileInfo_t *fileInfo, void *data ) {
+	BUILDER_ASSERT( results );
+
 	builderFoundMSVCInstallData_t *foundData = (builderFoundMSVCInstallData_t *) data;
 
-	builderMSVCVersion_t version = {};
+	builderMSVCVersion_t version = {0};
 
 	if ( sscanf( fileInfo->filename, "%d.%d.%d", &version.v0, &version.v1, &version.v2 ) != 3 ) {
 		return;
 	}
 
 	builderMSVCInstall_t install = {
-		.rootFolder		= Builder_FormatString( "%s", fileInfo->fullFilename ),
-		.includePath	= Builder_FormatString( "%s\\include", fileInfo->fullFilename ),
-		.libPath		= Builder_FormatString( "%s\\lib\\x64", fileInfo->fullFilename ),
+		.rootFolder		= Builder_FormatString( results, "%s", fileInfo->fullFilename ),
+		.includePath	= Builder_FormatString( results, "%s\\include", fileInfo->fullFilename ),
+		.libPath		= Builder_FormatString( results, "%s\\lib\\x64", fileInfo->fullFilename ),
 		.version		= version,
 	};
 
-	foundData->installs = (builderMSVCInstall_t *) realloc( foundData->installs, ( ++foundData->installsCount ) * sizeof( builderMSVCInstall_t ) );
-	foundData->installs[foundData->installsCount - 1] = install;
+	foundData->installs = foundData->installsCount
+		? arenaRealloc( results, foundData->installs, builderMSVCInstall_t, foundData->installsCount, foundData->installsCount + 1 )
+		: arenaPush( results, builderMSVCInstall_t, 1 );
+	foundData->installs[foundData->installsCount++] = install;
 }
 
 static bool Builder_MSVCNotInstalled( void ) {
@@ -1719,8 +1957,13 @@ static int Builder_CompareMSVCInstallVersions( const void *a, const void *b ) {
 
 // get all versions of MSVC
 // thanks to Microsoft we will be doing that in the most retarded way possible
-static bool Builder_GetMSVCInstall( builderMSVCInstall_t *outInstall ) {
+// The paths this hands back via outInstall live for the whole build, so they go on the caller's scratch.
+static bool Builder_GetMSVCInstall( arena_t *results, builderMSVCInstall_t *outInstall ) {
+	BUILDER_ASSERT( results );
 	BUILDER_ASSERT( outInstall );
+
+	// the VS install paths we search through are only needed while we're searching, so they don't go on the caller's scratch
+	scratch_t scratch = scratchGet( results );
 
 	bool success = false;
 
@@ -1800,7 +2043,7 @@ static bool Builder_GetMSVCInstall( builderMSVCInstall_t *outInstall ) {
 				goto cleanup;
 			}
 
-			visualStudioInstallationPath = (char *) malloc( ( (size_t) utf8Length + 1 ) * sizeof( char ) );
+			visualStudioInstallationPath = arenaPush( scratch.arena, char, (uint64_t) utf8Length + 1 );
 
 			int converted = WideCharToMultiByte( CP_UTF8, 0, visualStudioInstallationPathWide, (int) wideLength, visualStudioInstallationPath, utf8Length, NULL, NULL );
 
@@ -1816,26 +2059,21 @@ static bool Builder_GetMSVCInstall( builderMSVCInstall_t *outInstall ) {
 
 		SysFreeString( visualStudioInstallationPathWide );
 
-		char *msvcRootFolder = Builder_FormatString( "%s\\VC\\Tools\\MSVC", visualStudioInstallationPath );
-
-		free( visualStudioInstallationPath );
+		char *msvcRootFolder = Builder_FormatString( scratch.arena, "%s\\VC\\Tools\\MSVC", visualStudioInstallationPath );
 
 		builderFoundMSVCInstallData_t foundData = {
 			.installs		= foundMSVCInstalls,
 			.installsCount	= foundMSVCInstallsCount,
 		};
 
-		if ( !Builder_VisitFiles( msvcRootFolder, BUILDER_FILE_VISIT_FOLDERS, Builder_OnMSVCInstallFound, &foundData ) ) {
+		if ( !Builder_VisitFiles( results, msvcRootFolder, BUILDER_FILE_VISIT_FOLDERS, Builder_OnMSVCInstallFound, &foundData ) ) {
 			Builder_Error( "Failed to query for MSVC installation folders under \"%s\".\n", msvcRootFolder );
-			free( msvcRootFolder );
 			instance->vtable->Release( instance );
 			goto cleanup;
 		}
 
 		foundMSVCInstalls = foundData.installs;
 		foundMSVCInstallsCount = foundData.installsCount;
-
-		free( msvcRootFolder );
 
 		instance->vtable->Release( instance );
 
@@ -1869,26 +2107,26 @@ static bool Builder_GetMSVCInstall( builderMSVCInstall_t *outInstall ) {
 
 		if ( missingFoldersCount > 0 ) {
 			stringBuilder_t sb = {};
-			StringBuilder_Appendf( &sb, "Version %d.%d.%d of your MSVC installation is malformed because the following folder(s) could not be found:\n", install->version.v0, install->version.v1, install->version.v2 );
+
+			StringBuilder_Appendf( scratch.arena, &sb, "Version %d.%d.%d of your MSVC installation is malformed because the following folder(s) could not be found:\n", install->version.v0, install->version.v1, install->version.v2 );
 
 			for ( uint32_t missingFolderIndex = 0; missingFolderIndex < missingFoldersCount; missingFolderIndex++ ) {
-				StringBuilder_Appendf( &sb, " - %s\n", missingFolders[missingFolderIndex] );
+				StringBuilder_Appendf( scratch.arena, &sb, " - %s\n", missingFolders[missingFolderIndex] );
 			}
 
-			StringBuilder_Appendf( &sb, "You must have the following folders in your MSVC install:\n"
+			StringBuilder_Appendf( scratch.arena, &sb, "You must have the following folders in your MSVC install:\n"
 				"    %s\n"
 				"    %s\n"
 				, install->includePath
 				, install->libPath
 			);
 
-			StringBuilder_Appendf( &sb, "If you want to use this version of MSVC specifically, you will need to fix this yourself.\n" );
+			StringBuilder_Appendf( scratch.arena, &sb, "If you want to use this version of MSVC specifically, you will need to fix this yourself.\n" );
 
-			char *message = StringBuilder_ToString( &sb );
+			char *message = StringBuilder_ToString( scratch.arena, &sb );
 			Builder_Warning( "%s", message );
-			free( message );
 
-			StringBuilder_Destroy( &sb );
+			scratchRewind( &scratch );
 
 			continue;
 		}
@@ -1969,7 +2207,8 @@ static const char *Builder_GetOptimizationString_MSVC( const Optimization optimi
 	return NULL;
 }
 
-static char *Builder_ExtractVersionNumber( const char *text ) {
+// the version string it finds is handed back to the caller, so it goes on their scratch
+static char *Builder_ExtractVersionNumber( arena_t *results, const char *text ) {
 	for ( const char *c = text; *c; c++ ) {
 		if ( !isdigit( (unsigned char) *c ) ) {
 			continue;
@@ -1992,7 +2231,7 @@ static char *Builder_ExtractVersionNumber( const char *text ) {
 		}
 
 		if ( sawDot ) {
-			return Builder_FormatString( "%.*s", (int) ( end - start ), start );
+			return Builder_FormatString( results, "%.*s", (int) ( end - start ), start );
 		}
 
 		c = end - 1;
@@ -2076,40 +2315,43 @@ typedef struct builderCompileContext_t {
 static bool Builder_CompileSourceFile( const builderCompileContext_t *context, const char *sourceFile ) {
 	BuildConfig *config = context->config;
 
-	stringBuilder_t compileArgs = {};
-	StringBuilder_Appendf( &compileArgs, "\"%s\" ", context->compilerPath );
+	// this runs on the compile job threads, and the scratch arenas are thread_local, so each thread gets its own
+	scratch_t scratch = scratchGet( NULL );
+
+	stringBuilder_t compileArgs = {0};
+	StringBuilder_Appendf( scratch.arena, &compileArgs, "\"%s\" ", context->compilerPath );
 
 	if ( context->useMSVC ) {
 #if defined( _WIN32 )
 		builderMSVCInstall_t *msvcInstall = context->msvcInstall;
 		builderWindowsSDKInstall_t *windowsSDKInstall = context->windowsSDKInstall;
 
-		StringBuilder_Appendf( &compileArgs, "/nologo " );	// disable MSVC spamming its copyright banner for every compilation unit
-		StringBuilder_Appendf( &compileArgs, "/c " );
+		StringBuilder_Appendf( scratch.arena, &compileArgs, "/nologo " );	// disable MSVC spamming its copyright banner for every compilation unit
+		StringBuilder_Appendf( scratch.arena, &compileArgs, "/c " );
 
 		if ( config->languageVersion != LANGUAGE_VERSION_UNSET ) {
-			StringBuilder_Appendf( &compileArgs, "/std:%s ", GetLanguageVersionString( config->languageVersion ) );
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "/std:%s ", GetLanguageVersionString( config->languageVersion ) );
 		}
 
 		if ( !config->removeSymbols ) {
-			StringBuilder_Appendf( &compileArgs, "/Z7 " );
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "/Z7 " );
 		}
 
-		StringBuilder_Appendf( &compileArgs, "%s ", Builder_GetOptimizationString_MSVC( config->optimization ) );
+		StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", Builder_GetOptimizationString_MSVC( config->optimization ) );
 
-		StringBuilder_Appendf( &compileArgs, "/Fo" );
-		Builder_AppendIntermediateFilePath( &compileArgs, context->intermediateFolder, sourceFile );
-		StringBuilder_Appendf( &compileArgs, "%s ", sourceFile );
+		StringBuilder_Appendf( scratch.arena, &compileArgs, "/Fo" );
+		Builder_AppendIntermediateFilePath( scratch.arena, &compileArgs, context->intermediateFolder, sourceFile );
+		StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", sourceFile );
 
 		const char **define = config->defines;
 		while ( define && *define ) {
-			StringBuilder_Appendf( &compileArgs, "/D%s ", *define );
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "/D%s ", *define );
 
 			define++;
 		}
 
 		// cl.exe doesn't know where the CRT/Windows SDK headers live unless you're in a Developer Command Prompt, so point it there ourselves
-		StringBuilder_Appendf( &compileArgs, "/I\"%s\" /I\"%s\" /I\"%s\" /I\"%s\" "
+		StringBuilder_Appendf( scratch.arena, &compileArgs, "/I\"%s\" /I\"%s\" /I\"%s\" /I\"%s\" "
 			, msvcInstall->includePath
 			, windowsSDKInstall->ucrtIncludePath
 			, windowsSDKInstall->umIncludePath
@@ -2117,13 +2359,13 @@ static bool Builder_CompileSourceFile( const builderCompileContext_t *context, c
 
 		const char **additionalInclude = config->additionalIncludes;
 		while ( additionalInclude && *additionalInclude ) {
-			StringBuilder_Appendf( &compileArgs, "/I%s ", *additionalInclude );
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "/I%s ", *additionalInclude );
 
 			additionalInclude++;
 		}
 
 		if ( config->warningsAsErrors ) {
-			StringBuilder_Appendf( &compileArgs, "/WX " );
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "/WX " );
 		}
 
 		bool sawWarningLevel = false;
@@ -2131,7 +2373,7 @@ static bool Builder_CompileSourceFile( const builderCompileContext_t *context, c
 		while ( warningLevel && *warningLevel ) {
 			if ( sawWarningLevel ) {
 				Builder_Error( "MSVC only allows one warning level to be set at a time, but you specified more than one.\n" );
-				StringBuilder_Destroy( &compileArgs );
+				scratchRewind( &scratch );
 				return false;
 			}
 
@@ -2147,11 +2389,11 @@ static bool Builder_CompileSourceFile( const builderCompileContext_t *context, c
 					, *warningLevel
 				);
 
-				StringBuilder_Destroy( &compileArgs );
+				scratchRewind( &scratch );
 				return false;
 			}
 
-			StringBuilder_Appendf( &compileArgs, "%s ", *warningLevel );
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", *warningLevel );
 
 			sawWarningLevel = true;
 			warningLevel++;
@@ -2159,36 +2401,36 @@ static bool Builder_CompileSourceFile( const builderCompileContext_t *context, c
 #endif
 	} else {
 		if ( config->languageVersion != LANGUAGE_VERSION_UNSET ) {
-			StringBuilder_Appendf( &compileArgs, "-std=%s ", GetLanguageVersionString( config->languageVersion ) );
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "-std=%s ", GetLanguageVersionString( config->languageVersion ) );
 		}
 
 		if ( !config->removeSymbols ) {
-			StringBuilder_Appendf( &compileArgs, "-g " );
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "-g " );
 		}
 
-		StringBuilder_Appendf( &compileArgs, "%s ", Builder_GetOptimizationString_Clang( config->optimization ) );
+		StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", Builder_GetOptimizationString_Clang( config->optimization ) );
 
-		StringBuilder_Appendf( &compileArgs, "-c " );
-		StringBuilder_Appendf( &compileArgs, "-o " );
-		Builder_AppendIntermediateFilePath( &compileArgs, context->intermediateFolder, sourceFile );
-		StringBuilder_Appendf( &compileArgs, "%s ", sourceFile );
+		StringBuilder_Appendf( scratch.arena, &compileArgs, "-c " );
+		StringBuilder_Appendf( scratch.arena, &compileArgs, "-o " );
+		Builder_AppendIntermediateFilePath( scratch.arena, &compileArgs, context->intermediateFolder, sourceFile );
+		StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", sourceFile );
 
 		const char **define = config->defines;
 		while ( define && *define ) {
-			StringBuilder_Appendf( &compileArgs, "-D%s ", *define );
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "-D%s ", *define );
 
 			define++;
 		}
 
 		const char **additionalInclude = config->additionalIncludes;
 		while ( additionalInclude && *additionalInclude ) {
-			StringBuilder_Appendf( &compileArgs, "-I%s ", *additionalInclude );
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "-I%s ", *additionalInclude );
 
 			additionalInclude++;
 		}
 
 		if ( config->warningsAsErrors ) {
-			StringBuilder_Appendf( &compileArgs, "-Werror " );
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "-Werror " );
 		}
 
 		const char **warningLevel = config->warningLevels;
@@ -2203,11 +2445,11 @@ static bool Builder_CompileSourceFile( const builderCompileContext_t *context, c
 					, *warningLevel
 				);
 
-				StringBuilder_Destroy( &compileArgs );
+				scratchRewind( &scratch );
 				return false;
 			}
 
-			StringBuilder_Appendf( &compileArgs, "%s ", *warningLevel );
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", *warningLevel );
 
 			warningLevel++;
 		}
@@ -2215,20 +2457,18 @@ static bool Builder_CompileSourceFile( const builderCompileContext_t *context, c
 
 	const char **ignoreWarning = config->ignoreWarnings;
 	while ( ignoreWarning && *ignoreWarning ) {
-		StringBuilder_Appendf( &compileArgs, "%s ", *ignoreWarning );
+		StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", *ignoreWarning );
 
 		ignoreWarning++;
 	}
 
-	char *args = StringBuilder_ToString( &compileArgs );
-
-	StringBuilder_Destroy( &compileArgs );
+	char *args = StringBuilder_ToString( scratch.arena, &compileArgs );
 
 	printf( "%s\n", args );
 
-	int32_t compileResult = Builder_RunProcess( args, NULL );
+	int32_t compileResult = Builder_RunProcess( NULL, args, NULL );
 
-	free( args );
+	scratchRewind( &scratch );
 
 	return compileResult == 0;
 }
@@ -2259,11 +2499,15 @@ static void Builder_RunCompileJobPool( builderCompileJobPool_t *pool ) {
 #if defined( _WIN32 )
 static DWORD WINAPI Builder_CompileJobThreadProc( LPVOID param ) {
 	Builder_RunCompileJobPool( (builderCompileJobPool_t *) param );
+	// End of thread, teardown any scratch memory used
+	scratchFree();
 	return 0;
 }
 #elif defined( __linux__ )
 static void *Builder_CompileJobThreadProc( void *param ) {
 	Builder_RunCompileJobPool( (builderCompileJobPool_t *) param );
+		// End of thread, teardown any scratch memory used
+	scratchFree();
 	return NULL;
 }
 #endif
@@ -2348,15 +2592,18 @@ int Build( BuilderOptions *options ) {
 		}
 	}
 
+	// toolchain and compiler paths are used right through to the link step
+	scratch_t buildScratch = scratchGet( NULL );
+
 	// only query for windows SDK and MSVC installations after verifying cmd line args and
 #ifdef _WIN32
-	builderWindowsSDKInstall_t windowsSDKInstall = {};
-	if ( !Builder_GetWindowsSDKInstall( &windowsSDKInstall ) ) {
+	builderWindowsSDKInstall_t windowsSDKInstall = {0};
+	if ( !Builder_GetWindowsSDKInstall( buildScratch.arena, &windowsSDKInstall ) ) {
 		return 1;
 	}
 
-	builderMSVCInstall_t msvcInstall = {};
-	if ( !Builder_GetMSVCInstall( &msvcInstall ) ) {
+	builderMSVCInstall_t msvcInstall = {0};
+	if ( !Builder_GetMSVCInstall( buildScratch.arena, &msvcInstall ) ) {
 		return 1;
 	}
 #endif
@@ -2367,7 +2614,7 @@ int Build( BuilderOptions *options ) {
 	bool useMSVC = Builder_StringEquals( compilerPath, "cl" ) || Builder_StringEquals( compilerPath, "cl.exe" );
 
 	if ( useMSVC ) {
-		compilerPath = Builder_FormatString( "%s\\bin\\Hostx64\\x64\\cl.exe", msvcInstall.rootFolder );
+		compilerPath = Builder_FormatString( buildScratch.arena, "%s\\bin\\Hostx64\\x64\\cl.exe", msvcInstall.rootFolder );
 	}
 #else
 	bool useMSVC = false;
@@ -2376,30 +2623,23 @@ int Build( BuilderOptions *options ) {
 	if ( options->compilerVersion && options->compilerVersion[0] ) {
 		if ( useMSVC ) {
 #if defined( _WIN32 )
-			char *actualVersion = Builder_FormatString( "%d.%d.%d", msvcInstall.version.v0, msvcInstall.version.v1, msvcInstall.version.v2 );
+			char *actualVersion = Builder_FormatString( buildScratch.arena, "%d.%d.%d", msvcInstall.version.v0, msvcInstall.version.v1, msvcInstall.version.v2 );
 
 			if ( !Builder_StringEquals( actualVersion, options->compilerVersion ) ) {
 				Builder_Warning( "You are using compiler version \"%s\", but \"%s\" was set as BuilderOptions::compilerVersion.  I will continue building anyway, but you may not get what you expect.\n", actualVersion, options->compilerVersion );
 			}
-
-			free( actualVersion );
 #endif
 		} else {
-			char *versionCmd = Builder_FormatString( "\"%s\" --version", compilerPath );
+			char *versionCmd = Builder_FormatString( buildScratch.arena, "\"%s\" --version", compilerPath );
 			char *versionOutput = NULL;
 
-			Builder_RunProcess( versionCmd, &versionOutput );
+			Builder_RunProcess( buildScratch.arena, versionCmd, &versionOutput );
 
 			if ( !Builder_StringContains( versionOutput, options->compilerVersion ) ) {
-				char *actualVersion = Builder_ExtractVersionNumber( versionOutput );
+				char *actualVersion = Builder_ExtractVersionNumber( buildScratch.arena, versionOutput );
 
 				Builder_Warning( "You are using compiler version \"%s\", but \"%s\" was set as BuilderOptions::compilerVersion.  I will continue building anyway, but you may not get what you expect.\n", actualVersion, options->compilerVersion );
-
-				free( actualVersion );
 			}
-
-			free( versionCmd );
-			free( versionOutput );
 		}
 	}
 
@@ -2407,7 +2647,7 @@ int Build( BuilderOptions *options ) {
 	// or wait for Tom's linear allocator
 	uint32_t configsToBuildCount = 0;
 	BuildConfig *configsToBuild = NULL;
-	AddBuildConfigInternal( options, targetConfig, NULL, &configsToBuild, &configsToBuildCount );
+	AddBuildConfigInternal( NULL, options, targetConfig, NULL, &configsToBuild, &configsToBuildCount );
 
 	double totalCompileTimeMS = 0.0;
 	double totalLinkTimeMS = 0.0;
@@ -2429,7 +2669,7 @@ int Build( BuilderOptions *options ) {
 			const char *intermediateFolder = config->intermediateFolder;
 
 			if ( intermediateFolder && config->binaryFolder ) {
-				intermediateFolder = Builder_FormatString( "%s%c%s", config->binaryFolder, BUILDER_PATH_SEPARATOR, intermediateFolder );
+				intermediateFolder = Builder_FormatString( buildScratch.arena, "%s%c%s", config->binaryFolder, BUILDER_PATH_SEPARATOR, intermediateFolder );
 			} else if ( !intermediateFolder ) {
 				intermediateFolder = config->binaryFolder;
 			}
@@ -2440,7 +2680,7 @@ int Build( BuilderOptions *options ) {
 			}
 
 			// glob step
-			builderFileGlobResult_t globResult = Builder_GlobFiles( config->sourceFiles );
+			builderFileGlobResult_t globResult = Builder_GlobFiles( buildScratch.arena, config->sourceFiles );
 
 			// compilation step
 			{
@@ -2477,7 +2717,7 @@ int Build( BuilderOptions *options ) {
 					uint32_t numCreatedThreads = 0;
 
 					if ( numAdditionalThreads > 0 ) {
-						additionalThreads = (builderThread_t *) malloc( numAdditionalThreads * sizeof( builderThread_t ) );
+						additionalThreads = arenaPush( buildScratch.arena, builderThread_t, numAdditionalThreads );
 
 						for ( uint32_t threadIndex = 0; threadIndex < numAdditionalThreads; threadIndex++ ) {
 							if ( Builder_CreateCompileJobThread( &pool, &additionalThreads[numCreatedThreads] ) ) {
@@ -2493,12 +2733,9 @@ int Build( BuilderOptions *options ) {
 						Builder_ThreadJoin( additionalThreads[threadIndex] );
 					}
 
-					if ( additionalThreads ) {
-						free( additionalThreads );
-					}
-
 					if ( pool.numFailed > 0 ) {
 						Builder_Error( "Build failed.\n" );
+						scratchRewind( &buildScratch );
 						return 1;
 					}
 				}
@@ -2512,42 +2749,51 @@ int Build( BuilderOptions *options ) {
 
 				if ( config->binaryFolder && !Builder_CreateFolderIfItDoesntExist( config->binaryFolder ) ) {
 					Builder_Error( "Failed to create the binary folder \"%s\".\n", config->binaryFolder );
+					scratchRewind( &buildScratch );
 					return 1;
 				}
 
-				stringBuilder_t linkerArgs = {};
+				stringBuilder_t linkerArgs = {0};
 #if defined( _WIN32 )
 				if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
-					StringBuilder_Appendf( &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\lib.exe\" ", msvcInstall.rootFolder );
+					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\lib.exe\" ", msvcInstall.rootFolder );
 				} else {
-					StringBuilder_Appendf( &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\link.exe\" ", msvcInstall.rootFolder );
+					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\link.exe\" ", msvcInstall.rootFolder );
 				}
 
 				if ( config->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
-					StringBuilder_Appendf( &linkerArgs, "/DLL " );
+					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/DLL " );
 				}
 
-				StringBuilder_Appendf( &linkerArgs, "/OUT:" );
-				Builder_AppendBinaryPath( &linkerArgs, config );
+				StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/OUT:" );
+				Builder_AppendBinaryPath( buildScratch.arena, &linkerArgs, config );
 
-				StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", msvcInstall.libPath );
-				StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.umLibPath );
-				StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.ucrtLibPath );
+				StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", msvcInstall.libPath );
+				StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.umLibPath );
+				StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.ucrtLibPath );
 
 				for ( uint32_t fileIndex = 0; fileIndex < globResult.count; ++fileIndex ) {
-					Builder_AppendIntermediateFilePath( &linkerArgs, intermediateFolder, globResult.files[fileIndex] );
+					Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, globResult.files[fileIndex] );
 				}
 
 				const char **additionalLibPath = config->additionalLibPaths;
 				while ( additionalLibPath && *additionalLibPath ) {
-					StringBuilder_Appendf( &linkerArgs, "/LIBPATH:\"%s\" ", *additionalLibPath );
+					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", *additionalLibPath );
 
 					additionalLibPath++;
 				}
 
 				const char **additionalLib = config->additionalLibs;
 				while ( additionalLib && *additionalLib ) {
-					StringBuilder_Appendf( &linkerArgs, "%s.lib ", *additionalLib );
+					// callers sometimes already include the ".lib" extension themselves - don't double it up
+					size_t libNameLen = strlen( *additionalLib );
+					bool alreadyHasExtension = libNameLen >= 4 && _stricmp( *additionalLib + libNameLen - 4, ".lib" ) == 0;
+
+					if ( alreadyHasExtension ) {
+						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", *additionalLib );
+					} else {
+						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s.lib ", *additionalLib );
+					}
 
 					additionalLib++;
 				}
@@ -2567,75 +2813,72 @@ int Build( BuilderOptions *options ) {
 					// so link.exe has no idea which CRT/SDK libs to pull in unless we name them ourselves
 					// TODO: AK: 11/08/2026: we need dynamic runtime support too
 					if (debugDefineSet) {
-						StringBuilder_Appendf( &linkerArgs, "libcmtd.lib libcpmtd.lib libvcruntimed.lib libucrtd.lib kernel32.lib " );
+						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "libcmtd.lib libcpmtd.lib libvcruntimed.lib libucrtd.lib kernel32.lib " );
 					} else {
-						StringBuilder_Appendf( &linkerArgs, "libcmt.lib libcpmt.lib libvcruntime.lib libucrt.lib kernel32.lib " );
+						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "libcmt.lib libcpmt.lib libvcruntime.lib libucrt.lib kernel32.lib " );
 					}
 				}
 
 				const char **additionalLinkerArgument = config->additionalLinkerArguments;
 				while ( additionalLinkerArgument && *additionalLinkerArgument ) {
-					StringBuilder_Appendf( &linkerArgs, "%s ", *additionalLinkerArgument );
+					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", *additionalLinkerArgument );
 
 					additionalLinkerArgument++;
 				}
 #elif defined( __linux__ )
 				if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
-					StringBuilder_Appendf( &linkerArgs, "ar rcs " );
-					Builder_AppendBinaryPath( &linkerArgs, config );
+					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "ar rcs " );
+					Builder_AppendBinaryPath( buildScratch.arena, &linkerArgs, config );
 
 					for ( uint32_t fileIndex = 0; fileIndex < globResult.count; ++fileIndex ) {
-						Builder_AppendIntermediateFilePath( &linkerArgs, intermediateFolder, globResult.files[fileIndex] );
+						Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, globResult.files[fileIndex] );
 					}
 				} else {
-					StringBuilder_Appendf( &linkerArgs, "\"%s\" ", compilerPath );
+					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "\"%s\" ", compilerPath );
 
 					if ( config->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
-						StringBuilder_Appendf( &linkerArgs, "-shared " );
+						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-shared " );
 					}
 
-					StringBuilder_Appendf( &linkerArgs, "-o " );
-					Builder_AppendBinaryPath( &linkerArgs, config );
+					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-o " );
+					Builder_AppendBinaryPath( buildScratch.arena, &linkerArgs, config );
 
 					for ( uint32_t fileIndex = 0; fileIndex < globResult.count; ++fileIndex ) {
-						Builder_AppendIntermediateFilePath( &linkerArgs, intermediateFolder, globResult.files[fileIndex] );
+						Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, globResult.files[fileIndex] );
 					}
 
 					const char **additionalLibPath = config->additionalLibPaths;
 					while ( additionalLibPath && *additionalLibPath ) {
-						StringBuilder_Appendf( &linkerArgs, "-L%s ", *additionalLibPath );
+						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-L%s ", *additionalLibPath );
 
 						additionalLibPath++;
 					}
 
 					const char **additionalLib = config->additionalLibs;
 					while ( additionalLib && *additionalLib ) {
-						StringBuilder_Appendf( &linkerArgs, "-l%s ", *additionalLib );
+						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-l%s ", *additionalLib );
 
 						additionalLib++;
 					}
 
 					const char **additionalLinkerArgument = config->additionalLinkerArguments;
 					while ( additionalLinkerArgument && *additionalLinkerArgument ) {
-						StringBuilder_Appendf( &linkerArgs, "%s ", *additionalLinkerArgument );
+						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", *additionalLinkerArgument );
 
 						additionalLinkerArgument++;
 					}
 				}
 #endif
 
-				char *args = StringBuilder_ToString( &linkerArgs );
-
-				StringBuilder_Destroy( &linkerArgs );
+				char *args = StringBuilder_ToString( buildScratch.arena, &linkerArgs );
 
 				printf( "%s\n", args );
 
-				int32_t linkResult = Builder_RunProcess( args, NULL );
-
-				free( args );
+				int32_t linkResult = Builder_RunProcess( NULL, args, NULL );
 
 				if ( linkResult != 0 ) {
 					Builder_Error( "Link failed.\n" );
+					scratchRewind( &buildScratch );
 					return 1;
 				}
 
@@ -2664,6 +2907,7 @@ int Build( BuilderOptions *options ) {
 		printf( "    Total   : %f ms\n", Builder_TimeMS() - totalTimeStart );
 	}
 
+	scratchRewind( &buildScratch );
 	return 0;
 }
 

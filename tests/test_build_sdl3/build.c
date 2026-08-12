@@ -7,6 +7,8 @@ int main( int argc, char **argv ) {
 		.argv = argv,
 	};
 
+	Builder_RebuildSelf(argc,argv);
+
 	const char *sdlBinaryName = "SDL";
 	const char *sdlBinaryFolder = "bin/demos/SDL3";
 
@@ -32,6 +34,7 @@ int main( int argc, char **argv ) {
 			"src/filesystem/*.c",
 			"src/gpu/*.c",
 			"src/haptic/*.c",
+			"src/haptic/hidapi/*.c",
 			"src/hidapi/*.c",
 			"src/io/*.c",
 			"src/io/generic/*.c",
@@ -97,6 +100,7 @@ int main( int argc, char **argv ) {
 			"src/thread/windows/*.c",
 			"src/tray/windows/*.c",
 			"src/video/windows/*.c",
+			"src/video/windows/*.cpp",
 #elif defined( __linux__ )
 			"src/render/gpu/*.c",
 			"src/render/opengl/*.c",
@@ -122,16 +126,17 @@ int main( int argc, char **argv ) {
 		},
 		.additionalLibs = (const char *[]) {
 #if defined( _WIN32 )
-			"Ole32.lib",
-			"OleAut32.lib",
-			"Winmm.lib",
-			"Imm32.lib",
-			"Advapi32.lib",
-			"Shell32.lib",
-			"Cfgmgr32.lib",
-			"Gdi32.lib",
-			"SetupAPI.lib",
-			"Version.lib",
+			"Ole32",
+			"OleAut32",
+			"Winmm",
+			"Imm32",
+			"Advapi32",
+			"Shell32",
+			"Cfgmgr32",
+			"Gdi32",
+			"SetupAPI",
+			"Version",
+			"user32",
 #elif defined( __linux__ )
 #endif
 			NULL

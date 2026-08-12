@@ -1378,7 +1378,7 @@ static void Builder_AddGlobbedFile( builderFileGlobResult_t *fileResults, const 
 }
 
 // remember to free sliceArray.data
-static builderStringSliceArray_t Builder_SliceFilePath( const char *filePath ) {
+static builderStringSliceArray_t Builder_SliceFilePath( arena_t* results, const char *filePath ) {
 	const char *pathIterator = filePath; 
 	builderStringSliceArray_t sliceArray = {
 		.data = NULL,
@@ -1405,8 +1405,7 @@ static builderStringSliceArray_t Builder_SliceFilePath( const char *filePath ) {
 		}
 	}
 
-	// I don't like that we are somewhat hiding this allocation
-	sliceArray.data = (builderStringSlice_t *) malloc( numSlices * sizeof( builderStringSlice_t ) );
+	sliceArray.data = arenaPush(results, builderStringSlice_t, numSlices);
 	sliceArray.count = numSlices;
 
 	pathIterator = filePath;
@@ -1508,7 +1507,7 @@ static bool Builder_PathMatchesPattern( const builderStringSliceArray_t *pattern
 	return inRecursiveGlob;
 }
 
-static void Builder_GlobVisitCallback( fileInfo_t *fileInfo, void *data ) {
+static void Builder_GlobVisitCallback( arena_t *resultsArena, fileInfo_t *fileInfo, void *data ) {
 	builderGlobVisitCallbackData_t *callbackData = (builderGlobVisitCallbackData_t *)data;
 
 	uint32_t filenameLen = strnlen( fileInfo->filename, 255 ); // filename length maxes here I think?
@@ -1522,24 +1521,29 @@ static void Builder_GlobVisitCallback( fileInfo_t *fileInfo, void *data ) {
 	// we could do a heavyweight verification that the search path matches here,
 	// but really it should match from the call sites
 	const char* matchStart = fileInfo->fullFilename + callbackData->searchPathLen;
-	const builderStringSliceArray_t pathSlices = Builder_SliceFilePath( matchStart );
+	scratch_t scratch = scratchGet( resultsArena );
+	const builderStringSliceArray_t pathSlices = Builder_SliceFilePath( scratch.arena, matchStart );
 
 	if ( Builder_PathMatchesPattern( &callbackData->patternSlices, &pathSlices ) ) {
-		Builder_AddGlobbedFile( callbackData->globResults, fileInfo->fullFilename ); // Do we need to copy the filename string?
+		// fileInfo->fullFilename lives on Builder_VisitFiles' internal scratch and won't survive past this
+		// call, so it has to be copied into resultsArena to outlive the walk.
+		const char *fullFilename = Builder_FormatString( resultsArena, "%s", fileInfo->fullFilename );
+		Builder_AddGlobbedFile( callbackData->globResults, fullFilename );
 	}
 
-	free( pathSlices.data );
+	scratchRewind( &scratch);
 }
 
-static builderFileGlobResult_t Builder_GlobFiles( const char **globPatterns ) {
+static builderFileGlobResult_t Builder_GlobFiles( arena_t *resultsArena, const char **globPatterns ) {
 	builderFileGlobResult_t globResult = {
 		.files = NULL,
 		.count = 0,
 		.capacity = 0
 	};
-	
+
+	scratch_t scratch = scratchGet( resultsArena );
 	// setup re-usable search path allocation
-	char *const searchPath = (char *const) malloc( ( MAX_PATH + 1 ) * sizeof( const char ) );
+	char *const searchPath = arenaPush( scratch.arena, char, (MAX_PATH + 1));
 	while ( globPatterns && *globPatterns) {
 		// start by copying and seeking to find if there is an asterisk, and then rewind to just after the preceding slash (or start if it is say **/*.cpp)
 		const char* pattern = *globPatterns;
@@ -1575,7 +1579,7 @@ static builderFileGlobResult_t Builder_GlobFiles( const char **globPatterns ) {
 		searchPath[globPathLen] = '\0';
 		
 		builderGlobVisitCallbackData_t callbackData = {
-			.patternSlices = Builder_SliceFilePath(pattern),
+			.patternSlices = Builder_SliceFilePath( scratch.arena, pattern),
 			.globResults = &globResult,
 			.searchPathLen = globPathLen
 		};
@@ -1584,15 +1588,14 @@ static builderFileGlobResult_t Builder_GlobFiles( const char **globPatterns ) {
 		if (callbackData.patternSlices.count > 1) { // we are matching folders too
 			visitFlags |= BUILDER_FILE_VISIT_RECURSIVE;
 		}
-		if ( !Builder_VisitFiles( searchPath, visitFlags, &Builder_GlobVisitCallback, &callbackData ) ) {
+		if ( !Builder_VisitFiles( resultsArena, searchPath, visitFlags, &Builder_GlobVisitCallback, &callbackData ) ) {
 			printf( "Warning: Found no matches for pattern %s, at search path %s.\n", *globPatterns, searchPath );
 		}
-
-		free( callbackData.patternSlices.data );
+		
 		++globPatterns;
 	}
 
-	free( searchPath );
+	scratchRewind( &scratch);
 	return globResult;
 }
 
@@ -2677,7 +2680,7 @@ int Build( BuilderOptions *options ) {
 			}
 
 			// glob step
-			builderFileGlobResult_t globResult = Builder_GlobFiles( config->sourceFiles );
+			builderFileGlobResult_t globResult = Builder_GlobFiles( buildScratch.arena, config->sourceFiles );
 
 			// compilation step
 			{

@@ -2624,8 +2624,6 @@ int Build( BuilderOptions *options ) {
 		}
 	}
 
-	// TODO: DM: 10/08/2026: either do proper cleanup ourselves via goto to account for all cases
-	// or wait for Tom's linear allocator
 	uint32_t configsToBuildCount = 0;
 	BuildConfig *configsToBuild = NULL;
 	AddBuildConfigInternal( NULL, options, targetConfig, NULL, &configsToBuild, &configsToBuildCount );

@@ -695,26 +695,40 @@ static bool HasCommandLineArg( BuilderOptions *options, const char *arg ) {
 // growable stack of the configs currently being registered (config -> config->dependsOn[i] -> ...), used to detect cycles
 // bundling the pointer/count/capacity together means only a single pointer to this struct needs to be threaded through the
 // recursion below - growing builderConfigAncestry_t::items is then just a field mutation every recursive call already sees
-// TODO: DM: 08/08/2026: Tom's growable array
-typedef struct builderConfigAncestry_t {
-	BuildConfig	**items;
+#define CONFIG_ANCESTRY_CHUNK_SIZE 8
+typedef struct builderConfigAncestryChunk_t {
+	BuildConfig	*items[CONFIG_ANCESTRY_CHUNK_SIZE];
 	uint32_t	count;
-	uint32_t	capacity;
+	struct builderConfigAncestryChunk_t	*next;
+	struct builderConfigAncestryChunk_t	*previous;
+} builderConfigAncestryChunk_t;
+
+typedef struct builderConfigAncestry_t {
+	builderConfigAncestryChunk_t* head;
+	builderConfigAncestryChunk_t* tail;
 } builderConfigAncestry_t;
 
 static void Builder_ConfigStackPush( arena_t *arena, builderConfigAncestry_t *stack, BuildConfig *config ) {
-	if ( stack->count == stack->capacity ) {
-		uint32_t newCapacity = stack->capacity ? stack->capacity * 2 : 8;
+	builderConfigAncestryChunk_t* tail = stack->tail;
+	if ( !tail || tail->count == CONFIG_ANCESTRY_CHUNK_SIZE ) {
+		builderConfigAncestryChunk_t* newTail = arenaPush( arena, builderConfigAncestryChunk_t, 1);
+		newTail->count = 0;
+		newTail->next = NULL;
+		newTail->previous = stack->tail;
+		if( tail )
+		{
+			tail->next = newTail;
+		}
+		
+		stack->tail = newTail;
+		tail = newTail;
 
-		// stack->count (not the old capacity) - anything between count and capacity was never written
-		stack->items = stack->capacity
-			? arenaRealloc( arena, stack->items, BuildConfig *, stack->count, newCapacity )
-			: arenaPush( arena, BuildConfig *, newCapacity );
-
-		stack->capacity = newCapacity;
+		if( !stack->head ) {
+			stack->head = newTail;
+		}
 	}
 
-	stack->items[stack->count++] = config;
+	tail->items[tail->count++] = config;
 }
 
 // scratch backs ancestry->items - its lifetime is exactly one AddBuildConfig() call (see AddBuildConfig() below,
@@ -723,24 +737,28 @@ static void Builder_ConfigStackPush( arena_t *arena, builderConfigAncestry_t *st
 static void AddBuildConfigInternal( arena_t *arena, BuilderOptions *options, BuildConfig *config, builderConfigAncestry_t *ancestry, BuildConfig **outConfigs, uint32_t *outConfigsCount ) {
 	// if no ancestry then dont do circular dependency checking
 	if ( ancestry ) {
-		for ( uint32_t ancestorIndex = 0; ancestorIndex < ancestry->count; ancestorIndex++ ) {
-			if ( ancestry->items[ancestorIndex] == config ) {
-				//Throwaway scratch; we're about to exit
-				scratch_t errorScratch = scratchGet( NULL );
-				stringBuilder_t cycle = {0};
+		builderConfigAncestryChunk_t* next = ancestry->head;
+		while ( next ) {
+			for ( uint32_t ancestorIndex = 0; ancestorIndex < next->count; ancestorIndex++ ) {
+				if ( next->items[ancestorIndex] == config ) {
+					//Throwaway scratch; we're about to exit
+					scratch_t errorScratch = scratchGet( NULL );
+					stringBuilder_t cycle = {0};
 
-				for ( uint32_t cycleIndex = ancestorIndex; cycleIndex < ancestry->count; cycleIndex++ ) {
-					const char *cycleConfigName = ancestry->items[cycleIndex]->name;
-					StringBuilder_Appendf( errorScratch.arena, &cycle, "%s -> ", cycleConfigName ? cycleConfigName : "(unnamed config)" );
+					for ( uint32_t cycleIndex = ancestorIndex; cycleIndex < next->count; cycleIndex++ ) {
+						const char *cycleConfigName = next->items[cycleIndex]->name;
+						StringBuilder_Appendf( errorScratch.arena, &cycle, "%s -> ", cycleConfigName ? cycleConfigName : "(unnamed config)" );
+					}
+
+					StringBuilder_Appendf( errorScratch.arena, &cycle, "%s", config->name ? config->name : "(unnamed config)" );
+
+					char *cycleString = StringBuilder_ToString( errorScratch.arena, &cycle );
+					Builder_Error( "Cyclic BuildConfig::dependsOn detected: %s\n", cycleString );
+
+					exit( 1 );
 				}
-
-				StringBuilder_Appendf( errorScratch.arena, &cycle, "%s", config->name ? config->name : "(unnamed config)" );
-
-				char *cycleString = StringBuilder_ToString( errorScratch.arena, &cycle );
-				Builder_Error( "Cyclic BuildConfig::dependsOn detected: %s\n", cycleString );
-
-				exit( 1 );
 			}
+			next = next->next;
 		}
 
 		Builder_ConfigStackPush( arena, ancestry, config );
@@ -757,8 +775,14 @@ static void AddBuildConfigInternal( arena_t *arena, BuilderOptions *options, Bui
 		}
 	}
 
-	if ( ancestry ) {
-		ancestry->count--;
+	if ( ancestry && ancestry->tail ) {
+		if(ancestry->tail->count > 0) {
+			ancestry->tail->count--;
+
+			if( ancestry->tail->count == 0 ) {
+				ancestry->tail = ancestry->tail->previous;
+			}
+		}
 	}
 
 	// multiple configs can rely on the same config (e.g. configs A and B may both rely on config C)

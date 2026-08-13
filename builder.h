@@ -178,7 +178,6 @@ typedef struct scratch_t {
 
 
 #define NUM_SCRATCH_ARENAS 2
-
 thread_local arena_t scratches[NUM_SCRATCH_ARENAS];
 
 arenaRewindSpot_t arenaTell( arena_t *arena ) {
@@ -1663,9 +1662,13 @@ typedef struct {
 	builderMSVCVersion_t	version;
 } builderMSVCInstall_t;
 
-// TODO: DM: 05/08/2026: Tom's chunked array
+// How many Windows SDK versions / MSVC toolsets we're willing to find on one machine. User can specify with defines
+#ifndef BUILDER_MAX_TOOLCHAIN_VERSIONS
+#define BUILDER_MAX_TOOLCHAIN_VERSIONS 16
+#endif
+
 typedef struct {
-	builderMSVCInstall_t	*installs;
+	builderMSVCInstall_t	installs[BUILDER_MAX_TOOLCHAIN_VERSIONS];
 	uint32_t				installsCount;
 } builderFoundMSVCInstallData_t;
 
@@ -1684,9 +1687,8 @@ typedef struct {
 	builderWindowsSDKVersion_t	version;
 } builderWindowsSDKInstall_t;
 
-// TODO: DM: 05/08/2026: Tom's chunked array
 typedef struct {
-	builderWindowsSDKVersion_t	*versions;
+	builderWindowsSDKVersion_t	versions[BUILDER_MAX_TOOLCHAIN_VERSIONS];
 	uint32_t					versionsCount;
 } builderFoundWindowsSDKVersionData_t;
 
@@ -1699,9 +1701,8 @@ static void OnWindowsSDKVersionFound( arena_t *results, fileInfo_t *fileInfo, vo
 		return;
 	}
 
-	foundData->versions = foundData->versionsCount
-		? arenaRealloc( results, foundData->versions, builderWindowsSDKVersion_t, foundData->versionsCount, foundData->versionsCount + 1 )
-		: arenaPush( results, builderWindowsSDKVersion_t, 1 );
+	BUILDER_ASSERT( foundData->versionsCount < BUILDER_MAX_TOOLCHAIN_VERSIONS && "Found more Windows SDK versions than BUILDER_MAX_TOOLCHAIN_VERSIONS allows for. Define this above builder.h to expand the search" );
+
 	foundData->versions[foundData->versionsCount++] = version;
 }
 
@@ -1723,8 +1724,8 @@ static bool Builder_GetWindowsSDKInstall( arena_t *results, builderWindowsSDKIns
 	bool success = false;
 	HKEY key = NULL;
 	const char *windowsSDKRoot = NULL;
-	builderWindowsSDKVersion_t *versions = NULL;
-	uint32_t versionsCount = 0;
+
+	builderFoundWindowsSDKVersionData_t foundData = {0};
 	bool found = false;
 
 	const char *winSDKRegPath = "SOFTWARE\\Microsoft\\Windows Kits\\Installed Roots";
@@ -1779,17 +1780,7 @@ static bool Builder_GetWindowsSDKInstall( arena_t *results, builderWindowsSDKIns
 	{
 		char *windowsSDKLibFolder = Builder_FormatString( results, "%sLib", windowsSDKRoot );
 
-		builderFoundWindowsSDKVersionData_t foundData = {
-			.versions		= versions,
-			.versionsCount	= versionsCount,
-		};
-
-		// resultsScratch, not a local scratch - foundData.versions has to survive past this block, down to the qsort() below
 		bool visited = Builder_VisitFiles( results, windowsSDKLibFolder, BUILDER_FILE_VISIT_FOLDERS, OnWindowsSDKVersionFound, &foundData );
-
-
-		versions = foundData.versions;
-		versionsCount = foundData.versionsCount;
 
 		if ( !visited ) {
 			Builder_Error( "Failed to query your Windows SDK root folder for the version of the Windows SDK that you asked for.  Do you definitely have at least one version of the Windows SDK installed?\n" );
@@ -1797,17 +1788,17 @@ static bool Builder_GetWindowsSDKInstall( arena_t *results, builderWindowsSDKIns
 		}
 	}
 
-	if ( versionsCount == 0 ) {
+	if ( foundData.versionsCount == 0 ) {
 		Builder_Error( "Failed to find any versions of the Windows SDK installed under \"%s\".\n", windowsSDKRoot );
 		goto cleanup;
 	}
 
 	// newest version first
-	qsort( versions, versionsCount, sizeof( builderWindowsSDKVersion_t ), Builder_CompareWindowsSDKVersions );
+	qsort( foundData.versions, foundData.versionsCount, sizeof( builderWindowsSDKVersion_t ), Builder_CompareWindowsSDKVersions );
 
 	// find the first windows SDK folder that isnt malformed
-	for ( uint32_t versionIndex = 0; versionIndex < versionsCount; versionIndex++ ) {
-		builderWindowsSDKVersion_t *version = &versions[versionIndex];
+	for ( uint32_t versionIndex = 0; versionIndex < foundData.versionsCount; versionIndex++ ) {
+		builderWindowsSDKVersion_t *version = &foundData.versions[versionIndex];
 
 		// these go straight onto the results scratch because they're what we hand back if this version turns out to be the one.
 		// if it isn't, this marker lets us drop just this attempt without touching whatever the caller already had in there
@@ -1891,7 +1882,7 @@ static bool Builder_GetWindowsSDKInstall( arena_t *results, builderWindowsSDKIns
 			"Failed to find a valid installation of the Windows SDK on your machine.\n"
 			"You have %u versions of the Windows SDK installed on your machine, and somehow all of them appear to be malformed.\n"
 			"You need to install a version through the Visual Studio Installer, or via the separate Build Tools installer from Microsoft.\n"
-			, versionsCount
+			, foundData.versionsCount
 		);
 
 		goto cleanup;
@@ -1929,9 +1920,8 @@ static void Builder_OnMSVCInstallFound( arena_t *results, fileInfo_t *fileInfo, 
 		.version		= version,
 	};
 
-	foundData->installs = foundData->installsCount
-		? arenaRealloc( results, foundData->installs, builderMSVCInstall_t, foundData->installsCount, foundData->installsCount + 1 )
-		: arenaPush( results, builderMSVCInstall_t, 1 );
+	BUILDER_ASSERT( foundData->installsCount < BUILDER_MAX_TOOLCHAIN_VERSIONS && "Found more MSVC installs than BUILDER_MAX_TOOLCHAIN_VERSIONS allows for. Define this above builder.h to expand the search" );
+
 	foundData->installs[foundData->installsCount++] = install;
 }
 
@@ -2016,8 +2006,7 @@ static bool Builder_GetMSVCInstall( arena_t *results, builderMSVCInstall_t *outI
 	ULONG foundInstance = 0;
 	hr = instances->vtable->Next( instances, 1, &instance, &foundInstance );
 
-	builderMSVCInstall_t *foundMSVCInstalls = NULL;
-	uint32_t foundMSVCInstallsCount = 0;
+	builderFoundMSVCInstallData_t foundData = {0};
 
 	while ( foundInstance ) {
 		BSTR visualStudioInstallationPathWide = NULL;
@@ -2061,38 +2050,30 @@ static bool Builder_GetMSVCInstall( arena_t *results, builderMSVCInstall_t *outI
 
 		char *msvcRootFolder = Builder_FormatString( scratch.arena, "%s\\VC\\Tools\\MSVC", visualStudioInstallationPath );
 
-		builderFoundMSVCInstallData_t foundData = {
-			.installs		= foundMSVCInstalls,
-			.installsCount	= foundMSVCInstallsCount,
-		};
-
 		if ( !Builder_VisitFiles( results, msvcRootFolder, BUILDER_FILE_VISIT_FOLDERS, Builder_OnMSVCInstallFound, &foundData ) ) {
 			Builder_Error( "Failed to query for MSVC installation folders under \"%s\".\n", msvcRootFolder );
 			instance->vtable->Release( instance );
 			goto cleanup;
 		}
 
-		foundMSVCInstalls = foundData.installs;
-		foundMSVCInstallsCount = foundData.installsCount;
-
 		instance->vtable->Release( instance );
 
 		hr = instances->vtable->Next( instances, 1, &instance, &foundInstance );
 	}
 
-	if ( foundMSVCInstallsCount == 0 ) {
+	if ( foundData.installsCount == 0 ) {
 		success = Builder_MSVCNotInstalled();
 		goto cleanup;
 	}
 
 	// newest version first
-	qsort( foundMSVCInstalls, foundMSVCInstallsCount, sizeof( builderMSVCInstall_t ), Builder_CompareMSVCInstallVersions );
+	qsort( foundData.installs, foundData.installsCount, sizeof( builderMSVCInstall_t ), Builder_CompareMSVCInstallVersions );
 
 	bool found = false;
 	uint32_t useVersionIndex = 0;
 
-	for ( uint32_t versionIndex = 0; versionIndex < foundMSVCInstallsCount; versionIndex++ ) {
-		builderMSVCInstall_t *install = &foundMSVCInstalls[versionIndex];
+	for ( uint32_t versionIndex = 0; versionIndex < foundData.installsCount; versionIndex++ ) {
+		builderMSVCInstall_t *install = &foundData.installs[versionIndex];
 
 		uint32_t missingFoldersCount = 0;
 		const char *missingFolders[2] = {};
@@ -2142,7 +2123,7 @@ static bool Builder_GetMSVCInstall( arena_t *results, builderMSVCInstall_t *outI
 		goto cleanup;
 	}
 
-	*outInstall = foundMSVCInstalls[useVersionIndex];
+	*outInstall = foundData.installs[useVersionIndex];
 
 	printf( "Using latest valid MSVC version that was found, which was: %d.%d.%d\n", outInstall->version.v0, outInstall->version.v1, outInstall->version.v2 );
 

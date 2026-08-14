@@ -709,26 +709,34 @@ typedef struct builderConfigAncestry_t {
 } builderConfigAncestry_t;
 
 static void Builder_ConfigStackPush( arena_t *arena, builderConfigAncestry_t *stack, BuildConfig *config ) {
-	builderConfigAncestryChunk_t* tail = stack->tail;
-	if ( !tail || tail->count == CONFIG_ANCESTRY_CHUNK_SIZE ) {
-		builderConfigAncestryChunk_t* newTail = Builder_ArenaAlloc(arena, builderConfigAncestryChunk_t, 1);
-		newTail->count = 0;
-		newTail->next = NULL;
-		newTail->previous = stack->tail;
-		if( tail )
-		{
-			tail->next = newTail;
-		}
-		
-		stack->tail = newTail;
-		tail = newTail;
+	BUILDER_ASSERT( stack );
 
-		if( !stack->head ) {
-			stack->head = newTail;
-		}
+	// popping walks tail back, so tail can be NULL while head still holds the chain, and any chunk past the tail
+	// was emptied rather than freed - pick those up before allocating another
+	builderConfigAncestryChunk_t *tail = stack->tail ? stack->tail : stack->head;
+
+	if ( tail && tail->count == CONFIG_ANCESTRY_CHUNK_SIZE ) {
+		tail = tail->next;
 	}
 
-	tail->items[tail->count++] = config;
+	if ( !tail ) {
+		builderConfigAncestryChunk_t *chunk = Builder_ArenaAlloc( arena, builderConfigAncestryChunk_t, 1 );
+		chunk->count	= 0;
+		chunk->next		= NULL;
+		chunk->previous	= stack->tail;
+
+		if ( stack->tail ) {
+			stack->tail->next = chunk;
+		} else {
+			stack->head = chunk;
+		}
+
+		tail = chunk;
+	}
+
+	stack->tail = tail;
+
+	stack->tail->items[stack->tail->count++] = config;
 }
 
 // scratch backs ancestry->items - its lifetime is exactly one AddBuildConfig() call (see AddBuildConfig() below,
@@ -1254,7 +1262,7 @@ static void Builder_StringListPush( arena_t *arena, builderStringList_t *list, c
 	BUILDER_ASSERT( list );
 
 	if ( !list->tail || list->tail->count == STRING_CHUNK_SIZE ) {
-		builderStringChunk_t *chunk = Builder_ArenaAlloc(arena, builderStringChunk_t, 1 );
+		builderStringChunk_t *chunk = Builder_ArenaAlloc( arena, builderStringChunk_t, 1 );
 		chunk->count	= 0;
 		chunk->next		= NULL;
 

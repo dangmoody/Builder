@@ -1234,6 +1234,39 @@ typedef enum {
 } builderFileVisitFlagBits_t;
 typedef uint32_t builderFileVisitFlags_t;
 
+#define DIRECTORY_CHUNK_SIZE 16
+
+typedef struct builderDirectoryChunk_t {
+	const char						*items[DIRECTORY_CHUNK_SIZE];
+	uint32_t						count;
+	struct builderDirectoryChunk_t	*next;
+} builderDirectoryChunk_t;
+
+typedef struct builderDirectoryQueue_t {
+	builderDirectoryChunk_t	*head;
+	builderDirectoryChunk_t	*tail;
+} builderDirectoryQueue_t;
+
+static void Builder_DirectoryQueuePush( arena_t *arena, builderDirectoryQueue_t *queue, const char *directory ) {
+	BUILDER_ASSERT( queue );
+
+	if ( !queue->tail || queue->tail->count == DIRECTORY_CHUNK_SIZE ) {
+		builderDirectoryChunk_t *chunk = arenaPush( arena, builderDirectoryChunk_t, 1 );
+		chunk->count	= 0;
+		chunk->next		= NULL;
+
+		if ( queue->tail ) {
+			queue->tail->next = chunk;
+		} else {
+			queue->head = chunk;
+		}
+
+		queue->tail = chunk;
+	}
+
+	queue->tail->items[queue->tail->count++] = directory;
+}
+
 static bool Builder_VisitFiles( arena_t *results, const char *path, const builderFileVisitFlags_t visitFlags, builderFileVisitCallback_t callback, void *data ) {
 	BUILDER_ASSERT( path );
 	BUILDER_ASSERT( callback );
@@ -1241,17 +1274,21 @@ static bool Builder_VisitFiles( arena_t *results, const char *path, const builde
 	// the paths we build to walk the tree are ours alone - only the callback's allocations outlive us, and those go on resultsScratch
 	scratch_t scratch = scratchGet( results );
 
-	// TODO: DM: 05/08/2026: Tom's chunked array
-	uint32_t directoriesCount = 0;
-	const char **directories = arenaPush( scratch.arena, const char *, 1 );
-	directories[directoriesCount++] = path;
+	builderDirectoryQueue_t directories = {0};
+	Builder_DirectoryQueuePush( scratch.arena, &directories, path );
 
-	uint32_t dirIndex = 0;
+	builderDirectoryChunk_t *chunk = directories.head;
+	uint32_t chunkIndex = 0;
 
-	while ( dirIndex < directoriesCount ) {
-		const char *dir = directories[dirIndex];
+	while ( chunk ) {
+		// walking a folder pushes its subfolders on, so count grows underneath this and next appears when it overflows
+		if ( chunkIndex == chunk->count ) {
+			chunk = chunk->next;
+			chunkIndex = 0;
+			continue;
+		}
 
-		dirIndex += 1;
+		const char *dir = chunk->items[chunkIndex++];
 
 		size_t dirLength = strlen( dir );
 		bool dirHasTrailingSeparator = dirLength > 0 && ( dir[dirLength - 1] == '\\' || dir[dirLength - 1] == '/' );
@@ -1283,9 +1320,7 @@ static bool Builder_VisitFiles( arena_t *results, const char *path, const builde
 					}
 
 					if ( visitFlags & BUILDER_FILE_VISIT_RECURSIVE ) {
-						directories = arenaRealloc( scratch.arena, directories, const char *, directoriesCount, directoriesCount + 1 );
-						directories[directoriesCount] = fileInfo.fullFilename;
-						directoriesCount++;
+						Builder_DirectoryQueuePush( scratch.arena, &directories, fileInfo.fullFilename );
 					}
 				}
 			} else if ( visitFlags & BUILDER_FILE_VISIT_FILES ) {
@@ -1343,9 +1378,7 @@ static bool Builder_VisitFiles( arena_t *results, const char *path, const builde
 				}
 
 				if ( visitFlags & BUILDER_FILE_VISIT_RECURSIVE ) {
-					directories = scratchRealloc( &scratch, directories, const char *, directoriesCount, directoriesCount + 1 );
-					directories[directoriesCount] = fileInfo.fullFilename;
-					directoriesCount++;
+					Builder_DirectoryQueuePush( scratch.arena, &directories, fileInfo.fullFilename );
 				}
 			} else if ( visitFlags & BUILDER_FILE_VISIT_FILES ) {
 				callback( results, &fileInfo, data );

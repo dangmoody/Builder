@@ -248,7 +248,7 @@ void scratchFree( void ) {
 		while ( block != NULL ) {
 			arenaBlock_t *next = block->next;
 
-			free( block );	// block->block was allocated as part of this same malloc - see scratchAllocate().
+			free( block );	// block->block was allocated as part of this same malloc - see arenaAllocate().
 
 			block = next;
 		}
@@ -1223,7 +1223,7 @@ typedef struct {
 	const char	*fullFilename;
 } fileInfo_t;
 
-// resultsScratch is for anything the callback allocates that has to outlive the walk.  It's optional - pass NULL if the
+// results is for anything the callback allocates that has to outlive the walk.  It's optional - pass NULL if the
 // callback doesn't allocate.  Builder_VisitFiles() never allocates from it itself.
 typedef void ( *builderFileVisitCallback_t )( arena_t *resultsArena, fileInfo_t *fileInfo, void *data );
 
@@ -1234,50 +1234,54 @@ typedef enum {
 } builderFileVisitFlagBits_t;
 typedef uint32_t builderFileVisitFlags_t;
 
-#define DIRECTORY_CHUNK_SIZE 16
+#define STRING_CHUNK_SIZE 16
 
-typedef struct builderDirectoryChunk_t {
-	const char						*items[DIRECTORY_CHUNK_SIZE];
-	uint32_t						count;
-	struct builderDirectoryChunk_t	*next;
-} builderDirectoryChunk_t;
+// Grows by chaining another chunk on rather than reallocating, so entries already added never move and it can be
+// appended to while it's being walked.
+typedef struct builderStringChunk_t {
+	const char					*items[STRING_CHUNK_SIZE];
+	uint32_t					count;
+	struct builderStringChunk_t	*next;
+} builderStringChunk_t;
 
-typedef struct builderDirectoryQueue_t {
-	builderDirectoryChunk_t	*head;
-	builderDirectoryChunk_t	*tail;
-} builderDirectoryQueue_t;
+typedef struct builderStringList_t {
+	builderStringChunk_t	*head;
+	builderStringChunk_t	*tail;
+	uint32_t				count;
+} builderStringList_t;
 
-static void Builder_DirectoryQueuePush( arena_t *arena, builderDirectoryQueue_t *queue, const char *directory ) {
-	BUILDER_ASSERT( queue );
+static void Builder_StringListPush( arena_t *arena, builderStringList_t *list, const char *string ) {
+	BUILDER_ASSERT( list );
 
-	if ( !queue->tail || queue->tail->count == DIRECTORY_CHUNK_SIZE ) {
-		builderDirectoryChunk_t *chunk = arenaPush( arena, builderDirectoryChunk_t, 1 );
+	if ( !list->tail || list->tail->count == STRING_CHUNK_SIZE ) {
+		builderStringChunk_t *chunk = arenaPush( arena, builderStringChunk_t, 1 );
 		chunk->count	= 0;
 		chunk->next		= NULL;
 
-		if ( queue->tail ) {
-			queue->tail->next = chunk;
+		if ( list->tail ) {
+			list->tail->next = chunk;
 		} else {
-			queue->head = chunk;
+			list->head = chunk;
 		}
 
-		queue->tail = chunk;
+		list->tail = chunk;
 	}
 
-	queue->tail->items[queue->tail->count++] = directory;
+	list->tail->items[list->tail->count++] = string;
+	list->count++;
 }
 
 static bool Builder_VisitFiles( arena_t *results, const char *path, const builderFileVisitFlags_t visitFlags, builderFileVisitCallback_t callback, void *data ) {
 	BUILDER_ASSERT( path );
 	BUILDER_ASSERT( callback );
 
-	// the paths we build to walk the tree are ours alone - only the callback's allocations outlive us, and those go on resultsScratch
+	// the paths we build to walk the tree are ours alone - only the callback's allocations outlive us, and those go on results
 	scratch_t scratch = scratchGet( results );
 
-	builderDirectoryQueue_t directories = {0};
-	Builder_DirectoryQueuePush( scratch.arena, &directories, path );
+	builderStringList_t directories = {0};
+	Builder_StringListPush( scratch.arena, &directories, path );
 
-	builderDirectoryChunk_t *chunk = directories.head;
+	builderStringChunk_t *chunk = directories.head;
 	uint32_t chunkIndex = 0;
 
 	while ( chunk ) {
@@ -1320,7 +1324,7 @@ static bool Builder_VisitFiles( arena_t *results, const char *path, const builde
 					}
 
 					if ( visitFlags & BUILDER_FILE_VISIT_RECURSIVE ) {
-						Builder_DirectoryQueuePush( scratch.arena, &directories, fileInfo.fullFilename );
+						Builder_StringListPush( scratch.arena, &directories, fileInfo.fullFilename );
 					}
 				}
 			} else if ( visitFlags & BUILDER_FILE_VISIT_FILES ) {
@@ -1378,7 +1382,7 @@ static bool Builder_VisitFiles( arena_t *results, const char *path, const builde
 				}
 
 				if ( visitFlags & BUILDER_FILE_VISIT_RECURSIVE ) {
-					Builder_DirectoryQueuePush( scratch.arena, &directories, fileInfo.fullFilename );
+					Builder_StringListPush( scratch.arena, &directories, fileInfo.fullFilename );
 				}
 			} else if ( visitFlags & BUILDER_FILE_VISIT_FILES ) {
 				callback( results, &fileInfo, data );
@@ -1399,12 +1403,6 @@ static bool Builder_VisitFiles( arena_t *results, const char *path, const builde
 	return true;
 }
 
-typedef struct {
-	const char **files;
-	uint32_t count;
-	uint32_t capacity;
-} builderFileGlobResult_t;
-
 // There could be an optimisation here if we store whether there is an asterisk
 // As slice comparison can early out if count is not equal for the price of more memory?
 // We should wait for some more consistent performance benchmarks to test the difference
@@ -1421,17 +1419,8 @@ typedef struct {
 typedef struct {
 	const builderStringSliceArray_t patternSlices;
 	const uint32_t searchPathLen;
-	builderFileGlobResult_t *globResults;
+	builderStringList_t *globResults;
 } builderGlobVisitCallbackData_t;
-
-static void Builder_AddGlobbedFile( builderFileGlobResult_t *fileResults, const char *file ) {
-	if ( fileResults->count == fileResults->capacity ) {
-		fileResults->capacity = fileResults->capacity ? fileResults->capacity * 2 : 8;
-		fileResults->files = (const char **) realloc( fileResults->files, fileResults->capacity * sizeof( const char * ) );
-	}
-
-	fileResults->files[fileResults->count++] = file;
-}
 
 // remember to free sliceArray.data
 static builderStringSliceArray_t Builder_SliceFilePath( arena_t* results, const char *filePath ) {
@@ -1584,18 +1573,15 @@ static void Builder_GlobVisitCallback( arena_t *resultsArena, fileInfo_t *fileIn
 		// fileInfo->fullFilename lives on Builder_VisitFiles' internal scratch and won't survive past this
 		// call, so it has to be copied into resultsArena to outlive the walk.
 		const char *fullFilename = Builder_FormatString( resultsArena, "%s", fileInfo->fullFilename );
-		Builder_AddGlobbedFile( callbackData->globResults, fullFilename );
+		Builder_StringListPush( resultsArena, callbackData->globResults, fullFilename );
 	}
 
 	scratchRewind( &scratch);
 }
 
-static builderFileGlobResult_t Builder_GlobFiles( arena_t *resultsArena, const char **globPatterns ) {
-	builderFileGlobResult_t globResult = {
-		.files = NULL,
-		.count = 0,
-		.capacity = 0
-	};
+// builds onto whatever arena it's handed - the caller flattens it if it needs to index the result
+static builderStringList_t Builder_GlobFiles( arena_t *resultsArena, const char **globPatterns ) {
+	builderStringList_t globResult = {0};
 
 	scratch_t scratch = scratchGet( resultsArena );
 	// setup re-usable search path allocation
@@ -1618,7 +1604,7 @@ static builderFileGlobResult_t Builder_GlobFiles( arena_t *resultsArena, const c
 		if ( *pattern == '\0' ) {
 			// should I just let the compile step handle the empty strings?
 			if ( pattern != *globPatterns ) {
-				Builder_AddGlobbedFile( &globResult, *globPatterns ); // yes I realise this wasn't globbed \_O_O_/
+				Builder_StringListPush( resultsArena, &globResult, *globPatterns ); // yes I realise this wasn't globbed \_O_O_/
 				++globPatterns;
 			}
 			continue;
@@ -1806,7 +1792,7 @@ static bool Builder_GetWindowsSDKInstall( arena_t *results, builderWindowsSDKIns
 
 	if ( status == ERROR_SUCCESS ) {
 		// valueStrLength from RegQueryValueExA includes the null terminator for REG_SZ strings
-		// snapshot resultsScratch first - if this doesn't pan out (wrong type, or the read fails) we rewind
+		// snapshot results first - if this doesn't pan out (wrong type, or the read fails) we rewind
 		// back to here rather than leaving the failed attempt sat on it
 		arenaRewindSpot_t attempt = arenaTell( results );
 		char *windowsSDKRootStr = arenaPush( results, char, windowsSDKRootLength );
@@ -2715,14 +2701,29 @@ int Build( BuilderOptions *options ) {
 				return 1;
 			}
 
-			// glob step
-			builderFileGlobResult_t globResult = Builder_GlobFiles( buildScratch.arena, config->sourceFiles );
+			// glob step - flattened into one array because the compile job pool indexes into it by job number
+			builderStringList_t globList = Builder_GlobFiles( buildScratch.arena, config->sourceFiles );
+
+			uint32_t sourceFilesCount = globList.count;
+			const char **sourceFiles = NULL;
+
+			if ( sourceFilesCount > 0 ) {
+				sourceFiles = arenaPush( buildScratch.arena, const char *, sourceFilesCount );
+
+				uint32_t written = 0;
+
+				for ( builderStringChunk_t *chunk = globList.head; chunk; chunk = chunk->next ) {
+					for ( uint32_t i = 0; i < chunk->count; i++ ) {
+						sourceFiles[written++] = chunk->items[i];
+					}
+				}
+			}
 
 			// compilation step
 			{
 				const double compileTimeStart = Builder_TimeMS();
 
-				if ( globResult.count > 0 ) {
+				if ( sourceFilesCount > 0 ) {
 					// TODO: DM: 09/08/2026: is it OK to create and destroy a bunch of threads for each config?
 					builderCompileContext_t compileContext = {
 						.config				= config,
@@ -2737,17 +2738,17 @@ int Build( BuilderOptions *options ) {
 
 					builderCompileJobPool_t pool = {
 						.context			= &compileContext,
-						.sourceFiles		= globResult.files,
-						.sourceFilesCount	= globResult.count,
+						.sourceFiles		= sourceFiles,
+						.sourceFilesCount	= sourceFilesCount,
 					};
 
 					// only spin up additional threads once theres more than one file
 					// limit the number of threads we spin up to no higher than the number of CPU cores we have
 					uint32_t numCPUCores = Builder_GetNumCPUCores();
-					uint32_t numWorkers = ( numCPUCores < globResult.count ) ? numCPUCores : globResult.count;
+					uint32_t numWorkers = ( numCPUCores < sourceFilesCount ) ? numCPUCores : sourceFilesCount;
 					uint32_t numAdditionalThreads = ( numWorkers > 1 ) ? numWorkers - 1 : 0;
 
-					printf( "Compiling %u files across %u threads.\n", globResult.count, numWorkers );
+					printf( "Compiling %u files across %u threads.\n", sourceFilesCount, numWorkers );
 
 					builderThread_t *additionalThreads = NULL;
 					uint32_t numCreatedThreads = 0;
@@ -2808,8 +2809,8 @@ int Build( BuilderOptions *options ) {
 				StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.umLibPath );
 				StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.ucrtLibPath );
 
-				for ( uint32_t fileIndex = 0; fileIndex < globResult.count; ++fileIndex ) {
-					Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, globResult.files[fileIndex] );
+				for ( uint32_t fileIndex = 0; fileIndex < sourceFilesCount; ++fileIndex ) {
+					Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, sourceFiles[fileIndex] );
 				}
 
 				const char **additionalLibPath = config->additionalLibPaths;
@@ -2866,8 +2867,8 @@ int Build( BuilderOptions *options ) {
 					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "ar rcs " );
 					Builder_AppendBinaryPath( buildScratch.arena, &linkerArgs, config );
 
-					for ( uint32_t fileIndex = 0; fileIndex < globResult.count; ++fileIndex ) {
-						Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, globResult.files[fileIndex] );
+					for ( uint32_t fileIndex = 0; fileIndex < sourceFilesCount; ++fileIndex ) {
+						Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, sourceFiles[fileIndex] );
 					}
 				} else {
 					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "\"%s\" ", compilerPath );
@@ -2879,8 +2880,8 @@ int Build( BuilderOptions *options ) {
 					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-o " );
 					Builder_AppendBinaryPath( buildScratch.arena, &linkerArgs, config );
 
-					for ( uint32_t fileIndex = 0; fileIndex < globResult.count; ++fileIndex ) {
-						Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, globResult.files[fileIndex] );
+					for ( uint32_t fileIndex = 0; fileIndex < sourceFilesCount; ++fileIndex ) {
+						Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, sourceFiles[fileIndex] );
 					}
 
 					const char **additionalLibPath = config->additionalLibPaths;

@@ -2677,6 +2677,10 @@ int Build( BuilderOptions *options ) {
 	for ( uint32_t configIndex = 0; configIndex < configsToBuildCount; configIndex++ ) {
 		BuildConfig *config = &configsToBuild[configIndex];
 
+		// nothing this config allocates is wanted by the next one - the toolchain paths it reads were put on
+		// buildScratch before the loop, so they sit below this and the rewind can't reach them
+		arenaRewindSpot_t configStart = arenaTell( buildScratch.arena );
+
 		double compileTimeMS = 0.0;
 		double linkTimeMS = 0.0;
 
@@ -2934,6 +2938,8 @@ int Build( BuilderOptions *options ) {
 
 		totalCompileTimeMS += compileTimeMS;
 		totalLinkTimeMS += linkTimeMS;
+
+		arenaRewind( buildScratch.arena, &configStart );
 	}
 
 	// build summary

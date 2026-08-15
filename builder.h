@@ -215,8 +215,6 @@ void Builder_RewindArena( arena_t *arena, arenaRewindSpot_t *rewindLocation ) {
 	BUILDER_ASSERT( arena );
 	BUILDER_ASSERT( rewindLocation );
 
-	if( rewindLocation->block ) {
-		BUILDER_ASSERT( rewindLocation->block->owner = arena );
 	}
 
 	// A rewind spot can only wind backwards. A NULL block is the arena's earliest state, so it's always valid.

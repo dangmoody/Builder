@@ -132,8 +132,53 @@ int		Build( BuilderOptions *options );
 
 #ifdef BUILDER_IMPLEMENTATION
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN 1
+#include <Windows.h>
+#include <objbase.h>
+#include <oleauto.h>
+#if defined( _MSC_VER )
+#pragma comment( lib, "ole32.lib" )
+#pragma comment( lib, "oleaut32.lib" )
+#pragma comment( lib, "advapi32.lib" )
+#endif
+#elif defined( __linux__ )
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/stat.h>
+#include <dirent.h>
+#include <errno.h>
+#include <time.h>
+#include <pthread.h>
+#else
+#error Unrecognised platform.
+#endif
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdarg.h>
+#include <string.h>
+
+#ifdef __linux__
+#include <ctype.h>
+#endif
+
+#if defined( _WIN32 )
+#define BUILDER_PATH_SEPARATOR	'\\'
+#elif defined( __linux__ )
+#define BUILDER_PATH_SEPARATOR	'/'
+#endif
+
 #if defined( _MSC_VER ) && !defined( __cplusplus )
-#define BUILDER_THREAD_LOCAL __declspec( thread )
+#define BUILDER_THREAD_LOCAL	__declspec( thread )
+#else
+#define BUILDER_THREAD_LOCAL	__thread
+#endif
+
+#if defined( _WIN32 )
+#define BUILDER_MAX_PATH	MAX_PATH
+#elif defined( __linux__ )
+#define BUILDER_MAX_PATH	PATH_MAX
 #endif
 
 #ifndef BUILDER_COUNT_OF
@@ -145,7 +190,29 @@ int		Build( BuilderOptions *options );
 #define BUILDER_ASSERT assert
 #endif
 
-#include <stdlib.h>
+// alignof is only a keyword in C++ and C23. C11 and C17 have it as a macro in <stdalign.h>, which we'd rather not
+// pull in (or clash with), and _Alignof has been a keyword since C11 anyway.
+#ifdef __cplusplus
+#define BUILDER_ALIGNOF( type )		alignof( type )
+#elif defined( __STDC_VERSION__ ) && __STDC_VERSION__ >= 201112L
+#define BUILDER_ALIGNOF( type )		_Alignof( type )
+#else
+#define BUILDER_ALIGNOF( type )		__alignof__( type )
+#endif
+
+#define ARG_HELP_SHORT				"-h"
+#define ARG_HELP_LONG				"--help"
+#define ARG_CONFIG					"--config="
+
+#define ARENA_DEFAULT_BLOCK_SIZE	( 2 * 1024 * 1024 )
+
+#define NUM_SCRATCH_ARENAS			2
+
+enum {
+	BUILDER_VERSION_MAJOR	= 1,
+	BUILDER_VERSION_MINOR	= 0,
+	BUILDER_VERSION_PATCH	= 0,
+};
 
 typedef struct arena_t arena_t;
 
@@ -175,8 +242,6 @@ typedef struct scratch_t {
 	arenaRewindSpot_t	rewind;
 } scratch_t;
 
-
-#define NUM_SCRATCH_ARENAS 2
 
 BUILDER_THREAD_LOCAL arena_t g_scratches[NUM_SCRATCH_ARENAS];
 
@@ -215,6 +280,8 @@ void Builder_RewindArena( arena_t *arena, arenaRewindSpot_t *rewindLocation ) {
 	BUILDER_ASSERT( arena );
 	BUILDER_ASSERT( rewindLocation );
 
+	if ( rewindLocation->block ) {
+		BUILDER_ASSERT( rewindLocation->block->owner == arena );
 	}
 
 	// A rewind spot can only wind backwards. A NULL block is the arena's earliest state, so it's always valid.
@@ -255,8 +322,6 @@ void Builder_FreeScratch( void ) {
 		arena->tail = NULL;
 	}
 }
-
-#define ARENA_DEFAULT_BLOCK_SIZE ( 2 * 1024 * 1024 )
 
 void *Builder_ArenaAllocateInternal( arena_t *arena, size_t size, size_t alignment ) {
 	BUILDER_ASSERT( arena );
@@ -315,16 +380,6 @@ void *Builder_ArenaAllocateInternal( arena_t *arena, size_t size, size_t alignme
 	}
 }
 
-// alignof is only a keyword in C++ and C23. C11 and C17 have it as a macro in <stdalign.h>, which we'd rather not
-// pull in (or clash with), and _Alignof has been a keyword since C11 anyway.
-#ifdef __cplusplus
-#define BUILDER_ALIGNOF( type ) alignof( type )
-#elif defined( __STDC_VERSION__ ) && __STDC_VERSION__ >= 201112L
-#define BUILDER_ALIGNOF( type ) _Alignof( type )
-#else
-#define BUILDER_ALIGNOF( type ) __alignof__( type )
-#endif
-
 #define Builder_ArenaAlloc( arena, type, count )	( (type *) Builder_ArenaAllocateInternal( ( arena ), sizeof( type ) * ( count ), BUILDER_ALIGNOF( type ) ) )
 
 // Temporary stand-in until we have a proper growable array. There's no portable way to recover
@@ -335,52 +390,6 @@ void *Builder_ArenaAllocateInternal( arena_t *arena, size_t size, size_t alignme
 // scratch allocation - nothing here is individually freed until the whole arena rewinds.
 #define Builder_ArenaRealloc( arena, old, type, oldCount, newCount ) \
 	( (type *) memcpy( Builder_ArenaAlloc( ( arena ), type, ( newCount ) ), ( old ), sizeof( type ) * (	size_t ) ( oldCount ) ) )
-
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN 1
-#include <Windows.h>
-#include <objbase.h>
-#include <oleauto.h>
-#if defined( _MSC_VER )
-#pragma comment( lib, "ole32.lib" )
-#pragma comment( lib, "oleaut32.lib" )
-#pragma comment( lib, "advapi32.lib" )
-#endif
-#elif defined( __linux__ )
-#include <unistd.h>
-#include <sys/wait.h>
-#include <sys/stat.h>
-#include <dirent.h>
-#include <errno.h>
-#include <time.h>
-#include <pthread.h>
-#else
-#error Unrecognised platform.
-#endif
-
-#include <stdio.h>
-#include <stdarg.h>
-#include <string.h>
-
-#ifdef __linux__
-#include <ctype.h>
-#endif
-
-#if defined( _WIN32 )
-#define BUILDER_PATH_SEPARATOR '\\'
-#elif defined( __linux__ )
-#define BUILDER_PATH_SEPARATOR '/'
-#endif
-
-enum {
-	BUILDER_VERSION_MAJOR	= 1,
-	BUILDER_VERSION_MINOR	= 0,
-	BUILDER_VERSION_PATCH	= 0,
-};
-
-#define ARG_HELP_SHORT	"-h"
-#define ARG_HELP_LONG	"--help"
-#define ARG_CONFIG		"--config="
 
 static bool Builder_StringEquals( const char *a, const char *b ) {
 	return strcmp( a, b ) == 0;
@@ -1317,7 +1326,7 @@ static bool Builder_VisitFiles( arena_t *results, const char *path, const builde
 				}
 
 				if ( visitFlags & BUILDER_FILE_VISIT_RECURSIVE ) {
-					directories = scratchRealloc( &scratch, directories, const char *, directoriesCount, directoriesCount + 1 );
+					directories = Builder_ArenaRealloc( scratch.arena, directories, const char *, directoriesCount, directoriesCount + 1 );
 					directories[directoriesCount] = fileInfo.fullFilename;
 					directoriesCount++;
 				}
@@ -1508,7 +1517,7 @@ static void Builder_GlobVisitCallback( arena_t *resultsArena, fileInfo_t *fileIn
 	builderGlobVisitCallbackData_t *callbackData = (builderGlobVisitCallbackData_t *)data;
 
 	uint32_t filenameLen = strnlen( fileInfo->filename, 255 ); // filename length maxes here I think?
-	uint32_t fullFilenameLen = strnlen( fileInfo->fullFilename, MAX_PATH + filenameLen );
+	uint32_t fullFilenameLen = strnlen( fileInfo->fullFilename, BUILDER_MAX_PATH + filenameLen );
 
 	if ( fullFilenameLen - filenameLen < callbackData->searchPathLen ) {
 		printf( "Error: Search path length was longer than full file path for file %s\n", fileInfo->fullFilename );
@@ -1540,11 +1549,11 @@ static builderFileGlobResult_t Builder_GlobFiles( arena_t *resultsArena, const c
 
 	scratch_t scratch = Builder_GetScratch( resultsArena );
 	// setup re-usable search path allocation
-	char *const searchPath = Builder_ArenaAlloc( scratch.arena, char, (MAX_PATH + 1));
-	while ( globPatterns && *globPatterns) {
+	char *const searchPath = Builder_ArenaAlloc( scratch.arena, char, ( BUILDER_MAX_PATH + 1 ) );
+	while ( globPatterns && *globPatterns ) {
 		// start by copying and seeking to find if there is an asterisk, and then rewind to just after the preceding slash (or start if it is say **/*.cpp)
 		const char* pattern = *globPatterns;
-		while ( *pattern != '\0' )  {  // we could also early out if they put any erroneous characters
+		while ( *pattern != '\0' ) {  // we could also early out if they put any erroneous characters
 			if ( *(pattern++) == '*' ) {
 				while ( --pattern != *globPatterns ) {
 					if ( *pattern == '\\' || *pattern == '/' ) {
@@ -1567,7 +1576,7 @@ static builderFileGlobResult_t Builder_GlobFiles( arena_t *resultsArena, const c
 
 		const uint32_t globPathLen = pattern - *globPatterns;
 		if ( globPathLen != 0 ) {
-			if ( globPathLen > MAX_PATH ) {
+			if ( globPathLen > BUILDER_MAX_PATH ) {
 				printf( "Warning: Skipping pattern %s, path was larger than max path.\n", *globPatterns );
 				continue;
 			}
@@ -2406,6 +2415,12 @@ static bool Builder_CompileSourceFile( const builderCompileContext_t *context, c
 		}
 
 		StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", Builder_GetOptimizationString_Clang( config->optimization ) );
+
+#if defined( __linux__ )
+		if ( config->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "-fPIC " );
+		}
+#endif
 
 		StringBuilder_Appendf( scratch.arena, &compileArgs, "-c " );
 		StringBuilder_Appendf( scratch.arena, &compileArgs, "-o " );

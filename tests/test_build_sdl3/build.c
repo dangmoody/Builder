@@ -1,6 +1,9 @@
 #define BUILDER_IMPLEMENTATION
 #include "../../builder.h"
 
+#define BINARY_NAME		"SDL"
+#define BINARY_FOLDER	"bin/demos/SDL3"
+
 int main( int argc, char **argv ) {
 	BuilderOptions options = {
 		.argc = argc,
@@ -9,13 +12,10 @@ int main( int argc, char **argv ) {
 
 	Builder_RebuildSelf(argc,argv);
 
-	const char *sdlBinaryName = "SDL";
-	const char *sdlBinaryFolder = "bin/demos/SDL3";
-
 	BuildConfig sdl = {
 		.name			= "sdl",
-		.binaryName		= sdlBinaryName,
-		.binaryFolder	= sdlBinaryFolder,
+		.binaryName		= BINARY_NAME,
+		.binaryFolder	= BINARY_FOLDER,
 		.binaryType		= BINARY_TYPE_DYNAMIC_LIBRARY,
 		.sourceFiles = (const char *[]) {
 			"src/*.c",
@@ -117,6 +117,24 @@ int main( int argc, char **argv ) {
 			"SDL_PLATFORM_WIN32",
 			"HAVE_MODF",
 #elif defined( __linux__ )
+			"HAVE_LIBC",
+			"HAVE_STDARG_H",
+			"HAVE_STDDEF_H",
+			"HAVE_STDINT_H",
+			"HAVE_FLOAT_H",
+			"HAVE_LIMITS_H",
+			"HAVE_MATH_H",
+			"HAVE_SIGNAL_H",
+			"HAVE_STDIO_H",
+			"HAVE_STDLIB_H",
+			"HAVE_STRING_H",
+			"HAVE_STRINGS_H",
+			"HAVE_SYS_TYPES_H",
+			"HAVE_WCHAR_H",
+			"HAVE_INTTYPES_H",
+			"HAVE_MALLOC_H",
+			"HAVE_MEMORY_H",
+			"HAVE_ALLOCA_H",
 #endif
 			NULL
 		},
@@ -152,11 +170,11 @@ int main( int argc, char **argv ) {
 			NULL
 		},
 		.binaryName			= "sdl-demo-app",
-		.binaryFolder		= sdlBinaryFolder,
+		.binaryFolder		= BINARY_FOLDER,
 		.sourceFiles		= (const char *[]) { "demo-app/*.cpp", NULL },
 		.additionalIncludes	= (const char *[]) { "include", NULL },
-		.additionalLibPaths	= (const char *[]) { sdlBinaryFolder, NULL },
-		.additionalLibs		= (const char *[]) { sdlBinaryName, NULL },
+		.additionalLibPaths	= (const char *[]) { BINARY_FOLDER, NULL },
+		.additionalLibs		= (const char *[]) { ":" BINARY_NAME ".so", NULL },
 		.warningsAsErrors	= true,
 	};
 

@@ -113,14 +113,14 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 	BUILDER_ASSERT( options->argc > 0 && options->argv );
 
 	// everything built in here goes into a file and is then done with - nothing outlives this call
-	scratch_t scratch = scratchGet( NULL );
+	scratch_t scratch = Builder_GetScratch( NULL );
 
 	const char *buildCommand = ( zedOptions->buildCommand && zedOptions->buildCommand[0] ) ? zedOptions->buildCommand : options->argv[0];
 
 	// tasks.json
 	{
 		if ( zedOptions->taskConfigsCount == 0 ) {
-			zedOptions->taskConfigs = arenaPush( scratch.arena, ZedTaskConfig, options->configsCount );
+			zedOptions->taskConfigs = Builder_ArenaAlloc( scratch.arena, ZedTaskConfig, options->configsCount );
 			zedOptions->taskConfigsCount = options->configsCount;
 
 			for ( uint32_t configIndex = 0; configIndex < options->configsCount; configIndex++ ) {
@@ -185,7 +185,7 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 		}
 
 		if ( !wroteFile ) {
-			scratchRewind( &scratch );
+			Builder_RewindScratch( &scratch );
 			return false;
 		}
 	}
@@ -195,7 +195,7 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 		bool ok = true;
 
 		if ( zedOptions->debugConfigsCount == 0 ) {
-			zedOptions->debugConfigs = arenaPush( scratch.arena, ZedDebugConfig, options->configsCount );
+			zedOptions->debugConfigs = Builder_ArenaAlloc( scratch.arena, ZedDebugConfig, options->configsCount );
 			zedOptions->debugConfigsCount = options->configsCount;
 
 			for ( uint32_t configIndex = 0; configIndex < options->configsCount; configIndex++ ) {
@@ -310,14 +310,14 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 		}
 
 		if ( !ok ) {
-			scratchRewind( &scratch );
+			Builder_RewindScratch( &scratch );
 			return false;
 		}
 	}
 
 	printf( "\n" );
 
-	scratchRewind( &scratch );
+	Builder_RewindScratch( &scratch );
 
 	return true;
 }

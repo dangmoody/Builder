@@ -178,14 +178,14 @@ bool Builder_GenerateVSCodeJSONFiles( BuilderOptions *options, VSCodeJSONOptions
 	BUILDER_ASSERT( options->argc > 0 && options->argv );
 
 	// everything built in here goes into a file and is then done with - nothing outlives this call
-	scratch_t scratch = scratchGet( NULL );
+	scratch_t scratch = Builder_GetScratch( NULL );
 
 	const char *buildCommand = ( vsCodeOptions->buildCommand && vsCodeOptions->buildCommand[0] ) ? vsCodeOptions->buildCommand : options->argv[0];
 
 	// c_cpp_properties.json
 	{
 		if ( vsCodeOptions->cppPropertiesConfigsCount == 0 ) {
-			vsCodeOptions->cppPropertiesConfigs = arenaPush( scratch.arena, VSCodeCppPropertiesConfig, options->configsCount );
+			vsCodeOptions->cppPropertiesConfigs = Builder_ArenaAlloc( scratch.arena, VSCodeCppPropertiesConfig, options->configsCount );
 			vsCodeOptions->cppPropertiesConfigsCount = options->configsCount;
 
 			for ( uint32_t configIndex = 0; configIndex < options->configsCount; configIndex++ ) {
@@ -308,7 +308,7 @@ bool Builder_GenerateVSCodeJSONFiles( BuilderOptions *options, VSCodeJSONOptions
 		}
 
 		if ( !wroteFile ) {
-			scratchRewind( &scratch );
+			Builder_RewindScratch( &scratch );
 			return false;
 		}
 	}
@@ -316,7 +316,7 @@ bool Builder_GenerateVSCodeJSONFiles( BuilderOptions *options, VSCodeJSONOptions
 	// tasks.json
 	{
 		if ( vsCodeOptions->taskConfigsCount == 0 ) {
-			vsCodeOptions->taskConfigs = arenaPush( scratch.arena, VSCodeTaskConfig, options->configsCount );
+			vsCodeOptions->taskConfigs = Builder_ArenaAlloc( scratch.arena, VSCodeTaskConfig, options->configsCount );
 			vsCodeOptions->taskConfigsCount = options->configsCount;
 
 			for ( uint32_t configIndex = 0; configIndex < options->configsCount; configIndex++ ) {
@@ -384,7 +384,7 @@ bool Builder_GenerateVSCodeJSONFiles( BuilderOptions *options, VSCodeJSONOptions
 		}
 
 		if ( !wroteFile ) {
-			scratchRewind( &scratch );
+			Builder_RewindScratch( &scratch );
 			return false;
 		}
 	}
@@ -393,7 +393,7 @@ bool Builder_GenerateVSCodeJSONFiles( BuilderOptions *options, VSCodeJSONOptions
 	{
 
 		if ( vsCodeOptions->launchConfigsCount == 0 ) {
-			vsCodeOptions->launchConfigs = arenaPush( scratch.arena, VSCodeLaunchConfig, options->configsCount );
+			vsCodeOptions->launchConfigs = Builder_ArenaAlloc( scratch.arena, VSCodeLaunchConfig, options->configsCount );
 			vsCodeOptions->launchConfigsCount = options->configsCount;
 
 			for ( uint32_t configIndex = 0; configIndex < options->configsCount; configIndex++ ) {
@@ -558,14 +558,14 @@ bool Builder_GenerateVSCodeJSONFiles( BuilderOptions *options, VSCodeJSONOptions
 		}
 
 		if ( !wroteFile ) {
-			scratchRewind( &scratch );
+			Builder_RewindScratch( &scratch );
 			return false;
 		}
 	}
 
 	printf( "\n" );
 
-	scratchRewind( &scratch );
+	Builder_RewindScratch( &scratch );
 
 	return true;
 }

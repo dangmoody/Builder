@@ -684,6 +684,11 @@ static bool Builder_WriteEntireFile( const char *filename, const char *content )
 	return true;
 }
 
+static bool Builder_WriteStringBuilderToFile( arena_t *arena, const stringBuilder_t *sb, const char *filename ) {
+	const char *str = StringBuilder_ToString( arena, (stringBuilder_t *) sb );
+	return Builder_WriteEntireFile( filename, str );
+}
+
 static void SetCmdLineArgs( BuilderOptions *options, const int argc, char **argv ) {
 	options->argc = argc;
 	options->argv = argv;

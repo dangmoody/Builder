@@ -2782,6 +2782,10 @@ int Build( BuilderOptions *options ) {
 					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/DLL " );
 				}
 
+				if ( !config->removeSymbols ) {
+					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/DEBUG " );
+				}
+
 				StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/OUT:" );
 				Builder_AppendBinaryPath( buildScratch.arena, &linkerArgs, config );
 

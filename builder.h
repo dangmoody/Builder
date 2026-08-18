@@ -313,7 +313,7 @@ void Builder_FreeScratch( void ) {
 		while ( block != NULL ) {
 			arenaBlock_t *next = block->next;
 
-			free( block );	// block->block was allocated as part of this same malloc - see scratchAllocate().
+			free( block );	// block->block was allocated as part of this same malloc - see arenaAllocate().
 
 			block = next;
 		}
@@ -707,26 +707,48 @@ static bool HasCommandLineArg( BuilderOptions *options, const char *arg ) {
 // growable stack of the configs currently being registered (config -> config->dependsOn[i] -> ...), used to detect cycles
 // bundling the pointer/count/capacity together means only a single pointer to this struct needs to be threaded through the
 // recursion below - growing builderConfigAncestry_t::items is then just a field mutation every recursive call already sees
-// TODO: DM: 08/08/2026: Tom's growable array
-typedef struct builderConfigAncestry_t {
-	BuildConfig	**items;
+#define CONFIG_ANCESTRY_CHUNK_SIZE 8
+typedef struct builderConfigAncestryChunk_t {
+	BuildConfig	*items[CONFIG_ANCESTRY_CHUNK_SIZE];
 	uint32_t	count;
-	uint32_t	capacity;
+	struct builderConfigAncestryChunk_t	*next;
+	struct builderConfigAncestryChunk_t	*previous;
+} builderConfigAncestryChunk_t;
+
+typedef struct builderConfigAncestry_t {
+	builderConfigAncestryChunk_t* head;
+	builderConfigAncestryChunk_t* tail;
 } builderConfigAncestry_t;
 
 static void Builder_ConfigStackPush( arena_t *arena, builderConfigAncestry_t *stack, BuildConfig *config ) {
-	if ( stack->count == stack->capacity ) {
-		uint32_t newCapacity = stack->capacity ? stack->capacity * 2 : 8;
+	BUILDER_ASSERT( stack );
 
-		// stack->count (not the old capacity) - anything between count and capacity was never written
-		stack->items = stack->capacity
-			? Builder_ArenaRealloc( arena, stack->items, BuildConfig *, stack->count, newCapacity )
-			: Builder_ArenaAlloc( arena, BuildConfig *, newCapacity );
+	// popping walks tail back, so tail can be NULL while head still holds the chain, and any chunk past the tail
+	// was emptied rather than freed - pick those up before allocating another
+	builderConfigAncestryChunk_t *tail = stack->tail ? stack->tail : stack->head;
 
-		stack->capacity = newCapacity;
+	if ( tail && tail->count == CONFIG_ANCESTRY_CHUNK_SIZE ) {
+		tail = tail->next;
 	}
 
-	stack->items[stack->count++] = config;
+	if ( !tail ) {
+		builderConfigAncestryChunk_t *chunk = Builder_ArenaAlloc( arena, builderConfigAncestryChunk_t, 1 );
+		chunk->count	= 0;
+		chunk->next		= NULL;
+		chunk->previous	= stack->tail;
+
+		if ( stack->tail ) {
+			stack->tail->next = chunk;
+		} else {
+			stack->head = chunk;
+		}
+
+		tail = chunk;
+	}
+
+	stack->tail = tail;
+
+	stack->tail->items[stack->tail->count++] = config;
 }
 
 // scratch backs ancestry->items - its lifetime is exactly one AddBuildConfig() call (see AddBuildConfig() below,
@@ -735,24 +757,28 @@ static void Builder_ConfigStackPush( arena_t *arena, builderConfigAncestry_t *st
 static void AddBuildConfigInternal( arena_t *arena, BuilderOptions *options, BuildConfig *config, builderConfigAncestry_t *ancestry, BuildConfig **outConfigs, uint32_t *outConfigsCount ) {
 	// if no ancestry then dont do circular dependency checking
 	if ( ancestry ) {
-		for ( uint32_t ancestorIndex = 0; ancestorIndex < ancestry->count; ancestorIndex++ ) {
-			if ( ancestry->items[ancestorIndex] == config ) {
-				//Throwaway scratch; we're about to exit
-				scratch_t errorScratch = Builder_GetScratch( NULL );
-				stringBuilder_t cycle = {0};
+		builderConfigAncestryChunk_t* next = ancestry->head;
+		while ( next ) {
+			for ( uint32_t ancestorIndex = 0; ancestorIndex < next->count; ancestorIndex++ ) {
+				if ( next->items[ancestorIndex] == config ) {
+					//Throwaway scratch; we're about to exit
+					scratch_t errorScratch = Builder_GetScratch(NULL );
+					stringBuilder_t cycle = {0};
 
-				for ( uint32_t cycleIndex = ancestorIndex; cycleIndex < ancestry->count; cycleIndex++ ) {
-					const char *cycleConfigName = ancestry->items[cycleIndex]->name;
-					StringBuilder_Appendf( errorScratch.arena, &cycle, "%s -> ", cycleConfigName ? cycleConfigName : "(unnamed config)" );
+					for ( uint32_t cycleIndex = ancestorIndex; cycleIndex < next->count; cycleIndex++ ) {
+						const char *cycleConfigName = next->items[cycleIndex]->name;
+						StringBuilder_Appendf( errorScratch.arena, &cycle, "%s -> ", cycleConfigName ? cycleConfigName : "(unnamed config)" );
+					}
+
+					StringBuilder_Appendf( errorScratch.arena, &cycle, "%s", config->name ? config->name : "(unnamed config)" );
+
+					char *cycleString = StringBuilder_ToString( errorScratch.arena, &cycle );
+					Builder_Error( "Cyclic BuildConfig::dependsOn detected: %s\n", cycleString );
+
+					exit( 1 );
 				}
-
-				StringBuilder_Appendf( errorScratch.arena, &cycle, "%s", config->name ? config->name : "(unnamed config)" );
-
-				char *cycleString = StringBuilder_ToString( errorScratch.arena, &cycle );
-				Builder_Error( "Cyclic BuildConfig::dependsOn detected: %s\n", cycleString );
-
-				exit( 1 );
 			}
+			next = next->next;
 		}
 
 		Builder_ConfigStackPush( arena, ancestry, config );
@@ -769,8 +795,14 @@ static void AddBuildConfigInternal( arena_t *arena, BuilderOptions *options, Bui
 		}
 	}
 
-	if ( ancestry ) {
-		ancestry->count--;
+	if ( ancestry && ancestry->tail ) {
+		if(ancestry->tail->count > 0) {
+			ancestry->tail->count--;
+
+			if( ancestry->tail->count == 0 ) {
+				ancestry->tail = ancestry->tail->previous;
+			}
+		}
 	}
 
 	// multiple configs can rely on the same config (e.g. configs A and B may both rely on config C)
@@ -1211,7 +1243,7 @@ typedef struct {
 	const char	*fullFilename;
 } fileInfo_t;
 
-// resultsScratch is for anything the callback allocates that has to outlive the walk.  It's optional - pass NULL if the
+// results is for anything the callback allocates that has to outlive the walk.  It's optional - pass NULL if the
 // callback doesn't allocate.  Builder_VisitFiles() never allocates from it itself.
 typedef void ( *builderFileVisitCallback_t )( arena_t *resultsArena, fileInfo_t *fileInfo, void *data );
 
@@ -1222,24 +1254,65 @@ typedef enum {
 } builderFileVisitFlagBits_t;
 typedef uint32_t builderFileVisitFlags_t;
 
+#define STRING_CHUNK_SIZE 16
+
+// Grows by chaining another chunk on rather than reallocating, so entries already added never move and it can be
+// appended to while it's being walked.
+typedef struct builderStringChunk_t {
+	const char					*items[STRING_CHUNK_SIZE];
+	uint32_t					count;
+	struct builderStringChunk_t	*next;
+} builderStringChunk_t;
+
+typedef struct builderStringList_t {
+	builderStringChunk_t	*head;
+	builderStringChunk_t	*tail;
+	uint32_t				count;
+} builderStringList_t;
+
+static void Builder_StringListPush( arena_t *arena, builderStringList_t *list, const char *string ) {
+	BUILDER_ASSERT( list );
+
+	if ( !list->tail || list->tail->count == STRING_CHUNK_SIZE ) {
+		builderStringChunk_t *chunk = Builder_ArenaAlloc( arena, builderStringChunk_t, 1 );
+		chunk->count	= 0;
+		chunk->next		= NULL;
+
+		if ( list->tail ) {
+			list->tail->next = chunk;
+		} else {
+			list->head = chunk;
+		}
+
+		list->tail = chunk;
+	}
+
+	list->tail->items[list->tail->count++] = string;
+	list->count++;
+}
+
 static bool Builder_VisitFiles( arena_t *results, const char *path, const builderFileVisitFlags_t visitFlags, builderFileVisitCallback_t callback, void *data ) {
 	BUILDER_ASSERT( path );
 	BUILDER_ASSERT( callback );
 
-	// the paths we build to walk the tree are ours alone - only the callback's allocations outlive us, and those go on resultsScratch
-	scratch_t scratch = Builder_GetScratch( results );
+	// the paths we build to walk the tree are ours alone - only the callback's allocations outlive us, and those go on results
+	scratch_t scratch = Builder_GetScratch(results );
 
-	// TODO: DM: 05/08/2026: Tom's chunked array
-	uint32_t directoriesCount = 0;
-	const char **directories = Builder_ArenaAlloc( scratch.arena, const char *, 1 );
-	directories[directoriesCount++] = path;
+	builderStringList_t directories = {0};
+	Builder_StringListPush( scratch.arena, &directories, path );
 
-	uint32_t dirIndex = 0;
+	builderStringChunk_t *chunk = directories.head;
+	uint32_t chunkIndex = 0;
 
-	while ( dirIndex < directoriesCount ) {
-		const char *dir = directories[dirIndex];
+	while ( chunk ) {
+		// walking a folder pushes its subfolders on, so count grows underneath this and next appears when it overflows
+		if ( chunkIndex == chunk->count ) {
+			chunk = chunk->next;
+			chunkIndex = 0;
+			continue;
+		}
 
-		dirIndex += 1;
+		const char *dir = chunk->items[chunkIndex++];
 
 		size_t dirLength = strlen( dir );
 		bool dirHasTrailingSeparator = dirLength > 0 && ( dir[dirLength - 1] == '\\' || dir[dirLength - 1] == '/' );
@@ -1271,9 +1344,7 @@ static bool Builder_VisitFiles( arena_t *results, const char *path, const builde
 					}
 
 					if ( visitFlags & BUILDER_FILE_VISIT_RECURSIVE ) {
-						directories = Builder_ArenaRealloc( scratch.arena, directories, const char *, directoriesCount, directoriesCount + 1 );
-						directories[directoriesCount] = fileInfo.fullFilename;
-						directoriesCount++;
+						Builder_StringListPush( scratch.arena, &directories, fileInfo.fullFilename );
 					}
 				}
 			} else if ( visitFlags & BUILDER_FILE_VISIT_FILES ) {
@@ -1331,9 +1402,7 @@ static bool Builder_VisitFiles( arena_t *results, const char *path, const builde
 				}
 
 				if ( visitFlags & BUILDER_FILE_VISIT_RECURSIVE ) {
-					directories = Builder_ArenaRealloc( scratch.arena, directories, const char *, directoriesCount, directoriesCount + 1 );
-					directories[directoriesCount] = fileInfo.fullFilename;
-					directoriesCount++;
+					Builder_StringListPush( scratch.arena, &directories, fileInfo.fullFilename );
 				}
 			} else if ( visitFlags & BUILDER_FILE_VISIT_FILES ) {
 				callback( results, &fileInfo, data );
@@ -1354,12 +1423,6 @@ static bool Builder_VisitFiles( arena_t *results, const char *path, const builde
 	return true;
 }
 
-typedef struct {
-	const char **files;
-	uint32_t count;
-	uint32_t capacity;
-} builderFileGlobResult_t;
-
 // There could be an optimisation here if we store whether there is an asterisk
 // As slice comparison can early out if count is not equal for the price of more memory?
 // We should wait for some more consistent performance benchmarks to test the difference
@@ -1376,17 +1439,8 @@ typedef struct {
 typedef struct {
 	const builderStringSliceArray_t patternSlices;
 	const uint32_t searchPathLen;
-	builderFileGlobResult_t *globResults;
+	builderStringList_t *globResults;
 } builderGlobVisitCallbackData_t;
-
-static void Builder_AddGlobbedFile( builderFileGlobResult_t *fileResults, const char *file ) {
-	if ( fileResults->count == fileResults->capacity ) {
-		fileResults->capacity = fileResults->capacity ? fileResults->capacity * 2 : 8;
-		fileResults->files = (const char **) realloc( fileResults->files, fileResults->capacity * sizeof( const char * ) );
-	}
-
-	fileResults->files[fileResults->count++] = file;
-}
 
 // remember to free sliceArray.data
 static builderStringSliceArray_t Builder_SliceFilePath( arena_t* results, const char *filePath ) {
@@ -1539,18 +1593,15 @@ static void Builder_GlobVisitCallback( arena_t *resultsArena, fileInfo_t *fileIn
 		// fileInfo->fullFilename lives on Builder_VisitFiles' internal scratch and won't survive past this
 		// call, so it has to be copied into resultsArena to outlive the walk.
 		const char *fullFilename = Builder_FormatString( resultsArena, "%s", fileInfo->fullFilename );
-		Builder_AddGlobbedFile( callbackData->globResults, fullFilename );
+		Builder_StringListPush( resultsArena, callbackData->globResults, fullFilename );
 	}
 
 	Builder_RewindScratch( &scratch);
 }
 
-static builderFileGlobResult_t Builder_GlobFiles( arena_t *resultsArena, const char **globPatterns ) {
-	builderFileGlobResult_t globResult = {
-		.files = NULL,
-		.count = 0,
-		.capacity = 0
-	};
+// builds onto whatever arena it's handed - the caller flattens it if it needs to index the result
+static builderStringList_t Builder_GlobFiles( arena_t *resultsArena, const char **globPatterns ) {
+	builderStringList_t globResult = {0};
 
 	scratch_t scratch = Builder_GetScratch( resultsArena );
 	// setup re-usable search path allocation
@@ -1573,7 +1624,7 @@ static builderFileGlobResult_t Builder_GlobFiles( arena_t *resultsArena, const c
 		if ( *pattern == '\0' ) {
 			// should I just let the compile step handle the empty strings?
 			if ( pattern != *globPatterns ) {
-				Builder_AddGlobbedFile( &globResult, *globPatterns ); // yes I realise this wasn't globbed \_O_O_/
+				Builder_StringListPush( resultsArena, &globResult, *globPatterns ); // yes I realise this wasn't globbed \_O_O_/
 				++globPatterns;
 			}
 			continue;
@@ -1674,9 +1725,13 @@ typedef struct {
 	builderMSVCVersion_t	version;
 } builderMSVCInstall_t;
 
-// TODO: DM: 05/08/2026: Tom's chunked array
+// How many Windows SDK versions / MSVC toolsets we're willing to find on one machine. User can specify with defines
+#ifndef BUILDER_MAX_TOOLCHAIN_VERSIONS
+#define BUILDER_MAX_TOOLCHAIN_VERSIONS 16
+#endif
+
 typedef struct {
-	builderMSVCInstall_t	*installs;
+	builderMSVCInstall_t	installs[BUILDER_MAX_TOOLCHAIN_VERSIONS];
 	uint32_t				installsCount;
 } builderFoundMSVCInstallData_t;
 
@@ -1695,9 +1750,8 @@ typedef struct {
 	builderWindowsSDKVersion_t	version;
 } builderWindowsSDKInstall_t;
 
-// TODO: DM: 05/08/2026: Tom's chunked array
 typedef struct {
-	builderWindowsSDKVersion_t	*versions;
+	builderWindowsSDKVersion_t	versions[BUILDER_MAX_TOOLCHAIN_VERSIONS];
 	uint32_t					versionsCount;
 } builderFoundWindowsSDKVersionData_t;
 
@@ -1710,9 +1764,8 @@ static void OnWindowsSDKVersionFound( arena_t *results, fileInfo_t *fileInfo, vo
 		return;
 	}
 
-	foundData->versions = foundData->versionsCount
-		? Builder_ArenaRealloc( results, foundData->versions, builderWindowsSDKVersion_t, foundData->versionsCount, foundData->versionsCount + 1 )
-		: Builder_ArenaAlloc( results, builderWindowsSDKVersion_t, 1 );
+	BUILDER_ASSERT( foundData->versionsCount < BUILDER_MAX_TOOLCHAIN_VERSIONS && "Found more Windows SDK versions than BUILDER_MAX_TOOLCHAIN_VERSIONS allows for. Define this above builder.h to expand the search" );
+
 	foundData->versions[foundData->versionsCount++] = version;
 }
 
@@ -1734,8 +1787,8 @@ static bool Builder_GetWindowsSDKInstall( arena_t *results, builderWindowsSDKIns
 	bool success = false;
 	HKEY key = NULL;
 	const char *windowsSDKRoot = NULL;
-	builderWindowsSDKVersion_t *versions = NULL;
-	uint32_t versionsCount = 0;
+
+	builderFoundWindowsSDKVersionData_t foundData = {0};
 	bool found = false;
 
 	const char *winSDKRegPath = "SOFTWARE\\Microsoft\\Windows Kits\\Installed Roots";
@@ -1759,7 +1812,7 @@ static bool Builder_GetWindowsSDKInstall( arena_t *results, builderWindowsSDKIns
 
 	if ( status == ERROR_SUCCESS ) {
 		// valueStrLength from RegQueryValueExA includes the null terminator for REG_SZ strings
-		// snapshot resultsScratch first - if this doesn't pan out (wrong type, or the read fails) we rewind
+		// snapshot results first - if this doesn't pan out (wrong type, or the read fails) we rewind
 		// back to here rather than leaving the failed attempt sat on it
 		arenaRewindSpot_t attempt = Builder_ArenaTell( results );
 		char *windowsSDKRootStr = Builder_ArenaAlloc( results, char, windowsSDKRootLength );
@@ -1790,17 +1843,7 @@ static bool Builder_GetWindowsSDKInstall( arena_t *results, builderWindowsSDKIns
 	{
 		char *windowsSDKLibFolder = Builder_FormatString( results, "%sLib", windowsSDKRoot );
 
-		builderFoundWindowsSDKVersionData_t foundData = {
-			.versions		= versions,
-			.versionsCount	= versionsCount,
-		};
-
-		// resultsScratch, not a local scratch - foundData.versions has to survive past this block, down to the qsort() below
 		bool visited = Builder_VisitFiles( results, windowsSDKLibFolder, BUILDER_FILE_VISIT_FOLDERS, OnWindowsSDKVersionFound, &foundData );
-
-
-		versions = foundData.versions;
-		versionsCount = foundData.versionsCount;
 
 		if ( !visited ) {
 			Builder_Error( "Failed to query your Windows SDK root folder for the version of the Windows SDK that you asked for.  Do you definitely have at least one version of the Windows SDK installed?\n" );
@@ -1808,17 +1851,17 @@ static bool Builder_GetWindowsSDKInstall( arena_t *results, builderWindowsSDKIns
 		}
 	}
 
-	if ( versionsCount == 0 ) {
+	if ( foundData.versionsCount == 0 ) {
 		Builder_Error( "Failed to find any versions of the Windows SDK installed under \"%s\".\n", windowsSDKRoot );
 		goto cleanup;
 	}
 
 	// newest version first
-	qsort( versions, versionsCount, sizeof( builderWindowsSDKVersion_t ), Builder_CompareWindowsSDKVersions );
+	qsort( foundData.versions, foundData.versionsCount, sizeof( builderWindowsSDKVersion_t ), Builder_CompareWindowsSDKVersions );
 
 	// find the first windows SDK folder that isnt malformed
-	for ( uint32_t versionIndex = 0; versionIndex < versionsCount; versionIndex++ ) {
-		builderWindowsSDKVersion_t *version = &versions[versionIndex];
+	for ( uint32_t versionIndex = 0; versionIndex < foundData.versionsCount; versionIndex++ ) {
+		builderWindowsSDKVersion_t *version = &foundData.versions[versionIndex];
 
 		// these go straight onto the results scratch because they're what we hand back if this version turns out to be the one.
 		// if it isn't, this marker lets us drop just this attempt without touching whatever the caller already had in there
@@ -1902,7 +1945,7 @@ static bool Builder_GetWindowsSDKInstall( arena_t *results, builderWindowsSDKIns
 			"Failed to find a valid installation of the Windows SDK on your machine.\n"
 			"You have %u versions of the Windows SDK installed on your machine, and somehow all of them appear to be malformed.\n"
 			"You need to install a version through the Visual Studio Installer, or via the separate Build Tools installer from Microsoft.\n"
-			, versionsCount
+			, foundData.versionsCount
 		);
 
 		goto cleanup;
@@ -1940,9 +1983,8 @@ static void Builder_OnMSVCInstallFound( arena_t *results, fileInfo_t *fileInfo, 
 		.version		= version,
 	};
 
-	foundData->installs = foundData->installsCount
-		? Builder_ArenaRealloc( results, foundData->installs, builderMSVCInstall_t, foundData->installsCount, foundData->installsCount + 1 )
-		: Builder_ArenaAlloc( results, builderMSVCInstall_t, 1 );
+	BUILDER_ASSERT( foundData->installsCount < BUILDER_MAX_TOOLCHAIN_VERSIONS && "Found more MSVC installs than BUILDER_MAX_TOOLCHAIN_VERSIONS allows for. Define this above builder.h to expand the search" );
+
 	foundData->installs[foundData->installsCount++] = install;
 }
 
@@ -2027,8 +2069,7 @@ static bool Builder_GetMSVCInstall( arena_t *results, builderMSVCInstall_t *outI
 	ULONG foundInstance = 0;
 	hr = instances->vtable->Next( instances, 1, &instance, &foundInstance );
 
-	builderMSVCInstall_t *foundMSVCInstalls = NULL;
-	uint32_t foundMSVCInstallsCount = 0;
+	builderFoundMSVCInstallData_t foundData = {0};
 
 	while ( foundInstance ) {
 		BSTR visualStudioInstallationPathWide = NULL;
@@ -2072,38 +2113,30 @@ static bool Builder_GetMSVCInstall( arena_t *results, builderMSVCInstall_t *outI
 
 		char *msvcRootFolder = Builder_FormatString( scratch.arena, "%s\\VC\\Tools\\MSVC", visualStudioInstallationPath );
 
-		builderFoundMSVCInstallData_t foundData = {
-			.installs		= foundMSVCInstalls,
-			.installsCount	= foundMSVCInstallsCount,
-		};
-
 		if ( !Builder_VisitFiles( results, msvcRootFolder, BUILDER_FILE_VISIT_FOLDERS, Builder_OnMSVCInstallFound, &foundData ) ) {
 			Builder_Error( "Failed to query for MSVC installation folders under \"%s\".\n", msvcRootFolder );
 			instance->vtable->Release( instance );
 			goto cleanup;
 		}
 
-		foundMSVCInstalls = foundData.installs;
-		foundMSVCInstallsCount = foundData.installsCount;
-
 		instance->vtable->Release( instance );
 
 		hr = instances->vtable->Next( instances, 1, &instance, &foundInstance );
 	}
 
-	if ( foundMSVCInstallsCount == 0 ) {
+	if ( foundData.installsCount == 0 ) {
 		success = Builder_MSVCNotInstalled();
 		goto cleanup;
 	}
 
 	// newest version first
-	qsort( foundMSVCInstalls, foundMSVCInstallsCount, sizeof( builderMSVCInstall_t ), Builder_CompareMSVCInstallVersions );
+	qsort( foundData.installs, foundData.installsCount, sizeof( builderMSVCInstall_t ), Builder_CompareMSVCInstallVersions );
 
 	bool found = false;
 	uint32_t useVersionIndex = 0;
 
-	for ( uint32_t versionIndex = 0; versionIndex < foundMSVCInstallsCount; versionIndex++ ) {
-		builderMSVCInstall_t *install = &foundMSVCInstalls[versionIndex];
+	for ( uint32_t versionIndex = 0; versionIndex < foundData.installsCount; versionIndex++ ) {
+		builderMSVCInstall_t *install = &foundData.installs[versionIndex];
 
 		uint32_t missingFoldersCount = 0;
 		const char *missingFolders[2] = {};
@@ -2153,7 +2186,7 @@ static bool Builder_GetMSVCInstall( arena_t *results, builderMSVCInstall_t *outI
 		goto cleanup;
 	}
 
-	*outInstall = foundMSVCInstalls[useVersionIndex];
+	*outInstall = foundData.installs[useVersionIndex];
 
 	printf( "Using latest valid MSVC version that was found, which was: %d.%d.%d\n", outInstall->version.v0, outInstall->version.v1, outInstall->version.v2 );
 
@@ -2660,8 +2693,6 @@ int Build( BuilderOptions *options ) {
 		}
 	}
 
-	// TODO: DM: 10/08/2026: either do proper cleanup ourselves via goto to account for all cases
-	// or wait for Tom's linear allocator
 	uint32_t configsToBuildCount = 0;
 	BuildConfig *configsToBuild = NULL;
 	AddBuildConfigInternal( NULL, options, targetConfig, NULL, &configsToBuild, &configsToBuildCount );
@@ -2671,6 +2702,10 @@ int Build( BuilderOptions *options ) {
 
 	for ( uint32_t configIndex = 0; configIndex < configsToBuildCount; configIndex++ ) {
 		BuildConfig *config = &configsToBuild[configIndex];
+
+		// nothing this config allocates is wanted by the next one - the toolchain paths it reads were put on
+		// buildScratch before the loop, so they sit below this and the rewind can't reach them
+		arenaRewindSpot_t configStart = Builder_ArenaTell( buildScratch.arena );
 
 		double compileTimeMS = 0.0;
 		double linkTimeMS = 0.0;
@@ -2696,14 +2731,29 @@ int Build( BuilderOptions *options ) {
 				return 1;
 			}
 
-			// glob step
-			builderFileGlobResult_t globResult = Builder_GlobFiles( buildScratch.arena, config->sourceFiles );
+			// glob step - flattened into one array because the compile job pool indexes into it by job number
+			builderStringList_t globList = Builder_GlobFiles( buildScratch.arena, config->sourceFiles );
+
+			uint32_t sourceFilesCount = globList.count;
+			const char **sourceFiles = NULL;
+
+			if ( sourceFilesCount > 0 ) {
+				sourceFiles = Builder_ArenaAlloc(buildScratch.arena, const char *, sourceFilesCount );
+
+				uint32_t written = 0;
+
+				for ( builderStringChunk_t *chunk = globList.head; chunk; chunk = chunk->next ) {
+					for ( uint32_t i = 0; i < chunk->count; i++ ) {
+						sourceFiles[written++] = chunk->items[i];
+					}
+				}
+			}
 
 			// compilation step
 			{
 				const double compileTimeStart = Builder_TimeMS();
 
-				if ( globResult.count > 0 ) {
+				if ( sourceFilesCount > 0 ) {
 					// TODO: DM: 09/08/2026: is it OK to create and destroy a bunch of threads for each config?
 					builderCompileContext_t compileContext = {
 						.config				= config,
@@ -2718,17 +2768,17 @@ int Build( BuilderOptions *options ) {
 
 					builderCompileJobPool_t pool = {
 						.context			= &compileContext,
-						.sourceFiles		= globResult.files,
-						.sourceFilesCount	= globResult.count,
+						.sourceFiles		= sourceFiles,
+						.sourceFilesCount	= sourceFilesCount,
 					};
 
 					// only spin up additional threads once theres more than one file
 					// limit the number of threads we spin up to no higher than the number of CPU cores we have
 					uint32_t numCPUCores = Builder_GetNumCPUCores();
-					uint32_t numWorkers = ( numCPUCores < globResult.count ) ? numCPUCores : globResult.count;
+					uint32_t numWorkers = ( numCPUCores < sourceFilesCount ) ? numCPUCores : sourceFilesCount;
 					uint32_t numAdditionalThreads = ( numWorkers > 1 ) ? numWorkers - 1 : 0;
 
-					printf( "Compiling %u files across %u threads.\n", globResult.count, numWorkers );
+					printf( "Compiling %u files across %u threads.\n", sourceFilesCount, numWorkers );
 
 					builderThread_t *additionalThreads = NULL;
 					uint32_t numCreatedThreads = 0;
@@ -2793,8 +2843,8 @@ int Build( BuilderOptions *options ) {
 				StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.umLibPath );
 				StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.ucrtLibPath );
 
-				for ( uint32_t fileIndex = 0; fileIndex < globResult.count; ++fileIndex ) {
-					Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, globResult.files[fileIndex] );
+				for ( uint32_t fileIndex = 0; fileIndex < sourceFilesCount; ++fileIndex ) {
+					Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, sourceFiles[fileIndex] );
 				}
 
 				const char **additionalLibPath = config->additionalLibPaths;
@@ -2851,8 +2901,8 @@ int Build( BuilderOptions *options ) {
 					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "ar rcs " );
 					Builder_AppendBinaryPath( buildScratch.arena, &linkerArgs, config );
 
-					for ( uint32_t fileIndex = 0; fileIndex < globResult.count; ++fileIndex ) {
-						Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, globResult.files[fileIndex] );
+					for ( uint32_t fileIndex = 0; fileIndex < sourceFilesCount; ++fileIndex ) {
+						Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, sourceFiles[fileIndex] );
 					}
 				} else {
 					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "\"%s\" ", compilerPath );
@@ -2864,8 +2914,8 @@ int Build( BuilderOptions *options ) {
 					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-o " );
 					Builder_AppendBinaryPath( buildScratch.arena, &linkerArgs, config );
 
-					for ( uint32_t fileIndex = 0; fileIndex < globResult.count; ++fileIndex ) {
-						Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, globResult.files[fileIndex] );
+					for ( uint32_t fileIndex = 0; fileIndex < sourceFilesCount; ++fileIndex ) {
+						Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, sourceFiles[fileIndex] );
 					}
 
 					const char **additionalLibPath = config->additionalLibPaths;
@@ -2918,6 +2968,8 @@ int Build( BuilderOptions *options ) {
 
 		totalCompileTimeMS += compileTimeMS;
 		totalLinkTimeMS += linkTimeMS;
+
+		Builder_RewindArena( buildScratch.arena, &configStart );
 	}
 
 	// build summary

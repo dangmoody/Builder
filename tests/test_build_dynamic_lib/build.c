@@ -1,6 +1,7 @@
 #define BUILDER_IMPLEMENTATION
 #include "../../builder.h"
 
+
 int main( int argc, char **argv ) {
 	Builder_RebuildSelf( argc, argv );
 
@@ -9,54 +10,26 @@ int main( int argc, char **argv ) {
 		.argv = argv,
 	};
 
-	BuildConfig libConfig = {
-		.name			= "lib",
-		.binaryName		= "test_dynamic_lib",
-		.binaryType		= BINARY_TYPE_DYNAMIC_LIBRARY,
-		.sourceFiles = (const char *[]) {
-			"lib/mathlib.c",
-			NULL
-		},
-		.defines = (const char *[]) {
-			"MATHLIB_BUILDING",
-			NULL
-		},
-	};
+	BuildConfig *someOtherConfig = CreateBuildConfig( &options, "someOtherConfig", BINARY_TYPE_EXE );
 
-	BuildConfig programConfig = {
-		.name				= "program",
-		.binaryName			= "test_dynamic_lib_program",
-		.dependsOn = (BuildConfig *[]) {
-			&libConfig,
-			NULL
-		},
-		.sourceFiles = (const char *[]) {
-			"program/main.c",
-			NULL
-		},
-		.additionalIncludes = (const char *[]) {
-			"lib",
-			NULL
-		},
-		.additionalLibs = (const char *[]) {
+	BuildConfig *libConfig = CreateBuildConfig( &options, "lib", BINARY_TYPE_DYNAMIC_LIBRARY );
+	SetBinaryName( libConfig, "test_dynamic_lib" );
+	AddSourceFiles( libConfig, "lib/mathlib.c" );
+	AddDefines( libConfig, "MATHLIB_BUILDING" );
+
+	BuildConfig *programConfig = CreateBuildConfig( &options, "program", BINARY_TYPE_EXE );
+	SetBinaryName( programConfig, "test_dynamic_lib_program" );
+	AddDependencies( programConfig, libConfig );
+	AddSourceFiles( programConfig, "program/main.c" );
+	AddIncludes( programConfig, "lib" );
 #if defined( _WIN32 )
-			"test_dynamic_lib.lib",
+	AddLibs( programConfig, "test_dynamic_lib.lib" );
 #else
-			"./test_dynamic_lib.so",
+	AddLibs( programConfig, "./test_dynamic_lib.so" );
+	AddLinkerArguments( programConfig, "-Wl,-rpath,$ORIGIN" );
 #endif
-			NULL
-		},
-		.additionalLinkerArguments = (const char *[]) {
-#ifdef __linux__
-			"-Wl,-rpath,$ORIGIN",
-#endif
-			NULL
-		},
-	};
 
-	options.defaultConfig = &programConfig;
-
-	AddBuildConfig( &options, &programConfig );
+	options.defaultConfig = programConfig;
 
 	return Build( &options );
 }

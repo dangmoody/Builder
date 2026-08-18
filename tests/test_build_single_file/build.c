@@ -6,15 +6,9 @@ int main( int argc, char **argv ) {
 
 	BuilderOptions options = {};
 
-	BuildConfig config = {
-		.binaryName		= "test_build_single_file",
-		.sourceFiles = (const char *[]) {
-			"main.c",
-			NULL
-		},
-	};
-
-	AddBuildConfig( &options, &config );
+	BuildConfig *config = CreateBuildConfig( &options, "single_file", BINARY_TYPE_EXE );
+	SetBinaryName( config, "test_build_single_file" );
+	AddSourceFiles( config, "main.c" );
 
 	return Build( &options );
 }

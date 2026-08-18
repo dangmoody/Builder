@@ -11,33 +11,26 @@ int main( int argc, char **argv ) {
 		.argv = argv,
 	};
 
-	BuildConfig config = {
-		.name			= "config",
-		.binaryName		= "test_generate_vs_code_json",
-		.sourceFiles	= (const char *[]) {
-			"main.c",
-			NULL
-		},
-	};
+	BuildConfig *config = CreateBuildConfig( &options, "config", BINARY_TYPE_EXE );
+	SetBinaryName( config, "test_generate_vs_code_json" );
+	AddSourceFiles( config, "main.c" );
 
 	if ( HasCommandLineArg( &options, "--release" ) ) {
-		config.binaryFolder = "bin/release";
+		SetBinaryFolder( config, "bin/release" );
 	} else {
-		config.binaryFolder = "bin/debug";
+		SetBinaryFolder( config, "bin/debug" );
 	}
 
-	options.defaultConfig = &config;
-
-	AddBuildConfig( &options, &config );
+	options.defaultConfig = config;
 
 	if ( HasCommandLineArg( &options, "--vscode" ) ) {
 		VSCodeCppPropertiesConfig cppPropertiesConfigs[] = {
-			{ .config = &config, .intelliSenseMode = VSCODE_INTELLISENSE_MODE_LINUX_CLANG_X64 },
+			{ .config = config, .intelliSenseMode = VSCODE_INTELLISENSE_MODE_LINUX_CLANG_X64 },
 		};
 
 		VSCodeTaskConfig taskConfigs[] = {
-			{ .config = &config },
-			{ .config = &config, .additionalBuildArgs = (const char *[]) { "--release", NULL } },
+			{ .config = config },
+			{ .config = config, .additionalBuildArgs = (const char *[]) { "--release", NULL } },
 		};
 
 		VSCodeLaunchConfig launchConfigs[] = {

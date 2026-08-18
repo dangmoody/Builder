@@ -42,6 +42,12 @@ extern "C" {
 #include <stdbool.h>
 #endif
 
+// up here rather than with the rest of the implementation defines because the Add*() macros below expand to it
+#ifndef BUILDER_ASSERT
+#include <assert.h>
+#define BUILDER_ASSERT assert
+#endif
+
 typedef enum BinaryType {
 	BINARY_TYPE_EXE	= 0,
 	BINARY_TYPE_DYNAMIC_LIBRARY,
@@ -68,37 +74,52 @@ typedef enum Optimization {
 	OPTIMIZATION_PROGRAM_SPEED,
 } Optimization;
 
+//TODO: Rename to match public api format or take BuildConfig into IMPL
+typedef struct StringList {
+	struct builderStringChunk_t	*head;
+	struct builderStringChunk_t	*tail;
+	uint32_t					count;
+} StringList;
 
+typedef struct ConfigPtrList {
+	struct buildConfigPtrChunk_t	*head;
+	struct buildConfigPtrChunk_t	*tail;
+	uint32_t						count;
+} ConfigPtrList;
+
+// Builder owns every BuildConfig - you get one from CreateBuildConfig() and fill it in with the Add*()/Set*()
+// functions further down.  Those copy every string they're handed into Builder's own memory, so set these fields
+// through them rather than writing to them directly.
 typedef struct BuildConfig {
-	const char			*name;
-	// Other BuildConfigs that need to be built before this one.  NULL-terminated array.
-	// You only need to call AddBuildConfig() on the top-level config - its dependencies are registered and built automatically.
-	// Every BuildConfig you put in here must have BuildConfig::name set.
-	struct BuildConfig	**dependsOn;
-	const char			*binaryName;
-	// The folder the binary is placed into, relative to the file you pass into Builder.
+	const char				*name;
+	// Other BuildConfigs that need to be built before this one - see AddDependency().
+	// Building a config builds everything in here first, so you only ever have to ask for the top-level one.
+	ConfigPtrList	dependsOn;
+	// See SetBinaryName().
+	const char				*binaryName;
+	// The folder the binary is placed into, relative to the file you pass into Builder - see SetBinaryFolder().
 	// If this folder doesn't exist then Builder will create it for you.
-	// Leave NULL to put the binary alongside the source file.
-	const char			*binaryFolder;
-	// The folder that intermediate build files (object files) are placed into, relative to binaryFolder.
+	// Leave unset to put the binary alongside the source file.
+	const char				*binaryFolder;
+	// The folder that intermediate build files (object files) are placed into, relative to binaryFolder - see SetIntermediateFolder().
 	// If this folder doesn't exist then Builder will create it for you.
-	// Leave NULL to put intermediate files alongside the binary.
-	const char			*intermediateFolder;
-	const char			**sourceFiles;
-	const char			**defines;
-	const char			**additionalIncludes;
-	const char			**additionalLibPaths;
-	const char			**additionalLibs;
-	const char			**warningLevels;
-	const char			**ignoreWarnings;
-	const char			**additionalLinkerArguments;
-	BinaryType			binaryType;
-	LanguageVersion		languageVersion;
-	Optimization		optimization;
-	bool				removeSymbols;
-	bool				warningsAsErrors;
-	void				( *OnPreBuild )( struct BuildConfig *config );
-	void				( *OnPostBuild )( struct BuildConfig *config );
+	// Leave unset to put intermediate files alongside the binary.
+	const char				*intermediateFolder;
+	StringList		sourceFiles;
+	StringList		defines;
+	StringList		additionalIncludes;
+	StringList		additionalLibPaths;
+	StringList		additionalLibs;
+	StringList		warningLevels;
+	StringList		ignoreWarnings;
+	StringList		additionalLinkerArguments;
+	BinaryType				binaryType;
+	LanguageVersion			languageVersion;
+	Optimization			optimization;
+	bool					removeSymbols;
+	bool					warningsAsErrors;
+	void					( *OnPreBuild )( struct BuildConfig *config );
+	void					( *OnPostBuild )( struct BuildConfig *config );
 } BuildConfig;
 
 typedef struct BuilderOptions {
@@ -120,13 +141,51 @@ typedef struct BuilderOptions {
 	int			argc;
 	char		**argv;
 
-	// The list of configs that gets populated when calling AddBuildConfig().
+	// The list of configs that gets populated when calling CreateBuildConfig().
 	// Don't write to this directly unless you know what you're doing.
-	BuildConfig	*configs;
-	uint32_t	configsCount;
+	ConfigPtrList	configs;
 } BuilderOptions;
 
-void	AddBuildConfig( BuilderOptions *options, BuildConfig *config );
+// Creates a BuildConfig, registers it with options, and hands it back.  Builder owns it and keeps it alive until the
+// program exits.
+// name is what "--config=" matches against and what the build log calls the config.  It's required, and no two
+// configs may share one.
+BuildConfig	*CreateBuildConfig( BuilderOptions *options, const char *name, BinaryType binaryType );
+
+// Bundles the arguments of the Add*() macros below into an array and its length, so a call site never has to write a
+// count or a terminator.  sizeof doesn't evaluate its operand, so naming __VA_ARGS__ twice costs nothing at runtime.
+#define BUILDER_STRING_ARGS( ... )	(const char *[]) { __VA_ARGS__ },	(uint32_t) ( sizeof( (const char *[]) { __VA_ARGS__ } ) / sizeof( const char * ) )
+#define BUILDER_CONFIG_ARGS( ... )	(BuildConfig *[]) { __VA_ARGS__ },	(uint32_t) ( sizeof( (BuildConfig *[]) { __VA_ARGS__ } ) / sizeof( BuildConfig * ) )
+
+// Each of these takes one or more entries and copies every one of them, so a stack buffer is as safe to pass as a
+// literal.  They're additive: call them as often as you like and the entries accumulate.
+#define AddSourceFiles( config, ... )		( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->sourceFiles, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )
+#define AddDefines( config, ... )			( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->defines, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )				// no "-D"/"/D" - Builder adds that for you
+#define AddIncludes( config, ... )			( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->additionalIncludes, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )
+#define AddLibPaths( config, ... )			( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->additionalLibPaths, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )
+#define AddLibs( config, ... )				( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->additionalLibs, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )
+#define AddWarningLevels( config, ... )		( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->warningLevels, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )
+#define AddIgnoreWarnings( config, ... )	( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->ignoreWarnings, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )
+#define AddLinkerArguments( config, ... )	( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->additionalLinkerArguments, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )
+
+// Every dependency must be a config that came from CreateBuildConfig().  They all get built before config does.
+#define AddDependencies( config, ... )		Builder_AddDependenciesInternal( ( config ), BUILDER_CONFIG_ARGS( __VA_ARGS__ ) )
+
+// DO NOT CALL THESE DIRECTLY
+// CALL THE MACRO VERSIONS ABOVE INSTEAD
+void	Builder_AddStringsInternal( StringList *list, const char **strings, uint32_t count );
+void	Builder_AddDependenciesInternal( BuildConfig *config, BuildConfig **dependencies, uint32_t count );
+
+void	SetBinaryName( BuildConfig *config, const char *name );
+void	SetBinaryFolder( BuildConfig *config, const char *folder );
+void	SetIntermediateFolder( BuildConfig *config, const char *folder );
+void	SetLanguageVersion( BuildConfig *config, LanguageVersion languageVersion );
+void	SetOptimization( BuildConfig *config, Optimization optimization );
+void	SetRemoveSymbols( BuildConfig *config, bool removeSymbols );
+void	SetWarningsAsErrors( BuildConfig *config, bool warningsAsErrors );
+void	SetPreBuildCallback( BuildConfig *config, void ( *callback )( BuildConfig *config ) );
+void	SetPostBuildCallback( BuildConfig *config, void ( *callback )( BuildConfig *config ) );
+
 int		Build( BuilderOptions *options );
 
 
@@ -183,11 +242,6 @@ int		Build( BuilderOptions *options );
 
 #ifndef BUILDER_COUNT_OF
 #define BUILDER_COUNT_OF( array )	( sizeof( array ) / sizeof( array[0] ) )
-#endif
-
-#ifndef BUILDER_ASSERT
-#include <assert.h>
-#define BUILDER_ASSERT assert
 #endif
 
 // alignof is only a keyword in C++ and C23. C11 and C17 have it as a macro in <stdalign.h>, which we'd rather not
@@ -704,137 +758,316 @@ static bool HasCommandLineArg( BuilderOptions *options, const char *arg ) {
 	return false;
 }
 
-// growable stack of the configs currently being registered (config -> config->dependsOn[i] -> ...), used to detect cycles
-// bundling the pointer/count/capacity together means only a single pointer to this struct needs to be threaded through the
-// recursion below - growing builderConfigAncestry_t::items is then just a field mutation every recursive call already sees
-#define CONFIG_ANCESTRY_CHUNK_SIZE 8
-typedef struct builderConfigAncestryChunk_t {
-	BuildConfig	*items[CONFIG_ANCESTRY_CHUNK_SIZE];
-	uint32_t	count;
-	struct builderConfigAncestryChunk_t	*next;
-	struct builderConfigAncestryChunk_t	*previous;
-} builderConfigAncestryChunk_t;
+#define STRING_CHUNK_SIZE 16
 
-typedef struct builderConfigAncestry_t {
-	builderConfigAncestryChunk_t* head;
-	builderConfigAncestryChunk_t* tail;
-} builderConfigAncestry_t;
+// Grows by chaining another chunk on rather than reallocating, so entries already added never move and it can be
+// appended to while it's being walked.
+typedef struct builderStringChunk_t {
+	const char					*items[STRING_CHUNK_SIZE];
+	uint32_t					count;
+	struct builderStringChunk_t	*next;
+} builderStringChunk_t;
 
-static void Builder_ConfigStackPush( arena_t *arena, builderConfigAncestry_t *stack, BuildConfig *config ) {
-	BUILDER_ASSERT( stack );
+// same shape as builderStringChunk_t, but it chains backwards as well - Builder_CollectConfigsToBuild() uses one of
+// these lists as a stack, and popping has to find the chunk before the current one
+#define BUILD_CONFIG_PTR_CHUNK_SIZE 8
+typedef struct buildConfigPtrChunk_t {
+	BuildConfig						*items[BUILD_CONFIG_PTR_CHUNK_SIZE];
+	uint32_t						count;
+	struct buildConfigPtrChunk_t	*next;
+	struct buildConfigPtrChunk_t	*previous;
+} buildConfigPtrChunk_t;
+
+static void Builder_StringListPush( arena_t *arena, StringList *list, const char *string ) {
+	BUILDER_ASSERT( list );
+
+	if ( !list->tail || list->tail->count == STRING_CHUNK_SIZE ) {
+		builderStringChunk_t *chunk = Builder_ArenaAlloc( arena, builderStringChunk_t, 1 );
+		chunk->count	= 0;
+		chunk->next		= NULL;
+
+		if ( list->tail ) {
+			list->tail->next = chunk;
+		} else {
+			list->head = chunk;
+		}
+
+		list->tail = chunk;
+	}
+
+	list->tail->items[list->tail->count++] = string;
+	list->count++;
+}
+
+static void Builder_ConfigListPush( arena_t *arena, ConfigPtrList *list, BuildConfig *config ) {
+	BUILDER_ASSERT( list );
 
 	// popping walks tail back, so tail can be NULL while head still holds the chain, and any chunk past the tail
 	// was emptied rather than freed - pick those up before allocating another
-	builderConfigAncestryChunk_t *tail = stack->tail ? stack->tail : stack->head;
+	buildConfigPtrChunk_t *tail = list->tail ? list->tail : list->head;
 
-	if ( tail && tail->count == CONFIG_ANCESTRY_CHUNK_SIZE ) {
+	if ( tail && tail->count == BUILD_CONFIG_PTR_CHUNK_SIZE ) {
 		tail = tail->next;
 	}
 
 	if ( !tail ) {
-		builderConfigAncestryChunk_t *chunk = Builder_ArenaAlloc( arena, builderConfigAncestryChunk_t, 1 );
+		buildConfigPtrChunk_t *chunk = Builder_ArenaAlloc( arena, buildConfigPtrChunk_t, 1 );
 		chunk->count	= 0;
 		chunk->next		= NULL;
-		chunk->previous	= stack->tail;
+		chunk->previous	= list->tail;
 
-		if ( stack->tail ) {
-			stack->tail->next = chunk;
+		if ( list->tail ) {
+			list->tail->next = chunk;
 		} else {
-			stack->head = chunk;
+			list->head = chunk;
 		}
 
 		tail = chunk;
 	}
 
-	stack->tail = tail;
+	list->tail = tail;
 
-	stack->tail->items[stack->tail->count++] = config;
+	list->tail->items[list->tail->count++] = config;
+	list->count++;
 }
 
-// scratch backs ancestry->items - its lifetime is exactly one AddBuildConfig() call (see AddBuildConfig() below,
-// which gets it and rewinds it), so every function that touches ancestry takes it too, as the first argument.
-// scratch and ancestry are NULL together - Build()'s second-pass call further down needs neither.
-static void AddBuildConfigInternal( arena_t *arena, BuilderOptions *options, BuildConfig *config, builderConfigAncestry_t *ancestry, BuildConfig **outConfigs, uint32_t *outConfigsCount ) {
-	// if no ancestry then dont do circular dependency checking
-	if ( ancestry ) {
-		builderConfigAncestryChunk_t* next = ancestry->head;
-		while ( next ) {
-			for ( uint32_t ancestorIndex = 0; ancestorIndex < next->count; ancestorIndex++ ) {
-				if ( next->items[ancestorIndex] == config ) {
-					//Throwaway scratch; we're about to exit
-					scratch_t errorScratch = Builder_GetScratch(NULL );
-					stringBuilder_t cycle = {0};
+// only the ancestry stack pops - emptied chunks are left chained on for Builder_ConfigListPush() to pick up again
+static void Builder_ConfigListPop( ConfigPtrList *list ) {
+	BUILDER_ASSERT( list );
+	BUILDER_ASSERT( list->count > 0 && "Popped a config list that had nothing in it." );
 
-					for ( uint32_t cycleIndex = ancestorIndex; cycleIndex < next->count; cycleIndex++ ) {
-						const char *cycleConfigName = next->items[cycleIndex]->name;
-						StringBuilder_Appendf( errorScratch.arena, &cycle, "%s -> ", cycleConfigName ? cycleConfigName : "(unnamed config)" );
-					}
+	list->tail->count--;
+	list->count--;
 
-					StringBuilder_Appendf( errorScratch.arena, &cycle, "%s", config->name ? config->name : "(unnamed config)" );
+	if ( list->tail->count == 0 ) {
+		list->tail = list->tail->previous;
+	}
+}
 
-					char *cycleString = StringBuilder_ToString( errorScratch.arena, &cycle );
-					Builder_Error( "Cyclic BuildConfig::dependsOn detected: %s\n", cycleString );
+// Every BuildConfig, and every string one of them owns, lives on this arena.  Builder_GetScratch( NULL ) always hands
+// back the same one and nothing rewinds it, so anything put here outlasts the scratches that come and go on top of it.
+// g_scratches is BUILDER_THREAD_LOCAL though, so it's one arena per thread: creating or adding to a config has to stay
+// on the main thread, or this needs to become an arena of its own outside g_scratches.  Reading it anywhere is fine.
+static arena_t *Builder_GetConfigArena( void ) {
+	scratch_t configStorage = Builder_GetScratch( NULL );
+
+	return configStorage.arena;
+}
+
+// Every string that comes in through the public API gets copied.  A caller can hand us a snprintf'd stack buffer just
+// as easily as a literal, and keeping their pointer would leave the config pointing at a dead frame.
+static const char *Builder_CopyString( arena_t *arena, const char *string ) {
+	if ( !string ) {
+		return NULL;
+	}
+
+	size_t size = strlen( string ) + 1;
+	char *copy = Builder_ArenaAlloc( arena, char, size );
+	memcpy( copy, string, size );
+
+	return copy;
+}
+
+static bool Builder_ArenaOwnsPointer( arena_t *arena, const void *pointer ) {
+	BUILDER_ASSERT( arena );
+
+	for ( arenaBlock_t *block = arena->head; block; block = block->next ) {
+		const char *blockStart = (const char *) block->block;
+
+		if ( (const char *) pointer >= blockStart && (const char *) pointer < blockStart + block->capacity ) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+BuildConfig *CreateBuildConfig( BuilderOptions *options, const char *name, BinaryType binaryType ) {
+	BUILDER_ASSERT( options );
+	BUILDER_ASSERT( name && name[0] && "Every BuildConfig needs a name - it's what \"" ARG_CONFIG "\" and the build log refer to it by." );
+
+	{
+		for ( buildConfigPtrChunk_t *chunk = options->configs.head; chunk; chunk = chunk->next ) {
+			for ( uint32_t configIndex = 0; configIndex < chunk->count; configIndex++ ) {
+				if ( Builder_StringEquals( chunk->items[configIndex]->name, name ) ) {
+					Builder_Error( "There is already a BuildConfig called \"%s\".  Config names have to be unique, otherwise \"" ARG_CONFIG "%s\" has no way of telling them apart.\n", name, name );
 
 					exit( 1 );
 				}
 			}
-			next = next->next;
-		}
-
-		Builder_ConfigStackPush( arena, ancestry, config );
-	}
-
-	// register dependencies first so they show up (and get built) ahead of the config that needs them
-	{
-		BuildConfig **dependency = config->dependsOn;
-
-		while ( dependency && *dependency ) {
-			AddBuildConfigInternal( arena, options, *dependency, ancestry, outConfigs, outConfigsCount );
-
-			dependency++;
 		}
 	}
 
-	if ( ancestry && ancestry->tail ) {
-		if(ancestry->tail->count > 0) {
-			ancestry->tail->count--;
+	arena_t *configArena = Builder_GetConfigArena();
 
-			if( ancestry->tail->count == 0 ) {
-				ancestry->tail = ancestry->tail->previous;
+	BuildConfig *config = Builder_ArenaAlloc( configArena, BuildConfig, 1 );
+	memset( config, 0, sizeof( BuildConfig ) );
+
+	config->name		= Builder_CopyString( configArena, name );
+	config->binaryType	= binaryType;
+
+	Builder_ConfigListPush( configArena, &options->configs, config );
+
+	return config;
+}
+
+void Builder_AddStringsInternal( StringList *list, const char **strings, uint32_t count ) {
+	BUILDER_ASSERT( list );
+	BUILDER_ASSERT( strings );
+
+	arena_t *configArena = Builder_GetConfigArena();
+
+	for ( uint32_t stringIndex = 0; stringIndex < count; stringIndex++ ) {
+		const char *string = strings[stringIndex];
+
+		BUILDER_ASSERT( string && string[0] && "Adding an empty entry to a BuildConfig list doesn't do anything." );
+
+		Builder_StringListPush( configArena, list, Builder_CopyString( configArena, string ) );
+	}
+}
+
+void Builder_AddDependenciesInternal( BuildConfig *config, BuildConfig **dependencies, uint32_t count ) {
+	BUILDER_ASSERT( config );
+	BUILDER_ASSERT( dependencies );
+
+	arena_t *configArena = Builder_GetConfigArena();
+
+	for ( uint32_t dependencyIndex = 0; dependencyIndex < count; dependencyIndex++ ) {
+		BuildConfig *dependency = dependencies[dependencyIndex];
+
+		BUILDER_ASSERT( dependency );
+		BUILDER_ASSERT( config != dependency && "A BuildConfig can't depend on itself." );
+
+		// CreateBuildConfig() is the only thing that allocates a BuildConfig, so a pointer from outside this arena came
+		// off somebody's stack and would dangle by the time Build() read it
+		BUILDER_ASSERT( Builder_ArenaOwnsPointer( configArena, dependency ) && "Dependencies have to come from CreateBuildConfig() - Builder can't hold on to a BuildConfig it doesn't own." );
+
+		Builder_ConfigListPush( configArena, &config->dependsOn, dependency );
+	}
+}
+
+void SetBinaryName( BuildConfig *config, const char *name ) {
+	BUILDER_ASSERT( config );
+
+	config->binaryName = Builder_CopyString( Builder_GetConfigArena(), name );
+}
+
+void SetBinaryFolder( BuildConfig *config, const char *folder ) {
+	BUILDER_ASSERT( config );
+
+	config->binaryFolder = Builder_CopyString( Builder_GetConfigArena(), folder );
+}
+
+void SetIntermediateFolder( BuildConfig *config, const char *folder ) {
+	BUILDER_ASSERT( config );
+
+	config->intermediateFolder = Builder_CopyString( Builder_GetConfigArena(), folder );
+}
+
+void SetLanguageVersion( BuildConfig *config, LanguageVersion languageVersion ) {
+	BUILDER_ASSERT( config );
+
+	config->languageVersion = languageVersion;
+}
+
+void SetOptimization( BuildConfig *config, Optimization optimization ) {
+	BUILDER_ASSERT( config );
+
+	config->optimization = optimization;
+}
+
+void SetRemoveSymbols( BuildConfig *config, bool removeSymbols ) {
+	BUILDER_ASSERT( config );
+
+	config->removeSymbols = removeSymbols;
+}
+
+void SetWarningsAsErrors( BuildConfig *config, bool warningsAsErrors ) {
+	BUILDER_ASSERT( config );
+
+	config->warningsAsErrors = warningsAsErrors;
+}
+
+void SetPreBuildCallback( BuildConfig *config, void ( *callback )( BuildConfig *config ) ) {
+	BUILDER_ASSERT( config );
+
+	config->OnPreBuild = callback;
+}
+
+void SetPostBuildCallback( BuildConfig *config, void ( *callback )( BuildConfig *config ) ) {
+	BUILDER_ASSERT( config );
+
+	config->OnPostBuild = callback;
+}
+
+// Depth-first walk of config->dependsOn that appends each config to outConfigsToBuild only once everything it depends
+// on is already in there, so the build order falls out of the walk.
+// ancestry is the chain of configs the walk is currently inside (config -> dependency -> ...) and starts out empty.  A
+// config turning up in there again is a cycle, which there's no sensible way to build, so it's fatal.
+// arena backs both lists, plus the error message if it comes to that.
+static void Builder_CollectConfigsToBuild( arena_t *arena, BuildConfig *config, ConfigPtrList *ancestry, ConfigPtrList *outConfigsToBuild ) {
+	BUILDER_ASSERT( config );
+	BUILDER_ASSERT( ancestry );
+	BUILDER_ASSERT( outConfigsToBuild );
+
+	// multiple configs can rely on the same config (e.g. configs A and B may both rely on config C), and anything
+	// already in the list has had its whole subtree walked and cleared of cycles
+	for ( buildConfigPtrChunk_t *chunk = outConfigsToBuild->head; chunk; chunk = chunk->next ) {
+		for ( uint32_t collectedIndex = 0; collectedIndex < chunk->count; collectedIndex++ ) {
+			if ( chunk->items[collectedIndex] == config ) {
+				return;
 			}
 		}
 	}
 
-	// multiple configs can rely on the same config (e.g. configs A and B may both rely on config C)
-	// so we still need this duplicate check anyway
-	for ( uint32_t configIndex = 0; configIndex < *outConfigsCount; configIndex++ ) {
-		if ( ( *outConfigs )[configIndex].name && config->name && Builder_StringEquals( ( *outConfigs )[configIndex].name, config->name ) ) {
-			return;
+	{
+		// where in the ancestry the config turned up, if it did - the cycle is everything from there onwards
+		buildConfigPtrChunk_t *cycleChunk = NULL;
+		uint32_t cycleIndex = 0;
+
+		for ( buildConfigPtrChunk_t *chunk = ancestry->head; chunk && !cycleChunk; chunk = chunk->next ) {
+			for ( uint32_t ancestorIndex = 0; ancestorIndex < chunk->count; ancestorIndex++ ) {
+				if ( chunk->items[ancestorIndex] == config ) {
+					cycleChunk = chunk;
+					cycleIndex = ancestorIndex;
+					break;
+				}
+			}
+		}
+
+		if ( cycleChunk ) {
+			// throwaway scratch, we're about to exit
+			scratch_t errorScratch = Builder_GetScratch( arena );
+			stringBuilder_t cycle = {0};
+
+			// picking the walk back up where the match was found spells out the cycle and nothing that came before it
+			for ( buildConfigPtrChunk_t *chunk = cycleChunk; chunk; chunk = chunk->next ) {
+				for ( uint32_t ancestorIndex = ( chunk == cycleChunk ) ? cycleIndex : 0; ancestorIndex < chunk->count; ancestorIndex++ ) {
+					StringBuilder_Appendf( errorScratch.arena, &cycle, "%s -> ", chunk->items[ancestorIndex]->name );
+				}
+			}
+
+			StringBuilder_Appendf( errorScratch.arena, &cycle, "%s", config->name );
+
+			char *cycleString = StringBuilder_ToString( errorScratch.arena, &cycle );
+			Builder_Error( "Cyclic BuildConfig dependency detected: %s\n", cycleString );
+
+			exit( 1 );
 		}
 	}
 
-	// *outConfigs has to outlive this whole call chain - it can't share an arena with results, which gets rewound
-	// (and would take it down too) the moment the top-level AddBuildConfig() call returns. Excluding arena here
-	// is what guarantees that.
-	scratch_t configsScratch = Builder_GetScratch( arena );
+	Builder_ConfigListPush( arena, ancestry, config );
 
-	*outConfigs = *outConfigsCount
-		? Builder_ArenaRealloc( configsScratch.arena, *outConfigs, BuildConfig, *outConfigsCount, *outConfigsCount + 1 )
-		: Builder_ArenaAlloc( configsScratch.arena, BuildConfig, 1 );
-	( *outConfigsCount )++;
+	// dependencies go in first so they show up (and get built) ahead of the config that needs them
+	for ( buildConfigPtrChunk_t *chunk = config->dependsOn.head; chunk; chunk = chunk->next ) {
+		for ( uint32_t dependencyIndex = 0; dependencyIndex < chunk->count; dependencyIndex++ ) {
+			Builder_CollectConfigsToBuild( arena, chunk->items[dependencyIndex], ancestry, outConfigsToBuild );
+		}
+	}
 
-	BuildConfig *dst = &( *outConfigs )[(*outConfigsCount) - 1];
+	Builder_ConfigListPop( ancestry );
 
-	memcpy( dst, config, sizeof( BuildConfig ) );
-}
-
-void AddBuildConfig( BuilderOptions *options, BuildConfig *config ) {
-	scratch_t scratch = Builder_GetScratch( NULL );
-	builderConfigAncestry_t ancestry = {0};
-
-	AddBuildConfigInternal( scratch.arena, options, config, &ancestry, &options->configs, &options->configsCount );
-
-	Builder_RewindScratch( &scratch );
+	Builder_ConfigListPush( arena, outConfigsToBuild, config );
 }
 
 static int32_t Builder_RunProcess( arena_t* results, const char *processAndArgs, char **outCapturedOutput ) {
@@ -1254,43 +1487,6 @@ typedef enum {
 } builderFileVisitFlagBits_t;
 typedef uint32_t builderFileVisitFlags_t;
 
-#define STRING_CHUNK_SIZE 16
-
-// Grows by chaining another chunk on rather than reallocating, so entries already added never move and it can be
-// appended to while it's being walked.
-typedef struct builderStringChunk_t {
-	const char					*items[STRING_CHUNK_SIZE];
-	uint32_t					count;
-	struct builderStringChunk_t	*next;
-} builderStringChunk_t;
-
-typedef struct builderStringList_t {
-	builderStringChunk_t	*head;
-	builderStringChunk_t	*tail;
-	uint32_t				count;
-} builderStringList_t;
-
-static void Builder_StringListPush( arena_t *arena, builderStringList_t *list, const char *string ) {
-	BUILDER_ASSERT( list );
-
-	if ( !list->tail || list->tail->count == STRING_CHUNK_SIZE ) {
-		builderStringChunk_t *chunk = Builder_ArenaAlloc( arena, builderStringChunk_t, 1 );
-		chunk->count	= 0;
-		chunk->next		= NULL;
-
-		if ( list->tail ) {
-			list->tail->next = chunk;
-		} else {
-			list->head = chunk;
-		}
-
-		list->tail = chunk;
-	}
-
-	list->tail->items[list->tail->count++] = string;
-	list->count++;
-}
-
 static bool Builder_VisitFiles( arena_t *results, const char *path, const builderFileVisitFlags_t visitFlags, builderFileVisitCallback_t callback, void *data ) {
 	BUILDER_ASSERT( path );
 	BUILDER_ASSERT( callback );
@@ -1298,7 +1494,7 @@ static bool Builder_VisitFiles( arena_t *results, const char *path, const builde
 	// the paths we build to walk the tree are ours alone - only the callback's allocations outlive us, and those go on results
 	scratch_t scratch = Builder_GetScratch(results );
 
-	builderStringList_t directories = {0};
+	StringList directories = {0};
 	Builder_StringListPush( scratch.arena, &directories, path );
 
 	builderStringChunk_t *chunk = directories.head;
@@ -1439,7 +1635,7 @@ typedef struct {
 typedef struct {
 	const builderStringSliceArray_t patternSlices;
 	const uint32_t searchPathLen;
-	builderStringList_t *globResults;
+	StringList *globResults;
 } builderGlobVisitCallbackData_t;
 
 // remember to free sliceArray.data
@@ -1600,61 +1796,63 @@ static void Builder_GlobVisitCallback( arena_t *resultsArena, fileInfo_t *fileIn
 }
 
 // builds onto whatever arena it's handed - the caller flattens it if it needs to index the result
-static builderStringList_t Builder_GlobFiles( arena_t *resultsArena, const char **globPatterns ) {
-	builderStringList_t globResult = {0};
+static StringList Builder_GlobFiles( arena_t *resultsArena, const StringList *globPatterns ) {
+	StringList globResult = {0};
 
 	scratch_t scratch = Builder_GetScratch( resultsArena );
 	// setup re-usable search path allocation
 	char *const searchPath = Builder_ArenaAlloc( scratch.arena, char, ( BUILDER_MAX_PATH + 1 ) );
-	while ( globPatterns && *globPatterns ) {
-		// start by copying and seeking to find if there is an asterisk, and then rewind to just after the preceding slash (or start if it is say **/*.cpp)
-		const char* pattern = *globPatterns;
-		while ( *pattern != '\0' ) {  // we could also early out if they put any erroneous characters
-			if ( *(pattern++) == '*' ) {
-				while ( --pattern != *globPatterns ) {
-					if ( *pattern == '\\' || *pattern == '/' ) {
-						++pattern;
-						break;
+
+	for ( builderStringChunk_t *chunk = globPatterns->head; chunk; chunk = chunk->next ) {
+		for ( uint32_t patternIndex = 0; patternIndex < chunk->count; patternIndex++ ) {
+			const char *globPattern = chunk->items[patternIndex];
+
+			// start by copying and seeking to find if there is an asterisk, and then rewind to just after the preceding slash (or start if it is say **/*.cpp)
+			const char* pattern = globPattern;
+			while ( *pattern != '\0' )  {  // we could also early out if they put any erroneous characters
+				if ( *(pattern++) == '*' ) {
+					while ( --pattern != globPattern ) {
+						if ( *pattern == '\\' || *pattern == '/' ) {
+							++pattern;
+							break;
+						}
 					}
+					break;
 				}
-				break;
 			}
-		}
 
-		if ( *pattern == '\0' ) {
-			// should I just let the compile step handle the empty strings?
-			if ( pattern != *globPatterns ) {
-				Builder_StringListPush( resultsArena, &globResult, *globPatterns ); // yes I realise this wasn't globbed \_O_O_/
-				++globPatterns;
-			}
-			continue;
-		}
-
-		const uint32_t globPathLen = pattern - *globPatterns;
-		if ( globPathLen != 0 ) {
-			if ( globPathLen > BUILDER_MAX_PATH ) {
-				printf( "Warning: Skipping pattern %s, path was larger than max path.\n", *globPatterns );
+			if ( *pattern == '\0' ) {
+				// should I just let the compile step handle the empty strings?
+				if ( pattern != globPattern ) {
+					Builder_StringListPush( resultsArena, &globResult, globPattern ); // yes I realise this wasn't globbed \_O_O_/
+				}
 				continue;
 			}
-			memcpy( searchPath, *globPatterns, globPathLen );
-		}
-		searchPath[globPathLen] = '\0';
 
-		builderGlobVisitCallbackData_t callbackData = {
-			.patternSlices = Builder_SliceFilePath( scratch.arena, pattern),
-			.globResults = &globResult,
-			.searchPathLen = globPathLen
-		};
+			const uint32_t globPathLen = (uint32_t) ( pattern - globPattern );
+			if ( globPathLen != 0 ) {
+				if ( globPathLen > BUILDER_MAX_PATH ) {
+					printf( "Warning: Skipping pattern %s, path was larger than max path.\n", globPattern );
+					continue;
+				}
+				memcpy( searchPath, globPattern, globPathLen );
+			}
+			searchPath[globPathLen] = '\0';
 
-		builderFileVisitFlags_t visitFlags = BUILDER_FILE_VISIT_FILES;
-		if (callbackData.patternSlices.count > 1) { // we are matching folders too
-			visitFlags |= BUILDER_FILE_VISIT_RECURSIVE;
-		}
-		if ( !Builder_VisitFiles( resultsArena, searchPath, visitFlags, &Builder_GlobVisitCallback, &callbackData ) ) {
-			printf( "Warning: Found no matches for pattern %s, at search path %s.\n", *globPatterns, searchPath );
-		}
+			builderGlobVisitCallbackData_t callbackData = {
+				.patternSlices = Builder_SliceFilePath( scratch.arena, pattern),
+				.globResults = &globResult,
+				.searchPathLen = globPathLen
+			};
 
-		++globPatterns;
+			builderFileVisitFlags_t visitFlags = BUILDER_FILE_VISIT_FILES;
+			if (callbackData.patternSlices.count > 1) { // we are matching folders too
+				visitFlags |= BUILDER_FILE_VISIT_RECURSIVE;
+			}
+			if ( !Builder_VisitFiles( resultsArena, searchPath, visitFlags, &Builder_GlobVisitCallback, &callbackData ) ) {
+				printf( "Warning: Found no matches for pattern %s, at search path %s.\n", globPattern, searchPath );
+			}
+		}
 	}
 
 	Builder_RewindScratch( &scratch);
@@ -2387,11 +2585,10 @@ static bool Builder_CompileSourceFile( const builderCompileContext_t *context, c
 		Builder_AppendIntermediateFilePath( scratch.arena, &compileArgs, context->intermediateFolder, sourceFile );
 		StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", sourceFile );
 
-		const char **define = config->defines;
-		while ( define && *define ) {
-			StringBuilder_Appendf( scratch.arena, &compileArgs, "/D%s ", *define );
-
-			define++;
+		for ( builderStringChunk_t *chunk = config->defines.head; chunk; chunk = chunk->next ) {
+			for ( uint32_t defineIndex = 0; defineIndex < chunk->count; defineIndex++ ) {
+				StringBuilder_Appendf( scratch.arena, &compileArgs, "/D%s ", chunk->items[defineIndex] );
+			}
 		}
 
 		// cl.exe doesn't know where the CRT/Windows SDK headers live unless you're in a Developer Command Prompt, so point it there ourselves
@@ -2401,11 +2598,10 @@ static bool Builder_CompileSourceFile( const builderCompileContext_t *context, c
 			, windowsSDKInstall->umIncludePath
 			, windowsSDKInstall->sharedIncludePath );
 
-		const char **additionalInclude = config->additionalIncludes;
-		while ( additionalInclude && *additionalInclude ) {
-			StringBuilder_Appendf( scratch.arena, &compileArgs, "/I%s ", *additionalInclude );
-
-			additionalInclude++;
+		for ( builderStringChunk_t *chunk = config->additionalIncludes.head; chunk; chunk = chunk->next ) {
+			for ( uint32_t includeIndex = 0; includeIndex < chunk->count; includeIndex++ ) {
+				StringBuilder_Appendf( scratch.arena, &compileArgs, "/I%s ", chunk->items[includeIndex] );
+			}
 		}
 
 		if ( config->warningsAsErrors ) {
@@ -2413,34 +2609,37 @@ static bool Builder_CompileSourceFile( const builderCompileContext_t *context, c
 		}
 
 		bool sawWarningLevel = false;
-		const char **warningLevel = config->warningLevels;
-		while ( warningLevel && *warningLevel ) {
-			if ( sawWarningLevel ) {
-				Builder_Error( "MSVC only allows one warning level to be set at a time, but you specified more than one.\n" );
-				Builder_RewindScratch( &scratch );
-				return false;
+
+		for ( builderStringChunk_t *chunk = config->warningLevels.head; chunk; chunk = chunk->next ) {
+			for ( uint32_t warningLevelIndex = 0; warningLevelIndex < chunk->count; warningLevelIndex++ ) {
+				const char *warningLevel = chunk->items[warningLevelIndex];
+
+				if ( sawWarningLevel ) {
+					Builder_Error( "MSVC only allows one warning level to be set at a time, but you specified more than one.\n" );
+					Builder_RewindScratch( &scratch );
+					return false;
+				}
+
+				if ( !Builder_IsWarningLevelAllowed_MSVC( warningLevel ) ) {
+					Builder_Error(
+						"Warning level \"%s\" is not a valid one.  Allowed warning levels are:\n"
+						"    /W0\n"
+						"    /W1\n"
+						"    /W2\n"
+						"    /W3\n"
+						"    /W4\n"
+						"    /Wall\n"
+						, warningLevel
+					);
+
+					Builder_RewindScratch( &scratch );
+					return false;
+				}
+
+				StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", warningLevel );
+
+				sawWarningLevel = true;
 			}
-
-			if ( !Builder_IsWarningLevelAllowed_MSVC( *warningLevel ) ) {
-				Builder_Error(
-					"Warning level \"%s\" is not a valid one.  Allowed warning levels are:\n"
-					"    /W0\n"
-					"    /W1\n"
-					"    /W2\n"
-					"    /W3\n"
-					"    /W4\n"
-					"    /Wall\n"
-					, *warningLevel
-				);
-
-				Builder_RewindScratch( &scratch );
-				return false;
-			}
-
-			StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", *warningLevel );
-
-			sawWarningLevel = true;
-			warningLevel++;
 		}
 #endif
 	} else {
@@ -2465,51 +2664,49 @@ static bool Builder_CompileSourceFile( const builderCompileContext_t *context, c
 		Builder_AppendIntermediateFilePath( scratch.arena, &compileArgs, context->intermediateFolder, sourceFile );
 		StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", sourceFile );
 
-		const char **define = config->defines;
-		while ( define && *define ) {
-			StringBuilder_Appendf( scratch.arena, &compileArgs, "-D%s ", *define );
-
-			define++;
+		for ( builderStringChunk_t *chunk = config->defines.head; chunk; chunk = chunk->next ) {
+			for ( uint32_t defineIndex = 0; defineIndex < chunk->count; defineIndex++ ) {
+				StringBuilder_Appendf( scratch.arena, &compileArgs, "-D%s ", chunk->items[defineIndex] );
+			}
 		}
 
-		const char **additionalInclude = config->additionalIncludes;
-		while ( additionalInclude && *additionalInclude ) {
-			StringBuilder_Appendf( scratch.arena, &compileArgs, "-I%s ", *additionalInclude );
-
-			additionalInclude++;
+		for ( builderStringChunk_t *chunk = config->additionalIncludes.head; chunk; chunk = chunk->next ) {
+			for ( uint32_t includeIndex = 0; includeIndex < chunk->count; includeIndex++ ) {
+				StringBuilder_Appendf( scratch.arena, &compileArgs, "-I%s ", chunk->items[includeIndex] );
+			}
 		}
 
 		if ( config->warningsAsErrors ) {
 			StringBuilder_Appendf( scratch.arena, &compileArgs, "-Werror " );
 		}
 
-		const char **warningLevel = config->warningLevels;
-		while ( warningLevel && *warningLevel ) {
-			if ( !Builder_IsWarningLevelAllowed_Clang( *warningLevel ) ) {
-				Builder_Error(
-					"Warning level \"%s\" is not a valid one.  Allowed warning levels are:\n"
-					"    -Wall\n"
-					"    -Weverything\n"
-					"    -Wextra\n"
-					"    -Wpedantic\n"
-					, *warningLevel
-				);
+		for ( builderStringChunk_t *chunk = config->warningLevels.head; chunk; chunk = chunk->next ) {
+			for ( uint32_t warningLevelIndex = 0; warningLevelIndex < chunk->count; warningLevelIndex++ ) {
+				const char *warningLevel = chunk->items[warningLevelIndex];
 
-				Builder_RewindScratch( &scratch );
-				return false;
+				if ( !Builder_IsWarningLevelAllowed_Clang( warningLevel ) ) {
+					Builder_Error(
+						"Warning level \"%s\" is not a valid one.  Allowed warning levels are:\n"
+						"    -Wall\n"
+						"    -Weverything\n"
+						"    -Wextra\n"
+						"    -Wpedantic\n"
+						, warningLevel
+					);
+
+					Builder_RewindScratch( &scratch );
+					return false;
+				}
+
+				StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", warningLevel );
 			}
-
-			StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", *warningLevel );
-
-			warningLevel++;
 		}
 	}
 
-	const char **ignoreWarning = config->ignoreWarnings;
-	while ( ignoreWarning && *ignoreWarning ) {
-		StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", *ignoreWarning );
-
-		ignoreWarning++;
+	for ( builderStringChunk_t *chunk = config->ignoreWarnings.head; chunk; chunk = chunk->next ) {
+		for ( uint32_t ignoreWarningIndex = 0; ignoreWarningIndex < chunk->count; ignoreWarningIndex++ ) {
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", chunk->items[ignoreWarningIndex] );
+		}
 	}
 
 	char *args = StringBuilder_ToString( scratch.arena, &compileArgs );
@@ -2617,19 +2814,21 @@ int Build( BuilderOptions *options ) {
 	const char *nameOfConfigToBuild = Builder_GetNameOfConfigToBuild( options );
 	BuildConfig *targetConfig = NULL;
 	{
-		if ( options->configsCount == 0 ) {
-			Builder_Error( "No BuildConfig was registered.  You must call AddBuildConfig() at least once.\n" );
+		if ( options->configs.count == 0 ) {
+			Builder_Error( "No BuildConfig was registered.  You must call CreateBuildConfig() at least once.\n" );
 			return 1;
-		} else if ( options->configsCount > 1 && !nameOfConfigToBuild ) {
+		} else if ( options->configs.count > 1 && !nameOfConfigToBuild ) {
 			Builder_Error( "You have more than 1 BuildConfig defined, but you never told me which you wanted me to build via \"" ARG_CONFIG "\".  You need to tell me what config you want me to build, or set a default via BuilderOptions::defaultConfig.\n" );
 			return 1;
 		}
 
 		if ( nameOfConfigToBuild ) {
-			for ( uint32_t configIndex = 0; configIndex < options->configsCount; configIndex++ ) {
-				if ( options->configs[configIndex].name && Builder_StringEquals( options->configs[configIndex].name, nameOfConfigToBuild ) ) {
-					targetConfig = &options->configs[configIndex];
-					break;
+			for ( buildConfigPtrChunk_t *chunk = options->configs.head; chunk && !targetConfig; chunk = chunk->next ) {
+				for ( uint32_t configIndex = 0; configIndex < chunk->count; configIndex++ ) {
+					if ( Builder_StringEquals( chunk->items[configIndex]->name, nameOfConfigToBuild ) ) {
+						targetConfig = chunk->items[configIndex];
+						break;
+					}
 				}
 			}
 
@@ -2638,12 +2837,16 @@ int Build( BuilderOptions *options ) {
 				return 1;
 			}
 		} else {
-			targetConfig = &options->configs[0];
+			// only one config was ever registered, so there's nothing to be ambiguous about
+			targetConfig = options->configs.head->items[0];
 		}
 	}
 
-	// toolchain and compiler paths are used right through to the link step
-	scratch_t buildScratch = Builder_GetScratch( NULL );
+	// toolchain and compiler paths are used right through to the link step.
+	// this deliberately excludes the config arena: OnPreBuild/OnPostBuild callbacks run inside the loop below, so a
+	// callback calling Add*()/Set*() allocates while this scratch is open.  If the two shared an arena, the per-config
+	// rewind would take whatever the callback added with it and leave the config pointing into reusable memory.
+	scratch_t buildScratch = Builder_GetScratch( Builder_GetConfigArena() );
 
 	// only query for windows SDK and MSVC installations after verifying cmd line args and
 #ifdef _WIN32
@@ -2693,15 +2896,29 @@ int Build( BuilderOptions *options ) {
 		}
 	}
 
-	uint32_t configsToBuildCount = 0;
-	BuildConfig *configsToBuild = NULL;
-	AddBuildConfigInternal( NULL, options, targetConfig, NULL, &configsToBuild, &configsToBuildCount );
+	// the walk happens here rather than as configs are created because dependencies get attached to a config after
+	// CreateBuildConfig() has handed it over, so this is the first point the graph is complete.
+	// its lists go on buildScratch above the toolchain paths but below the rewind spot the loop takes for each config,
+	// so the per-config rewind can't reach back and take them with it
+	ConfigPtrList ancestry = {0};
+	ConfigPtrList configsToBuild = {0};
+
+	Builder_CollectConfigsToBuild( buildScratch.arena, targetConfig, &ancestry, &configsToBuild );
 
 	double totalCompileTimeMS = 0.0;
 	double totalLinkTimeMS = 0.0;
 
-	for ( uint32_t configIndex = 0; configIndex < configsToBuildCount; configIndex++ ) {
-		BuildConfig *config = &configsToBuild[configIndex];
+	buildConfigPtrChunk_t *configChunk = configsToBuild.head;
+	uint32_t configChunkIndex = 0;
+
+	while ( configChunk ) {
+		if ( configChunkIndex == configChunk->count ) {
+			configChunk = configChunk->next;
+			configChunkIndex = 0;
+			continue;
+		}
+
+		BuildConfig *config = configChunk->items[configChunkIndex++];
 
 		// nothing this config allocates is wanted by the next one - the toolchain paths it reads were put on
 		// buildScratch before the loop, so they sit below this and the rewind can't reach them
@@ -2716,7 +2933,7 @@ int Build( BuilderOptions *options ) {
 
 		// build the config
 		{
-			printf( "Building config \"%s\":\n", config->name ? config->name : "" );
+			printf( "Building config \"%s\":\n", config->name );
 
 			const char *intermediateFolder = config->intermediateFolder;
 
@@ -2732,7 +2949,7 @@ int Build( BuilderOptions *options ) {
 			}
 
 			// glob step - flattened into one array because the compile job pool indexes into it by job number
-			builderStringList_t globList = Builder_GlobFiles( buildScratch.arena, config->sourceFiles );
+			StringList globList = Builder_GlobFiles( buildScratch.arena, &config->sourceFiles );
 
 			uint32_t sourceFilesCount = globList.count;
 			const char **sourceFiles = NULL;
@@ -2743,8 +2960,8 @@ int Build( BuilderOptions *options ) {
 				uint32_t written = 0;
 
 				for ( builderStringChunk_t *chunk = globList.head; chunk; chunk = chunk->next ) {
-					for ( uint32_t i = 0; i < chunk->count; i++ ) {
-						sourceFiles[written++] = chunk->items[i];
+					for ( uint32_t globbedFileIndex = 0; globbedFileIndex < chunk->count; globbedFileIndex++ ) {
+						sourceFiles[written++] = chunk->items[globbedFileIndex];
 					}
 				}
 			}
@@ -2847,35 +3064,37 @@ int Build( BuilderOptions *options ) {
 					Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, sourceFiles[fileIndex] );
 				}
 
-				const char **additionalLibPath = config->additionalLibPaths;
-				while ( additionalLibPath && *additionalLibPath ) {
-					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", *additionalLibPath );
-
-					additionalLibPath++;
+				for ( builderStringChunk_t *chunk = config->additionalLibPaths.head; chunk; chunk = chunk->next ) {
+					for ( uint32_t libPathIndex = 0; libPathIndex < chunk->count; libPathIndex++ ) {
+						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", chunk->items[libPathIndex] );
+					}
 				}
 
-				const char **additionalLib = config->additionalLibs;
-				while ( additionalLib && *additionalLib ) {
-					// callers sometimes already include the ".lib" extension themselves - don't double it up
-					size_t libNameLen = strlen( *additionalLib );
-					bool alreadyHasExtension = libNameLen >= 4 && _stricmp( *additionalLib + libNameLen - 4, ".lib" ) == 0;
+				for ( builderStringChunk_t *chunk = config->additionalLibs.head; chunk; chunk = chunk->next ) {
+					for ( uint32_t libIndex = 0; libIndex < chunk->count; libIndex++ ) {
+						const char *additionalLib = chunk->items[libIndex];
 
-					if ( alreadyHasExtension ) {
-						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", *additionalLib );
-					} else {
-						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s.lib ", *additionalLib );
+						// callers sometimes already include the ".lib" extension themselves - don't double it up
+						size_t libNameLen = strlen( additionalLib );
+						bool alreadyHasExtension = libNameLen >= 4 && _stricmp( additionalLib + libNameLen - 4, ".lib" ) == 0;
+
+						if ( alreadyHasExtension ) {
+							StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", additionalLib );
+						} else {
+							StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s.lib ", additionalLib );
+						}
 					}
-
-					additionalLib++;
 				}
 
 				// TODO: AK: 11/08/2026: handle this better
 				bool debugDefineSet = false;
-				const char **define = config->defines;
-				while ( define && *define ) {
-					if ( !debugDefineSet && _strnicmp( "_DEBUG", *(define++), sizeof("_DEBUG") ) == 0 ) {
-						debugDefineSet = true;
-						break;
+
+				for ( builderStringChunk_t *chunk = config->defines.head; chunk && !debugDefineSet; chunk = chunk->next ) {
+					for ( uint32_t defineIndex = 0; defineIndex < chunk->count; defineIndex++ ) {
+						if ( _strnicmp( "_DEBUG", chunk->items[defineIndex], sizeof( "_DEBUG" ) ) == 0 ) {
+							debugDefineSet = true;
+							break;
+						}
 					}
 				}
 
@@ -2890,11 +3109,10 @@ int Build( BuilderOptions *options ) {
 					}
 				}
 
-				const char **additionalLinkerArgument = config->additionalLinkerArguments;
-				while ( additionalLinkerArgument && *additionalLinkerArgument ) {
-					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", *additionalLinkerArgument );
-
-					additionalLinkerArgument++;
+				for ( builderStringChunk_t *chunk = config->additionalLinkerArguments.head; chunk; chunk = chunk->next ) {
+					for ( uint32_t argumentIndex = 0; argumentIndex < chunk->count; argumentIndex++ ) {
+						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", chunk->items[argumentIndex] );
+					}
 				}
 #elif defined( __linux__ )
 				if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
@@ -2918,25 +3136,22 @@ int Build( BuilderOptions *options ) {
 						Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, sourceFiles[fileIndex] );
 					}
 
-					const char **additionalLibPath = config->additionalLibPaths;
-					while ( additionalLibPath && *additionalLibPath ) {
-						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-L%s ", *additionalLibPath );
-
-						additionalLibPath++;
+					for ( builderStringChunk_t *chunk = config->additionalLibPaths.head; chunk; chunk = chunk->next ) {
+						for ( uint32_t libPathIndex = 0; libPathIndex < chunk->count; libPathIndex++ ) {
+							StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-L%s ", chunk->items[libPathIndex] );
+						}
 					}
 
-					const char **additionalLib = config->additionalLibs;
-					while ( additionalLib && *additionalLib ) {
-						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-l%s ", *additionalLib );
-
-						additionalLib++;
+					for ( builderStringChunk_t *chunk = config->additionalLibs.head; chunk; chunk = chunk->next ) {
+						for ( uint32_t libIndex = 0; libIndex < chunk->count; libIndex++ ) {
+							StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-l%s ", chunk->items[libIndex] );
+						}
 					}
 
-					const char **additionalLinkerArgument = config->additionalLinkerArguments;
-					while ( additionalLinkerArgument && *additionalLinkerArgument ) {
-						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", *additionalLinkerArgument );
-
-						additionalLinkerArgument++;
+					for ( builderStringChunk_t *chunk = config->additionalLinkerArguments.head; chunk; chunk = chunk->next ) {
+						for ( uint32_t argumentIndex = 0; argumentIndex < chunk->count; argumentIndex++ ) {
+							StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", chunk->items[argumentIndex] );
+						}
 					}
 				}
 #endif
@@ -2961,7 +3176,7 @@ int Build( BuilderOptions *options ) {
 			config->OnPostBuild( config );
 		}
 
-		printf( "Finished config \"%s\":\n", config->name ? config->name : "" );
+		printf( "Finished config \"%s\":\n", config->name );
 		printf( "    Compile : %f ms\n", compileTimeMS );
 		printf( "    Link    : %f ms\n", linkTimeMS );
 		printf( "\n" );

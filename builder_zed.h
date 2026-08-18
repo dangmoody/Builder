@@ -120,14 +120,18 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 	// tasks.json
 	{
 		if ( zedOptions->taskConfigsCount == 0 ) {
-			zedOptions->taskConfigs = Builder_ArenaAlloc( scratch.arena, ZedTaskConfig, options->configsCount );
-			zedOptions->taskConfigsCount = options->configsCount;
+			zedOptions->taskConfigs = Builder_ArenaAlloc( scratch.arena, ZedTaskConfig, options->configs.count );
+			zedOptions->taskConfigsCount = options->configs.count;
 
-			for ( uint32_t configIndex = 0; configIndex < options->configsCount; configIndex++ ) {
-				zedOptions->taskConfigs[configIndex] = (ZedTaskConfig) {
-					.config	= &options->configs[configIndex],
-					.args	= NULL,
-				};
+			uint32_t configIndex = 0;
+
+			for ( buildConfigPtrChunk_t *chunk = options->configs.head; chunk; chunk = chunk->next ) {
+				for ( uint32_t chunkConfigIndex = 0; chunkConfigIndex < chunk->count; chunkConfigIndex++ ) {
+					zedOptions->taskConfigs[configIndex++] = (ZedTaskConfig) {
+						.config	= chunk->items[chunkConfigIndex],
+						.args	= NULL,
+					};
+				}
 			}
 		}
 
@@ -195,32 +199,36 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 		bool ok = true;
 
 		if ( zedOptions->debugConfigsCount == 0 ) {
-			zedOptions->debugConfigs = Builder_ArenaAlloc( scratch.arena, ZedDebugConfig, options->configsCount );
-			zedOptions->debugConfigsCount = options->configsCount;
+			zedOptions->debugConfigs = Builder_ArenaAlloc( scratch.arena, ZedDebugConfig, options->configs.count );
+			zedOptions->debugConfigsCount = options->configs.count;
 
-			for ( uint32_t configIndex = 0; configIndex < options->configsCount; configIndex++ ) {
-				const BuildConfig *config = &options->configs[configIndex];
+			uint32_t configIndex = 0;
 
-				const char *extension = Builder_GetFileExtensionFromBinaryType( config->binaryType );
+			for ( buildConfigPtrChunk_t *chunk = options->configs.head; chunk; chunk = chunk->next ) {
+				for ( uint32_t chunkConfigIndex = 0; chunkConfigIndex < chunk->count; chunkConfigIndex++ ) {
+					const BuildConfig *config = chunk->items[chunkConfigIndex];
 
-				char *fullBinaryPath = config->binaryFolder
-					? Builder_FormatString( scratch.arena, "%s%c%s%s", config->binaryFolder, BUILDER_PATH_SEPARATOR, config->binaryName, extension )
-					: Builder_FormatString( scratch.arena, "%s%s", config->binaryName, extension );
+					const char *extension = Builder_GetFileExtensionFromBinaryType( config->binaryType );
 
-				// Zed wants forward slashes regardless of platform
-				for ( char *c = fullBinaryPath; *c; c++ ) {
-					if ( *c == '\\' ) {
-						*c = '/';
+					char *fullBinaryPath = config->binaryFolder
+						? Builder_FormatString( scratch.arena, "%s%c%s%s", config->binaryFolder, BUILDER_PATH_SEPARATOR, config->binaryName, extension )
+						: Builder_FormatString( scratch.arena, "%s%s", config->binaryName, extension );
+
+					// Zed wants forward slashes regardless of platform
+					for ( char *c = fullBinaryPath; *c; c++ ) {
+						if ( *c == '\\' ) {
+							*c = '/';
+						}
 					}
-				}
 
-				zedOptions->debugConfigs[configIndex] = (ZedDebugConfig) {
-					.label		= Builder_FormatString( scratch.arena, "Debug %s", config->name ),
-					.binaryName	= Builder_FormatString( scratch.arena, "${ZED_WORKTREE_ROOT}/%s", fullBinaryPath ),
-					.cwd		= "${ZED_WORKTREE_ROOT}",
-					.adapter	= ZED_DEBUGGER_ADAPTER_CODELLDB,
-					.request	= ZED_DEBUGGER_REQUEST_LAUNCH,
-				};
+					zedOptions->debugConfigs[configIndex++] = (ZedDebugConfig) {
+						.label		= Builder_FormatString( scratch.arena, "Debug %s", config->name ),
+						.binaryName	= Builder_FormatString( scratch.arena, "${ZED_WORKTREE_ROOT}/%s", fullBinaryPath ),
+						.cwd		= "${ZED_WORKTREE_ROOT}",
+						.adapter	= ZED_DEBUGGER_ADAPTER_CODELLDB,
+						.request	= ZED_DEBUGGER_REQUEST_LAUNCH,
+					};
+				}
 			}
 		}
 

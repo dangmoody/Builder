@@ -9,20 +9,28 @@ int main( int argc, char **argv ) {
 		.argv = argv,
 	};
 
-	BuildConfig *libConfig = CreateBuildConfig( &options, "lib", BINARY_TYPE_STATIC_LIBRARY );
-	SetBinaryName( libConfig, "test_static_lib" );
-	AddSourceFiles( libConfig, "lib/mathlib.c" );
+	BuildConfig *libConfig = CreateBuildConfig( &options );
+	*libConfig = (BuildConfig) {
+		.name			= "lib",
+		.binaryType		= BINARY_TYPE_STATIC_LIBRARY,
+		.binaryName		= "test_static_lib",
+		.sourceFiles	= MakeStringList( "lib/mathlib.c" ),
+	};
 
-	BuildConfig *programConfig = CreateBuildConfig( &options, "program", BINARY_TYPE_EXE );
-	SetBinaryName( programConfig, "test_static_lib_program" );
-	AddDependencies( programConfig, libConfig );
-	AddSourceFiles( programConfig, "program/main.c" );
-	AddIncludes( programConfig, "lib" );
+	BuildConfig *programConfig = CreateBuildConfig( &options );
+	*programConfig = (BuildConfig) {
+		.name				= "program",
+		.binaryType			= BINARY_TYPE_EXE,
+		.binaryName			= "test_static_lib_program",
+		.dependsOn			= MakeDependencies( libConfig ),
+		.sourceFiles		= MakeStringList( "program/main.c" ),
+		.additionalIncludes	= MakeStringList( "lib" ),
 #if defined( _WIN32 )
-	AddLinkerArguments( programConfig, "test_static_lib.lib" );
+		.additionalLinkerArguments = MakeStringList( "test_static_lib.lib" ),
 #else
-	AddLinkerArguments( programConfig, "./test_static_lib.a" );
+		.additionalLinkerArguments = MakeStringList( "./test_static_lib.a" ),
 #endif
+	};
 
 	options.defaultConfig = programConfig;
 

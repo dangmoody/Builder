@@ -87,21 +87,23 @@ typedef struct ConfigPtrList {
 	uint32_t						count;
 } ConfigPtrList;
 
-// Builder owns every BuildConfig - you get one from CreateBuildConfig() and fill it in with the Add*()/Set*()
-// functions further down.  Those copy every string they're handed into Builder's own memory, so set these fields
-// through them rather than writing to them directly.
+// Builder owns every BuildConfig - you get a blank one from CreateBuildConfig() and fill it in, either by assigning
+// the whole struct or a field at a time.  Write to these fields directly; the list fields are the only ones that need
+// building first, which is what MakeStringList() and MakeDependencies() are for.
+// A config keeps the pointers you give it rather than copying them, so anything not a string literal wants to come
+// from Config_FormatString().
 typedef struct BuildConfig {
+	// Required, and unique across your configs.  It's what "--config=" matches against and what the build log calls it.
 	const char				*name;
-	// Other BuildConfigs that need to be built before this one - see AddDependency().
+	// Other BuildConfigs that need to be built before this one - see MakeDependencies() and AddDependencies().
 	// Building a config builds everything in here first, so you only ever have to ask for the top-level one.
-	ConfigPtrList	dependsOn;
-	// See SetBinaryName().
+	ConfigPtrList			dependsOn;
 	const char				*binaryName;
-	// The folder the binary is placed into, relative to the file you pass into Builder - see SetBinaryFolder().
+	// The folder the binary is placed into, relative to the file you pass into Builder.
 	// If this folder doesn't exist then Builder will create it for you.
 	// Leave unset to put the binary alongside the source file.
 	const char				*binaryFolder;
-	// The folder that intermediate build files (object files) are placed into, relative to binaryFolder - see SetIntermediateFolder().
+	// The folder that intermediate build files (object files) are placed into, relative to binaryFolder.
 	// If this folder doesn't exist then Builder will create it for you.
 	// Leave unset to put intermediate files alongside the binary.
 	const char				*intermediateFolder;
@@ -146,19 +148,46 @@ typedef struct BuilderOptions {
 	ConfigPtrList	configs;
 } BuilderOptions;
 
-// Creates a BuildConfig, registers it with options, and hands it back.  Builder owns it and keeps it alive until the
-// program exits.
-// name is what "--config=" matches against and what the build log calls the config.  It's required, and no two
-// configs may share one.
-BuildConfig	*CreateBuildConfig( BuilderOptions *options, const char *name, BinaryType binaryType );
+// Creates a zeroed BuildConfig, registers it with options, and hands it back.  Builder owns it and keeps it alive
+// until the program exits, so nothing user-owned is ever pointed at.
+// Fill it in however you like - assign the whole struct at once, or use the Add*()/Set*() functions below:
+//
+//	BuildConfig *program = CreateBuildConfig( options );
+//	*program = (BuildConfig) {
+//		.name        = "program",
+//		.binaryType  = BINARY_TYPE_EXE,
+//		.sourceFiles = MakeStringList( "main.c", "util.c" ),
+//		.dependsOn   = MakeDependencies( lib ),
+//	};
+//
+// Every config needs a name - it's what "--config=" matches against and what the build log calls it - and no two may
+// share one.  Build() checks both before it builds anything.
+BuildConfig	*CreateBuildConfig( BuilderOptions *options );
 
-// Bundles the arguments of the Add*() macros below into an array and its length, so a call site never has to write a
-// count or a terminator.  sizeof doesn't evaluate its operand, so naming __VA_ARGS__ twice costs nothing at runtime.
+// Bundles the arguments of the macros below into an array and its length, so a call site never has to write a count or
+// a terminator.  sizeof doesn't evaluate its operand, so naming __VA_ARGS__ twice costs nothing at runtime.
 #define BUILDER_STRING_ARGS( ... )	(const char *[]) { __VA_ARGS__ },	(uint32_t) ( sizeof( (const char *[]) { __VA_ARGS__ } ) / sizeof( const char * ) )
 #define BUILDER_CONFIG_ARGS( ... )	(BuildConfig *[]) { __VA_ARGS__ },	(uint32_t) ( sizeof( (BuildConfig *[]) { __VA_ARGS__ } ) / sizeof( BuildConfig * ) )
 
-// Each of these takes one or more entries and copies every one of them, so a stack buffer is as safe to pass as a
-// literal.  They're additive: call them as often as you like and the entries accumulate.
+// Build a whole list in one expression, for assigning straight into a BuildConfig.  What they hand back is the list
+// wrapper by value - everything it points at lives in Builder's memory, so it survives being copied about and outlasts
+// the strings you built it from.
+#define MakeStringList( ... )	Builder_MakeStringListInternal( BUILDER_STRING_ARGS( __VA_ARGS__ ) )
+#define MakeDependencies( ... )	Builder_MakeDependenciesInternal( BUILDER_CONFIG_ARGS( __VA_ARGS__ ) )
+
+// Builds a string in Builder's memory, so it's still alive when the build runs.
+// A BuildConfig keeps whatever pointers you give it rather than copying them, which is free for the string literals
+// that make up almost every build script.  Use this for anything you need to build at runtime - a version number, a
+// path assembled from parts - rather than pointing a config at a local buffer that's about to go out of scope.
+const char	*Config_FormatString( const char *fmt, ... );
+
+// DO NOT CALL THESE DIRECTLY
+// CALL THE MACRO VERSIONS ABOVE INSTEAD
+StringList		Builder_MakeStringListInternal( const char **strings, uint32_t count );
+ConfigPtrList	Builder_MakeDependenciesInternal( BuildConfig **dependencies, uint32_t count );
+
+// Append to a list that's already on a config, for layering settings on after it's been filled in.  Additive: call them
+// as often as you like and the entries accumulate.
 #define AddSourceFiles( config, ... )		( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->sourceFiles, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )
 #define AddDefines( config, ... )			( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->defines, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )				// no "-D"/"/D" - Builder adds that for you
 #define AddIncludes( config, ... )			( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->additionalIncludes, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )
@@ -176,15 +205,6 @@ BuildConfig	*CreateBuildConfig( BuilderOptions *options, const char *name, Binar
 void	Builder_AddStringsInternal( StringList *list, const char **strings, uint32_t count );
 void	Builder_AddDependenciesInternal( BuildConfig *config, BuildConfig **dependencies, uint32_t count );
 
-void	SetBinaryName( BuildConfig *config, const char *name );
-void	SetBinaryFolder( BuildConfig *config, const char *folder );
-void	SetIntermediateFolder( BuildConfig *config, const char *folder );
-void	SetLanguageVersion( BuildConfig *config, LanguageVersion languageVersion );
-void	SetOptimization( BuildConfig *config, Optimization optimization );
-void	SetRemoveSymbols( BuildConfig *config, bool removeSymbols );
-void	SetWarningsAsErrors( BuildConfig *config, bool warningsAsErrors );
-void	SetPreBuildCallback( BuildConfig *config, void ( *callback )( BuildConfig *config ) );
-void	SetPostBuildCallback( BuildConfig *config, void ( *callback )( BuildConfig *config ) );
 
 int		Build( BuilderOptions *options );
 
@@ -475,19 +495,26 @@ static bool Builder_PathHasFileExtension( const char *path, const char *extensio
 #endif
 }
 
-static char *Builder_FormatString( arena_t *arena, const char *fmt, ... ) {
-	va_list args;
-	va_start( args, fmt );
-
+static char *Builder_FormatStringV( arena_t *arena, const char *fmt, va_list args ) {
 	va_list argsCopy;
 	va_copy( argsCopy, args );
 
 	int length = vsnprintf( NULL, 0, fmt, args );
-	va_end( args );
 
 	char *result = Builder_ArenaAlloc( arena, char, (uint64_t) length + 1 );
 	vsnprintf( result, (size_t) length + 1, fmt, argsCopy );
 	va_end( argsCopy );
+
+	return result;
+}
+
+static char *Builder_FormatString( arena_t *arena, const char *fmt, ... ) {
+	va_list args;
+	va_start( args, fmt );
+
+	char *result = Builder_FormatStringV( arena, fmt, args );
+
+	va_end( args );
 
 	return result;
 }
@@ -854,20 +881,6 @@ static arena_t *Builder_GetConfigArena( void ) {
 	return configStorage.arena;
 }
 
-// Every string that comes in through the public API gets copied.  A caller can hand us a snprintf'd stack buffer just
-// as easily as a literal, and keeping their pointer would leave the config pointing at a dead frame.
-static const char *Builder_CopyString( arena_t *arena, const char *string ) {
-	if ( !string ) {
-		return NULL;
-	}
-
-	size_t size = strlen( string ) + 1;
-	char *copy = Builder_ArenaAlloc( arena, char, size );
-	memcpy( copy, string, size );
-
-	return copy;
-}
-
 static bool Builder_ArenaOwnsPointer( arena_t *arena, const void *pointer ) {
 	BUILDER_ASSERT( arena );
 
@@ -882,33 +895,59 @@ static bool Builder_ArenaOwnsPointer( arena_t *arena, const void *pointer ) {
 	return false;
 }
 
-BuildConfig *CreateBuildConfig( BuilderOptions *options, const char *name, BinaryType binaryType ) {
+BuildConfig *CreateBuildConfig( BuilderOptions *options ) {
 	BUILDER_ASSERT( options );
-	BUILDER_ASSERT( name && name[0] && "Every BuildConfig needs a name - it's what \"" ARG_CONFIG "\" and the build log refer to it by." );
-
-	{
-		for ( buildConfigPtrChunk_t *chunk = options->configs.head; chunk; chunk = chunk->next ) {
-			for ( uint32_t configIndex = 0; configIndex < chunk->count; configIndex++ ) {
-				if ( Builder_StringEquals( chunk->items[configIndex]->name, name ) ) {
-					Builder_Error( "There is already a BuildConfig called \"%s\".  Config names have to be unique, otherwise \"" ARG_CONFIG "%s\" has no way of telling them apart.\n", name, name );
-
-					exit( 1 );
-				}
-			}
-		}
-	}
 
 	arena_t *configArena = Builder_GetConfigArena();
 
 	BuildConfig *config = Builder_ArenaAlloc( configArena, BuildConfig, 1 );
 	memset( config, 0, sizeof( BuildConfig ) );
 
-	config->name		= Builder_CopyString( configArena, name );
-	config->binaryType	= binaryType;
-
 	Builder_ConfigListPush( configArena, &options->configs, config );
 
 	return config;
+}
+
+const char *Config_FormatString( const char *fmt, ... ) {
+	BUILDER_ASSERT( fmt );
+
+	va_list args;
+	va_start( args, fmt );
+
+	const char *result = Builder_FormatStringV( Builder_GetConfigArena(), fmt, args );
+
+	va_end( args );
+
+	return result;
+}
+
+StringList Builder_MakeStringListInternal( const char **strings, uint32_t count ) {
+	StringList list = {0};
+
+	Builder_AddStringsInternal( &list, strings, count );
+
+	return list;
+}
+
+ConfigPtrList Builder_MakeDependenciesInternal( BuildConfig **dependencies, uint32_t count ) {
+	BUILDER_ASSERT( dependencies );
+
+	ConfigPtrList list = {0};
+	arena_t *configArena = Builder_GetConfigArena();
+
+	for ( uint32_t dependencyIndex = 0; dependencyIndex < count; dependencyIndex++ ) {
+		BuildConfig *dependency = dependencies[dependencyIndex];
+
+		BUILDER_ASSERT( dependency );
+
+		// CreateBuildConfig() is the only thing that allocates a BuildConfig, so a pointer from outside this arena came
+		// off somebody's stack and would dangle by the time Build() read it
+		BUILDER_ASSERT( Builder_ArenaOwnsPointer( configArena, dependency ) && "Dependencies have to come from CreateBuildConfig() - Builder can't hold on to a BuildConfig it doesn't own." );
+
+		Builder_ConfigListPush( configArena, &list, dependency );
+	}
+
+	return list;
 }
 
 void Builder_AddStringsInternal( StringList *list, const char **strings, uint32_t count ) {
@@ -922,7 +961,8 @@ void Builder_AddStringsInternal( StringList *list, const char **strings, uint32_
 
 		BUILDER_ASSERT( string && string[0] && "Adding an empty entry to a BuildConfig list doesn't do anything." );
 
-		Builder_StringListPush( configArena, list, Builder_CopyString( configArena, string ) );
+		// the string itself isn't copied - almost every entry is a literal, and Config_FormatString() covers the rest
+		Builder_StringListPush( configArena, list, string );
 	}
 }
 
@@ -944,60 +984,6 @@ void Builder_AddDependenciesInternal( BuildConfig *config, BuildConfig **depende
 
 		Builder_ConfigListPush( configArena, &config->dependsOn, dependency );
 	}
-}
-
-void SetBinaryName( BuildConfig *config, const char *name ) {
-	BUILDER_ASSERT( config );
-
-	config->binaryName = Builder_CopyString( Builder_GetConfigArena(), name );
-}
-
-void SetBinaryFolder( BuildConfig *config, const char *folder ) {
-	BUILDER_ASSERT( config );
-
-	config->binaryFolder = Builder_CopyString( Builder_GetConfigArena(), folder );
-}
-
-void SetIntermediateFolder( BuildConfig *config, const char *folder ) {
-	BUILDER_ASSERT( config );
-
-	config->intermediateFolder = Builder_CopyString( Builder_GetConfigArena(), folder );
-}
-
-void SetLanguageVersion( BuildConfig *config, LanguageVersion languageVersion ) {
-	BUILDER_ASSERT( config );
-
-	config->languageVersion = languageVersion;
-}
-
-void SetOptimization( BuildConfig *config, Optimization optimization ) {
-	BUILDER_ASSERT( config );
-
-	config->optimization = optimization;
-}
-
-void SetRemoveSymbols( BuildConfig *config, bool removeSymbols ) {
-	BUILDER_ASSERT( config );
-
-	config->removeSymbols = removeSymbols;
-}
-
-void SetWarningsAsErrors( BuildConfig *config, bool warningsAsErrors ) {
-	BUILDER_ASSERT( config );
-
-	config->warningsAsErrors = warningsAsErrors;
-}
-
-void SetPreBuildCallback( BuildConfig *config, void ( *callback )( BuildConfig *config ) ) {
-	BUILDER_ASSERT( config );
-
-	config->OnPreBuild = callback;
-}
-
-void SetPostBuildCallback( BuildConfig *config, void ( *callback )( BuildConfig *config ) ) {
-	BUILDER_ASSERT( config );
-
-	config->OnPostBuild = callback;
 }
 
 // Depth-first walk of config->dependsOn that appends each config to outConfigsToBuild only once everything it depends
@@ -1223,10 +1209,10 @@ static int32_t Builder_RunProcess( arena_t* results, const char *processAndArgs,
 		return -1;
 	}
 
-	char buffer[1024] = {};
+	char buffer[1024] = {0};
 	ssize_t bytesRead = 0;
 
-	stringBuilder_t capturedOutput = {};
+	stringBuilder_t capturedOutput = {0};
 
 	// the builder's own buffers are throwaway, so they go somewhere other than the scratch the caller wants the result in
 	scratch_t temporaryScratch = Builder_GetScratch( results );
@@ -1516,7 +1502,7 @@ static bool Builder_VisitFiles( arena_t *results, const char *path, const builde
 #if defined( _WIN32 )
 		char *searchPath = Builder_FormatString( scratch.arena, dirHasTrailingSeparator ? "%s*" : "%s\\*", dir );
 
-		WIN32_FIND_DATA findData = {};
+		WIN32_FIND_DATA findData = {0};
 		HANDLE handle = FindFirstFile( searchPath, &findData );
 
 		if ( handle == INVALID_HANDLE_VALUE ) {
@@ -1575,7 +1561,7 @@ static bool Builder_VisitFiles( arena_t *results, const char *path, const builde
 
 			char *fullFilename = Builder_FormatString( scratch.arena, dirHasTrailingSeparator ? "%s%s" : "%s/%s", dir, entry->d_name );
 
-			struct stat fileStat = {};
+			struct stat fileStat = {0};
 
 			if ( stat( fullFilename, &fileStat ) != 0 ) {
 				err = errno;
@@ -2337,7 +2323,7 @@ static bool Builder_GetMSVCInstall( arena_t *results, builderMSVCInstall_t *outI
 		builderMSVCInstall_t *install = &foundData.installs[versionIndex];
 
 		uint32_t missingFoldersCount = 0;
-		const char *missingFolders[2] = {};
+		const char *missingFolders[2] = {0};
 
 		if ( !Builder_FolderExists( install->includePath ) ) {
 			missingFolders[missingFoldersCount++] = install->includePath;
@@ -2348,7 +2334,7 @@ static bool Builder_GetMSVCInstall( arena_t *results, builderMSVCInstall_t *outI
 		}
 
 		if ( missingFoldersCount > 0 ) {
-			stringBuilder_t sb = {};
+			stringBuilder_t sb = {0};
 
 			StringBuilder_Appendf( scratch.arena, &sb, "Version %d.%d.%d of your MSVC installation is malformed because the following folder(s) could not be found:\n", install->version.v0, install->version.v1, install->version.v2 );
 
@@ -2807,6 +2793,31 @@ int Build( BuilderOptions *options ) {
 	for ( int argIndex = 0; argIndex < options->argc; argIndex++ ) {
 		if ( Builder_StringStartsWith( options->argv[argIndex], ARG_HELP_SHORT ) || Builder_StringStartsWith( options->argv[argIndex], ARG_HELP_LONG ) ) {
 			return ShowUsage( 0 );
+		}
+	}
+
+	// Names can only be checked here.  A config comes out of CreateBuildConfig() blank and gets filled in afterwards,
+	// so this is the first point at which every config actually has the name it's going to be built under.
+	for ( buildConfigPtrChunk_t *chunk = options->configs.head; chunk; chunk = chunk->next ) {
+		for ( uint32_t configIndex = 0; configIndex < chunk->count; configIndex++ ) {
+			BuildConfig *config = chunk->items[configIndex];
+
+			if ( !config->name || !config->name[0] ) {
+				Builder_Error( "One of your BuildConfigs has no name.  Every config needs one - it's what \"" ARG_CONFIG "\" matches against and what the build log calls it.\n" );
+				return 1;
+			}
+
+			// only has to look at the configs after this one, since anything before it already compared against this
+			for ( buildConfigPtrChunk_t *otherChunk = chunk; otherChunk; otherChunk = otherChunk->next ) {
+				uint32_t firstOtherIndex = ( otherChunk == chunk ) ? configIndex + 1 : 0;
+
+				for ( uint32_t otherIndex = firstOtherIndex; otherIndex < otherChunk->count; otherIndex++ ) {
+					if ( Builder_StringEquals( otherChunk->items[otherIndex]->name, config->name ) ) {
+						Builder_Error( "There is more than one BuildConfig called \"%s\".  Config names have to be unique, otherwise \"" ARG_CONFIG "%s\" has no way of telling them apart.\n", config->name, config->name );
+						return 1;
+					}
+				}
+			}
 		}
 	}
 

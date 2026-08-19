@@ -12,55 +12,66 @@ int main( int argc, char **argv ) {
 
 	Builder_RebuildSelf(argc,argv);
 
-	BuildConfig *sdl = CreateBuildConfig( &options, "sdl", BINARY_TYPE_DYNAMIC_LIBRARY );
-	SetBinaryName( sdl, BINARY_NAME );
-	SetBinaryFolder( sdl, BINARY_FOLDER );
-
-	AddSourceFiles( sdl,
-		"src/*.c",
-		"src/atomic/*.c",
-		"src/audio/*.c",
-		"src/audio/disk/*.c",
-		"src/audio/dummy/*.c",
-		"src/camera/*.c",
-		"src/camera/dummy/*.c",
-		"src/camera/mediafoundation/*.c",
-		"src/core/*.c",
-		"src/cpuinfo/*.c",
-		"src/dialog/*.c",
-		"src/dynapi/*.c",
-		"src/events/*.c",
-		"src/filesystem/*.c",
-		"src/gpu/*.c",
-		"src/haptic/*.c",
-		"src/haptic/hidapi/*.c",
-		"src/hidapi/*.c",
-		"src/io/*.c",
-		"src/io/generic/*.c",
-		"src/joystick/*.c",
-		"src/joystick/hidapi/*.c",
-		"src/joystick/virtual/*.c",
-		"src/locale/*.c",
-		"src/main/*.c",
-		"src/main/generic/*.c",
-		"src/misc/*.c",
-		"src/power/*.c",
-		"src/process/*.c",
-		"src/render/*.c",
-		"src/render/software/*.c",
-		"src/sensor/*.c",
-		"src/stdlib/*.c",
-		"src/storage/*.c",
-		"src/storage/generic/*.c",
-		"src/tray/*.c",
-		"src/thread/*.c",
-		"src/time/*.c",
-		"src/timer/*.c",
-		"src/video/*.c",
-		"src/video/dummy/*.c",
-		"src/video/offscreen/*.c",
-		"src/video/yuv2rgb/*.c"
-	);
+	// the cross-platform half goes in the initialiser; the per-platform half is appended below, because a #if inside a
+	// macro argument list is undefined behaviour (clang's -Wembedded-directive) even though it happens to work
+	BuildConfig *sdl = CreateBuildConfig( &options );
+	*sdl = (BuildConfig) {
+		.name			= "sdl",
+		.binaryType		= BINARY_TYPE_DYNAMIC_LIBRARY,
+		.binaryName		= BINARY_NAME,
+		.binaryFolder	= BINARY_FOLDER,
+		.sourceFiles	= MakeStringList(
+			"src/*.c",
+			"src/atomic/*.c",
+			"src/audio/*.c",
+			"src/audio/disk/*.c",
+			"src/audio/dummy/*.c",
+			"src/camera/*.c",
+			"src/camera/dummy/*.c",
+			"src/camera/mediafoundation/*.c",
+			"src/core/*.c",
+			"src/cpuinfo/*.c",
+			"src/dialog/*.c",
+			"src/dynapi/*.c",
+			"src/events/*.c",
+			"src/filesystem/*.c",
+			"src/gpu/*.c",
+			"src/haptic/*.c",
+			"src/haptic/hidapi/*.c",
+			"src/hidapi/*.c",
+			"src/io/*.c",
+			"src/io/generic/*.c",
+			"src/joystick/*.c",
+			"src/joystick/hidapi/*.c",
+			"src/joystick/virtual/*.c",
+			"src/locale/*.c",
+			"src/main/*.c",
+			"src/main/generic/*.c",
+			"src/misc/*.c",
+			"src/power/*.c",
+			"src/process/*.c",
+			"src/render/*.c",
+			"src/render/software/*.c",
+			"src/sensor/*.c",
+			"src/stdlib/*.c",
+			"src/storage/*.c",
+			"src/storage/generic/*.c",
+			"src/tray/*.c",
+			"src/thread/*.c",
+			"src/time/*.c",
+			"src/timer/*.c",
+			"src/video/*.c",
+			"src/video/dummy/*.c",
+			"src/video/offscreen/*.c",
+			"src/video/yuv2rgb/*.c"
+		),
+		.defines			= MakeStringList( "DLL_EXPORT" ),
+		.additionalIncludes	= MakeStringList(
+			"src",	// this feels dirty, are we sure we want to do this?
+			"include",
+			"include/build_config"
+		),
+	};
 
 #if defined( _WIN32 )
 	// TODO(DM): 14/06/2025: we cant just do "src/**/windows/*.c" here because
@@ -107,7 +118,7 @@ int main( int argc, char **argv ) {
 		"src/video/windows/*.cpp"
 	);
 
-	AddDefines( sdl, "DLL_EXPORT", "SDL_PLATFORM_WIN32", "HAVE_MODF" );
+	AddDefines( sdl, "SDL_PLATFORM_WIN32", "HAVE_MODF" );
 
 	AddLibs( sdl,
 		"Ole32", "OleAut32", "Winmm", "Imm32", "Advapi32", "Shell32",
@@ -122,7 +133,6 @@ int main( int argc, char **argv ) {
 	);
 
 	AddDefines( sdl,
-		"DLL_EXPORT",
 		"HAVE_LIBC", "HAVE_STDARG_H", "HAVE_STDDEF_H", "HAVE_STDINT_H", "HAVE_FLOAT_H",
 		"HAVE_LIMITS_H", "HAVE_MATH_H", "HAVE_SIGNAL_H", "HAVE_STDIO_H", "HAVE_STDLIB_H",
 		"HAVE_STRING_H", "HAVE_STRINGS_H", "HAVE_SYS_TYPES_H", "HAVE_WCHAR_H",
@@ -130,27 +140,24 @@ int main( int argc, char **argv ) {
 	);
 #endif
 
-	AddIncludes( sdl,
-		"src",	// this feels dirty, are we sure we want to do this?
-		"include",
-		"include/build_config"
-	);
-
-	BuildConfig *demo = CreateBuildConfig( &options, "demo", BINARY_TYPE_EXE );
-	SetBinaryName( demo, "sdl-demo-app" );
-	SetBinaryFolder( demo, BINARY_FOLDER );
-	SetWarningsAsErrors( demo, true );
-
-	AddDependencies( demo, sdl );
-	AddSourceFiles( demo, "demo-app/*.cpp" );
-	AddIncludes( demo, "include" );
-	AddLibPaths( demo, BINARY_FOLDER );
+	BuildConfig *demo = CreateBuildConfig( &options );
+	*demo = (BuildConfig) {
+		.name				= "demo",
+		.binaryType			= BINARY_TYPE_EXE,
+		.binaryName			= "sdl-demo-app",
+		.binaryFolder		= BINARY_FOLDER,
+		.warningsAsErrors	= true,
+		.dependsOn			= MakeDependencies( sdl ),
+		.sourceFiles		= MakeStringList( "demo-app/*.cpp" ),
+		.additionalIncludes	= MakeStringList( "include" ),
+		.additionalLibPaths	= MakeStringList( BINARY_FOLDER ),
 #if defined( _WIN32 )
-	AddLibs( demo, BINARY_NAME );
+		.additionalLibs		= MakeStringList( BINARY_NAME ),
 #elif defined( __linux__ )
-	// ":" is GNU ld syntax for "link this exact filename", which is how the .so gets picked up without a lib prefix
-	AddLibs( demo, ":" BINARY_NAME ".so" );
+		// ":" is GNU ld syntax for "link this exact filename", which is how the .so gets picked up without a lib prefix
+		.additionalLibs		= MakeStringList( ":" BINARY_NAME ".so" ),
 #endif
+	};
 
 	options.defaultConfig = demo;
 

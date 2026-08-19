@@ -11,14 +11,16 @@ int main( int argc, char **argv ) {
 		.argv = argv,
 	};
 
-	BuildConfig *config = CreateBuildConfig( &options, "config", BINARY_TYPE_EXE );
-	SetBinaryName( config, "test_generate_vs_code_json" );
+	BuildConfig *config = CreateBuildConfig( &options );
+	config->name = "config";
+	config->binaryType = BINARY_TYPE_EXE;
+	config->binaryName = "test_generate_vs_code_json";
 	AddSourceFiles( config, "main.c" );
 
 	if ( HasCommandLineArg( &options, "--release" ) ) {
-		SetBinaryFolder( config, "bin/release" );
+		config->binaryFolder = "bin/release";
 	} else {
-		SetBinaryFolder( config, "bin/debug" );
+		config->binaryFolder = "bin/debug";
 	}
 
 	options.defaultConfig = config;

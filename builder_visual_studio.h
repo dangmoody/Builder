@@ -395,23 +395,26 @@ static void Builder_VSAddFilesFromPatterns( arena_t *arena,
 											visualStudioFileList_t *headerFiles,
 											visualStudioFileList_t *otherFiles,
 											visualStudioFilterPathList_t *filterPaths,
-											const char **filePatterns )
+											const char **filePatterns,
+											const BuilderOptions *options )
 {
 	if ( !filePatterns ) {
 		return;
 	}
 
-	builderFileGlobResult_t globResult = Builder_GlobFiles( arena, filePatterns );
+	builderStringList_t globResult = Builder_GlobFiles( arena, filePatterns, options );
 
-	for ( uint32_t fileIndex = 0; fileIndex < globResult.count; fileIndex++ ) {
-		const char *file = globResult.files[fileIndex];
+	for ( builderStringChunk_t *chunk = globResult.head; chunk; chunk = chunk->next ) {
+		for ( uint32_t fileIndex = 0; fileIndex < chunk->count; fileIndex++ ) {
+			const char *file = chunk->items[fileIndex];
 
-		if ( Builder_VSIsSourceFile( file ) ) {
-			Builder_VSAddFileUnique( arena, sourceFiles, filterPaths, file );
-		} else if ( Builder_VSIsHeaderFile( file ) ) {
-			Builder_VSAddFileUnique( arena, headerFiles, filterPaths, file );
-		} else {
-			Builder_VSAddFileUnique( arena, otherFiles, filterPaths, file );
+			if ( Builder_VSIsSourceFile( file ) ) {
+				Builder_VSAddFileUnique( arena, sourceFiles, filterPaths, file );
+			} else if ( Builder_VSIsHeaderFile( file ) ) {
+				Builder_VSAddFileUnique( arena, headerFiles, filterPaths, file );
+			} else {
+				Builder_VSAddFileUnique( arena, otherFiles, filterPaths, file );
+			}
 		}
 	}
 }
@@ -831,10 +834,10 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 		visualStudioFilterPathList_t filterPaths = {};
 
 		for ( uint32_t configIndex = 0; configIndex < project->configsCount; configIndex++ ) {
-			Builder_VSAddFilesFromPatterns( scratch.arena, &sourceFiles, &headerFiles, &otherFiles, &filterPaths, project->configs[configIndex].config->sourceFiles );
+			Builder_VSAddFilesFromPatterns( scratch.arena, &sourceFiles, &headerFiles, &otherFiles, &filterPaths, project->configs[configIndex].config->sourceFiles, options );
 		}
 
-		Builder_VSAddFilesFromPatterns( scratch.arena, &sourceFiles, &headerFiles, &otherFiles, &filterPaths, project->extraFiles );
+		Builder_VSAddFilesFromPatterns( scratch.arena, &sourceFiles, &headerFiles, &otherFiles, &filterPaths, project->extraFiles, options );
 
 		const char *projectDisplayName = Builder_VSGetProjectDisplayName( project->name );
 

@@ -13,7 +13,7 @@ doc/notes/
 
 # ignore tools folder, but dont ignore 7zip
 tools/*
-!tools/7zip_win64
+!tools/7zip-win64
 
 # ignore test files
 tests/**/*.exe

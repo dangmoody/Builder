@@ -3,6 +3,7 @@
 
 Builder
 
+Distributed under MIT License:
 Copyright (c) 2026 Dan Moody
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -74,7 +75,6 @@ typedef enum Optimization {
 	OPTIMIZATION_PROGRAM_SPEED,
 } Optimization;
 
-//TODO: Rename to match public api format or take BuildConfig into IMPL
 typedef struct StringList {
 	struct builderStringChunk_t	*head;
 	struct builderStringChunk_t	*tail;
@@ -142,6 +142,10 @@ typedef struct BuilderOptions {
 	// You can and should set these.
 	int			argc;
 	char		**argv;
+
+	// Enables extra diagnostic logging throughout the build (each line prefixed "VERBOSE: ").
+	// You can set this yourself, or leave it and Builder will set it automatically if "-v" or "--verbose" is present in argv.
+	bool		verboseLogging;
 
 	// The list of configs that gets populated when calling CreateBuildConfig().
 	// Don't write to this directly unless you know what you're doing.
@@ -276,6 +280,8 @@ int		Build( BuilderOptions *options );
 
 #define ARG_HELP_SHORT				"-h"
 #define ARG_HELP_LONG				"--help"
+#define ARG_VERBOSE_SHORT			"-v"
+#define ARG_VERBOSE_LONG			"--verbose"
 #define ARG_CONFIG					"--config="
 
 #define ARENA_DEFAULT_BLOCK_SIZE	( 2 * 1024 * 1024 )
@@ -530,6 +536,19 @@ static void Builder_Warning( const char *fmt, ... ) {
 
 static void Builder_Error( const char *fmt, ... ) {
 	printf( "ERROR: " );
+
+	va_list args;
+	va_start( args, fmt );
+	vprintf( fmt, args );
+	va_end( args );
+}
+
+static void Builder_LogVerbose( const BuilderOptions *options, const char *fmt, ... ) {
+	if ( !options->verboseLogging ) {
+		return;
+	}
+
+	printf( "VERBOSE: " );
 
 	va_list args;
 	va_start( args, fmt );
@@ -1393,10 +1412,28 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 }
 
 static int ShowUsage( const int exitCode ) {
-	// TODO: DM: 30/07/2026: write the usage/help text here
 	printf(
-		"Usage:\n"
+		"Builder\n"
 		"\n"
+		"USAGE:\n"
+		"    <your build program> [arguments] [custom arguments]\n"
+		"\n"
+		"Arguments:\n"
+		"    " ARG_HELP_SHORT "|" ARG_HELP_LONG " (optional):\n"
+		"        Shows this help and then exits.\n"
+		"\n"
+		"    " ARG_VERBOSE_SHORT "|" ARG_VERBOSE_LONG " (optional):\n"
+		"        Enables verbose logging, so a lot more information gets output.\n"
+		"\n"
+		"    " ARG_CONFIG "<config> (optional):\n"
+		"        Sets the config to build to <config>.\n"
+		"        This must match the name of a config you registered via AddBuildConfig().\n"
+		"        If you only registered one config you don't need to specify this.\n"
+		"        If you registered more than one config you must either specify this or set BuilderOptions::defaultConfig.\n"
+		"\n"
+		"    [custom arguments] (optional):\n"
+		"        Any arguments not listed here are passed through to your build program via BuilderOptions::argc/argv.\n"
+		"        Use HasCommandLineArg( BuilderOptions *, const char * ) to query for them.\n"
 		"\n"
 	);
 
@@ -1615,6 +1652,7 @@ typedef struct {
 	const builderStringSliceArray_t patternSlices;
 	const uint32_t searchPathLen;
 	StringList *globResults;
+	bool verboseLogging;
 } builderGlobVisitCallbackData_t;
 
 // remember to free sliceArray.data
@@ -1765,6 +1803,10 @@ static void Builder_GlobVisitCallback( arena_t *resultsArena, fileInfo_t *fileIn
 	const builderStringSliceArray_t pathSlices = Builder_SliceFilePath( scratch.arena, matchStart );
 
 	if ( Builder_PathMatchesPattern( &callbackData->patternSlices, &pathSlices ) ) {
+		if ( callbackData->verboseLogging ) {
+			printf( "VERBOSE:  - Found \"%s\"\n", fileInfo->fullFilename );
+		}
+
 		// fileInfo->fullFilename lives on Builder_VisitFiles' internal scratch and won't survive past this
 		// call, so it has to be copied into resultsArena to outlive the walk.
 		const char *fullFilename = Builder_FormatString( resultsArena, "%s", fileInfo->fullFilename );
@@ -1775,7 +1817,7 @@ static void Builder_GlobVisitCallback( arena_t *resultsArena, fileInfo_t *fileIn
 }
 
 // builds onto whatever arena it's handed - the caller flattens it if it needs to index the result
-static StringList Builder_GlobFiles( arena_t *resultsArena, const StringList *globPatterns ) {
+static StringList Builder_GlobFiles( arena_t *resultsArena, const StringList *globPatterns, const BuilderOptions *options ) {
 	StringList globResult = {0};
 
 	scratch_t scratch = Builder_GetScratch( resultsArena );
@@ -1803,6 +1845,8 @@ static StringList Builder_GlobFiles( arena_t *resultsArena, const StringList *gl
 			if ( *pattern == '\0' ) {
 				// should I just let the compile step handle the empty strings?
 				if ( pattern != globPattern ) {
+					Builder_LogVerbose( options, "Adding source file \"%s\" to the list of source files to build with (no glob).\n", globPattern );
+
 					Builder_StringListPush( resultsArena, &globResult, globPattern ); // yes I realise this wasn't globbed \_O_O_/
 				}
 				continue;
@@ -1821,13 +1865,17 @@ static StringList Builder_GlobFiles( arena_t *resultsArena, const StringList *gl
 			builderGlobVisitCallbackData_t callbackData = {
 				.patternSlices = Builder_SliceFilePath( scratch.arena, pattern),
 				.globResults = &globResult,
-				.searchPathLen = globPathLen
+				.searchPathLen = globPathLen,
+				.verboseLogging = options->verboseLogging
 			};
 
 			builderFileVisitFlags_t visitFlags = BUILDER_FILE_VISIT_FILES;
 			if (callbackData.patternSlices.count > 1) { // we are matching folders too
 				visitFlags |= BUILDER_FILE_VISIT_RECURSIVE;
 			}
+
+			Builder_LogVerbose( options, "About to glob all source files found under user-specified pattern \"%s\" to the list of source files to build with:\n", globPattern );
+
 			if ( !Builder_VisitFiles( resultsArena, searchPath, visitFlags, &Builder_GlobVisitCallback, &callbackData ) ) {
 				printf( "Warning: Found no matches for pattern %s, at search path %s.\n", globPattern, searchPath );
 			}
@@ -2787,6 +2835,10 @@ int Build( BuilderOptions *options ) {
 		if ( Builder_StringStartsWith( options->argv[argIndex], ARG_HELP_SHORT ) || Builder_StringStartsWith( options->argv[argIndex], ARG_HELP_LONG ) ) {
 			return ShowUsage( 0 );
 		}
+
+		if ( Builder_StringStartsWith( options->argv[argIndex], ARG_VERBOSE_SHORT ) || Builder_StringStartsWith( options->argv[argIndex], ARG_VERBOSE_LONG ) ) {
+			options->verboseLogging = true;
+		}
 	}
 
 	// Names can only be checked here.  A config comes out of CreateBuildConfig() blank and gets filled in afterwards,
@@ -2865,6 +2917,10 @@ int Build( BuilderOptions *options ) {
 	}
 #endif
 
+	if ( options->compilerPath && options->compilerPath[0] ) {
+		Builder_LogVerbose( options, "Found override compiler backend \"%s\" from BuilderOptions::compilerPath.\n", options->compilerPath );
+	}
+
 	const char *compilerPath = ( options->compilerPath && options->compilerPath[0] ) ? options->compilerPath : "clang";
 
 #if defined( _WIN32 )
@@ -2924,6 +2980,8 @@ int Build( BuilderOptions *options ) {
 			double linkTimeMS = 0.0;
 
 			if ( config->OnPreBuild ) {
+				Builder_LogVerbose( options, "Found a OnPreBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name ? config->name : "" );
+
 				config->OnPreBuild( config );
 			}
 
@@ -2945,7 +3003,7 @@ int Build( BuilderOptions *options ) {
 				}
 
 				// glob step - flattened into one array because the compile job pool indexes into it by job number
-				StringList globList = Builder_GlobFiles( buildScratch.arena, &config->sourceFiles );
+				StringList globList = Builder_GlobFiles( buildScratch.arena, &config->sourceFiles, options );
 
 				uint32_t sourceFilesCount = globList.count;
 				const char **sourceFiles = NULL;
@@ -3169,6 +3227,8 @@ int Build( BuilderOptions *options ) {
 			}
 
 			if ( config->OnPostBuild ) {
+				Builder_LogVerbose( options, "Found a OnPostBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name ? config->name : "" );
+
 				config->OnPostBuild( config );
 			}
 

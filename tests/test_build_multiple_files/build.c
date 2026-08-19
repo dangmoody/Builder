@@ -4,7 +4,7 @@
 int main( int argc, char **argv ) {
 	Builder_RebuildSelf( argc, argv );
 
-	BuilderOptions options = {};
+	BuilderOptions options = {0};
 
 	BuildConfig *config = CreateBuildConfig( &options );
 	*config = (BuildConfig) {

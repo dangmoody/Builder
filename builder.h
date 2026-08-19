@@ -1194,10 +1194,28 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 }
 
 static int ShowUsage( const int exitCode ) {
-	// TODO: DM: 30/07/2026: write the usage/help text here
 	printf(
-		"Usage:\n"
+		"Builder\n"
 		"\n"
+		"USAGE:\n"
+		"    <your build program> [arguments] [custom arguments]\n"
+		"\n"
+		"Arguments:\n"
+		"    " ARG_HELP_SHORT "|" ARG_HELP_LONG " (optional):\n"
+		"        Shows this help and then exits.\n"
+		"\n"
+		"    " ARG_VERBOSE_SHORT "|" ARG_VERBOSE_LONG " (optional):\n"
+		"        Enables verbose logging, so a lot more information gets output.\n"
+		"\n"
+		"    " ARG_CONFIG "<config> (optional):\n"
+		"        Sets the config to build to <config>.\n"
+		"        This must match the name of a config you registered via AddBuildConfig().\n"
+		"        If you only registered one config you don't need to specify this.\n"
+		"        If you registered more than one config you must either specify this or set BuilderOptions::defaultConfig.\n"
+		"\n"
+		"    [custom arguments] (optional):\n"
+		"        Any arguments not listed here are passed through to your build program via BuilderOptions::argc/argv.\n"
+		"        Use HasCommandLineArg( BuilderOptions *, const char * ) to query for them.\n"
 		"\n"
 	);
 

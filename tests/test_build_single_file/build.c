@@ -4,17 +4,15 @@
 int main( int argc, char **argv ) {
 	Builder_RebuildSelf( argc, argv );
 
-	BuilderOptions options = {};
+	BuilderOptions options = {0};
 
-	BuildConfig config = {
+	BuildConfig *config = CreateBuildConfig( &options );
+	*config = (BuildConfig) {
+		.name			= "single_file",
+		.binaryType		= BINARY_TYPE_EXE,
 		.binaryName		= "test_build_single_file",
-		.sourceFiles = (const char *[]) {
-			"main.c",
-			NULL
-		},
+		.sourceFiles	= MakeStringList( "main.c" ),
 	};
-
-	AddBuildConfig( &options, &config );
 
 	return Build( &options );
 }

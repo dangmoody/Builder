@@ -12,12 +12,15 @@ int main( int argc, char **argv ) {
 
 	Builder_RebuildSelf(argc,argv);
 
-	BuildConfig sdl = {
+	// the cross-platform half goes in the initialiser; the per-platform half is appended below, because a #if inside a
+	// macro argument list is undefined behaviour (clang's -Wembedded-directive) even though it happens to work
+	BuildConfig *sdl = CreateBuildConfig( &options );
+	*sdl = (BuildConfig) {
 		.name			= "sdl",
+		.binaryType		= BINARY_TYPE_DYNAMIC_LIBRARY,
 		.binaryName		= BINARY_NAME,
 		.binaryFolder	= BINARY_FOLDER,
-		.binaryType		= BINARY_TYPE_DYNAMIC_LIBRARY,
-		.sourceFiles = (const char *[]) {
+		.sourceFiles	= MakeStringList(
 			"src/*.c",
 			"src/atomic/*.c",
 			"src/audio/*.c",
@@ -60,125 +63,103 @@ int main( int argc, char **argv ) {
 			"src/video/*.c",
 			"src/video/dummy/*.c",
 			"src/video/offscreen/*.c",
-			"src/video/yuv2rgb/*.c",
-#if defined( _WIN32 )
-			// TODO(DM): 14/06/2025: we cant just do "src/**/windows/*.c" here because
-			//	- "hidapi/windows/hid.c" includes "hidapi_descriptor_reconstruct.c" which we dont want to use on windows and it isnt platform wrapped
-			//	- apparently we only want two source files from "src/thread/generic" so we cant glob that either
-			// so we have to include every windows subfolder manually whilst making sure to exclude only that one file
-			// annoying
-			"src/audio/directsound/*.c",
-			"src/audio/wasapi/*.c",
-			"src/core/windows/*.c",
-			"src/core/windows/*.cpp",
-			"src/dialog/windows/*.c",
-			"src/filesystem/windows/*.c",
-			"src/haptic/windows/*.c",
-			"src/hidapi/windows/hid.c",
-			"src/io/windows/*.c",
-			"src/joystick/gdk/*.c",
-			"src/joystick/gdk/*.cpp",
-			"src/joystick/windows/*.c",
-			"src/gpu/vulkan/*.c",
-			"src/gpu/d3d12/*.c",
-			"src/loadso/windows/*.c",
-			"src/locale/windows/*.c",
-			"src/main/windows/*.c",
-			"src/misc/windows/*.c",
-			"src/power/windows/*.c",
-			"src/process/windows/*.c",
-			"src/render/direct3d/*.c",
-			"src/render/direct3d11/*.c",
-			"src/render/direct3d12/*.c",
-			"src/render/gpu/*.c",
-			"src/render/opengl/*.c",
-			"src/render/opengles2/*.c",
-			"src/render/vulkan/*.c",
-			"src/sensor/windows/*.c",
-			"src/time/windows/*.c",
-			"src/timer/windows/*.c",
-			"src/thread/generic/SDL_syscond.c",
-			"src/thread/generic/SDL_sysrwlock.c",
-			"src/thread/windows/*.c",
-			"src/tray/windows/*.c",
-			"src/video/windows/*.c",
-			"src/video/windows/*.cpp",
-#elif defined( __linux__ )
-			"src/render/gpu/*.c",
-			"src/render/opengl/*.c",
-			"src/render/opengles2/*.c",
-			"src/render/vulkan/*.c",
-#endif
-			NULL
-		},
-		.defines = (const char *[]) {
-			"DLL_EXPORT",
-#ifdef _WIN32
-			"SDL_PLATFORM_WIN32",
-			"HAVE_MODF",
-#elif defined( __linux__ )
-			"HAVE_LIBC",
-			"HAVE_STDARG_H",
-			"HAVE_STDDEF_H",
-			"HAVE_STDINT_H",
-			"HAVE_FLOAT_H",
-			"HAVE_LIMITS_H",
-			"HAVE_MATH_H",
-			"HAVE_SIGNAL_H",
-			"HAVE_STDIO_H",
-			"HAVE_STDLIB_H",
-			"HAVE_STRING_H",
-			"HAVE_STRINGS_H",
-			"HAVE_SYS_TYPES_H",
-			"HAVE_WCHAR_H",
-			"HAVE_INTTYPES_H",
-			"HAVE_MALLOC_H",
-			"HAVE_MEMORY_H",
-			"HAVE_ALLOCA_H",
-#endif
-			NULL
-		},
-		.additionalIncludes = (const char *[]) {
+			"src/video/yuv2rgb/*.c"
+		),
+		.defines			= MakeStringList( "DLL_EXPORT" ),
+		.additionalIncludes	= MakeStringList(
 			"src",	// this feels dirty, are we sure we want to do this?
 			"include",
-			"include/build_config",
-			NULL
-		},
-		.additionalLibs = (const char *[]) {
-#if defined( _WIN32 )
-			"Ole32",
-			"OleAut32",
-			"Winmm",
-			"Imm32",
-			"Advapi32",
-			"Shell32",
-			"Cfgmgr32",
-			"Gdi32",
-			"SetupAPI",
-			"Version",
-			"user32",
-#elif defined( __linux__ )
-#endif
-			NULL
-		}
+			"include/build_config"
+		),
 	};
 
-	BuildConfig demo = {
+#if defined( _WIN32 )
+	// TODO(DM): 14/06/2025: we cant just do "src/**/windows/*.c" here because
+	//	- "hidapi/windows/hid.c" includes "hidapi_descriptor_reconstruct.c" which we dont want to use on windows and it isnt platform wrapped
+	//	- apparently we only want two source files from "src/thread/generic" so we cant glob that either
+	// so we have to include every windows subfolder manually whilst making sure to exclude only that one file
+	// annoying
+	AddSourceFiles( sdl,
+		"src/audio/directsound/*.c",
+		"src/audio/wasapi/*.c",
+		"src/core/windows/*.c",
+		"src/core/windows/*.cpp",
+		"src/dialog/windows/*.c",
+		"src/filesystem/windows/*.c",
+		"src/haptic/windows/*.c",
+		"src/hidapi/windows/hid.c",
+		"src/io/windows/*.c",
+		"src/joystick/gdk/*.c",
+		"src/joystick/gdk/*.cpp",
+		"src/joystick/windows/*.c",
+		"src/gpu/vulkan/*.c",
+		"src/gpu/d3d12/*.c",
+		"src/loadso/windows/*.c",
+		"src/locale/windows/*.c",
+		"src/main/windows/*.c",
+		"src/misc/windows/*.c",
+		"src/power/windows/*.c",
+		"src/process/windows/*.c",
+		"src/render/direct3d/*.c",
+		"src/render/direct3d11/*.c",
+		"src/render/direct3d12/*.c",
+		"src/render/gpu/*.c",
+		"src/render/opengl/*.c",
+		"src/render/opengles2/*.c",
+		"src/render/vulkan/*.c",
+		"src/sensor/windows/*.c",
+		"src/time/windows/*.c",
+		"src/timer/windows/*.c",
+		"src/thread/generic/SDL_syscond.c",
+		"src/thread/generic/SDL_sysrwlock.c",
+		"src/thread/windows/*.c",
+		"src/tray/windows/*.c",
+		"src/video/windows/*.c",
+		"src/video/windows/*.cpp"
+	);
+
+	AddDefines( sdl, "SDL_PLATFORM_WIN32", "HAVE_MODF" );
+
+	AddLibs( sdl,
+		"Ole32", "OleAut32", "Winmm", "Imm32", "Advapi32", "Shell32",
+		"Cfgmgr32", "Gdi32", "SetupAPI", "Version", "user32"
+	);
+#elif defined( __linux__ )
+	AddSourceFiles( sdl,
+		"src/render/gpu/*.c",
+		"src/render/opengl/*.c",
+		"src/render/opengles2/*.c",
+		"src/render/vulkan/*.c"
+	);
+
+	AddDefines( sdl,
+		"HAVE_LIBC", "HAVE_STDARG_H", "HAVE_STDDEF_H", "HAVE_STDINT_H", "HAVE_FLOAT_H",
+		"HAVE_LIMITS_H", "HAVE_MATH_H", "HAVE_SIGNAL_H", "HAVE_STDIO_H", "HAVE_STDLIB_H",
+		"HAVE_STRING_H", "HAVE_STRINGS_H", "HAVE_SYS_TYPES_H", "HAVE_WCHAR_H",
+		"HAVE_INTTYPES_H", "HAVE_MALLOC_H", "HAVE_MEMORY_H", "HAVE_ALLOCA_H"
+	);
+#endif
+
+	BuildConfig *demo = CreateBuildConfig( &options );
+	*demo = (BuildConfig) {
 		.name				= "demo",
-		.dependsOn			= (BuildConfig *[]) {
-			&sdl,
-			NULL
-		},
+		.binaryType			= BINARY_TYPE_EXE,
 		.binaryName			= "sdl-demo-app",
 		.binaryFolder		= BINARY_FOLDER,
-		.sourceFiles		= (const char *[]) { "demo-app/*.cpp", NULL },
-		.additionalIncludes	= (const char *[]) { "include", NULL },
-		.additionalLibPaths	= (const char *[]) { BINARY_FOLDER, NULL },
-		.additionalLibs		= (const char *[]) { ":" BINARY_NAME ".so", NULL },
 		.warningsAsErrors	= true,
+		.dependsOn			= MakeDependencies( sdl ),
+		.sourceFiles		= MakeStringList( "demo-app/*.cpp" ),
+		.additionalIncludes	= MakeStringList( "include" ),
+		.additionalLibPaths	= MakeStringList( BINARY_FOLDER ),
+#if defined( _WIN32 )
+		.additionalLibs		= MakeStringList( BINARY_NAME ),
+#elif defined( __linux__ )
+		// ":" is GNU ld syntax for "link this exact filename", which is how the .so gets picked up without a lib prefix
+		.additionalLibs		= MakeStringList( ":" BINARY_NAME ".so" ),
+#endif
 	};
 
-	AddBuildConfig( &options, &demo );
+	options.defaultConfig = demo;
 
 	return Build( &options );
 }

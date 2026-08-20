@@ -9,54 +9,32 @@ int main( int argc, char **argv ) {
 		.argv = argv,
 	};
 
-	BuildConfig libConfig = {
+	BuildConfig *libConfig = CreateBuildConfig( &options );
+	*libConfig = (BuildConfig) {
 		.name			= "lib",
-		.binaryName		= "test_dynamic_lib",
 		.binaryType		= BINARY_TYPE_DYNAMIC_LIBRARY,
-		.sourceFiles = (const char *[]) {
-			"lib/mathlib.c",
-			NULL
-		},
-		.defines = (const char *[]) {
-			"MATHLIB_BUILDING",
-			NULL
-		},
+		.binaryName		= "test_dynamic_lib",
+		.sourceFiles	= MakeStringList( "lib/mathlib.c" ),
+		.defines		= MakeStringList( "MATHLIB_BUILDING" ),
 	};
 
-	BuildConfig programConfig = {
+	BuildConfig *programConfig = CreateBuildConfig( &options );
+	*programConfig = (BuildConfig) {
 		.name				= "program",
+		.binaryType			= BINARY_TYPE_EXE,
 		.binaryName			= "test_dynamic_lib_program",
-		.dependsOn = (BuildConfig *[]) {
-			&libConfig,
-			NULL
-		},
-		.sourceFiles = (const char *[]) {
-			"program/main.c",
-			NULL
-		},
-		.additionalIncludes = (const char *[]) {
-			"lib",
-			NULL
-		},
-		.additionalLibs = (const char *[]) {
+		.dependsOn			= MakeDependencies( libConfig ),
+		.sourceFiles		= MakeStringList( "program/main.c" ),
+		.additionalIncludes	= MakeStringList( "lib" ),
 #if defined( _WIN32 )
-			"test_dynamic_lib.lib",
+		.additionalLibs		= MakeStringList( "test_dynamic_lib.lib" ),
 #else
-			"./test_dynamic_lib.so",
+		.additionalLibs				= MakeStringList( "./test_dynamic_lib.so" ),
+		.additionalLinkerArguments	= MakeStringList( "-Wl,-rpath,$ORIGIN" ),
 #endif
-			NULL
-		},
-		.additionalLinkerArguments = (const char *[]) {
-#ifdef __linux__
-			"-Wl,-rpath,$ORIGIN",
-#endif
-			NULL
-		},
 	};
 
-	options.defaultConfig = &programConfig;
-
-	AddBuildConfig( &options, &programConfig );
+	options.defaultConfig = programConfig;
 
 	return Build( &options );
 }

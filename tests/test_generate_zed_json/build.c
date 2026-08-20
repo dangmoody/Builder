@@ -11,29 +11,24 @@ int main( int argc, char **argv ) {
 		.argv = argv,
 	};
 
-	BuildConfig config = {
-		.name			= "config",
-		.binaryName		= "test_generate_zed_json",
-		.sourceFiles	= (const char *[]) {
-			"main.c",
-			NULL
-		},
-	};
+	BuildConfig *config = CreateBuildConfig( &options );
+	config->name = "config";
+	config->binaryType = BINARY_TYPE_EXE;
+	config->binaryName = "test_generate_zed_json";
+	AddSourceFiles( config, "main.c" );
 
 	if ( HasCommandLineArg( &options, "--release" ) ) {
-		config.binaryFolder = "bin/release";
+		config->binaryFolder = "bin/release";
 	} else {
-		config.binaryFolder = "bin/debug";
+		config->binaryFolder = "bin/debug";
 	}
 
-	options.defaultConfig = &config;
-
-	AddBuildConfig( &options, &config );
+	options.defaultConfig = config;
 
 	if ( HasCommandLineArg( &options, "--zed" ) ) {
 		ZedTaskConfig taskConfigs[] = {
-			{ .config = &config },
-			{ .config = &config, .args = (const char *[]) { "--release", NULL } },
+			{ .config = config },
+			{ .config = config, .args = (const char *[]) { "--release", NULL } },
 		};
 
 		ZedDebugConfig debugConfigs[] = {

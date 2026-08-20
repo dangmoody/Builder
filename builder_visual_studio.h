@@ -79,8 +79,8 @@ typedef struct VisualStudioProject {
 	// For example your build config may declare "./src/**/*.cpp" but you might also want "./src/**/*.h" in your project.
 	// Any files/paths you add to this are relative to the current working directory, same as BuildConfig::sourceFiles.
 	// Also supports wildcards.
-	// NULL-terminated array.
-	const char			**extraFiles;
+	// Build it with MakeStringList().
+	StringList			extraFiles;
 
 	// The name of the project as it shows in Visual Studio.
 	// Give this a name like "games/shooter" if you want the project to be nested inside solution folders in the Solution Explorer.
@@ -395,14 +395,14 @@ static void Builder_VSAddFilesFromPatterns( arena_t *arena,
 											visualStudioFileList_t *headerFiles,
 											visualStudioFileList_t *otherFiles,
 											visualStudioFilterPathList_t *filterPaths,
-											const char **filePatterns,
+											const StringList *filePatterns,
 											const BuilderOptions *options )
 {
 	if ( !filePatterns ) {
 		return;
 	}
 
-	builderStringList_t globResult = Builder_GlobFiles( arena, filePatterns, options );
+	StringList globResult = Builder_GlobFiles( arena, filePatterns, options );
 
 	for ( builderStringChunk_t *chunk = globResult.head; chunk; chunk = chunk->next ) {
 		for ( uint32_t fileIndex = 0; fileIndex < chunk->count; fileIndex++ ) {
@@ -834,10 +834,10 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 		visualStudioFilterPathList_t filterPaths = {};
 
 		for ( uint32_t configIndex = 0; configIndex < project->configsCount; configIndex++ ) {
-			Builder_VSAddFilesFromPatterns( scratch.arena, &sourceFiles, &headerFiles, &otherFiles, &filterPaths, project->configs[configIndex].config->sourceFiles, options );
+			Builder_VSAddFilesFromPatterns( scratch.arena, &sourceFiles, &headerFiles, &otherFiles, &filterPaths, &project->configs[configIndex].config->sourceFiles, options );
 		}
 
-		Builder_VSAddFilesFromPatterns( scratch.arena, &sourceFiles, &headerFiles, &otherFiles, &filterPaths, project->extraFiles, options );
+		Builder_VSAddFilesFromPatterns( scratch.arena, &sourceFiles, &headerFiles, &otherFiles, &filterPaths, &project->extraFiles, options );
 
 		const char *projectDisplayName = Builder_VSGetProjectDisplayName( project->name );
 
@@ -954,11 +954,15 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 
 					// external include paths
 					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<ExternalIncludePath>" );
-					for ( const char **include = buildConfig->additionalIncludes; include && *include; include++ ) {
-						if ( Builder_PathIsAbsolute( *include ) ) {
-							StringBuilder_Appendf( scratch.arena, &vcxprojContent, "%s;", *include );
-						} else {
-							StringBuilder_Appendf( scratch.arena, &vcxprojContent, "%s;", Builder_RelativePathTo( scratch.arena, projectFilesPath, *include ) );
+					for ( builderStringChunk_t *chunk = buildConfig->additionalIncludes.head; chunk; chunk = chunk->next ) {
+						for ( uint32_t includeIndex = 0; includeIndex < chunk->count; includeIndex++ ) {
+							const char *include = chunk->items[includeIndex];
+
+							if ( Builder_PathIsAbsolute( include ) ) {
+								StringBuilder_Appendf( scratch.arena, &vcxprojContent, "%s;", include );
+							} else {
+								StringBuilder_Appendf( scratch.arena, &vcxprojContent, "%s;", Builder_RelativePathTo( scratch.arena, projectFilesPath, include ) );
+							}
 						}
 					}
 					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "$(ExternalIncludePath)" );
@@ -966,11 +970,15 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 
 					// external library paths
 					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<LibraryPath>" );
-					for ( const char **libPath = buildConfig->additionalLibPaths; libPath && *libPath; libPath++ ) {
-						if ( Builder_PathIsAbsolute( *libPath ) ) {
-							StringBuilder_Appendf( scratch.arena, &vcxprojContent, "%s;", *libPath );
-						} else {
-							StringBuilder_Appendf( scratch.arena, &vcxprojContent, "%s;", Builder_RelativePathTo( scratch.arena, projectFilesPath, *libPath ) );
+					for ( builderStringChunk_t *chunk = buildConfig->additionalLibPaths.head; chunk; chunk = chunk->next ) {
+						for ( uint32_t libPathIndex = 0; libPathIndex < chunk->count; libPathIndex++ ) {
+							const char *libPath = chunk->items[libPathIndex];
+
+							if ( Builder_PathIsAbsolute( libPath ) ) {
+								StringBuilder_Appendf( scratch.arena, &vcxprojContent, "%s;", libPath );
+							} else {
+								StringBuilder_Appendf( scratch.arena, &vcxprojContent, "%s;", Builder_RelativePathTo( scratch.arena, projectFilesPath, libPath ) );
+							}
 						}
 					}
 					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "$(LibraryPath)" );
@@ -996,8 +1004,10 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 
 					// preprocessor definitions
 					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<NMakePreprocessorDefinitions>" );
-					for ( const char **define = buildConfig->defines; define && *define; define++ ) {
-						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "%s;", *define );
+					for ( builderStringChunk_t *chunk = buildConfig->defines.head; chunk; chunk = chunk->next ) {
+						for ( uint32_t defineIndex = 0; defineIndex < chunk->count; defineIndex++ ) {
+							StringBuilder_Appendf( scratch.arena, &vcxprojContent, "%s;", chunk->items[defineIndex] );
+						}
 					}
 					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "$(NMakePreprocessorDefinitions)" );
 					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "</NMakePreprocessorDefinitions>\n" );

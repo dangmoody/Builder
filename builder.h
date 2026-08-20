@@ -43,6 +43,12 @@ extern "C" {
 #include <stdbool.h>
 #endif
 
+// up here rather than with the rest of the implementation defines because the Add*() macros below expand to it
+#ifndef BUILDER_ASSERT
+#include <assert.h>
+#define BUILDER_ASSERT assert
+#endif
+
 typedef enum BinaryType {
 	BINARY_TYPE_EXE	= 0,
 	BINARY_TYPE_DYNAMIC_LIBRARY,
@@ -69,37 +75,53 @@ typedef enum Optimization {
 	OPTIMIZATION_PROGRAM_SPEED,
 } Optimization;
 
+typedef struct StringList {
+	struct builderStringChunk_t	*head;
+	struct builderStringChunk_t	*tail;
+	uint32_t					count;
+} StringList;
 
+typedef struct ConfigPtrList {
+	struct buildConfigPtrChunk_t	*head;
+	struct buildConfigPtrChunk_t	*tail;
+	uint32_t						count;
+} ConfigPtrList;
+
+// Builder owns every BuildConfig - you get a blank one from CreateBuildConfig() and fill it in, either by assigning
+// the whole struct or a field at a time.  Write to these fields directly; the list fields are the only ones that need
+// building first, which is what MakeStringList() and MakeDependencies() are for.
+// A config keeps the pointers you give it rather than copying them, so anything not a string literal wants to come
+// from Config_FormatString().
 typedef struct BuildConfig {
-	const char			*name;
-	// Other BuildConfigs that need to be built before this one.  NULL-terminated array.
-	// You only need to call AddBuildConfig() on the top-level config - its dependencies are registered and built automatically.
-	// Every BuildConfig you put in here must have BuildConfig::name set.
-	struct BuildConfig	**dependsOn;
-	const char			*binaryName;
+	// Required, and unique across your configs.  It's what "--config=" matches against and what the build log calls it.
+	const char				*name;
+	// Other BuildConfigs that need to be built before this one - see MakeDependencies() and AddDependencies().
+	// Building a config builds everything in here first, so you only ever have to ask for the top-level one.
+	ConfigPtrList			dependsOn;
+	const char				*binaryName;
 	// The folder the binary is placed into, relative to the file you pass into Builder.
 	// If this folder doesn't exist then Builder will create it for you.
-	// Leave NULL to put the binary alongside the source file.
-	const char			*binaryFolder;
+	// Leave unset to put the binary alongside the source file.
+	const char				*binaryFolder;
 	// The folder that intermediate build files (object files) are placed into, relative to binaryFolder.
 	// If this folder doesn't exist then Builder will create it for you.
-	// Leave NULL to put intermediate files alongside the binary.
-	const char			*intermediateFolder;
-	const char			**sourceFiles;
-	const char			**defines;
-	const char			**additionalIncludes;
-	const char			**additionalLibPaths;
-	const char			**additionalLibs;
-	const char			**warningLevels;
-	const char			**ignoreWarnings;
-	const char			**additionalLinkerArguments;
-	BinaryType			binaryType;
-	LanguageVersion		languageVersion;
-	Optimization		optimization;
-	bool				removeSymbols;
-	bool				warningsAsErrors;
-	void				( *OnPreBuild )( struct BuildConfig *config );
-	void				( *OnPostBuild )( struct BuildConfig *config );
+	// Leave unset to put intermediate files alongside the binary.
+	const char				*intermediateFolder;
+	StringList		sourceFiles;
+	StringList		defines;
+	StringList		additionalIncludes;
+	StringList		additionalLibPaths;
+	StringList		additionalLibs;
+	StringList		warningLevels;
+	StringList		ignoreWarnings;
+	StringList		additionalLinkerArguments;
+	BinaryType				binaryType;
+	LanguageVersion			languageVersion;
+	Optimization			optimization;
+	bool					removeSymbols;
+	bool					warningsAsErrors;
+	void					( *OnPreBuild )( struct BuildConfig *config );
+	void					( *OnPostBuild )( struct BuildConfig *config );
 } BuildConfig;
 
 typedef struct BuilderOptions {
@@ -125,13 +147,70 @@ typedef struct BuilderOptions {
 	// You can set this yourself, or leave it and Builder will set it automatically if "-v" or "--verbose" is present in argv.
 	bool		verboseLogging;
 
-	// The list of configs that gets populated when calling AddBuildConfig().
+	// The list of configs that gets populated when calling CreateBuildConfig().
 	// Don't write to this directly unless you know what you're doing.
-	BuildConfig	*configs;
-	uint32_t	configsCount;
+	ConfigPtrList	configs;
 } BuilderOptions;
 
-void	AddBuildConfig( BuilderOptions *options, BuildConfig *config );
+// Creates a zeroed BuildConfig, registers it with options, and hands it back.  Builder owns it and keeps it alive
+// until the program exits, so nothing user-owned is ever pointed at.
+// Fill it in however you like - assign the whole struct at once, or use the Add*()/Set*() functions below:
+//
+//	BuildConfig *program = CreateBuildConfig( options );
+//	*program = (BuildConfig) {
+//		.name        = "program",
+//		.binaryType  = BINARY_TYPE_EXE,
+//		.sourceFiles = MakeStringList( "main.c", "util.c" ),
+//		.dependsOn   = MakeDependencies( lib ),
+//	};
+//
+// Every config needs a name - it's what "--config=" matches against and what the build log calls it - and no two may
+// share one.  Build() checks both before it builds anything.
+BuildConfig	*CreateBuildConfig( BuilderOptions *options );
+
+// Bundles the arguments of the macros below into an array and its length, so a call site never has to write a count or
+// a terminator.  sizeof doesn't evaluate its operand, so naming __VA_ARGS__ twice costs nothing at runtime.
+#define BUILDER_STRING_ARGS( ... )	(const char *[]) { __VA_ARGS__ },	(uint32_t) ( sizeof( (const char *[]) { __VA_ARGS__ } ) / sizeof( const char * ) )
+#define BUILDER_CONFIG_ARGS( ... )	(BuildConfig *[]) { __VA_ARGS__ },	(uint32_t) ( sizeof( (BuildConfig *[]) { __VA_ARGS__ } ) / sizeof( BuildConfig * ) )
+
+// Build a whole list in one expression, for assigning straight into a BuildConfig.  What they hand back is the list
+// wrapper by value - everything it points at lives in Builder's memory, so it survives being copied about and outlasts
+// the strings you built it from.
+#define MakeStringList( ... )	Builder_MakeStringListInternal( BUILDER_STRING_ARGS( __VA_ARGS__ ) )
+#define MakeDependencies( ... )	Builder_MakeDependenciesInternal( BUILDER_CONFIG_ARGS( __VA_ARGS__ ) )
+
+// Builds a string in Builder's memory, so it's still alive when the build runs.
+// A BuildConfig keeps whatever pointers you give it rather than copying them, which is free for the string literals
+// that make up almost every build script.  Use this for anything you need to build at runtime - a version number, a
+// path assembled from parts - rather than pointing a config at a local buffer that's about to go out of scope.
+const char	*Config_FormatString( const char *fmt, ... );
+
+// DO NOT CALL THESE DIRECTLY
+// CALL THE MACRO VERSIONS ABOVE INSTEAD
+StringList		Builder_MakeStringListInternal( const char **strings, uint32_t count );
+ConfigPtrList	Builder_MakeDependenciesInternal( BuildConfig **dependencies, uint32_t count );
+
+// Append to a list that's already on a config, for layering settings on after it's been filled in.  Additive: call them
+// as often as you like and the entries accumulate.
+#define AddSourceFiles( config, ... )		( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->sourceFiles, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )
+#define AddDefines( config, ... )			( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->defines, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )				// no "-D"/"/D" - Builder adds that for you
+#define AddIncludes( config, ... )			( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->additionalIncludes, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )
+#define AddLibPaths( config, ... )			( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->additionalLibPaths, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )
+#define AddLibs( config, ... )				( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->additionalLibs, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )
+#define AddWarningLevels( config, ... )		( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->warningLevels, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )
+#define AddIgnoreWarnings( config, ... )	( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->ignoreWarnings, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )
+#define AddLinkerArguments( config, ... )	( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->additionalLinkerArguments, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )
+
+// Every dependency gets built before config does.  Builder keeps the pointers, so they need to still be alive when
+// Build() runs - a config from CreateBuildConfig() always is.
+#define AddDependencies( config, ... )		Builder_AddDependenciesInternal( ( config ), BUILDER_CONFIG_ARGS( __VA_ARGS__ ) )
+
+// DO NOT CALL THESE DIRECTLY
+// CALL THE MACRO VERSIONS ABOVE INSTEAD
+void	Builder_AddStringsInternal( StringList *list, const char **strings, uint32_t count );
+void	Builder_AddDependenciesInternal( BuildConfig *config, BuildConfig **dependencies, uint32_t count );
+
+
 int		Build( BuilderOptions *options );
 
 
@@ -188,11 +267,6 @@ int		Build( BuilderOptions *options );
 
 #ifndef BUILDER_COUNT_OF
 #define BUILDER_COUNT_OF( array )	( sizeof( array ) / sizeof( array[0] ) )
-#endif
-
-#ifndef BUILDER_ASSERT
-#include <assert.h>
-#define BUILDER_ASSERT assert
 #endif
 
 // alignof is only a keyword in C++ and C23. C11 and C17 have it as a macro in <stdalign.h>, which we'd rather not
@@ -428,19 +502,26 @@ static bool Builder_PathHasFileExtension( const char *path, const char *extensio
 #endif
 }
 
-static char *Builder_FormatString( arena_t *arena, const char *fmt, ... ) {
-	va_list args;
-	va_start( args, fmt );
-
+static char *Builder_FormatStringV( arena_t *arena, const char *fmt, va_list args ) {
 	va_list argsCopy;
 	va_copy( argsCopy, args );
 
 	int length = vsnprintf( NULL, 0, fmt, args );
-	va_end( args );
 
 	char *result = Builder_ArenaAlloc( arena, char, (uint64_t) length + 1 );
 	vsnprintf( result, (size_t) length + 1, fmt, argsCopy );
 	va_end( argsCopy );
+
+	return result;
+}
+
+static char *Builder_FormatString( arena_t *arena, const char *fmt, ... ) {
+	va_list args;
+	va_start( args, fmt );
+
+	char *result = Builder_FormatStringV( arena, fmt, args );
+
+	va_end( args );
 
 	return result;
 }
@@ -724,137 +805,253 @@ static bool HasCommandLineArg( BuilderOptions *options, const char *arg ) {
 	return false;
 }
 
-// growable stack of the configs currently being registered (config -> config->dependsOn[i] -> ...), used to detect cycles
-// bundling the pointer/count/capacity together means only a single pointer to this struct needs to be threaded through the
-// recursion below - growing builderConfigAncestry_t::items is then just a field mutation every recursive call already sees
-#define CONFIG_ANCESTRY_CHUNK_SIZE 8
-typedef struct builderConfigAncestryChunk_t {
-	BuildConfig	*items[CONFIG_ANCESTRY_CHUNK_SIZE];
-	uint32_t	count;
-	struct builderConfigAncestryChunk_t	*next;
-	struct builderConfigAncestryChunk_t	*previous;
-} builderConfigAncestryChunk_t;
+#define STRING_CHUNK_SIZE 16
 
-typedef struct builderConfigAncestry_t {
-	builderConfigAncestryChunk_t* head;
-	builderConfigAncestryChunk_t* tail;
-} builderConfigAncestry_t;
+// Grows by chaining another chunk on rather than reallocating, so entries already added never move and it can be
+// appended to while it's being walked.
+typedef struct builderStringChunk_t {
+	const char					*items[STRING_CHUNK_SIZE];
+	uint32_t					count;
+	struct builderStringChunk_t	*next;
+} builderStringChunk_t;
 
-static void Builder_ConfigStackPush( arena_t *arena, builderConfigAncestry_t *stack, BuildConfig *config ) {
-	BUILDER_ASSERT( stack );
+// same shape as builderStringChunk_t, but it chains backwards as well - Builder_CollectConfigsToBuild() uses one of
+// these lists as a stack, and popping has to find the chunk before the current one
+#define BUILD_CONFIG_PTR_CHUNK_SIZE 8
+typedef struct buildConfigPtrChunk_t {
+	BuildConfig						*items[BUILD_CONFIG_PTR_CHUNK_SIZE];
+	uint32_t						count;
+	struct buildConfigPtrChunk_t	*next;
+	struct buildConfigPtrChunk_t	*previous;
+} buildConfigPtrChunk_t;
+
+static void Builder_StringListPush( arena_t *arena, StringList *list, const char *string ) {
+	BUILDER_ASSERT( list );
+
+	if ( !list->tail || list->tail->count == STRING_CHUNK_SIZE ) {
+		builderStringChunk_t *chunk = Builder_ArenaAlloc( arena, builderStringChunk_t, 1 );
+		chunk->count	= 0;
+		chunk->next		= NULL;
+
+		if ( list->tail ) {
+			list->tail->next = chunk;
+		} else {
+			list->head = chunk;
+		}
+
+		list->tail = chunk;
+	}
+
+	list->tail->items[list->tail->count++] = string;
+	list->count++;
+}
+
+static void Builder_ConfigListPush( arena_t *arena, ConfigPtrList *list, BuildConfig *config ) {
+	BUILDER_ASSERT( list );
 
 	// popping walks tail back, so tail can be NULL while head still holds the chain, and any chunk past the tail
 	// was emptied rather than freed - pick those up before allocating another
-	builderConfigAncestryChunk_t *tail = stack->tail ? stack->tail : stack->head;
+	buildConfigPtrChunk_t *tail = list->tail ? list->tail : list->head;
 
-	if ( tail && tail->count == CONFIG_ANCESTRY_CHUNK_SIZE ) {
+	if ( tail && tail->count == BUILD_CONFIG_PTR_CHUNK_SIZE ) {
 		tail = tail->next;
 	}
 
 	if ( !tail ) {
-		builderConfigAncestryChunk_t *chunk = Builder_ArenaAlloc( arena, builderConfigAncestryChunk_t, 1 );
+		buildConfigPtrChunk_t *chunk = Builder_ArenaAlloc( arena, buildConfigPtrChunk_t, 1 );
 		chunk->count	= 0;
 		chunk->next		= NULL;
-		chunk->previous	= stack->tail;
+		chunk->previous	= list->tail;
 
-		if ( stack->tail ) {
-			stack->tail->next = chunk;
+		if ( list->tail ) {
+			list->tail->next = chunk;
 		} else {
-			stack->head = chunk;
+			list->head = chunk;
 		}
 
 		tail = chunk;
 	}
 
-	stack->tail = tail;
+	list->tail = tail;
 
-	stack->tail->items[stack->tail->count++] = config;
+	list->tail->items[list->tail->count++] = config;
+	list->count++;
 }
 
-// scratch backs ancestry->items - its lifetime is exactly one AddBuildConfig() call (see AddBuildConfig() below,
-// which gets it and rewinds it), so every function that touches ancestry takes it too, as the first argument.
-// scratch and ancestry are NULL together - Build()'s second-pass call further down needs neither.
-static void AddBuildConfigInternal( arena_t *arena, BuilderOptions *options, BuildConfig *config, builderConfigAncestry_t *ancestry, BuildConfig **outConfigs, uint32_t *outConfigsCount ) {
-	// if no ancestry then dont do circular dependency checking
-	if ( ancestry ) {
-		builderConfigAncestryChunk_t* next = ancestry->head;
-		while ( next ) {
-			for ( uint32_t ancestorIndex = 0; ancestorIndex < next->count; ancestorIndex++ ) {
-				if ( next->items[ancestorIndex] == config ) {
-					//Throwaway scratch; we're about to exit
-					scratch_t errorScratch = Builder_GetScratch(NULL );
-					stringBuilder_t cycle = {0};
+// only the ancestry stack pops - emptied chunks are left chained on for Builder_ConfigListPush() to pick up again
+static void Builder_ConfigListPop( ConfigPtrList *list ) {
+	BUILDER_ASSERT( list );
+	BUILDER_ASSERT( list->count > 0 && "Popped a config list that had nothing in it." );
 
-					for ( uint32_t cycleIndex = ancestorIndex; cycleIndex < next->count; cycleIndex++ ) {
-						const char *cycleConfigName = next->items[cycleIndex]->name;
-						StringBuilder_Appendf( errorScratch.arena, &cycle, "%s -> ", cycleConfigName ? cycleConfigName : "(unnamed config)" );
-					}
+	list->tail->count--;
+	list->count--;
 
-					StringBuilder_Appendf( errorScratch.arena, &cycle, "%s", config->name ? config->name : "(unnamed config)" );
+	if ( list->tail->count == 0 ) {
+		list->tail = list->tail->previous;
+	}
+}
 
-					char *cycleString = StringBuilder_ToString( errorScratch.arena, &cycle );
-					Builder_Error( "Cyclic BuildConfig::dependsOn detected: %s\n", cycleString );
+// Every BuildConfig, and every string one of them owns, lives on this arena.  Builder_GetScratch( NULL ) always hands
+// back the same one and nothing rewinds it, so anything put here outlasts the scratches that come and go on top of it.
+// g_scratches is BUILDER_THREAD_LOCAL though, so it's one arena per thread: creating or adding to a config has to stay
+// on the main thread, or this needs to become an arena of its own outside g_scratches.  Reading it anywhere is fine.
+static arena_t *Builder_GetConfigArena( void ) {
+	scratch_t configStorage = Builder_GetScratch( NULL );
 
-					exit( 1 );
+	return configStorage.arena;
+}
+
+BuildConfig *CreateBuildConfig( BuilderOptions *options ) {
+	BUILDER_ASSERT( options );
+
+	arena_t *configArena = Builder_GetConfigArena();
+
+	BuildConfig *config = Builder_ArenaAlloc( configArena, BuildConfig, 1 );
+	memset( config, 0, sizeof( BuildConfig ) );
+
+	Builder_ConfigListPush( configArena, &options->configs, config );
+
+	return config;
+}
+
+const char *Config_FormatString( const char *fmt, ... ) {
+	BUILDER_ASSERT( fmt );
+
+	va_list args;
+	va_start( args, fmt );
+
+	const char *result = Builder_FormatStringV( Builder_GetConfigArena(), fmt, args );
+
+	va_end( args );
+
+	return result;
+}
+
+StringList Builder_MakeStringListInternal( const char **strings, uint32_t count ) {
+	StringList list = {0};
+
+	Builder_AddStringsInternal( &list, strings, count );
+
+	return list;
+}
+
+ConfigPtrList Builder_MakeDependenciesInternal( BuildConfig **dependencies, uint32_t count ) {
+	BUILDER_ASSERT( dependencies );
+
+	ConfigPtrList list = {0};
+	arena_t *configArena = Builder_GetConfigArena();
+
+	for ( uint32_t dependencyIndex = 0; dependencyIndex < count; dependencyIndex++ ) {
+		BuildConfig *dependency = dependencies[dependencyIndex];
+
+		BUILDER_ASSERT( dependency );
+
+		Builder_ConfigListPush( configArena, &list, dependency );
+	}
+
+	return list;
+}
+
+void Builder_AddStringsInternal( StringList *list, const char **strings, uint32_t count ) {
+	BUILDER_ASSERT( list );
+	BUILDER_ASSERT( strings );
+
+	arena_t *configArena = Builder_GetConfigArena();
+
+	for ( uint32_t stringIndex = 0; stringIndex < count; stringIndex++ ) {
+		const char *string = strings[stringIndex];
+
+		BUILDER_ASSERT( string && string[0] && "Adding an empty entry to a BuildConfig list doesn't do anything." );
+
+		// the string itself isn't copied - almost every entry is a literal, and Config_FormatString() covers the rest
+		Builder_StringListPush( configArena, list, string );
+	}
+}
+
+void Builder_AddDependenciesInternal( BuildConfig *config, BuildConfig **dependencies, uint32_t count ) {
+	BUILDER_ASSERT( config );
+	BUILDER_ASSERT( dependencies );
+
+	arena_t *configArena = Builder_GetConfigArena();
+
+	for ( uint32_t dependencyIndex = 0; dependencyIndex < count; dependencyIndex++ ) {
+		BuildConfig *dependency = dependencies[dependencyIndex];
+
+		BUILDER_ASSERT( dependency );
+		BUILDER_ASSERT( config != dependency && "A BuildConfig can't depend on itself." );
+
+		Builder_ConfigListPush( configArena, &config->dependsOn, dependency );
+	}
+}
+
+// Depth-first walk of config->dependsOn that appends each config to outConfigsToBuild only once everything it depends
+// on is already in there, so the build order falls out of the walk.
+// ancestry is the chain of configs the walk is currently inside (config -> dependency -> ...) and starts out empty.  A
+// config turning up in there again is a cycle, which there's no sensible way to build, so it's fatal.
+// arena backs both lists, plus the error message if it comes to that.
+static void Builder_CollectConfigsToBuild( arena_t *arena, BuildConfig *config, ConfigPtrList *ancestry, ConfigPtrList *outConfigsToBuild ) {
+	BUILDER_ASSERT( config );
+	BUILDER_ASSERT( ancestry );
+	BUILDER_ASSERT( outConfigsToBuild );
+
+	// multiple configs can rely on the same config (e.g. configs A and B may both rely on config C), and anything
+	// already in the list has had its whole subtree walked and cleared of cycles
+	for ( buildConfigPtrChunk_t *chunk = outConfigsToBuild->head; chunk; chunk = chunk->next ) {
+		for ( uint32_t collectedIndex = 0; collectedIndex < chunk->count; collectedIndex++ ) {
+			if ( chunk->items[collectedIndex] == config ) {
+				return;
+			}
+		}
+	}
+
+	{
+		// where in the ancestry the config turned up, if it did - the cycle is everything from there onwards
+		buildConfigPtrChunk_t *cycleChunk = NULL;
+		uint32_t cycleIndex = 0;
+
+		for ( buildConfigPtrChunk_t *chunk = ancestry->head; chunk && !cycleChunk; chunk = chunk->next ) {
+			for ( uint32_t ancestorIndex = 0; ancestorIndex < chunk->count; ancestorIndex++ ) {
+				if ( chunk->items[ancestorIndex] == config ) {
+					cycleChunk = chunk;
+					cycleIndex = ancestorIndex;
+					break;
 				}
 			}
-			next = next->next;
 		}
 
-		Builder_ConfigStackPush( arena, ancestry, config );
-	}
+		if ( cycleChunk ) {
+			// throwaway scratch, we're about to exit
+			scratch_t errorScratch = Builder_GetScratch( arena );
+			stringBuilder_t cycle = {0};
 
-	// register dependencies first so they show up (and get built) ahead of the config that needs them
-	{
-		BuildConfig **dependency = config->dependsOn;
-
-		while ( dependency && *dependency ) {
-			AddBuildConfigInternal( arena, options, *dependency, ancestry, outConfigs, outConfigsCount );
-
-			dependency++;
-		}
-	}
-
-	if ( ancestry && ancestry->tail ) {
-		if(ancestry->tail->count > 0) {
-			ancestry->tail->count--;
-
-			if( ancestry->tail->count == 0 ) {
-				ancestry->tail = ancestry->tail->previous;
+			// picking the walk back up where the match was found spells out the cycle and nothing that came before it
+			for ( buildConfigPtrChunk_t *chunk = cycleChunk; chunk; chunk = chunk->next ) {
+				for ( uint32_t ancestorIndex = ( chunk == cycleChunk ) ? cycleIndex : 0; ancestorIndex < chunk->count; ancestorIndex++ ) {
+					StringBuilder_Appendf( errorScratch.arena, &cycle, "%s -> ", chunk->items[ancestorIndex]->name );
+				}
 			}
+
+			StringBuilder_Appendf( errorScratch.arena, &cycle, "%s", config->name );
+
+			char *cycleString = StringBuilder_ToString( errorScratch.arena, &cycle );
+			Builder_Error( "Cyclic BuildConfig dependency detected: %s\n", cycleString );
+
+			exit( 1 );
 		}
 	}
 
-	// multiple configs can rely on the same config (e.g. configs A and B may both rely on config C)
-	// so we still need this duplicate check anyway
-	for ( uint32_t configIndex = 0; configIndex < *outConfigsCount; configIndex++ ) {
-		if ( ( *outConfigs )[configIndex].name && config->name && Builder_StringEquals( ( *outConfigs )[configIndex].name, config->name ) ) {
-			return;
+	Builder_ConfigListPush( arena, ancestry, config );
+
+	// dependencies go in first so they show up (and get built) ahead of the config that needs them
+	for ( buildConfigPtrChunk_t *chunk = config->dependsOn.head; chunk; chunk = chunk->next ) {
+		for ( uint32_t dependencyIndex = 0; dependencyIndex < chunk->count; dependencyIndex++ ) {
+			Builder_CollectConfigsToBuild( arena, chunk->items[dependencyIndex], ancestry, outConfigsToBuild );
 		}
 	}
 
-	// *outConfigs has to outlive this whole call chain - it can't share an arena with results, which gets rewound
-	// (and would take it down too) the moment the top-level AddBuildConfig() call returns. Excluding arena here
-	// is what guarantees that.
-	scratch_t configsScratch = Builder_GetScratch( arena );
+	Builder_ConfigListPop( ancestry );
 
-	*outConfigs = *outConfigsCount
-		? Builder_ArenaRealloc( configsScratch.arena, *outConfigs, BuildConfig, *outConfigsCount, *outConfigsCount + 1 )
-		: Builder_ArenaAlloc( configsScratch.arena, BuildConfig, 1 );
-	( *outConfigsCount )++;
-
-	BuildConfig *dst = &( *outConfigs )[(*outConfigsCount) - 1];
-
-	memcpy( dst, config, sizeof( BuildConfig ) );
-}
-
-void AddBuildConfig( BuilderOptions *options, BuildConfig *config ) {
-	scratch_t scratch = Builder_GetScratch( NULL );
-	builderConfigAncestry_t ancestry = {0};
-
-	AddBuildConfigInternal( scratch.arena, options, config, &ancestry, &options->configs, &options->configsCount );
-
-	Builder_RewindScratch( &scratch );
+	Builder_ConfigListPush( arena, outConfigsToBuild, config );
 }
 
 static int32_t Builder_RunProcess( arena_t* results, const char *processAndArgs, char **outCapturedOutput ) {
@@ -1010,10 +1207,10 @@ static int32_t Builder_RunProcess( arena_t* results, const char *processAndArgs,
 		return -1;
 	}
 
-	char buffer[1024] = {};
+	char buffer[1024] = {0};
 	ssize_t bytesRead = 0;
 
-	stringBuilder_t capturedOutput = {};
+	stringBuilder_t capturedOutput = {0};
 
 	// the builder's own buffers are throwaway, so they go somewhere other than the scratch the caller wants the result in
 	scratch_t temporaryScratch = Builder_GetScratch( results );
@@ -1292,43 +1489,6 @@ typedef enum {
 } builderFileVisitFlagBits_t;
 typedef uint32_t builderFileVisitFlags_t;
 
-#define STRING_CHUNK_SIZE 16
-
-// Grows by chaining another chunk on rather than reallocating, so entries already added never move and it can be
-// appended to while it's being walked.
-typedef struct builderStringChunk_t {
-	const char					*items[STRING_CHUNK_SIZE];
-	uint32_t					count;
-	struct builderStringChunk_t	*next;
-} builderStringChunk_t;
-
-typedef struct builderStringList_t {
-	builderStringChunk_t	*head;
-	builderStringChunk_t	*tail;
-	uint32_t				count;
-} builderStringList_t;
-
-static void Builder_StringListPush( arena_t *arena, builderStringList_t *list, const char *string ) {
-	BUILDER_ASSERT( list );
-
-	if ( !list->tail || list->tail->count == STRING_CHUNK_SIZE ) {
-		builderStringChunk_t *chunk = Builder_ArenaAlloc( arena, builderStringChunk_t, 1 );
-		chunk->count	= 0;
-		chunk->next		= NULL;
-
-		if ( list->tail ) {
-			list->tail->next = chunk;
-		} else {
-			list->head = chunk;
-		}
-
-		list->tail = chunk;
-	}
-
-	list->tail->items[list->tail->count++] = string;
-	list->count++;
-}
-
 static bool Builder_VisitFiles( arena_t *results, const char *path, const builderFileVisitFlags_t visitFlags, builderFileVisitCallback_t callback, void *data ) {
 	BUILDER_ASSERT( path );
 	BUILDER_ASSERT( callback );
@@ -1336,47 +1496,97 @@ static bool Builder_VisitFiles( arena_t *results, const char *path, const builde
 	// the paths we build to walk the tree are ours alone - only the callback's allocations outlive us, and those go on results
 	scratch_t scratch = Builder_GetScratch(results );
 
-	builderStringList_t directories = {0};
+	StringList directories = {0};
 	Builder_StringListPush( scratch.arena, &directories, path );
 
-	builderStringChunk_t *chunk = directories.head;
-	uint32_t chunkIndex = 0;
+	// walking a folder pushes its subfolders on, so count grows underneath the inner loop and next appears when it overflows
+	for ( builderStringChunk_t *chunk = directories.head; chunk; chunk = chunk->next ) {
+		for ( uint32_t directoryIndex = 0; directoryIndex < chunk->count; directoryIndex++ ) {
+			const char *dir = chunk->items[directoryIndex];
 
-	while ( chunk ) {
-		// walking a folder pushes its subfolders on, so count grows underneath this and next appears when it overflows
-		if ( chunkIndex == chunk->count ) {
-			chunk = chunk->next;
-			chunkIndex = 0;
-			continue;
-		}
-
-		const char *dir = chunk->items[chunkIndex++];
-
-		size_t dirLength = strlen( dir );
-		bool dirHasTrailingSeparator = dirLength > 0 && ( dir[dirLength - 1] == '\\' || dir[dirLength - 1] == '/' );
+			size_t dirLength = strlen( dir );
+			bool dirHasTrailingSeparator = dirLength > 0 && ( dir[dirLength - 1] == '\\' || dir[dirLength - 1] == '/' );
 
 #if defined( _WIN32 )
-		char *searchPath = Builder_FormatString( scratch.arena, dirHasTrailingSeparator ? "%s*" : "%s\\*", dir );
+			char *searchPath = Builder_FormatString( scratch.arena, dirHasTrailingSeparator ? "%s*" : "%s\\*", dir );
 
-		WIN32_FIND_DATA findData = {};
-		HANDLE handle = FindFirstFile( searchPath, &findData );
+			WIN32_FIND_DATA findData = {0};
+			HANDLE handle = FindFirstFile( searchPath, &findData );
 
-		if ( handle == INVALID_HANDLE_VALUE ) {
-			Builder_RewindScratch( &scratch );
-			return false;
-		}
+			if ( handle == INVALID_HANDLE_VALUE ) {
+				Builder_RewindScratch( &scratch );
+				return false;
+			}
 
-		while ( 1 ) {
-			fileInfo_t fileInfo = {
-				.sizeBytes		= ( (uint64_t) findData.nFileSizeHigh << 32 ) | findData.nFileSizeLow,
-				.lastWriteTime	= ( (uint64_t) findData.ftLastWriteTime.dwHighDateTime << 32 ) | findData.ftLastWriteTime.dwLowDateTime,
-				.isDirectory	= (bool) ( findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ),
-				.filename		= findData.cFileName,
-				.fullFilename	= Builder_FormatString( scratch.arena, dirHasTrailingSeparator ? "%s%s" : "%s\\%s", dir, findData.cFileName ),
-			};
+			while ( 1 ) {
+				fileInfo_t fileInfo = {
+					.sizeBytes		= ( (uint64_t) findData.nFileSizeHigh << 32 ) | findData.nFileSizeLow,
+					.lastWriteTime	= ( (uint64_t) findData.ftLastWriteTime.dwHighDateTime << 32 ) | findData.ftLastWriteTime.dwLowDateTime,
+					.isDirectory	= (bool) ( findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ),
+					.filename		= findData.cFileName,
+					.fullFilename	= Builder_FormatString( scratch.arena, dirHasTrailingSeparator ? "%s%s" : "%s\\%s", dir, findData.cFileName ),
+				};
 
-			if ( fileInfo.isDirectory ) {
-				if ( !Builder_StringEquals( findData.cFileName, "." ) && !Builder_StringEquals( findData.cFileName, ".." ) ) {
+				if ( fileInfo.isDirectory ) {
+					if ( !Builder_StringEquals( findData.cFileName, "." ) && !Builder_StringEquals( findData.cFileName, ".." ) ) {
+						if ( visitFlags & BUILDER_FILE_VISIT_FOLDERS ) {
+							callback( results, &fileInfo, data );
+						}
+
+						if ( visitFlags & BUILDER_FILE_VISIT_RECURSIVE ) {
+							Builder_StringListPush( scratch.arena, &directories, fileInfo.fullFilename );
+						}
+					}
+				} else if ( visitFlags & BUILDER_FILE_VISIT_FILES ) {
+					callback( results, &fileInfo, data );
+				}
+
+				if ( !FindNextFile( handle, &findData ) ) {
+					break;
+				}
+			}
+
+			if ( !FindClose( handle ) ) {
+				Builder_RewindScratch( &scratch );
+				return false;
+			}
+#elif defined( __linux__ )
+			DIR *handle = opendir( dir );
+			int err = errno;
+
+			if ( !handle ) {
+				Builder_Error( "Failed to open folder \"%s\": %s\n", dir, strerror( err ) );
+				Builder_RewindScratch( &scratch );
+				return false;
+			}
+
+			struct dirent *entry = NULL;
+
+			while ( ( entry = readdir( handle ) ) != NULL ) {
+				if ( Builder_StringEquals( entry->d_name, "." ) || Builder_StringEquals( entry->d_name, ".." ) ) {
+					continue;
+				}
+
+				char *fullFilename = Builder_FormatString( scratch.arena, dirHasTrailingSeparator ? "%s%s" : "%s/%s", dir, entry->d_name );
+
+				struct stat fileStat = {0};
+
+				if ( stat( fullFilename, &fileStat ) != 0 ) {
+					err = errno;
+					Builder_Error( "Failed to stat \"%s\": %s\n", fullFilename, strerror( err ) );
+					Builder_RewindScratch( &scratch );
+					return false;
+				}
+
+				fileInfo_t fileInfo = {
+					.sizeBytes		= (uint64_t) fileStat.st_size,
+					.lastWriteTime	= (uint64_t) fileStat.st_mtime,
+					.isDirectory	= (bool) S_ISDIR( fileStat.st_mode ),
+					.filename		= entry->d_name,
+					.fullFilename	= fullFilename,
+				};
+
+				if ( fileInfo.isDirectory ) {
 					if ( visitFlags & BUILDER_FILE_VISIT_FOLDERS ) {
 						callback( results, &fileInfo, data );
 					}
@@ -1384,76 +1594,19 @@ static bool Builder_VisitFiles( arena_t *results, const char *path, const builde
 					if ( visitFlags & BUILDER_FILE_VISIT_RECURSIVE ) {
 						Builder_StringListPush( scratch.arena, &directories, fileInfo.fullFilename );
 					}
+				} else if ( visitFlags & BUILDER_FILE_VISIT_FILES ) {
+					callback( results, &fileInfo, data );
 				}
-			} else if ( visitFlags & BUILDER_FILE_VISIT_FILES ) {
-				callback( results, &fileInfo, data );
 			}
 
-			if ( !FindNextFile( handle, &findData ) ) {
-				break;
-			}
-		}
-
-		if ( !FindClose( handle ) ) {
-			Builder_RewindScratch( &scratch );
-			return false;
-		}
-#elif defined( __linux__ )
-		DIR *handle = opendir( dir );
-		int err = errno;
-
-		if ( !handle ) {
-			Builder_Error( "Failed to open folder \"%s\": %s\n", dir, strerror( err ) );
-			Builder_RewindScratch( &scratch );
-			return false;
-		}
-
-		struct dirent *entry = NULL;
-
-		while ( ( entry = readdir( handle ) ) != NULL ) {
-			if ( Builder_StringEquals( entry->d_name, "." ) || Builder_StringEquals( entry->d_name, ".." ) ) {
-				continue;
-			}
-
-			char *fullFilename = Builder_FormatString( scratch.arena, dirHasTrailingSeparator ? "%s%s" : "%s/%s", dir, entry->d_name );
-
-			struct stat fileStat = {};
-
-			if ( stat( fullFilename, &fileStat ) != 0 ) {
+			if ( closedir( handle ) != 0 ) {
 				err = errno;
-				Builder_Error( "Failed to stat \"%s\": %s\n", fullFilename, strerror( err ) );
+				Builder_Error( "Failed to close folder \"%s\": %s\n", dir, strerror( err ) );
 				Builder_RewindScratch( &scratch );
 				return false;
 			}
-
-			fileInfo_t fileInfo = {
-				.sizeBytes		= (uint64_t) fileStat.st_size,
-				.lastWriteTime	= (uint64_t) fileStat.st_mtime,
-				.isDirectory	= (bool) S_ISDIR( fileStat.st_mode ),
-				.filename		= entry->d_name,
-				.fullFilename	= fullFilename,
-			};
-
-			if ( fileInfo.isDirectory ) {
-				if ( visitFlags & BUILDER_FILE_VISIT_FOLDERS ) {
-					callback( results, &fileInfo, data );
-				}
-
-				if ( visitFlags & BUILDER_FILE_VISIT_RECURSIVE ) {
-					Builder_StringListPush( scratch.arena, &directories, fileInfo.fullFilename );
-				}
-			} else if ( visitFlags & BUILDER_FILE_VISIT_FILES ) {
-				callback( results, &fileInfo, data );
-			}
-		}
-
-		if ( closedir( handle ) != 0 ) {
-			err = errno;
-			Builder_Error( "Failed to close folder \"%s\": %s\n", dir, strerror( err ) );
-			Builder_RewindScratch( &scratch );
-			return false;
-		}
 #endif
+		}
 	}
 
 	Builder_RewindScratch( &scratch );
@@ -1477,7 +1630,7 @@ typedef struct {
 typedef struct {
 	const builderStringSliceArray_t patternSlices;
 	const uint32_t searchPathLen;
-	builderStringList_t *globResults;
+	StringList *globResults;
 	bool verboseLogging;
 } builderGlobVisitCallbackData_t;
 
@@ -1643,67 +1796,69 @@ static void Builder_GlobVisitCallback( arena_t *resultsArena, fileInfo_t *fileIn
 }
 
 // builds onto whatever arena it's handed - the caller flattens it if it needs to index the result
-static builderStringList_t Builder_GlobFiles( arena_t *resultsArena, const char **globPatterns, const BuilderOptions *options ) {
-	builderStringList_t globResult = {0};
+static StringList Builder_GlobFiles( arena_t *resultsArena, const StringList *globPatterns, const BuilderOptions *options ) {
+	StringList globResult = {0};
 
 	scratch_t scratch = Builder_GetScratch( resultsArena );
 	// setup re-usable search path allocation
 	char *const searchPath = Builder_ArenaAlloc( scratch.arena, char, ( BUILDER_MAX_PATH + 1 ) );
-	while ( globPatterns && *globPatterns ) {
-		// start by copying and seeking to find if there is an asterisk, and then rewind to just after the preceding slash (or start if it is say **/*.cpp)
-		const char* pattern = *globPatterns;
-		while ( *pattern != '\0' ) {  // we could also early out if they put any erroneous characters
-			if ( *(pattern++) == '*' ) {
-				while ( --pattern != *globPatterns ) {
-					if ( *pattern == '\\' || *pattern == '/' ) {
-						++pattern;
-						break;
+
+	for ( builderStringChunk_t *chunk = globPatterns->head; chunk; chunk = chunk->next ) {
+		for ( uint32_t patternIndex = 0; patternIndex < chunk->count; patternIndex++ ) {
+			const char *globPattern = chunk->items[patternIndex];
+
+			// start by copying and seeking to find if there is an asterisk, and then rewind to just after the preceding slash (or start if it is say **/*.cpp)
+			const char* pattern = globPattern;
+			while ( *pattern != '\0' )  {  // we could also early out if they put any erroneous characters
+				if ( *(pattern++) == '*' ) {
+					while ( --pattern != globPattern ) {
+						if ( *pattern == '\\' || *pattern == '/' ) {
+							++pattern;
+							break;
+						}
 					}
+					break;
 				}
-				break;
 			}
-		}
 
-		if ( *pattern == '\0' ) {
-			// should I just let the compile step handle the empty strings?
-			if ( pattern != *globPatterns ) {
-				Builder_LogVerbose( options, "Adding source file \"%s\" to the list of source files to build with (no glob).\n", *globPatterns );
+			if ( *pattern == '\0' ) {
+				// should I just let the compile step handle the empty strings?
+				if ( pattern != globPattern ) {
+					Builder_LogVerbose( options, "Adding source file \"%s\" to the list of source files to build with (no glob).\n", globPattern );
 
-				Builder_StringListPush( resultsArena, &globResult, *globPatterns ); // yes I realise this wasn't globbed \_O_O_/
-				++globPatterns;
-			}
-			continue;
-		}
-
-		const uint32_t globPathLen = pattern - *globPatterns;
-		if ( globPathLen != 0 ) {
-			if ( globPathLen > BUILDER_MAX_PATH ) {
-				printf( "Warning: Skipping pattern %s, path was larger than max path.\n", *globPatterns );
+					Builder_StringListPush( resultsArena, &globResult, globPattern ); // yes I realise this wasn't globbed \_O_O_/
+				}
 				continue;
 			}
-			memcpy( searchPath, *globPatterns, globPathLen );
+
+			const uint32_t globPathLen = (uint32_t) ( pattern - globPattern );
+			if ( globPathLen != 0 ) {
+				if ( globPathLen > BUILDER_MAX_PATH ) {
+					printf( "Warning: Skipping pattern %s, path was larger than max path.\n", globPattern );
+					continue;
+				}
+				memcpy( searchPath, globPattern, globPathLen );
+			}
+			searchPath[globPathLen] = '\0';
+
+			builderGlobVisitCallbackData_t callbackData = {
+				.patternSlices = Builder_SliceFilePath( scratch.arena, pattern),
+				.globResults = &globResult,
+				.searchPathLen = globPathLen,
+				.verboseLogging = options->verboseLogging
+			};
+
+			builderFileVisitFlags_t visitFlags = BUILDER_FILE_VISIT_FILES;
+			if (callbackData.patternSlices.count > 1) { // we are matching folders too
+				visitFlags |= BUILDER_FILE_VISIT_RECURSIVE;
+			}
+
+			Builder_LogVerbose( options, "About to glob all source files found under user-specified pattern \"%s\" to the list of source files to build with:\n", globPattern );
+
+			if ( !Builder_VisitFiles( resultsArena, searchPath, visitFlags, &Builder_GlobVisitCallback, &callbackData ) ) {
+				printf( "Warning: Found no matches for pattern %s, at search path %s.\n", globPattern, searchPath );
+			}
 		}
-		searchPath[globPathLen] = '\0';
-
-		builderGlobVisitCallbackData_t callbackData = {
-			.patternSlices = Builder_SliceFilePath( scratch.arena, pattern),
-			.globResults = &globResult,
-			.searchPathLen = globPathLen,
-			.verboseLogging = options->verboseLogging
-		};
-
-		builderFileVisitFlags_t visitFlags = BUILDER_FILE_VISIT_FILES;
-		if (callbackData.patternSlices.count > 1) { // we are matching folders too
-			visitFlags |= BUILDER_FILE_VISIT_RECURSIVE;
-		}
-
-		Builder_LogVerbose( options, "About to glob all source files found under user-specified pattern \"%s\" to the list of source files to build with:\n", *globPatterns );
-
-		if ( !Builder_VisitFiles( resultsArena, searchPath, visitFlags, &Builder_GlobVisitCallback, &callbackData ) ) {
-			printf( "Warning: Found no matches for pattern %s, at search path %s.\n", *globPatterns, searchPath );
-		}
-
-		++globPatterns;
 	}
 
 	Builder_RewindScratch( &scratch);
@@ -2188,7 +2343,7 @@ static bool Builder_GetMSVCInstall( arena_t *results, builderMSVCInstall_t *outI
 		builderMSVCInstall_t *install = &foundData.installs[versionIndex];
 
 		uint32_t missingFoldersCount = 0;
-		const char *missingFolders[2] = {};
+		const char *missingFolders[2] = {0};
 
 		if ( !Builder_FolderExists( install->includePath ) ) {
 			missingFolders[missingFoldersCount++] = install->includePath;
@@ -2199,7 +2354,7 @@ static bool Builder_GetMSVCInstall( arena_t *results, builderMSVCInstall_t *outI
 		}
 
 		if ( missingFoldersCount > 0 ) {
-			stringBuilder_t sb = {};
+			stringBuilder_t sb = {0};
 
 			StringBuilder_Appendf( scratch.arena, &sb, "Version %d.%d.%d of your MSVC installation is malformed because the following folder(s) could not be found:\n", install->version.v0, install->version.v1, install->version.v2 );
 
@@ -2436,11 +2591,10 @@ static bool Builder_CompileSourceFile( const builderCompileContext_t *context, c
 		Builder_AppendIntermediateFilePath( scratch.arena, &compileArgs, context->intermediateFolder, sourceFile );
 		StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", sourceFile );
 
-		const char **define = config->defines;
-		while ( define && *define ) {
-			StringBuilder_Appendf( scratch.arena, &compileArgs, "/D%s ", *define );
-
-			define++;
+		for ( builderStringChunk_t *chunk = config->defines.head; chunk; chunk = chunk->next ) {
+			for ( uint32_t defineIndex = 0; defineIndex < chunk->count; defineIndex++ ) {
+				StringBuilder_Appendf( scratch.arena, &compileArgs, "/D%s ", chunk->items[defineIndex] );
+			}
 		}
 
 		// cl.exe doesn't know where the CRT/Windows SDK headers live unless you're in a Developer Command Prompt, so point it there ourselves
@@ -2450,11 +2604,10 @@ static bool Builder_CompileSourceFile( const builderCompileContext_t *context, c
 			, windowsSDKInstall->umIncludePath
 			, windowsSDKInstall->sharedIncludePath );
 
-		const char **additionalInclude = config->additionalIncludes;
-		while ( additionalInclude && *additionalInclude ) {
-			StringBuilder_Appendf( scratch.arena, &compileArgs, "/I%s ", *additionalInclude );
-
-			additionalInclude++;
+		for ( builderStringChunk_t *chunk = config->additionalIncludes.head; chunk; chunk = chunk->next ) {
+			for ( uint32_t includeIndex = 0; includeIndex < chunk->count; includeIndex++ ) {
+				StringBuilder_Appendf( scratch.arena, &compileArgs, "/I%s ", chunk->items[includeIndex] );
+			}
 		}
 
 		if ( config->warningsAsErrors ) {
@@ -2462,34 +2615,37 @@ static bool Builder_CompileSourceFile( const builderCompileContext_t *context, c
 		}
 
 		bool sawWarningLevel = false;
-		const char **warningLevel = config->warningLevels;
-		while ( warningLevel && *warningLevel ) {
-			if ( sawWarningLevel ) {
-				Builder_Error( "MSVC only allows one warning level to be set at a time, but you specified more than one.\n" );
-				Builder_RewindScratch( &scratch );
-				return false;
+
+		for ( builderStringChunk_t *chunk = config->warningLevels.head; chunk; chunk = chunk->next ) {
+			for ( uint32_t warningLevelIndex = 0; warningLevelIndex < chunk->count; warningLevelIndex++ ) {
+				const char *warningLevel = chunk->items[warningLevelIndex];
+
+				if ( sawWarningLevel ) {
+					Builder_Error( "MSVC only allows one warning level to be set at a time, but you specified more than one.\n" );
+					Builder_RewindScratch( &scratch );
+					return false;
+				}
+
+				if ( !Builder_IsWarningLevelAllowed_MSVC( warningLevel ) ) {
+					Builder_Error(
+						"Warning level \"%s\" is not a valid one.  Allowed warning levels are:\n"
+						"    /W0\n"
+						"    /W1\n"
+						"    /W2\n"
+						"    /W3\n"
+						"    /W4\n"
+						"    /Wall\n"
+						, warningLevel
+					);
+
+					Builder_RewindScratch( &scratch );
+					return false;
+				}
+
+				StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", warningLevel );
+
+				sawWarningLevel = true;
 			}
-
-			if ( !Builder_IsWarningLevelAllowed_MSVC( *warningLevel ) ) {
-				Builder_Error(
-					"Warning level \"%s\" is not a valid one.  Allowed warning levels are:\n"
-					"    /W0\n"
-					"    /W1\n"
-					"    /W2\n"
-					"    /W3\n"
-					"    /W4\n"
-					"    /Wall\n"
-					, *warningLevel
-				);
-
-				Builder_RewindScratch( &scratch );
-				return false;
-			}
-
-			StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", *warningLevel );
-
-			sawWarningLevel = true;
-			warningLevel++;
 		}
 #endif
 	} else {
@@ -2514,51 +2670,49 @@ static bool Builder_CompileSourceFile( const builderCompileContext_t *context, c
 		Builder_AppendIntermediateFilePath( scratch.arena, &compileArgs, context->intermediateFolder, sourceFile );
 		StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", sourceFile );
 
-		const char **define = config->defines;
-		while ( define && *define ) {
-			StringBuilder_Appendf( scratch.arena, &compileArgs, "-D%s ", *define );
-
-			define++;
+		for ( builderStringChunk_t *chunk = config->defines.head; chunk; chunk = chunk->next ) {
+			for ( uint32_t defineIndex = 0; defineIndex < chunk->count; defineIndex++ ) {
+				StringBuilder_Appendf( scratch.arena, &compileArgs, "-D%s ", chunk->items[defineIndex] );
+			}
 		}
 
-		const char **additionalInclude = config->additionalIncludes;
-		while ( additionalInclude && *additionalInclude ) {
-			StringBuilder_Appendf( scratch.arena, &compileArgs, "-I%s ", *additionalInclude );
-
-			additionalInclude++;
+		for ( builderStringChunk_t *chunk = config->additionalIncludes.head; chunk; chunk = chunk->next ) {
+			for ( uint32_t includeIndex = 0; includeIndex < chunk->count; includeIndex++ ) {
+				StringBuilder_Appendf( scratch.arena, &compileArgs, "-I%s ", chunk->items[includeIndex] );
+			}
 		}
 
 		if ( config->warningsAsErrors ) {
 			StringBuilder_Appendf( scratch.arena, &compileArgs, "-Werror " );
 		}
 
-		const char **warningLevel = config->warningLevels;
-		while ( warningLevel && *warningLevel ) {
-			if ( !Builder_IsWarningLevelAllowed_Clang( *warningLevel ) ) {
-				Builder_Error(
-					"Warning level \"%s\" is not a valid one.  Allowed warning levels are:\n"
-					"    -Wall\n"
-					"    -Weverything\n"
-					"    -Wextra\n"
-					"    -Wpedantic\n"
-					, *warningLevel
-				);
+		for ( builderStringChunk_t *chunk = config->warningLevels.head; chunk; chunk = chunk->next ) {
+			for ( uint32_t warningLevelIndex = 0; warningLevelIndex < chunk->count; warningLevelIndex++ ) {
+				const char *warningLevel = chunk->items[warningLevelIndex];
 
-				Builder_RewindScratch( &scratch );
-				return false;
+				if ( !Builder_IsWarningLevelAllowed_Clang( warningLevel ) ) {
+					Builder_Error(
+						"Warning level \"%s\" is not a valid one.  Allowed warning levels are:\n"
+						"    -Wall\n"
+						"    -Weverything\n"
+						"    -Wextra\n"
+						"    -Wpedantic\n"
+						, warningLevel
+					);
+
+					Builder_RewindScratch( &scratch );
+					return false;
+				}
+
+				StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", warningLevel );
 			}
-
-			StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", *warningLevel );
-
-			warningLevel++;
 		}
 	}
 
-	const char **ignoreWarning = config->ignoreWarnings;
-	while ( ignoreWarning && *ignoreWarning ) {
-		StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", *ignoreWarning );
-
-		ignoreWarning++;
+	for ( builderStringChunk_t *chunk = config->ignoreWarnings.head; chunk; chunk = chunk->next ) {
+		for ( uint32_t ignoreWarningIndex = 0; ignoreWarningIndex < chunk->count; ignoreWarningIndex++ ) {
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", chunk->items[ignoreWarningIndex] );
+		}
 	}
 
 	char *args = StringBuilder_ToString( scratch.arena, &compileArgs );
@@ -2666,23 +2820,50 @@ int Build( BuilderOptions *options ) {
 		}
 	}
 
+	// Names can only be checked here.  A config comes out of CreateBuildConfig() blank and gets filled in afterwards,
+	// so this is the first point at which every config actually has the name it's going to be built under.
+	for ( buildConfigPtrChunk_t *chunk = options->configs.head; chunk; chunk = chunk->next ) {
+		for ( uint32_t configIndex = 0; configIndex < chunk->count; configIndex++ ) {
+			BuildConfig *config = chunk->items[configIndex];
+
+			if ( !config->name || !config->name[0] ) {
+				Builder_Error( "One of your BuildConfigs has no name.  Every config needs one - it's what \"" ARG_CONFIG "\" matches against and what the build log calls it.\n" );
+				return 1;
+			}
+
+			// only has to look at the configs after this one, since anything before it already compared against this
+			for ( buildConfigPtrChunk_t *otherChunk = chunk; otherChunk; otherChunk = otherChunk->next ) {
+				uint32_t firstOtherIndex = ( otherChunk == chunk ) ? configIndex + 1 : 0;
+
+				for ( uint32_t otherIndex = firstOtherIndex; otherIndex < otherChunk->count; otherIndex++ ) {
+					if ( Builder_StringEquals( otherChunk->items[otherIndex]->name, config->name ) ) {
+						Builder_Error( "There is more than one BuildConfig called \"%s\".  Config names have to be unique, otherwise \"" ARG_CONFIG "%s\" has no way of telling them apart.\n", config->name, config->name );
+						return 1;
+					}
+				}
+			}
+		}
+	}
+
 	// validate cmd line args
 	const char *nameOfConfigToBuild = Builder_GetNameOfConfigToBuild( options );
 	BuildConfig *targetConfig = NULL;
 	{
-		if ( options->configsCount == 0 ) {
-			Builder_Error( "No BuildConfig was registered.  You must call AddBuildConfig() at least once.\n" );
+		if ( options->configs.count == 0 ) {
+			Builder_Error( "No BuildConfig was registered.  You must call CreateBuildConfig() at least once.\n" );
 			return 1;
-		} else if ( options->configsCount > 1 && !nameOfConfigToBuild ) {
+		} else if ( options->configs.count > 1 && !nameOfConfigToBuild ) {
 			Builder_Error( "You have more than 1 BuildConfig defined, but you never told me which you wanted me to build via \"" ARG_CONFIG "\".  You need to tell me what config you want me to build, or set a default via BuilderOptions::defaultConfig.\n" );
 			return 1;
 		}
 
 		if ( nameOfConfigToBuild ) {
-			for ( uint32_t configIndex = 0; configIndex < options->configsCount; configIndex++ ) {
-				if ( options->configs[configIndex].name && Builder_StringEquals( options->configs[configIndex].name, nameOfConfigToBuild ) ) {
-					targetConfig = &options->configs[configIndex];
-					break;
+			for ( buildConfigPtrChunk_t *chunk = options->configs.head; chunk && !targetConfig; chunk = chunk->next ) {
+				for ( uint32_t configIndex = 0; configIndex < chunk->count; configIndex++ ) {
+					if ( Builder_StringEquals( chunk->items[configIndex]->name, nameOfConfigToBuild ) ) {
+						targetConfig = chunk->items[configIndex];
+						break;
+					}
 				}
 			}
 
@@ -2691,12 +2872,16 @@ int Build( BuilderOptions *options ) {
 				return 1;
 			}
 		} else {
-			targetConfig = &options->configs[0];
+			// only one config was ever registered, so there's nothing to be ambiguous about
+			targetConfig = options->configs.head->items[0];
 		}
 	}
 
-	// toolchain and compiler paths are used right through to the link step
-	scratch_t buildScratch = Builder_GetScratch( NULL );
+	// toolchain and compiler paths are used right through to the link step.
+	// this deliberately excludes the config arena: OnPreBuild/OnPostBuild callbacks run inside the loop below, so a
+	// callback calling Add*()/Set*() allocates while this scratch is open.  If the two shared an arena, the per-config
+	// rewind would take whatever the callback added with it and leave the config pointing into reusable memory.
+	scratch_t buildScratch = Builder_GetScratch( Builder_GetConfigArena() );
 
 	// only query for windows SDK and MSVC installations after verifying cmd line args and
 #ifdef _WIN32
@@ -2750,287 +2935,292 @@ int Build( BuilderOptions *options ) {
 		}
 	}
 
-	uint32_t configsToBuildCount = 0;
-	BuildConfig *configsToBuild = NULL;
-	AddBuildConfigInternal( NULL, options, targetConfig, NULL, &configsToBuild, &configsToBuildCount );
+	// the walk happens here rather than as configs are created because dependencies get attached to a config after
+	// CreateBuildConfig() has handed it over, so this is the first point the graph is complete.
+	// its lists go on buildScratch above the toolchain paths but below the rewind spot the loop takes for each config,
+	// so the per-config rewind can't reach back and take them with it
+	ConfigPtrList ancestry = {0};
+	ConfigPtrList configsToBuild = {0};
+
+	Builder_CollectConfigsToBuild( buildScratch.arena, targetConfig, &ancestry, &configsToBuild );
 
 	double totalCompileTimeMS = 0.0;
 	double totalLinkTimeMS = 0.0;
 
-	for ( uint32_t configIndex = 0; configIndex < configsToBuildCount; configIndex++ ) {
-		BuildConfig *config = &configsToBuild[configIndex];
+	for ( buildConfigPtrChunk_t *chunk = configsToBuild.head; chunk; chunk = chunk->next ) {
+		for ( uint32_t configIndex = 0; configIndex < chunk->count; configIndex++ ) {
+			BuildConfig *config = chunk->items[configIndex];
 
-		// nothing this config allocates is wanted by the next one - the toolchain paths it reads were put on
-		// buildScratch before the loop, so they sit below this and the rewind can't reach them
-		arenaRewindSpot_t configStart = Builder_ArenaTell( buildScratch.arena );
+			// nothing this config allocates is wanted by the next one - the toolchain paths it reads were put on
+			// buildScratch before the loop, so they sit below this and the rewind can't reach them
+			arenaRewindSpot_t configStart = Builder_ArenaTell( buildScratch.arena );
 
-		double compileTimeMS = 0.0;
-		double linkTimeMS = 0.0;
+			double compileTimeMS = 0.0;
+			double linkTimeMS = 0.0;
 
-		if ( config->OnPreBuild ) {
-			Builder_LogVerbose( options, "Found a OnPreBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name ? config->name : "" );
+			if ( config->OnPreBuild ) {
+				Builder_LogVerbose( options, "Found a OnPreBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name ? config->name : "" );
 
-			config->OnPreBuild( config );
-		}
-
-		// build the config
-		{
-			printf( "Building config \"%s\":\n", config->name ? config->name : "" );
-
-			const char *intermediateFolder = config->intermediateFolder;
-
-			if ( intermediateFolder && config->binaryFolder ) {
-				intermediateFolder = Builder_FormatString( buildScratch.arena, "%s%c%s", config->binaryFolder, BUILDER_PATH_SEPARATOR, intermediateFolder );
-			} else if ( !intermediateFolder ) {
-				intermediateFolder = config->binaryFolder;
+				config->OnPreBuild( config );
 			}
 
-			if ( intermediateFolder && !Builder_CreateFolderIfItDoesntExist( intermediateFolder ) ) {
-				Builder_Error( "Failed to create the intermediate folder \"%s\".\n", intermediateFolder );
-				return 1;
-			}
-
-			// glob step - flattened into one array because the compile job pool indexes into it by job number
-			builderStringList_t globList = Builder_GlobFiles( buildScratch.arena, config->sourceFiles, options );
-
-			uint32_t sourceFilesCount = globList.count;
-			const char **sourceFiles = NULL;
-
-			if ( sourceFilesCount > 0 ) {
-				sourceFiles = Builder_ArenaAlloc(buildScratch.arena, const char *, sourceFilesCount );
-
-				uint32_t written = 0;
-
-				for ( builderStringChunk_t *chunk = globList.head; chunk; chunk = chunk->next ) {
-					for ( uint32_t i = 0; i < chunk->count; i++ ) {
-						sourceFiles[written++] = chunk->items[i];
-					}
-				}
-			}
-
-			// compilation step
+			// build the config
 			{
-				const double compileTimeStart = Builder_TimeMS();
+				printf( "Building config \"%s\":\n", config->name );
+
+				const char *intermediateFolder = config->intermediateFolder;
+
+				if ( intermediateFolder && config->binaryFolder ) {
+					intermediateFolder = Builder_FormatString( buildScratch.arena, "%s%c%s", config->binaryFolder, BUILDER_PATH_SEPARATOR, intermediateFolder );
+				} else if ( !intermediateFolder ) {
+					intermediateFolder = config->binaryFolder;
+				}
+
+				if ( intermediateFolder && !Builder_CreateFolderIfItDoesntExist( intermediateFolder ) ) {
+					Builder_Error( "Failed to create the intermediate folder \"%s\".\n", intermediateFolder );
+					return 1;
+				}
+
+				// glob step - flattened into one array because the compile job pool indexes into it by job number
+				StringList globList = Builder_GlobFiles( buildScratch.arena, &config->sourceFiles, options );
+
+				uint32_t sourceFilesCount = globList.count;
+				const char **sourceFiles = NULL;
 
 				if ( sourceFilesCount > 0 ) {
-					// TODO: DM: 09/08/2026: is it OK to create and destroy a bunch of threads for each config?
-					builderCompileContext_t compileContext = {
-						.config				= config,
-						.compilerPath		= compilerPath,
-						.intermediateFolder	= intermediateFolder,
-						.useMSVC			= useMSVC,
+					sourceFiles = Builder_ArenaAlloc(buildScratch.arena, const char *, sourceFilesCount );
+
+					uint32_t written = 0;
+
+					for ( builderStringChunk_t *chunk = globList.head; chunk; chunk = chunk->next ) {
+						for ( uint32_t globbedFileIndex = 0; globbedFileIndex < chunk->count; globbedFileIndex++ ) {
+							sourceFiles[written++] = chunk->items[globbedFileIndex];
+						}
+					}
+				}
+
+				// compilation step
+				{
+					const double compileTimeStart = Builder_TimeMS();
+
+					if ( sourceFilesCount > 0 ) {
+						// TODO: DM: 09/08/2026: is it OK to create and destroy a bunch of threads for each config?
+						builderCompileContext_t compileContext = {
+							.config				= config,
+							.compilerPath		= compilerPath,
+							.intermediateFolder	= intermediateFolder,
+							.useMSVC			= useMSVC,
 #if defined( _WIN32 )
-						.msvcInstall		= &msvcInstall,
-						.windowsSDKInstall	= &windowsSDKInstall,
+							.msvcInstall		= &msvcInstall,
+							.windowsSDKInstall	= &windowsSDKInstall,
 #endif
-					};
+						};
 
-					builderCompileJobPool_t pool = {
-						.context			= &compileContext,
-						.sourceFiles		= sourceFiles,
-						.sourceFilesCount	= sourceFilesCount,
-					};
+						builderCompileJobPool_t pool = {
+							.context			= &compileContext,
+							.sourceFiles		= sourceFiles,
+							.sourceFilesCount	= sourceFilesCount,
+						};
 
-					// only spin up additional threads once theres more than one file
-					// limit the number of threads we spin up to no higher than the number of CPU cores we have
-					uint32_t numCPUCores = Builder_GetNumCPUCores();
-					uint32_t numWorkers = ( numCPUCores < sourceFilesCount ) ? numCPUCores : sourceFilesCount;
-					uint32_t numAdditionalThreads = ( numWorkers > 1 ) ? numWorkers - 1 : 0;
+						// only spin up additional threads once theres more than one file
+						// limit the number of threads we spin up to no higher than the number of CPU cores we have
+						uint32_t numCPUCores = Builder_GetNumCPUCores();
+						uint32_t numWorkers = ( numCPUCores < sourceFilesCount ) ? numCPUCores : sourceFilesCount;
+						uint32_t numAdditionalThreads = ( numWorkers > 1 ) ? numWorkers - 1 : 0;
 
-					printf( "Compiling %u files across %u threads.\n", sourceFilesCount, numWorkers );
+						printf( "Compiling %u files across %u threads.\n", sourceFilesCount, numWorkers );
 
-					builderThread_t *additionalThreads = NULL;
-					uint32_t numCreatedThreads = 0;
+						builderThread_t *additionalThreads = NULL;
+						uint32_t numCreatedThreads = 0;
 
-					if ( numAdditionalThreads > 0 ) {
-						additionalThreads = Builder_ArenaAlloc( buildScratch.arena, builderThread_t, numAdditionalThreads );
+						if ( numAdditionalThreads > 0 ) {
+							additionalThreads = Builder_ArenaAlloc( buildScratch.arena, builderThread_t, numAdditionalThreads );
 
-						for ( uint32_t threadIndex = 0; threadIndex < numAdditionalThreads; threadIndex++ ) {
-							if ( Builder_CreateCompileJobThread( &pool, &additionalThreads[numCreatedThreads] ) ) {
-								numCreatedThreads++;
+							for ( uint32_t threadIndex = 0; threadIndex < numAdditionalThreads; threadIndex++ ) {
+								if ( Builder_CreateCompileJobThread( &pool, &additionalThreads[numCreatedThreads] ) ) {
+									numCreatedThreads++;
+								}
+							}
+						}
+
+						// the main thread pulls jobs from the same pool instead of just sitting idle waiting on the additional threads
+						Builder_RunCompileJobPool( &pool );
+
+						for ( uint32_t threadIndex = 0; threadIndex < numCreatedThreads; threadIndex++ ) {
+							Builder_ThreadJoin( additionalThreads[threadIndex] );
+						}
+
+						if ( pool.numFailed > 0 ) {
+							Builder_Error( "Build failed.\n" );
+							Builder_RewindScratch( &buildScratch );
+							return 1;
+						}
+					}
+
+					compileTimeMS = Builder_TimeMS() - compileTimeStart;
+				}
+
+				// link step
+				{
+					double linkTimeStart = Builder_TimeMS();
+
+					if ( config->binaryFolder && !Builder_CreateFolderIfItDoesntExist( config->binaryFolder ) ) {
+						Builder_Error( "Failed to create the binary folder \"%s\".\n", config->binaryFolder );
+						Builder_RewindScratch( &buildScratch );
+						return 1;
+					}
+
+					stringBuilder_t linkerArgs = {0};
+#if defined( _WIN32 )
+					if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
+						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\lib.exe\" ", msvcInstall.rootFolder );
+					} else {
+						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\link.exe\" ", msvcInstall.rootFolder );
+					}
+
+					if ( config->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
+						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/DLL " );
+					}
+
+					if ( !config->removeSymbols ) {
+						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/DEBUG " );
+					}
+
+					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/OUT:" );
+					Builder_AppendBinaryPath( buildScratch.arena, &linkerArgs, config );
+
+					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", msvcInstall.libPath );
+					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.umLibPath );
+					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.ucrtLibPath );
+
+					for ( uint32_t fileIndex = 0; fileIndex < sourceFilesCount; ++fileIndex ) {
+						Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, sourceFiles[fileIndex] );
+					}
+
+					for ( builderStringChunk_t *chunk = config->additionalLibPaths.head; chunk; chunk = chunk->next ) {
+						for ( uint32_t libPathIndex = 0; libPathIndex < chunk->count; libPathIndex++ ) {
+							StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", chunk->items[libPathIndex] );
+						}
+					}
+
+					for ( builderStringChunk_t *chunk = config->additionalLibs.head; chunk; chunk = chunk->next ) {
+						for ( uint32_t libIndex = 0; libIndex < chunk->count; libIndex++ ) {
+							const char *additionalLib = chunk->items[libIndex];
+
+							// callers sometimes already include the ".lib" extension themselves - don't double it up
+							size_t libNameLen = strlen( additionalLib );
+							bool alreadyHasExtension = libNameLen >= 4 && _stricmp( additionalLib + libNameLen - 4, ".lib" ) == 0;
+
+							if ( alreadyHasExtension ) {
+								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", additionalLib );
+							} else {
+								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s.lib ", additionalLib );
 							}
 						}
 					}
 
-					// the main thread pulls jobs from the same pool instead of just sitting idle waiting on the additional threads
-					Builder_RunCompileJobPool( &pool );
+					// TODO: AK: 11/08/2026: handle this better
+					bool debugDefineSet = false;
 
-					for ( uint32_t threadIndex = 0; threadIndex < numCreatedThreads; threadIndex++ ) {
-						Builder_ThreadJoin( additionalThreads[threadIndex] );
+					for ( builderStringChunk_t *chunk = config->defines.head; chunk && !debugDefineSet; chunk = chunk->next ) {
+						for ( uint32_t defineIndex = 0; defineIndex < chunk->count; defineIndex++ ) {
+							if ( _strnicmp( "_DEBUG", chunk->items[defineIndex], sizeof( "_DEBUG" ) ) == 0 ) {
+								debugDefineSet = true;
+								break;
+							}
+						}
 					}
 
-					if ( pool.numFailed > 0 ) {
-						Builder_Error( "Build failed.\n" );
+					if ( config->binaryType != BINARY_TYPE_STATIC_LIBRARY ) {
+						// clang doesn't embed /DEFAULTLIB directives the way cl.exe does
+						// so link.exe has no idea which CRT/SDK libs to pull in unless we name them ourselves
+						// TODO: AK: 11/08/2026: we need dynamic runtime support too
+						if (debugDefineSet) {
+							StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "libcmtd.lib libcpmtd.lib libvcruntimed.lib libucrtd.lib kernel32.lib " );
+						} else {
+							StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "libcmt.lib libcpmt.lib libvcruntime.lib libucrt.lib kernel32.lib " );
+						}
+					}
+
+					for ( builderStringChunk_t *chunk = config->additionalLinkerArguments.head; chunk; chunk = chunk->next ) {
+						for ( uint32_t argumentIndex = 0; argumentIndex < chunk->count; argumentIndex++ ) {
+							StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", chunk->items[argumentIndex] );
+						}
+					}
+#elif defined( __linux__ )
+					if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
+						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "ar rcs " );
+						Builder_AppendBinaryPath( buildScratch.arena, &linkerArgs, config );
+
+						for ( uint32_t fileIndex = 0; fileIndex < sourceFilesCount; ++fileIndex ) {
+							Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, sourceFiles[fileIndex] );
+						}
+					} else {
+						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "\"%s\" ", compilerPath );
+
+						if ( config->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
+							StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-shared " );
+						}
+
+						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-o " );
+						Builder_AppendBinaryPath( buildScratch.arena, &linkerArgs, config );
+
+						for ( uint32_t fileIndex = 0; fileIndex < sourceFilesCount; ++fileIndex ) {
+							Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, sourceFiles[fileIndex] );
+						}
+
+						for ( builderStringChunk_t *chunk = config->additionalLibPaths.head; chunk; chunk = chunk->next ) {
+							for ( uint32_t libPathIndex = 0; libPathIndex < chunk->count; libPathIndex++ ) {
+								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-L%s ", chunk->items[libPathIndex] );
+							}
+						}
+
+						for ( builderStringChunk_t *chunk = config->additionalLibs.head; chunk; chunk = chunk->next ) {
+							for ( uint32_t libIndex = 0; libIndex < chunk->count; libIndex++ ) {
+								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-l%s ", chunk->items[libIndex] );
+							}
+						}
+
+						for ( builderStringChunk_t *chunk = config->additionalLinkerArguments.head; chunk; chunk = chunk->next ) {
+							for ( uint32_t argumentIndex = 0; argumentIndex < chunk->count; argumentIndex++ ) {
+								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", chunk->items[argumentIndex] );
+							}
+						}
+					}
+#endif
+
+					char *args = StringBuilder_ToString( buildScratch.arena, &linkerArgs );
+
+					printf( "%s\n", args );
+
+					int32_t linkResult = Builder_RunProcess( NULL, args, NULL );
+
+					if ( linkResult != 0 ) {
+						Builder_Error( "Link failed.\n" );
 						Builder_RewindScratch( &buildScratch );
 						return 1;
 					}
-				}
 
-				compileTimeMS = Builder_TimeMS() - compileTimeStart;
+					linkTimeMS = Builder_TimeMS() - linkTimeStart;
+				}
 			}
 
-			// link step
-			{
-				double linkTimeStart = Builder_TimeMS();
+			if ( config->OnPostBuild ) {
+				Builder_LogVerbose( options, "Found a OnPostBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name ? config->name : "" );
 
-				if ( config->binaryFolder && !Builder_CreateFolderIfItDoesntExist( config->binaryFolder ) ) {
-					Builder_Error( "Failed to create the binary folder \"%s\".\n", config->binaryFolder );
-					Builder_RewindScratch( &buildScratch );
-					return 1;
-				}
-
-				stringBuilder_t linkerArgs = {0};
-#if defined( _WIN32 )
-				if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
-					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\lib.exe\" ", msvcInstall.rootFolder );
-				} else {
-					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\link.exe\" ", msvcInstall.rootFolder );
-				}
-
-				if ( config->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
-					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/DLL " );
-				}
-
-				if ( !config->removeSymbols ) {
-					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/DEBUG " );
-				}
-
-				StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/OUT:" );
-				Builder_AppendBinaryPath( buildScratch.arena, &linkerArgs, config );
-
-				StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", msvcInstall.libPath );
-				StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.umLibPath );
-				StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.ucrtLibPath );
-
-				for ( uint32_t fileIndex = 0; fileIndex < sourceFilesCount; ++fileIndex ) {
-					Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, sourceFiles[fileIndex] );
-				}
-
-				const char **additionalLibPath = config->additionalLibPaths;
-				while ( additionalLibPath && *additionalLibPath ) {
-					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", *additionalLibPath );
-
-					additionalLibPath++;
-				}
-
-				const char **additionalLib = config->additionalLibs;
-				while ( additionalLib && *additionalLib ) {
-					// callers sometimes already include the ".lib" extension themselves - don't double it up
-					size_t libNameLen = strlen( *additionalLib );
-					bool alreadyHasExtension = libNameLen >= 4 && _stricmp( *additionalLib + libNameLen - 4, ".lib" ) == 0;
-
-					if ( alreadyHasExtension ) {
-						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", *additionalLib );
-					} else {
-						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s.lib ", *additionalLib );
-					}
-
-					additionalLib++;
-				}
-
-				// TODO: AK: 11/08/2026: handle this better
-				bool debugDefineSet = false;
-				const char **define = config->defines;
-				while ( define && *define ) {
-					if ( !debugDefineSet && _strnicmp( "_DEBUG", *(define++), sizeof("_DEBUG") ) == 0 ) {
-						debugDefineSet = true;
-						break;
-					}
-				}
-
-				if ( config->binaryType != BINARY_TYPE_STATIC_LIBRARY ) {
-					// clang doesn't embed /DEFAULTLIB directives the way cl.exe does
-					// so link.exe has no idea which CRT/SDK libs to pull in unless we name them ourselves
-					// TODO: AK: 11/08/2026: we need dynamic runtime support too
-					if (debugDefineSet) {
-						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "libcmtd.lib libcpmtd.lib libvcruntimed.lib libucrtd.lib kernel32.lib " );
-					} else {
-						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "libcmt.lib libcpmt.lib libvcruntime.lib libucrt.lib kernel32.lib " );
-					}
-				}
-
-				const char **additionalLinkerArgument = config->additionalLinkerArguments;
-				while ( additionalLinkerArgument && *additionalLinkerArgument ) {
-					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", *additionalLinkerArgument );
-
-					additionalLinkerArgument++;
-				}
-#elif defined( __linux__ )
-				if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
-					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "ar rcs " );
-					Builder_AppendBinaryPath( buildScratch.arena, &linkerArgs, config );
-
-					for ( uint32_t fileIndex = 0; fileIndex < sourceFilesCount; ++fileIndex ) {
-						Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, sourceFiles[fileIndex] );
-					}
-				} else {
-					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "\"%s\" ", compilerPath );
-
-					if ( config->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
-						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-shared " );
-					}
-
-					StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-o " );
-					Builder_AppendBinaryPath( buildScratch.arena, &linkerArgs, config );
-
-					for ( uint32_t fileIndex = 0; fileIndex < sourceFilesCount; ++fileIndex ) {
-						Builder_AppendIntermediateFilePath( buildScratch.arena, &linkerArgs, intermediateFolder, sourceFiles[fileIndex] );
-					}
-
-					const char **additionalLibPath = config->additionalLibPaths;
-					while ( additionalLibPath && *additionalLibPath ) {
-						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-L%s ", *additionalLibPath );
-
-						additionalLibPath++;
-					}
-
-					const char **additionalLib = config->additionalLibs;
-					while ( additionalLib && *additionalLib ) {
-						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-l%s ", *additionalLib );
-
-						additionalLib++;
-					}
-
-					const char **additionalLinkerArgument = config->additionalLinkerArguments;
-					while ( additionalLinkerArgument && *additionalLinkerArgument ) {
-						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", *additionalLinkerArgument );
-
-						additionalLinkerArgument++;
-					}
-				}
-#endif
-
-				char *args = StringBuilder_ToString( buildScratch.arena, &linkerArgs );
-
-				printf( "%s\n", args );
-
-				int32_t linkResult = Builder_RunProcess( NULL, args, NULL );
-
-				if ( linkResult != 0 ) {
-					Builder_Error( "Link failed.\n" );
-					Builder_RewindScratch( &buildScratch );
-					return 1;
-				}
-
-				linkTimeMS = Builder_TimeMS() - linkTimeStart;
+				config->OnPostBuild( config );
 			}
+
+			printf( "Finished config \"%s\":\n", config->name );
+			printf( "    Compile : %f ms\n", compileTimeMS );
+			printf( "    Link    : %f ms\n", linkTimeMS );
+			printf( "\n" );
+
+			totalCompileTimeMS += compileTimeMS;
+			totalLinkTimeMS += linkTimeMS;
+
+			Builder_RewindArena( buildScratch.arena, &configStart );
 		}
-
-		if ( config->OnPostBuild ) {
-			Builder_LogVerbose( options, "Found a OnPostBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name ? config->name : "" );
-
-			config->OnPostBuild( config );
-		}
-
-		printf( "Finished config \"%s\":\n", config->name ? config->name : "" );
-		printf( "    Compile : %f ms\n", compileTimeMS );
-		printf( "    Link    : %f ms\n", linkTimeMS );
-		printf( "\n" );
-
-		totalCompileTimeMS += compileTimeMS;
-		totalLinkTimeMS += linkTimeMS;
-
-		Builder_RewindArena( buildScratch.arena, &configStart );
 	}
 
 	// build summary

@@ -201,7 +201,8 @@ ConfigPtrList	Builder_MakeDependenciesInternal( BuildConfig **dependencies, uint
 #define AddIgnoreWarnings( config, ... )	( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->ignoreWarnings, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )
 #define AddLinkerArguments( config, ... )	( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->additionalLinkerArguments, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )
 
-// Every dependency must be a config that came from CreateBuildConfig().  They all get built before config does.
+// Every dependency gets built before config does.  Builder keeps the pointers, so they need to still be alive when
+// Build() runs - a config from CreateBuildConfig() always is.
 #define AddDependencies( config, ... )		Builder_AddDependenciesInternal( ( config ), BUILDER_CONFIG_ARGS( __VA_ARGS__ ) )
 
 // DO NOT CALL THESE DIRECTLY
@@ -900,20 +901,6 @@ static arena_t *Builder_GetConfigArena( void ) {
 	return configStorage.arena;
 }
 
-static bool Builder_ArenaOwnsPointer( arena_t *arena, const void *pointer ) {
-	BUILDER_ASSERT( arena );
-
-	for ( arenaBlock_t *block = arena->head; block; block = block->next ) {
-		const char *blockStart = (const char *) block->block;
-
-		if ( (const char *) pointer >= blockStart && (const char *) pointer < blockStart + block->capacity ) {
-			return true;
-		}
-	}
-
-	return false;
-}
-
 BuildConfig *CreateBuildConfig( BuilderOptions *options ) {
 	BUILDER_ASSERT( options );
 
@@ -959,10 +946,6 @@ ConfigPtrList Builder_MakeDependenciesInternal( BuildConfig **dependencies, uint
 
 		BUILDER_ASSERT( dependency );
 
-		// CreateBuildConfig() is the only thing that allocates a BuildConfig, so a pointer from outside this arena came
-		// off somebody's stack and would dangle by the time Build() read it
-		BUILDER_ASSERT( Builder_ArenaOwnsPointer( configArena, dependency ) && "Dependencies have to come from CreateBuildConfig() - Builder can't hold on to a BuildConfig it doesn't own." );
-
 		Builder_ConfigListPush( configArena, &list, dependency );
 	}
 
@@ -996,10 +979,6 @@ void Builder_AddDependenciesInternal( BuildConfig *config, BuildConfig **depende
 
 		BUILDER_ASSERT( dependency );
 		BUILDER_ASSERT( config != dependency && "A BuildConfig can't depend on itself." );
-
-		// CreateBuildConfig() is the only thing that allocates a BuildConfig, so a pointer from outside this arena came
-		// off somebody's stack and would dangle by the time Build() read it
-		BUILDER_ASSERT( Builder_ArenaOwnsPointer( configArena, dependency ) && "Dependencies have to come from CreateBuildConfig() - Builder can't hold on to a BuildConfig it doesn't own." );
 
 		Builder_ConfigListPush( configArena, &config->dependsOn, dependency );
 	}

@@ -4,10 +4,7 @@
 int main( int argc, char **argv ) {
 	Builder_RebuildSelf( argc, argv );
 
-	BuilderOptions options = {
-		.argc = argc,
-		.argv = argv,
-	};
+	BuilderOptions options = { 0 };
 
 	BuildConfig *libConfig = CreateBuildConfig( &options );
 	*libConfig = (BuildConfig) {
@@ -20,14 +17,14 @@ int main( int argc, char **argv ) {
 
 	BuildConfig *programConfig = CreateBuildConfig( &options );
 	*programConfig = (BuildConfig) {
-		.name				= "program",
-		.binaryType			= BINARY_TYPE_EXE,
-		.binaryName			= "test_dynamic_lib_program",
-		.dependsOn			= MakeDependencies( libConfig ),
-		.sourceFiles		= MakeStringList( "program/main.c" ),
-		.additionalIncludes	= MakeStringList( "lib" ),
+		.name						= "program",
+		.binaryType					= BINARY_TYPE_EXE,
+		.binaryName					= "test_dynamic_lib_program",
+		.dependsOn					= MakeDependencies( libConfig ),
+		.sourceFiles				= MakeStringList( "program/main.c" ),
+		.additionalIncludes			= MakeStringList( "lib" ),
 #if defined( _WIN32 )
-		.additionalLibs		= MakeStringList( "test_dynamic_lib.lib" ),
+		.additionalLibs				= MakeStringList( "test_dynamic_lib.lib" ),
 #else
 		.additionalLibs				= MakeStringList( "./test_dynamic_lib.so" ),
 		.additionalLinkerArguments	= MakeStringList( "-Wl,-rpath,$ORIGIN" ),
@@ -36,5 +33,5 @@ int main( int argc, char **argv ) {
 
 	options.defaultConfig = programConfig;
 
-	return Build( &options );
+	return Build( &options, argc, argv );
 }

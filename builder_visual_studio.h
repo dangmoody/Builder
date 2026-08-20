@@ -110,7 +110,7 @@ typedef struct VisualStudioSolution {
 	const char			*buildCommand;
 } VisualStudioSolution;
 
-bool	Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudioSolution *solution );
+bool	Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudioSolution *solution, int argc, char **argv );
 
 
 #ifdef BUILDER_VISUAL_STUDIO_IMPLEMENTATION
@@ -582,7 +582,7 @@ static void Builder_VSWriteFileFilters( arena_t *arena, stringBuilder_t *sb, con
 	StringBuilder_Appendf( arena, sb, "\t</ItemGroup>\n" );
 }
 
-bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudioSolution *solution ) {
+bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudioSolution *solution, int argc, char **argv ) {
 	BUILDER_ASSERT( options );
 	BUILDER_ASSERT( solution );
 
@@ -646,7 +646,7 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 		}
 	}
 
-	BUILDER_ASSERT( options->argc > 0 && options->argv );
+	BUILDER_ASSERT( argc > 0 && argv );
 
 	scratch_t scratch = Builder_GetScratch( NULL );
 

@@ -7,10 +7,7 @@
 int main( int argc, char **argv ) {
 	Builder_RebuildSelf( argc, argv );
 
-	BuilderOptions options = {
-		.argc = argc,
-		.argv = argv,
-	};
+	BuilderOptions options = { 0 };
 
 	BuildConfig *mathlib = CreateBuildConfig( &options );
 	*mathlib = (BuildConfig) {
@@ -22,7 +19,7 @@ int main( int argc, char **argv ) {
 		.additionalIncludes	= MakeStringList( "src" ),
 	};
 
-	if ( HasCommandLineArg( &options, "--release" ) ) {
+	if ( HasCommandLineArg( argc, argv, "--release" ) ) {
 		mathlib->binaryFolder = "bin/release";
 		mathlib->optimization = OPTIMIZATION_PROGRAM_SPEED;
 		AddDefines( mathlib, "MATHLIB_BUILDING", "NDEBUG" );
@@ -49,7 +46,7 @@ int main( int argc, char **argv ) {
 #endif
 	};
 
-	if ( HasCommandLineArg( &options, "--release" ) ) {
+	if ( HasCommandLineArg( argc, argv, "--release" ) ) {
 		app->binaryFolder = "bin/release";
 		app->optimization = OPTIMIZATION_PROGRAM_SPEED;
 		AddDefines( app, "NDEBUG" );
@@ -61,7 +58,7 @@ int main( int argc, char **argv ) {
 	// only the top-level config needs naming as the default - mathlib is pulled in automatically via dependsOn
 	options.defaultConfig = app;
 
-	if ( HasCommandLineArg( &options, "--sln" ) ) {
+	if ( HasCommandLineArg( argc, argv, "--sln" ) ) {
 		VisualStudioConfig mathlibVsConfigs[] = {
 			{ .name = "Debug",   .config = mathlib },
 			{ .name = "Release", .config = mathlib, .additionalBuildArgs = (const char *[]) { "--release", NULL }, .nmakeOutput = "bin/release/mathlib.dll" },
@@ -95,8 +92,8 @@ int main( int argc, char **argv ) {
 			.projectsCount	= BUILDER_COUNT_OF( vsProjects ),
 		};
 
-		return Builder_GenerateVisualStudioSolution( &options, &solution ) ? 0 : 1;
+		return Builder_GenerateVisualStudioSolution( &options, &solution, argc, argv ) ? 0 : 1;
 	}
 
-	return Build( &options );
+	return Build( &options, argc, argv );
 }

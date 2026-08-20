@@ -4,7 +4,7 @@
 int main( int argc, char **argv ) {
 	Builder_RebuildSelf( argc, argv );
 
-	BuilderOptions options = {0};
+	BuilderOptions options = { 0 };
 
 	BuildConfig *config = CreateBuildConfig( &options );
 	*config = (BuildConfig) {
@@ -16,11 +16,11 @@ int main( int argc, char **argv ) {
 	};
 
 	// layering onto a config that's already been filled in
-	if ( HasCommandLineArg( &options, "--release" ) ) {
+	if ( HasCommandLineArg( argc, argv, "--release" ) ) {
 		AddDefines( config, "NDEBUG" );
 	} else {
 		AddDefines( config, "_DEBUG" );
 	}
 
-	return Build( &options );
+	return Build( &options, argc, argv );
 }

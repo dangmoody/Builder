@@ -5,10 +5,7 @@
 #define BINARY_FOLDER	"bin/demos/SDL3"
 
 int main( int argc, char **argv ) {
-	BuilderOptions options = {
-		.argc = argc,
-		.argv = argv,
-	};
+	BuilderOptions options = { 0 };
 
 	Builder_RebuildSelf(argc,argv);
 
@@ -161,5 +158,5 @@ int main( int argc, char **argv ) {
 
 	options.defaultConfig = demo;
 
-	return Build( &options );
+	return Build( &options, argc, argv );
 }

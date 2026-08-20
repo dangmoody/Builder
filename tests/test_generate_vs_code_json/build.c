@@ -6,10 +6,7 @@
 int main( int argc, char **argv ) {
 	Builder_RebuildSelf( argc, argv );
 
-	BuilderOptions options = {
-		.argc = argc,
-		.argv = argv,
-	};
+	BuilderOptions options = { 0 };
 
 	BuildConfig *config = CreateBuildConfig( &options );
 	config->name = "config";
@@ -17,7 +14,7 @@ int main( int argc, char **argv ) {
 	config->binaryName = "test_generate_vs_code_json";
 	AddSourceFiles( config, "main.c" );
 
-	if ( HasCommandLineArg( &options, "--release" ) ) {
+	if ( HasCommandLineArg( argc, argv, "--release" ) ) {
 		config->binaryFolder = "bin/release";
 	} else {
 		config->binaryFolder = "bin/debug";
@@ -25,7 +22,7 @@ int main( int argc, char **argv ) {
 
 	options.defaultConfig = config;
 
-	if ( HasCommandLineArg( &options, "--vscode" ) ) {
+	if ( HasCommandLineArg( argc, argv, "--vscode" ) ) {
 		VSCodeCppPropertiesConfig cppPropertiesConfigs[] = {
 			{ .config = config, .intelliSenseMode = VSCODE_INTELLISENSE_MODE_LINUX_CLANG_X64 },
 		};
@@ -55,8 +52,8 @@ int main( int argc, char **argv ) {
 			.launchConfigsCount			= BUILDER_COUNT_OF( launchConfigs ),
 		};
 
-		return Builder_GenerateVSCodeJSONFiles( &options, &vsCodeOptions ) ? 0 : 1;
+		return Builder_GenerateVSCodeJSONFiles( &options, &vsCodeOptions, argc, argv ) ? 0 : 1;
 	}
 
-	return Build( &options );
+	return Build( &options, argc, argv );
 }

@@ -4,7 +4,7 @@
 int main( int argc, char **argv ) {
 	Builder_RebuildSelf( argc, argv );
 
-	BuilderOptions options = {0};
+	BuilderOptions options = { 0 };
 
 	BuildConfig *config = CreateBuildConfig( &options );
 	*config = (BuildConfig) {
@@ -14,5 +14,5 @@ int main( int argc, char **argv ) {
 		.sourceFiles	= MakeStringList( "main.c" ),
 	};
 
-	return Build( &options );
+	return Build( &options, argc, argv );
 }

@@ -6,10 +6,7 @@
 int main( int argc, char **argv ) {
 	Builder_RebuildSelf( argc, argv );
 
-	BuilderOptions options = {
-		.argc = argc,
-		.argv = argv,
-	};
+	BuilderOptions options = { 0 };
 
 	BuildConfig *config = CreateBuildConfig( &options );
 	config->name = "config";
@@ -17,7 +14,7 @@ int main( int argc, char **argv ) {
 	config->binaryName = "test_generate_zed_json";
 	AddSourceFiles( config, "main.c" );
 
-	if ( HasCommandLineArg( &options, "--release" ) ) {
+	if ( HasCommandLineArg( argc, argv, "--release" ) ) {
 		config->binaryFolder = "bin/release";
 	} else {
 		config->binaryFolder = "bin/debug";
@@ -25,7 +22,7 @@ int main( int argc, char **argv ) {
 
 	options.defaultConfig = config;
 
-	if ( HasCommandLineArg( &options, "--zed" ) ) {
+	if ( HasCommandLineArg( argc, argv, "--zed" ) ) {
 		ZedTaskConfig taskConfigs[] = {
 			{ .config = config },
 			{ .config = config, .args = (const char *[]) { "--release", NULL } },
@@ -53,8 +50,8 @@ int main( int argc, char **argv ) {
 			.debugConfigsCount	= BUILDER_COUNT_OF( debugConfigs ),
 		};
 
-		return Builder_GenerateZedJSONFiles( &options, &zedOptions ) ? 0 : 1;
+		return Builder_GenerateZedJSONFiles( &options, &zedOptions, argc, argv ) ? 0 : 1;
 	}
 
-	return Build( &options );
+	return Build( &options, argc, argv );
 }

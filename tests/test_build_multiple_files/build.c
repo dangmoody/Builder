@@ -26,7 +26,7 @@ int main( int argc, char **argv ) {
 	if ( HasCommandLineArg( argc, argv, "--msvc" ) ) {
 		options.compilerPath = "cl";
 	} else {
-		AddCompilerArguments( config, "-v" );
+		//AddCompilerArguments( config, "-v" );
 	}
 
 	return Build( &options, argc, argv );

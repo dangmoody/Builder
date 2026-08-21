@@ -2889,11 +2889,11 @@ typedef struct compileDependency_t {
 	uint64_t 	writeTime;
 } compileDependency_t;
 
-typedef struct dependencyArray_t {
+typedef struct compileDependencyArray_t {
 	uint32_t				count;
 	uint32_t				capacity;
 	compileDependency_t	   *dependencies;
-} dependencyArray_t;
+} compileDependencyArray_t;
 
 typedef struct builderDependencyJobInfo_t {
 	const BuilderOptions   *options;
@@ -2908,10 +2908,33 @@ typedef struct builderDependencyJobInfo_t {
 	builderAtomic32_t		nextDependencySliceIndex;
 } builderDependencyJobInfo_t;
 
-static bool Builder_AreDependenciesNewer( arena_t *dependencyArena, const BuilderOptions *options, bool useMSVC, dependencyArray_t *dependencyArray, char **compilerOutput, const compilePacket_t *toCheck ) {
+static bool Builder_DependencyArrayGetLastWriteTime( const char *dependency, const compileDependencyArray_t *dependencyArray, uint64_t *outWriteTime ) {
+	for ( uint32_t dependencyIndex = 0; dependencyIndex < dependencyArray->count; ++dependencyIndex ) {
+		const compileDependency_t *compileDependency = &dependencyArray->dependencies[dependencyIndex];
+		if ( strncmp( dependency, compileDependency->dependency, compileDependency->dependencyLength ) == 0 ) {
+			*outWriteTime = compileDependency->writeTime;
+			return true;
+		}
+	}
+	return false;
+}
+
+static void Builder_AddTodependencyArray( arena_t *dependencyArena, compileDependencyArray_t *dependencyArray, const char *dependency, uint64_t writeTime) {
+	if ( dependencyArray->capacity == dependencyArray->count ) {
+		Builder_ArenaRealloc( dependencyArena, dependencyArray->dependencies, compileDependency_t, dependencyArray->capacity, dependencyArray->capacity * 2 );
+		dependencyArray->capacity *= 2;
+	}
+
+	dependencyArray->dependencies[dependencyArray->count++] = (compileDependency_t) {
+		.dependency = dependency,
+		.dependencyLength = strnlen( dependency, 512 ),
+		.writeTime = writeTime
+	};
+}
+
+static bool Builder_AreDependenciesNewer( arena_t *dependencyArena, const BuilderOptions *options, bool useMSVC, compileDependencyArray_t *dependencyArray, char **compilerOutput, const compilePacket_t *toCheck ) {
 	bool foundNewerDependency = false;
 	char *current;
-	scratch_t scratch = Builder_GetScratch( dependencyArena );
 
 	if ( useMSVC ) {
 #if defined( _WIN32 )
@@ -2941,7 +2964,7 @@ static bool Builder_AreDependenciesNewer( arena_t *dependencyArena, const Builde
 			if ( !foundNewerDependency ) {
 				// get the substring we actually need
 				uint64_t dependencyFilenameLength = ( (uint64_t) dependencyEnd ) - ( (uint64_t) dependencyStart );
-				char *dependencyFilename = Builder_FormatString( scratch.arena, "%.*s", dependencyFilenameLength, dependencyStart );
+				char *dependencyFilename = Builder_FormatString( dependencyArena, "%.*s", dependencyFilenameLength, dependencyStart );
 				for ( uint64_t i = 0; i < dependencyFilenameLength; ++i ) {
 					if ( dependencyFilename[i] == '\\' && dependencyFilename[i + 1] == ' ' ) {
 						memmove( dependencyFilename + i, dependencyFilename + i + 1, dependencyFilenameLength - i ); // - 1 (count) + 1 '\0'
@@ -2950,9 +2973,14 @@ static bool Builder_AreDependenciesNewer( arena_t *dependencyArena, const Builde
 				}
 	
 				uint64_t lastWriteTime;
-				if ( Builder_GetFileLastWriteTime( dependencyFilename, &lastWriteTime ) ) {
+				if ( Builder_DependencyArrayGetLastWriteTime( dependencyFilename, dependencyArray, &lastWriteTime ) ) {
+					foundNewerDependency = lastWriteTime > toCheck->objectWriteTime;
+					Builder_LogVerbose( options, "Found %s's newer? (%s) dependency via dependency array.\n", toCheck->sourceFile, foundNewerDependency ? "true" : "false", dependencyFilename );
+				} else if ( Builder_GetFileLastWriteTime( dependencyFilename, &lastWriteTime ) ) {
 					foundNewerDependency = lastWriteTime > toCheck->objectWriteTime;
 					Builder_LogVerbose( options, "Found %s's newer? (%s) dependency %s, last write time = %llu\n", toCheck->sourceFile, foundNewerDependency ? "true" : "false", dependencyFilename, lastWriteTime );
+
+					Builder_AddTodependencyArray( dependencyArena, dependencyArray, dependencyFilename, lastWriteTime );
 				} else {
 					Builder_Error( "Couldn't get last write time for dependency: %s\n", dependencyFilename );
 				}
@@ -3015,7 +3043,7 @@ static bool Builder_AreDependenciesNewer( arena_t *dependencyArena, const Builde
 			if ( !foundNewerDependency && !firstDependency ) {
 				// get the substring we actually need
 				uint64_t dependencyFilenameLength = ( (uint64_t) dependencyEnd ) - ( (uint64_t) dependencyStart );
-				char *dependencyFilename = Builder_FormatString( scratch.arena, "%.*s", dependencyFilenameLength, dependencyStart );
+				char *dependencyFilename = Builder_FormatString( dependencyArena, "%.*s", dependencyFilenameLength, dependencyStart );
 				for ( uint64_t i = 0; i < dependencyFilenameLength; ++i ) {
 					if ( dependencyFilename[i] == '\\' && dependencyFilename[i + 1] == ' ' ) {
 						memmove( dependencyFilename + i, dependencyFilename + i + 1, dependencyFilenameLength - i ); // - 1 (count) + 1 '\0'
@@ -3024,9 +3052,14 @@ static bool Builder_AreDependenciesNewer( arena_t *dependencyArena, const Builde
 				}
 	
 				uint64_t lastWriteTime;
-				if ( Builder_GetFileLastWriteTime( dependencyFilename, &lastWriteTime ) ) {
+				if ( Builder_DependencyArrayGetLastWriteTime( dependencyFilename, dependencyArray, &lastWriteTime ) ) {
 					foundNewerDependency = lastWriteTime > toCheck->objectWriteTime;
-					Builder_LogVerbose( options, "Found %s's newer? (%s) dependency %s, last write time = %llu\n", toCheck->sourceFile, foundNewerDependency ? "true" : "false", dependencyFilename, lastWriteTime );
+					Builder_LogVerbose( options, "Found %s's new? (%s) dependency [via array], %s, last write time = %llu\n", toCheck->sourceFile, foundNewerDependency ? "true" : "false", dependencyFilename, lastWriteTime);
+				} else if ( Builder_GetFileLastWriteTime( dependencyFilename, &lastWriteTime ) ) {
+					foundNewerDependency = lastWriteTime > toCheck->objectWriteTime;
+					Builder_LogVerbose( options, "Found %s's new? (%s) dependency %s, last write time = %llu\n", toCheck->sourceFile, foundNewerDependency ? "true" : "false", dependencyFilename, lastWriteTime );
+
+					Builder_AddTodependencyArray( dependencyArena, dependencyArray, dependencyFilename, lastWriteTime );
 				} else {
 					Builder_Error( "Couldn't get last write time for dependency: %s\n", dependencyFilename );
 				}
@@ -3054,7 +3087,6 @@ static bool Builder_AreDependenciesNewer( arena_t *dependencyArena, const Builde
 		}
 	}
 
-	Builder_RewindScratch( &scratch );
 	*compilerOutput = current;
 	return foundNewerDependency;
 }
@@ -3099,7 +3131,7 @@ static void Builder_CheckDependencies( builderDependencyJobInfo_t *jobInfo, uint
 
 		// TODO: AK: 21/08/2026: this should be a hash map
 		static const uint32_t dependenciesCapcity = 16;
-		dependencyArray_t dependencyArray = {
+		compileDependencyArray_t dependencyArray = {
 			.count = 0,
 			.capacity = dependenciesCapcity,
 			.dependencies = Builder_ArenaAlloc( scratch.arena, compileDependency_t, dependenciesCapcity )

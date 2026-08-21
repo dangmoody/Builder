@@ -3313,7 +3313,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 
 				const char *intermediateFolder = options->intermediateFolder;
 				if ( !intermediateFolder || *intermediateFolder == '\0' ) {
-					intermediateFolder = "intermediates";
+					intermediateFolder = "intermediate";
 				}
 
 				if ( intermediateFolder && !Builder_CreateFolderIfItDoesntExist( intermediateFolder ) ) {

@@ -2855,9 +2855,9 @@ static void *Builder_CompileJobThreadProc( void *param ) {
 }
 #endif
 
-static bool Builder_CreateCompileJobThread( builderCompileJobPool_t *pool, builderThread_t *outThread ) {
 #if defined( _WIN32 )
-	HANDLE thread = CreateThread( NULL, 0, Builder_CompileJobThreadProc, pool, 0, NULL );
+static bool Builder_CreateJobThread( LPTHREAD_START_ROUTINE proc, void *args, builderThread_t *outThread ) {
+	HANDLE thread = CreateThread( NULL, 0, proc, args, 0, NULL );
 
 	if ( !thread ) {
 		Builder_Error( "Failed to create compile worker thread: 0x%X\n", GetLastError() );
@@ -2868,9 +2868,10 @@ static bool Builder_CreateCompileJobThread( builderCompileJobPool_t *pool, build
 
 	return true;
 #elif defined( __linux__ )
+static bool Builder_CreateJobThread( void *(proc)(void *), void *args, builderThread_t *outThread ) {
 	pthread_t thread;
 
-	int result = pthread_create( &thread, NULL, Builder_CompileJobThreadProc, pool );
+	int result = pthread_create( &thread, NULL, proc, args );
 
 	if ( result != 0 ) {
 		Builder_Error( "Failed to create compile worker thread: %s\n", strerror( result ) );
@@ -3151,34 +3152,6 @@ static void *Builder_DependencyJobThreadProc( void *param ) {
 	return NULL;
 }
 #endif
-
-static bool Builder_CreateDependencyJobThread( builderDependencyJobPool_t *pool, builderThread_t *outThread ) {
-#if defined( _WIN32 )
-	HANDLE thread = CreateThread( NULL, 0, Builder_DependencyJobThreadProc, pool, 0, NULL );
-
-	if ( !thread ) {
-		Builder_Error( "Failed to create Dependency worker thread: 0x%X\n", GetLastError() );
-		return false;
-	}
-
-	*outThread = thread;
-
-	return true;
-#elif defined( __linux__ )
-	pthread_t thread;
-
-	int result = pthread_create( &thread, NULL, Builder_DependencyJobThreadProc, pool );
-
-	if ( result != 0 ) {
-		Builder_Error( "Failed to create Dependency worker thread: %s\n", strerror( result ) );
-		return false;
-	}
-
-	*outThread = thread;
-
-	return true;
-#endif
-}
 
 int Build( BuilderOptions *options, int argc, char **argv ) {
 	double totalTimeStart = Builder_TimeMS();
@@ -3495,7 +3468,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 								additionalThreads = Builder_ArenaAlloc( buildScratch.arena, builderThread_t, numAdditionalThreads );
 
 								for ( uint32_t threadIndex = 0; threadIndex < numAdditionalThreads; threadIndex++ ) {
-									if ( Builder_CreateDependencyJobThread( &pool, &additionalThreads[numCreatedThreads] ) ) {
+									if ( Builder_CreateJobThread( Builder_DependencyJobThreadProc, &pool, &additionalThreads[numCreatedThreads] ) ) {
 										numCreatedThreads++;
 									}
 								}
@@ -3544,7 +3517,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 							additionalThreads = Builder_ArenaAlloc( buildScratch.arena, builderThread_t, numAdditionalThreads );
 
 							for ( uint32_t threadIndex = 0; threadIndex < numAdditionalThreads; threadIndex++ ) {
-								if ( Builder_CreateCompileJobThread( &pool, &additionalThreads[numCreatedThreads] ) ) {
+								if ( Builder_CreateJobThread( Builder_CompileJobThreadProc, &pool, &additionalThreads[numCreatedThreads] ) ) {
 									numCreatedThreads++;
 								}
 							}

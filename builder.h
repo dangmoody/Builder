@@ -1156,29 +1156,31 @@ static int32_t Builder_RunProcess( arena_t* results, const char *processAndArgs,
 			}
 			
 			DWORD available = 0;
-			if ( !PeekNamedPipe( handles[handleIndex], NULL, 0, NULL, &available, NULL ) ) {
-				// ERROR_BROKEN_PIPE here is expected EOF, not a real failure
-				DWORD lastError = GetLastError();
-				if ( lastError != ERROR_BROKEN_PIPE ) {
-					Builder_Error( "Failed to read %s of subprocess: Windows error code: 0x%X.\n", outputStrings[handleIndex], lastError );
+			if ( numHandles > 1 ) {
+				if ( !PeekNamedPipe( handles[handleIndex], NULL, 0, NULL, &available, NULL ) ) {
+					// ERROR_BROKEN_PIPE here is expected EOF, not a real failure
+					DWORD lastError = GetLastError();
+					if ( lastError != ERROR_BROKEN_PIPE ) {
+						Builder_Error( "Failed to read %s of subprocess: Windows error code: 0x%X.\n", outputStrings[handleIndex], lastError );
+					}
+					finished |= 1 << handleIndex;
+					continue;
 				}
-				finished |= 1 << handleIndex;
-				continue;
-			}
-			
-			if ( available == 0 ) {
-				continue;
+				
+				if ( available == 0 ) {
+					continue;
+				}
 			}
 			
 			DWORD bytesRead = 0;
-			DWORD toRead = min( available, sizeof( buffer ) - 1 );
+			DWORD toRead = available != 0 ? min( available, sizeof( buffer ) - 1 ) : sizeof( buffer ) - 1;
 			if ( ReadFile( handles[handleIndex], buffer, toRead, &bytesRead, NULL ) && bytesRead != 0 ) {
-		buffer[bytesRead] = 0;
-				if ( outCapturedOutput && handleIndex == 0 ) {
-			StringBuilder_Appendf( temporaryScratch.arena, &capturedOutput, "%s", buffer );
-		} else {
-			printf( "%s", buffer );
-		}
+				buffer[bytesRead] = 0;
+						if ( outCapturedOutput && handleIndex == 0 ) {
+					StringBuilder_Appendf( temporaryScratch.arena, &capturedOutput, "%s", buffer );
+				} else {
+					printf( "%s", buffer );
+				}
 				didRead = true;
 			} else {
 				// the child closing its end of the pipe (e.g. on exit) surfaces as ERROR_BROKEN_PIPE here - that's expected EOF, not a real failure
@@ -1187,12 +1189,15 @@ static int32_t Builder_RunProcess( arena_t* results, const char *processAndArgs,
 					Builder_Error( "Failed to read %s of subprocess: Windows error code: 0x%X.\n", outputStrings[handleIndex], lastError );
 				}
 				finished |= 1 << handleIndex;
+				didRead = true; // we are finished now anyway
 			}
 		}
 
 		// I don't know how I feel about this?
-		if ( !didRead ) { 
-			YieldProcessor();
+		// but we only hit this path when numHandles > 1
+		if ( !didRead ) {
+			BUILDER_ASSERT( numHandles > 1);
+			WaitForSingleObject( processInfo.hProcess, 1 );
 		}
 	}
 
@@ -3426,8 +3431,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 						}
 						
 						if ( needsDependencyCheck > 0 ) {
-							// only spin up additional threads once theres more than one file
-							// limit the number of threads we spin up to no higher than the number of CPU cores we have
+							// TODO: AK: 21/08/2026: If we are spinning up threads for this do we just spin the threads up and never look back?
 							uint32_t numWorkers = ( numCPUCores < needsDependencyCheck ) ? numCPUCores : needsDependencyCheck;
 							uint32_t numAdditionalThreads = ( numWorkers > 1 ) ? numWorkers - 1 : 0;
 							printf("%u source files need deeper checks across %u threads.\n", needsDependencyCheck, numWorkers);

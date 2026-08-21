@@ -22,10 +22,11 @@ int main( int argc, char **argv ) {
 		AddDefines( config, "_DEBUG" );
 	}
 
-	AddCompilerArguments( config, "-v" );
-
+	
 	if ( HasCommandLineArg( argc, argv, "--msvc" ) ) {
 		options.compilerPath = "cl";
+	} else {
+		AddCompilerArguments( config, "-v" );
 	}
 
 	return Build( &options, argc, argv );

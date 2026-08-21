@@ -22,5 +22,9 @@ int main( int argc, char **argv ) {
 		AddDefines( config, "_DEBUG" );
 	}
 
+	if ( HasCommandLineArg( argc, argv, "--msvc" ) ) {
+		options.compilerPath = "cl";
+	}
+
 	return Build( &options, argc, argv );
 }

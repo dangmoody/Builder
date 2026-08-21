@@ -1054,9 +1054,9 @@ static void Builder_CollectConfigsToBuild( arena_t *arena, BuildConfig *config, 
 }
 
 typedef enum {
-	BUILDER_RUN_PROCCESS_FLAG_NONE	 			= 0,
-	BUILDER_RUN_PROCCESS_FLAG_UNIFY_PIPES 		= 1 << 0,
-	BUILDER_RUN_PROCCESS_FLAG_DISCARD_STDERR 	= 1 << 1,
+	BUILDER_RUN_PROCCESS_FLAG_NONE				= 0,
+	BUILDER_RUN_PROCCESS_FLAG_UNIFY_PIPES		= 1 << 0,
+	BUILDER_RUN_PROCCESS_FLAG_DISCARD_STDERR	= 1 << 1,
 } BuilderRunProcessFlagBits;
 
 static int32_t Builder_RunProcess( arena_t* results, const char *processAndArgs, uint32_t builderRunProcessFlags, char **outCapturedOutput ) {

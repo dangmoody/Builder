@@ -1067,7 +1067,7 @@ static int32_t Builder_RunProcess( arena_t* results, const char *processAndArgs,
 
 	PROCESS_INFORMATION	processInfo;
 
-	// TODO: We are leaking handles everytime we return
+	// TODO: AK: 21/08/2026: We are leaking handles everytime we return due to an error
 	HANDLE stdoutRead = NULL;
 	HANDLE stdoutWrite = NULL;
 	HANDLE stderrRead = NULL;
@@ -2908,7 +2908,7 @@ typedef struct dependencyArray_t {
 	compileDependency_t	   *dependencies;
 } dependencyArray_t;
 
-typedef struct builderDependencyJobPool_t {
+typedef struct builderDependencyJobInfo_t {
 	const BuilderOptions   *options;
 	const bool				useMSVC;
 	const char			   *baseCompilerArgs;
@@ -2919,7 +2919,7 @@ typedef struct builderDependencyJobPool_t {
 	const char			  **outCompileCommands;
 	builderAtomic32_t		needsCompileCommandCount;
 	builderAtomic32_t		nextDependencySliceIndex;
-} builderDependencyJobPool_t;
+} builderDependencyJobInfo_t;
 
 static bool Builder_AreDependenciesNewer( arena_t *dependencyArena, const BuilderOptions *options, bool useMSVC, dependencyArray_t *dependencyArray, char **compilerOutput, const compilePacket_t *toCheck ) {
 	bool foundNewerDependency = false;
@@ -3072,30 +3072,29 @@ static bool Builder_AreDependenciesNewer( arena_t *dependencyArena, const Builde
 	return foundNewerDependency;
 }
 
-static void Builder_CheckDependencies( builderDependencyJobPool_t *pool, uint32_t sliceIndex ) {
+static void Builder_CheckDependencies( builderDependencyJobInfo_t *jobInfo, uint32_t sliceIndex ) {
 	scratch_t scratch = Builder_GetScratch( NULL );
 
 	stringBuilder_t argsBuilder = {0};
-	StringBuilder_Appendf( scratch.arena, &argsBuilder, "%s ", pool->baseCompilerArgs );
+	StringBuilder_Appendf( scratch.arena, &argsBuilder, "%s ", jobInfo->baseCompilerArgs );
 
-	uint32_t packetOffset = pool->packetsPerSlice * sliceIndex;
-	uint32_t numToCheck = pool->packetsPerSlice;
-	if ( sliceIndex < pool->leftoverPackets ) {
+	uint32_t packetOffset = jobInfo->packetsPerSlice * sliceIndex;
+	uint32_t numToCheck = jobInfo->packetsPerSlice;
+	if ( sliceIndex < jobInfo->leftoverPackets ) {
 		numToCheck += 1;
 		packetOffset += sliceIndex; // -1 + 1 (all the slices before us also had +1 for leftover)
 	} else {
-		packetOffset += pool->leftoverPackets;
+		packetOffset += jobInfo->leftoverPackets;
 	}
 
-	const compilePacket_t *relevantPackets = pool->packetsBegin + packetOffset;
+	const compilePacket_t *relevantPackets = jobInfo->packetsBegin + packetOffset;
 	for ( uint32_t packetIndex = 0; packetIndex < numToCheck; ++packetIndex ) {
 		StringBuilder_Appendf( scratch.arena, &argsBuilder, "%s ", relevantPackets[packetIndex].sourceFile );
 	}
 
 	const char *args = StringBuilder_ToString( scratch.arena, &argsBuilder );
 
-	// TODO: verbose?
-	printf( "Dependency check command: %s\n", args );
+	Builder_LogVerbose( jobInfo->options, "Dependency check command: %s\n", args );
 	
 	char *dependencyInfo = NULL;
 	int32_t dependencyCheckResult = Builder_RunProcess( scratch.arena, args, BUILDER_RUN_PROCCESS_FLAG_DISCARD_STDERR, &dependencyInfo );
@@ -3104,14 +3103,14 @@ static void Builder_CheckDependencies( builderDependencyJobPool_t *pool, uint32_
 		Builder_Warning( "Dependency check invocation returned %i. Adding all %u files to compile list.\n", dependencyCheckResult, numToCheck );
 
 		for ( uint32_t packetIndex = 0; packetIndex < numToCheck; ++packetIndex ) {
-			// TODO: Bad sharing here probably?
-			uint32_t compileCommandIndex = Builder_AtomicIncrement( &pool->needsCompileCommandCount ) - 1;
-			pool->outCompileCommands[compileCommandIndex] = relevantPackets[packetIndex].compileCommand;
+			// TODO: AK: 21/08/2026: Bad sharing here probably?
+			uint32_t compileCommandIndex = Builder_AtomicIncrement( &jobInfo->needsCompileCommandCount ) - 1;
+			jobInfo->outCompileCommands[compileCommandIndex] = relevantPackets[packetIndex].compileCommand;
 		}
 	} else {
-		Builder_LogVerbose( pool->options, "Dependency info acquired:\n%s\n", dependencyInfo );
+		Builder_LogVerbose( jobInfo->options, "Dependency info acquired:\n%s\n", dependencyInfo );
 
-		// TODO: this should be a hash map
+		// TODO: AK: 21/08/2026: this should be a hash map
 		static const uint32_t dependenciesCapcity = 16;
 		dependencyArray_t dependencyArray = {
 			.count = 0,
@@ -3120,10 +3119,10 @@ static void Builder_CheckDependencies( builderDependencyJobPool_t *pool, uint32_
 		};
 
 		for ( uint32_t packetIndex = 0; packetIndex < numToCheck; ++packetIndex ) {
-			if ( Builder_AreDependenciesNewer( scratch.arena, pool->options, pool->useMSVC, &dependencyArray, &dependencyInfo, &relevantPackets[packetIndex]) ) {
-				// TODO: Bad sharing here probably?
-				uint32_t compileCommandIndex = Builder_AtomicIncrement( &pool->needsCompileCommandCount ) - 1;
-				pool->outCompileCommands[compileCommandIndex] = relevantPackets[packetIndex].compileCommand;
+			if ( Builder_AreDependenciesNewer( scratch.arena, jobInfo->options, jobInfo->useMSVC, &dependencyArray, &dependencyInfo, &relevantPackets[packetIndex]) ) {
+				// TODO: AK: 21/08/2026: Bad sharing here probably?
+				uint32_t compileCommandIndex = Builder_AtomicIncrement( &jobInfo->needsCompileCommandCount ) - 1;
+				jobInfo->outCompileCommands[compileCommandIndex] = relevantPackets[packetIndex].compileCommand;
 			}
 		}
 	}
@@ -3131,22 +3130,22 @@ static void Builder_CheckDependencies( builderDependencyJobPool_t *pool, uint32_
 	Builder_RewindScratch( &scratch );
 }
 
-static void Builder_RunDependencyJobPool( builderDependencyJobPool_t *pool ) {
-	uint32_t dependencySliceIndex = Builder_AtomicIncrement( &pool->nextDependencySliceIndex ) - 1;
+static void Builder_RunDependencyJob( builderDependencyJobInfo_t *jobInfo ) {
+	uint32_t dependencySliceIndex = Builder_AtomicIncrement( &jobInfo->nextDependencySliceIndex ) - 1;
 
-	Builder_CheckDependencies( pool, dependencySliceIndex );
+	Builder_CheckDependencies( jobInfo, dependencySliceIndex );
 }
 
 #if defined( _WIN32 )
 static DWORD WINAPI Builder_DependencyJobThreadProc( LPVOID param ) {
-	Builder_RunDependencyJobPool( (builderDependencyJobPool_t *) param );
+	Builder_RunDependencyJob( (builderDependencyJobInfo_t *) param );
 	// End of thread, teardown any scratch memory used
 	Builder_FreeScratch();
 	return 0;
 }
 #elif defined( __linux__ )
 static void *Builder_DependencyJobThreadProc( void *param ) {
-	Builder_RunDependencyJobPool( (builderDependencyJobPool_t *) param );
+	Builder_RunDependencyJob( (builderDependencyJobInfo_t *) param );
 		// End of thread, teardown any scratch memory used
 	Builder_FreeScratch();
 	return NULL;
@@ -3348,8 +3347,12 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 					needsCompileCommands = Builder_ArenaAlloc(buildScratch.arena, const char *, compilePacketCount );
 
 					scratch_t scratch = Builder_GetScratch( buildScratch.arena );
-					// TODO: Check that create compilation command was successful
+
 					stringBuilder_t compileCommand = Builder_CreateCompilationCommand( scratch.arena, &compileContext );
+					if ( compileCommand.head == compileCommand.tail ) {
+						Builder_Error( "Failed to create compilation command!\n");
+						exit(1);
+					}
 					arenaRewindSpot_t commandRewind = Builder_ArenaTell( scratch.arena );
 
 					uint32_t written = 0;
@@ -3361,7 +3364,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 
 							// we do the hash of the source file here to grab the actual intermediate file
 							{
-								// TODO: Do we want to ensure the way the source file presents is unified? Otherwise we get ./main.cpp != main.cpp
+								// TODO: AK: 21/08/2026: Do we want to ensure the way the source file presents is unified? Otherwise we get ./main.cpp != main.cpp
 								arenaRewindSpot_t preIntermediateRewind = Builder_ArenaTell( scratch.arena );
 								StringBuilder_Appendf( scratch.arena, &compileCommand, "%s", compilerVersionString );
 								const char *stringForIntermediateHash = StringBuilder_ToString( scratch.arena, &compileCommand );
@@ -3450,7 +3453,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 
 							const uint32_t packetOffset = compilePacketCount - needsDependencyCheck;
 
-							builderDependencyJobPool_t pool = {
+							builderDependencyJobInfo_t jobInfo = {
 								.options = options,
 								.useMSVC = compileContext.useMSVC,
 								.baseCompilerArgs = baseArgs,
@@ -3468,14 +3471,14 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 								additionalThreads = Builder_ArenaAlloc( buildScratch.arena, builderThread_t, numAdditionalThreads );
 
 								for ( uint32_t threadIndex = 0; threadIndex < numAdditionalThreads; threadIndex++ ) {
-									if ( Builder_CreateJobThread( Builder_DependencyJobThreadProc, &pool, &additionalThreads[numCreatedThreads] ) ) {
+									if ( Builder_CreateJobThread( Builder_DependencyJobThreadProc, &jobInfo, &additionalThreads[numCreatedThreads] ) ) {
 										numCreatedThreads++;
 									}
 								}
 							}
 
 							// the main thread pulls jobs from the same pool instead of just sitting idle waiting on the additional threads
-							Builder_RunDependencyJobPool( &pool );
+							Builder_RunDependencyJob( &jobInfo );
 
 							for ( uint32_t threadIndex = 0; threadIndex < numCreatedThreads; threadIndex++ ) {
 								Builder_ThreadJoin( additionalThreads[threadIndex] );
@@ -3536,7 +3539,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 							return 1;
 						}
 					} else {
-							printf( "Skipped compilng all %u files.\n", compilePacketCount - needsCompileCommandCount );
+							printf( "Skipping compilation of all %u files.\n", compilePacketCount - needsCompileCommandCount );
 					}
 
 						compileTimeMS = Builder_TimeMS() - compileTimeStart;
@@ -3554,7 +3557,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 
 						stringBuilder_t linkerArgs = { 0 };
 						const char *binaryPath = Builder_GetBinaryPath( buildScratch.arena, config );
-						// TODO: We probably should just query if the file exists instead of using this function
+						// TODO: AK: 21/08/2026: We probably should just query if the file exists instead of using this function
 						uint64_t binaryFileWriteTime;
 						if ( needsCompileCommandCount > 0 || !Builder_GetFileLastWriteTime( binaryPath, &binaryFileWriteTime ) ) {				
 							stringBuilder_t linkerArgs = {0};

@@ -1055,13 +1055,8 @@ static void Builder_CollectConfigsToBuild( arena_t *arena, BuildConfig *config, 
 	Builder_ConfigListPush( arena, outConfigsToBuild, config );
 }
 
-typedef enum {
-	BUILDER_RUN_PROCCESS_FLAG_NONE				= 0,
-	BUILDER_RUN_PROCCESS_FLAG_UNIFY_PIPES		= 1 << 0,
-	BUILDER_RUN_PROCCESS_FLAG_DISCARD_STDERR	= 1 << 1,
-} BuilderRunProcessFlagBits;
 
-static int32_t Builder_RunProcess( arena_t* results, const char *processAndArgs, uint32_t builderRunProcessFlags, char **outCapturedOutput ) {
+static int32_t Builder_RunProcess( arena_t* results, const char *processAndArgs, bool discardStderr, char **outCapturedOutput ) {
 #if defined( _WIN32 )
 	SECURITY_ATTRIBUTES secAttr = { sizeof( SECURITY_ATTRIBUTES ), NULL, TRUE };
 
@@ -1070,14 +1065,13 @@ static int32_t Builder_RunProcess( arena_t* results, const char *processAndArgs,
 	// TODO: AK: 21/08/2026: We are leaking handles everytime we return due to an error
 	HANDLE stdoutRead = NULL;
 	HANDLE stdoutWrite = NULL;
-	HANDLE stderrRead = NULL;
 	HANDLE stderrWrite = NULL;
 	if ( !CreatePipe( &stdoutRead, &stdoutWrite, &secAttr, 0 ) ) {
 		Builder_Error( "CreatePipe call failed for stdout: 0x%X.\n", GetLastError() );
 		return -1;
 	}
 
-	if ( builderRunProcessFlags & BUILDER_RUN_PROCCESS_FLAG_DISCARD_STDERR ) { 
+	if ( discardStderr ) { 
 		stderrWrite = CreateFile(
 			"NUL",
 			GENERIC_WRITE,
@@ -1091,13 +1085,8 @@ static int32_t Builder_RunProcess( arena_t* results, const char *processAndArgs,
 			Builder_Error( "CreateFile call failed to open NUL device: 0x%X.\n", GetLastError() );
 			return -1;
     	}
-
-	} else if ( builderRunProcessFlags & BUILDER_RUN_PROCCESS_FLAG_UNIFY_PIPES ) {
-		stderrRead = stdoutRead;
+	} else {
 		stderrWrite = stdoutWrite;
-	}else if ( !CreatePipe( &stderrRead, &stderrWrite, &secAttr, 0 ) ) {
-		Builder_Error( "CreatePipe call failed for stderr: 0x%X.\n", GetLastError() );
-		return -1;
 	}
 
 	STARTUPINFO startInfo = { sizeof( startInfo ) };
@@ -1130,7 +1119,7 @@ static int32_t Builder_RunProcess( arena_t* results, const char *processAndArgs,
 		Builder_Error( "Failed to close stdout write handle: Windows error code: 0x%X\n", GetLastError() );
 		return -1;
 	}
-	if ( ( !(builderRunProcessFlags & BUILDER_RUN_PROCCESS_FLAG_UNIFY_PIPES) || ( builderRunProcessFlags & BUILDER_RUN_PROCCESS_FLAG_DISCARD_STDERR ) ) && !CloseHandle( stderrWrite ) ) {
+	if ( discardStderr && !CloseHandle( stderrWrite ) ) {
 		Builder_Error( "Failed to close stderr write handle: Windows error code: 0x%X\n", GetLastError() );
 		return -1;
 	}
@@ -1143,61 +1132,26 @@ static int32_t Builder_RunProcess( arena_t* results, const char *processAndArgs,
 	// the builder's own buffers are throwaway, so they go somewhere other than the scratch the caller wants the result in
 	scratch_t temporaryScratch = Builder_GetScratch( results );
 
-	HANDLE handles[2] = { stdoutRead, stderrRead };
 	const char *outputStrings[2] = { "STDOUT", "STDERR" }; 
-	uint8_t finished = 0;
-	const uint8_t numHandles = ( builderRunProcessFlags & ( BUILDER_RUN_PROCCESS_FLAG_UNIFY_PIPES | BUILDER_RUN_PROCCESS_FLAG_DISCARD_STDERR ) ) ? 1 : 2;
-	while ( finished != ( 1 << numHandles ) - 1 ) {
-		bool didRead = false;
-		
-		for ( uint8_t handleIndex = 0; handleIndex < numHandles; ++ handleIndex ) {
-			if ( finished & ( 1 << handleIndex ) ) {
-				continue;
-			}
-			
-			DWORD available = 0;
-			if ( numHandles > 1 ) {
-				if ( !PeekNamedPipe( handles[handleIndex], NULL, 0, NULL, &available, NULL ) ) {
-					// ERROR_BROKEN_PIPE here is expected EOF, not a real failure
-					DWORD lastError = GetLastError();
-					if ( lastError != ERROR_BROKEN_PIPE ) {
-						Builder_Error( "Failed to read %s of subprocess: Windows error code: 0x%X.\n", outputStrings[handleIndex], lastError );
-					}
-					finished |= 1 << handleIndex;
-					continue;
-				}
-				
-				if ( available == 0 ) {
-					continue;
-				}
-			}
-			
-			DWORD bytesRead = 0;
-			DWORD toRead = available != 0 ? min( available, sizeof( buffer ) - 1 ) : sizeof( buffer ) - 1;
-			if ( ReadFile( handles[handleIndex], buffer, toRead, &bytesRead, NULL ) && bytesRead != 0 ) {
-				buffer[bytesRead] = 0;
-						if ( outCapturedOutput && handleIndex == 0 ) {
-					StringBuilder_Appendf( temporaryScratch.arena, &capturedOutput, "%s", buffer );
-				} else {
-					printf( "%s", buffer );
-				}
-				didRead = true;
+	bool finished = false;
+	while ( !finished ) {
+		DWORD bytesRead = 0;
+		DWORD toRead = sizeof( buffer ) - 1;
+		if ( ReadFile( stdoutRead, buffer, toRead, &bytesRead, NULL ) && bytesRead != 0 ) {
+			buffer[bytesRead] = 0;
+			if ( outCapturedOutput ) {
+				StringBuilder_Appendf( temporaryScratch.arena, &capturedOutput, "%s", buffer );
 			} else {
-				// the child closing its end of the pipe (e.g. on exit) surfaces as ERROR_BROKEN_PIPE here - that's expected EOF, not a real failure
-				DWORD lastError = GetLastError();
-				if ( lastError != ERROR_BROKEN_PIPE ) {
-					Builder_Error( "Failed to read %s of subprocess: Windows error code: 0x%X.\n", outputStrings[handleIndex], lastError );
-				}
-				finished |= 1 << handleIndex;
-				didRead = true; // we are finished now anyway
+				printf( "%s", buffer );
 			}
-		}
-
-		// I don't know how I feel about this?
-		// but we only hit this path when numHandles > 1
-		if ( !didRead ) {
-			BUILDER_ASSERT( numHandles > 1);
-			WaitForSingleObject( processInfo.hProcess, 1 );
+		} else {
+			// the child closing its end of the pipe (e.g. on exit) surfaces as ERROR_BROKEN_PIPE here - that's expected EOF, not a real failure
+			DWORD lastError = GetLastError();
+			if ( lastError != ERROR_BROKEN_PIPE ) {
+				Builder_Error( "Failed to read stdout of subprocess: Windows error code: 0x%X.\n", lastError );
+			}
+			finished = false;
+			break;
 		}
 	}
 
@@ -1214,12 +1168,7 @@ static int32_t Builder_RunProcess( arena_t* results, const char *processAndArgs,
 		Builder_Error( "Failed to close stdout read handle: Windows error code: 0x%X\n", GetLastError() );
 		return -1;
 	}
-	if ( !(builderRunProcessFlags & ( BUILDER_RUN_PROCCESS_FLAG_UNIFY_PIPES | BUILDER_RUN_PROCCESS_FLAG_DISCARD_STDERR ) ) && !CloseHandle( stderrRead ) ) {
-		Builder_Error( "Failed to close stderr read handle: Windows error code: 0x%X\n", GetLastError() );
-		return -1;
-	}
 	stdoutRead = NULL;
-	stderrRead = NULL;
 
 	if ( WaitForSingleObject( processInfo.hProcess, INFINITE ) != WAIT_OBJECT_0 ) {
 		Builder_Error( "Failed to wait for subprocess to finish: 0x%X\n", GetLastError() );
@@ -1407,7 +1356,7 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 
 	printf( "%s\n", compileCmd );
 
-	if ( Builder_RunProcess( NULL, compileCmd, BUILDER_RUN_PROCCESS_FLAG_UNIFY_PIPES, NULL ) != 0 ) {
+	if ( Builder_RunProcess( NULL, compileCmd, false, NULL ) != 0 ) {
 		Builder_Error( "failed to rebuild '%s'.\n", binaryPath );
 
 #if defined( _WIN32 )
@@ -1461,7 +1410,7 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 
 	const char *execCmd = StringBuilder_ToString( scratch.arena, &execArgs );
 
-	int32_t exitCode = Builder_RunProcess( NULL, execCmd, BUILDER_RUN_PROCCESS_FLAG_UNIFY_PIPES, NULL );
+	int32_t exitCode = Builder_RunProcess( NULL, execCmd, false, NULL );
 
 	exit( exitCode );
 #elif defined( __linux__ )
@@ -2643,16 +2592,17 @@ static uint32_t Builder_AtomicIncrement( builderAtomic32_t *value ) {
 }
 
 typedef struct builderCompileContext_t {
-	BuildConfig	*config;
-	const char	*compilerPath;
-	bool		useMSVC;
+	BuildConfig	   *config;
+	const char	   *compilerPath;
+	bool			useMSVC;
+	bool			debugDefineSet;
 #if defined( _WIN32 )
 	builderMSVCInstall_t		*msvcInstall;
 	builderWindowsSDKInstall_t	*windowsSDKInstall;
 #endif
 } builderCompileContext_t;
 
-static stringBuilder_t Builder_CreateCompilationCommand( arena_t *commandArena, const builderCompileContext_t *context ) {
+static stringBuilder_t Builder_CreateCompilationCommand( arena_t *commandArena, builderCompileContext_t *context ) {
 	BuildConfig *config = context->config;
 
 	arenaRewindSpot_t rewind = Builder_ArenaTell( commandArena );
@@ -2681,6 +2631,11 @@ static stringBuilder_t Builder_CreateCompilationCommand( arena_t *commandArena, 
 		for ( builderStringChunk_t *chunk = config->defines.head; chunk; chunk = chunk->next ) {
 			for ( uint32_t defineIndex = 0; defineIndex < chunk->count; defineIndex++ ) {
 				StringBuilder_Appendf( commandArena, &compileArgs, "/D%s ", chunk->items[defineIndex] );
+
+				// TODO: AK: 11/08/2026: handle this better
+				if ( !context->debugDefineSet && _strnicmp( "_DEBUG", chunk->items[defineIndex], sizeof( "_DEBUG" ) ) == 0 ) {
+					context->debugDefineSet = true;
+				}
 			}
 		}
 
@@ -2734,6 +2689,13 @@ static stringBuilder_t Builder_CreateCompilationCommand( arena_t *commandArena, 
 				sawWarningLevel = true;
 			}
 		}
+
+		// TODO: AK: 21/08/2026: dynamic runtime also
+		if ( context->debugDefineSet ) {
+			StringBuilder_Appendf( commandArena, &compileArgs, "/MTd " );
+		} else {
+			StringBuilder_Appendf( commandArena, &compileArgs, "/MT " );
+		}
 #endif
 	} else {
 		if ( config->languageVersion != LANGUAGE_VERSION_UNSET ) {
@@ -2757,6 +2719,11 @@ static stringBuilder_t Builder_CreateCompilationCommand( arena_t *commandArena, 
 		for ( builderStringChunk_t *chunk = config->defines.head; chunk; chunk = chunk->next ) {
 			for ( uint32_t defineIndex = 0; defineIndex < chunk->count; defineIndex++ ) {
 				StringBuilder_Appendf( commandArena, &compileArgs, "-D%s ", chunk->items[defineIndex] );
+
+				// TODO: AK: 11/08/2026: handle this better
+				if ( !context->debugDefineSet && _strnicmp( "_DEBUG", chunk->items[defineIndex], sizeof( "_DEBUG" ) ) == 0 ) {
+					context->debugDefineSet = true;
+				}
 			}
 		}
 
@@ -2811,7 +2778,7 @@ static stringBuilder_t Builder_CreateCompilationCommand( arena_t *commandArena, 
 static bool Builder_CompileSourceFile( const char *compileCommand ) {
 	printf( "%s\n", compileCommand );
 	
-	int32_t compileResult = Builder_RunProcess( NULL, compileCommand, BUILDER_RUN_PROCCESS_FLAG_UNIFY_PIPES, NULL );
+	int32_t compileResult = Builder_RunProcess( NULL, compileCommand, false, NULL );
 
 	return compileResult == 0;
 }
@@ -3102,7 +3069,7 @@ static void Builder_CheckDependencies( builderDependencyJobInfo_t *jobInfo, uint
 	Builder_LogVerbose( jobInfo->options, "Dependency check command: %s\n", args );
 	
 	char *dependencyInfo = NULL;
-	int32_t dependencyCheckResult = Builder_RunProcess( scratch.arena, args, BUILDER_RUN_PROCCESS_FLAG_DISCARD_STDERR, &dependencyInfo );
+	int32_t dependencyCheckResult = Builder_RunProcess( scratch.arena, args, true, &dependencyInfo );
 
 	if ( dependencyCheckResult != 0 ) {
 		Builder_Warning( "Dependency check invocation returned %i. Adding all %u files to compile list.\n", dependencyCheckResult, numToCheck );
@@ -3273,7 +3240,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 		char *versionCmd = Builder_FormatString( buildScratch.arena, "\"%s\" --version", compilerPath );
 		char *versionOutput = NULL;
 
-		Builder_RunProcess( buildScratch.arena, versionCmd, BUILDER_RUN_PROCCESS_FLAG_UNIFY_PIPES, &versionOutput );
+		Builder_RunProcess( buildScratch.arena, versionCmd, false, &versionOutput );
 		compilerVersionString = Builder_ExtractVersionNumber( buildScratch.arena, versionOutput );
 	}
 
@@ -3613,24 +3580,12 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 									}
 								}
 							}
-
-							// TODO: AK: 11/08/2026: handle this better
-							bool debugDefineSet = false;
-
-							for ( builderStringChunk_t *chunk = config->defines.head; chunk && !debugDefineSet; chunk = chunk->next ) {
-								for ( uint32_t defineIndex = 0; defineIndex < chunk->count; defineIndex++ ) {
-									if ( _strnicmp( "_DEBUG", chunk->items[defineIndex], sizeof( "_DEBUG" ) ) == 0 ) {
-										debugDefineSet = true;
-										break;
-									}
-								}
-							}
 							
 							if ( config->binaryType != BINARY_TYPE_STATIC_LIBRARY ) {
 								// clang doesn't embed /DEFAULTLIB directives the way cl.exe does
 								// so link.exe has no idea which CRT/SDK libs to pull in unless we name them ourselves
 								// TODO: AK: 11/08/2026: we need dynamic runtime support too
-								if (debugDefineSet) {
+								if (compileContext.debugDefineSet) {
 									StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "libcmtd.lib libcpmtd.lib libvcruntimed.lib libucrtd.lib kernel32.lib " );
 								} else {
 									StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "libcmt.lib libcpmt.lib libvcruntime.lib libucrt.lib kernel32.lib " );
@@ -3685,12 +3640,11 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 								}
 							}
 #endif
-
 							char *args = StringBuilder_ToString( buildScratch.arena, &linkerArgs );
 
 							printf( "%s\n", args );
 
-							int32_t linkResult = Builder_RunProcess( NULL, args, BUILDER_RUN_PROCCESS_FLAG_UNIFY_PIPES, NULL );
+							int32_t linkResult = Builder_RunProcess( NULL, args, false, NULL );
 
 							if ( linkResult != 0 ) {
 								Builder_Error( "Link failed.\n" );

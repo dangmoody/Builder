@@ -1132,7 +1132,6 @@ static int32_t Builder_RunProcess( arena_t* results, const char *processAndArgs,
 	// the builder's own buffers are throwaway, so they go somewhere other than the scratch the caller wants the result in
 	scratch_t temporaryScratch = Builder_GetScratch( results );
 
-	const char *outputStrings[2] = { "STDOUT", "STDERR" }; 
 	bool finished = false;
 	while ( !finished ) {
 		DWORD bytesRead = 0;
@@ -1217,7 +1216,23 @@ static int32_t Builder_RunProcess( arena_t* results, const char *processAndArgs,
 			Builder_Error( "Failed to duplicate stdout pipe: %s\n", strerror( err ) );
 		}
 
-		if ( dup2( stdoutPipe[1], STDERR_FILENO ) == -1 ) {
+		// TODO: AK: 21/08/2026: this needs verifying / testing @dangmoody :)
+		if ( discardStderr ) {
+			int devNull = open( "/dev/null", O_WRONLY );
+			if ( devNull == -1 ) { 
+				err = errno;
+				Builder_Error( "Failed to open /dev/null: %s\n", strerror( err ) );
+			}
+			
+			if ( dup2( devNull, STDERR_FILENO ) == -1 ) { 
+				err = errno;
+				Builder_Error( "Failed to duplicate stderr to /dev/null: %s\n", strerror( err ) );
+			}
+			if ( close( devNull ) == -1 ) { 
+				err = errno;
+				Builder_Error( "Failed to close dev/null: %s\n", strerror( err ) );
+			}
+		} else if ( dup2( stdoutPipe[1], STDERR_FILENO ) == -1 ) {
 			err = errno;
 			Builder_Error( "Failed to duplicate stderr pipe: %s\n", strerror( err ) );
 		}

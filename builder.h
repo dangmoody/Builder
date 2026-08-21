@@ -107,6 +107,7 @@ typedef struct BuildConfig {
 	StringList		sourceFiles;
 	StringList		defines;
 	StringList		additionalIncludes;
+	StringList		additionalCompilerArguments;
 	StringList		additionalLibPaths;
 	StringList		additionalLibs;
 	StringList		warningLevels;
@@ -200,6 +201,7 @@ ConfigPtrList	Builder_MakeDependenciesInternal( BuildConfig **dependencies, uint
 #define AddSourceFiles( config, ... )		( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->sourceFiles, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )
 #define AddDefines( config, ... )			( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->defines, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )				// no "-D"/"/D" - Builder adds that for you
 #define AddIncludes( config, ... )			( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->additionalIncludes, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )
+#define AddCompilerArguments( config, ... )	( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->additionalCompilerArguments, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )
 #define AddLibPaths( config, ... )			( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->additionalLibPaths, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )
 #define AddLibs( config, ... )				( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->additionalLibs, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )
 #define AddWarningLevels( config, ... )		( BUILDER_ASSERT( config ), Builder_AddStringsInternal( &( config )->warningLevels, BUILDER_STRING_ARGS( __VA_ARGS__ ) ) )
@@ -2792,21 +2794,19 @@ static stringBuilder_t Builder_CreateCompilationCommand( arena_t *commandArena, 
 		}
 	}
 
-	// TODO: Add extra compile args to config and add them here?
+	for ( builderStringChunk_t *chunk = config->additionalCompilerArguments.head; chunk; chunk = chunk->next ) {
+		for ( uint32_t extraArgIndex = 0; extraArgIndex < chunk->count; extraArgIndex++ ) {
+			StringBuilder_Appendf( commandArena, &compileArgs, "%s ", chunk->items[extraArgIndex] );
+		}
+	}
 	
 	return compileArgs;
 }
 
 static bool Builder_CompileSourceFile( const char *compileCommand ) {
-	// this runs on the compile job threads, and the scratch arenas are BUILDER_THREAD_LOCAL, so each thread gets its own
-	scratch_t scratch = Builder_GetScratch( NULL );
-	
 	printf( "%s\n", compileCommand );
 	
-	char *dependencyOutput = NULL;
-	int32_t compileResult = Builder_RunProcess( scratch.arena, compileCommand, BUILDER_RUN_PROCCESS_FLAG_DISCARD_STDERR, &dependencyOutput );
-
-	Builder_RewindScratch( &scratch );
+	int32_t compileResult = Builder_RunProcess( NULL, compileCommand, BUILDER_RUN_PROCCESS_FLAG_UNIFY_PIPES, NULL );
 
 	return compileResult == 0;
 }

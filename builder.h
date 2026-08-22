@@ -121,6 +121,7 @@ typedef struct BuildConfig {
 	// When doing incremental builds should we exclude checking system headers
 	// this passes -M instead of -MM, and does not do anything on MSVC
 	bool				excludeSystemHeaderDependencyChecking;
+	bool				useDynamicRuntimeOnWindows;
 	void					( *OnPreBuild )( struct BuildConfig *config );
 	void					( *OnPostBuild )( struct BuildConfig *config );
 } BuildConfig;
@@ -2705,11 +2706,18 @@ static stringBuilder_t Builder_CreateCompilationCommand( arena_t *commandArena, 
 			}
 		}
 
-		// TODO: AK: 21/08/2026: dynamic runtime also
 		if ( context->debugDefineSet ) {
-			StringBuilder_Appendf( commandArena, &compileArgs, "/MTd " );
+			if ( config->useDynamicRuntimeOnWindows ) {
+				StringBuilder_Appendf( commandArena, &compileArgs, "/MDd " );
+			} else {
+				StringBuilder_Appendf( commandArena, &compileArgs, "/MTd " );
+			}
 		} else {
-			StringBuilder_Appendf( commandArena, &compileArgs, "/MT " );
+			if ( config->useDynamicRuntimeOnWindows ) {
+				StringBuilder_Appendf( commandArena, &compileArgs, "/MD " );
+			} else {
+				StringBuilder_Appendf( commandArena, &compileArgs, "/MT " );
+			}
 		}
 #endif
 	} else {
@@ -2741,6 +2749,12 @@ static stringBuilder_t Builder_CreateCompilationCommand( arena_t *commandArena, 
 				}
 			}
 		}
+
+#if defined( _WIN32 )
+		if ( config->useDynamicRuntimeOnWindows ) {
+			StringBuilder_Appendf( commandArena, &compileArgs, " -D_MT -D_DLL " );
+		}
+#endif
 
 		for ( builderStringChunk_t *chunk = config->additionalIncludes.head; chunk; chunk = chunk->next ) {
 			for ( uint32_t includeIndex = 0; includeIndex < chunk->count; includeIndex++ ) {
@@ -3631,11 +3645,18 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 							if ( config->binaryType != BINARY_TYPE_STATIC_LIBRARY ) {
 								// clang doesn't embed /DEFAULTLIB directives the way cl.exe does
 								// so link.exe has no idea which CRT/SDK libs to pull in unless we name them ourselves
-								// TODO: AK: 11/08/2026: we need dynamic runtime support too
-								if (compileContext.debugDefineSet) {
-									StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "libcmtd.lib libcpmtd.lib libvcruntimed.lib libucrtd.lib kernel32.lib " );
+								if ( config->useDynamicRuntimeOnWindows ) {
+									if (compileContext.debugDefineSet) {
+										StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "msvcrtd.lib msvcprtd.lib vcruntimed.lib ucrtd.lib kernel32.lib " );
+									} else {
+										StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "msvcrt.lib msvcprt.lib vcruntime.lib ucrt.lib kernel32.lib " );
+									}
 								} else {
-									StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "libcmt.lib libcpmt.lib libvcruntime.lib libucrt.lib kernel32.lib " );
+									if (compileContext.debugDefineSet) {
+										StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "libcmtd.lib libcpmtd.lib libvcruntimed.lib libucrtd.lib kernel32.lib " );
+									} else {
+										StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "libcmt.lib libcpmt.lib libvcruntime.lib libucrt.lib kernel32.lib " );
+									}
 								}
 							}
 

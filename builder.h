@@ -2611,8 +2611,8 @@ typedef struct builderCompileContext_t {
 	BuildConfig	   *config;
 	const char	   *compilerPath;
 	bool			useMSVC;
-	bool			debugDefineSet;
 #if defined( _WIN32 )
+	bool			debugDefineSet;
 	builderMSVCInstall_t		*msvcInstall;
 	builderWindowsSDKInstall_t	*windowsSDKInstall;
 #endif
@@ -2648,9 +2648,10 @@ static stringBuilder_t Builder_CreateCompilationCommand( arena_t *commandArena, 
 			for ( uint32_t defineIndex = 0; defineIndex < chunk->count; defineIndex++ ) {
 				StringBuilder_Appendf( commandArena, &compileArgs, "/D%s ", chunk->items[defineIndex] );
 
-				// TODO: AK: 11/08/2026: handle this better
 				if ( !context->debugDefineSet && _strnicmp( "_DEBUG", chunk->items[defineIndex], sizeof( "_DEBUG" ) ) == 0 ) {
 					context->debugDefineSet = true;
+				} else if ( !config->useDynamicRuntimeOnWindows && _strnicmp( "_DLL", chunk->items[defineIndex], sizeof( "_DLL" ) ) == 0 ) {
+					config->useDynamicRuntimeOnWindows = true;
 				}
 			}
 		}
@@ -2743,16 +2744,21 @@ static stringBuilder_t Builder_CreateCompilationCommand( arena_t *commandArena, 
 			for ( uint32_t defineIndex = 0; defineIndex < chunk->count; defineIndex++ ) {
 				StringBuilder_Appendf( commandArena, &compileArgs, "-D%s ", chunk->items[defineIndex] );
 
-				// TODO: AK: 11/08/2026: handle this better
+#if defined( _WIN32 )
 				if ( !context->debugDefineSet && _strnicmp( "_DEBUG", chunk->items[defineIndex], sizeof( "_DEBUG" ) ) == 0 ) {
 					context->debugDefineSet = true;
+				} else if ( !config->useDynamicRuntimeOnWindows && _strnicmp( "_DLL", chunk->items[defineIndex], sizeof( "_DLL" ) ) == 0 ) {
+					config->useDynamicRuntimeOnWindows = true;
 				}
+#endif
 			}
 		}
 
 #if defined( _WIN32 )
+		// we are handling these things for them on windows
+		StringBuilder_Appendf( commandArena, &compileArgs, " -D_MT ");
 		if ( config->useDynamicRuntimeOnWindows ) {
-			StringBuilder_Appendf( commandArena, &compileArgs, " -D_MT -D_DLL " );
+			StringBuilder_Appendf( commandArena, &compileArgs, "-D_DLL " );
 		}
 #endif
 

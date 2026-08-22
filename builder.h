@@ -1761,9 +1761,18 @@ static bool Builder_SliceMatchesPattern( const builderStringSlice_t *patternSlic
 			}
 		}
 
-		// consume match, resetting if the match fails (TODO: AK: 11/08/2026: explain this better?)
+		// keep matching characters, accounting for found wildcards
+		// wildcards being found means we can match the characters after that wildcard
+		// anywhere in the string (as long as we do match them at some point)
 		if ( patternSlice->begin[patternIndex] != '?' // can match any one character
-			&& patternSlice->begin[patternIndex] != pathSlice->begin[pathIndex] ) {
+		  && patternSlice->begin[patternIndex] != pathSlice->begin[pathIndex] ) {
+			// we never hit a wildcard so this is a failed match
+			if ( afterLastWildcard == 0 ) {
+				return false;
+			}
+
+			// otherwise reset back to the character after the last widldcard if the match fails
+			// so we keep trying for that match
 			patternIndex = afterLastWildcard;
 		} else {
 			++patternIndex;

@@ -71,9 +71,12 @@ typedef enum LanguageVersion {
 } LanguageVersion;
 
 typedef enum Optimization {
-	OPTIMIZATION_DISABLED	= 0,
+	OPTIMIZATION_NONE	= 0,
+	OPTIMIZATION_DISABLED,
 	OPTIMIZATION_PROGRAM_SIZE,
+	OPTIMIZATION_PROGRAM_SIZE_AGGRESSIVE,
 	OPTIMIZATION_PROGRAM_SPEED,
+	OPTIMIZATION_PROGRAM_BALANCED,
 } Optimization;
 
 typedef struct StringList {
@@ -2500,9 +2503,12 @@ static const char *GetLanguageVersionString( const LanguageVersion version ) {
 
 static const char *Builder_GetOptimizationString_Clang( const Optimization optimization ) {
 	switch ( optimization ) {
-		case OPTIMIZATION_DISABLED:			return "-O0";
-		case OPTIMIZATION_PROGRAM_SIZE:		return "-O2";
-		case OPTIMIZATION_PROGRAM_SPEED:	return "-O3";
+		case OPTIMIZATION_NONE:							return "";
+		case OPTIMIZATION_DISABLED:						return "-O0";
+		case OPTIMIZATION_PROGRAM_SIZE:					return "-Os";
+		case OPTIMIZATION_PROGRAM_SIZE_AGGRESSIVE:		return "-Oz";
+		case OPTIMIZATION_PROGRAM_BALANCED:				return "-O2";
+		case OPTIMIZATION_PROGRAM_SPEED:				return "-O3";
 	}
 
 	BUILDER_ASSERT( "Unrecognised optimization mode specified!\n" );
@@ -2512,9 +2518,12 @@ static const char *Builder_GetOptimizationString_Clang( const Optimization optim
 
 static const char *Builder_GetOptimizationString_MSVC( const Optimization optimization ) {
 	switch ( optimization ) {
-		case OPTIMIZATION_DISABLED:			return "/Od";
-		case OPTIMIZATION_PROGRAM_SIZE:		return "/O1";
-		case OPTIMIZATION_PROGRAM_SPEED:	return "/O2";
+		case OPTIMIZATION_NONE:							return "";
+		case OPTIMIZATION_DISABLED:						return "/Od";
+		case OPTIMIZATION_PROGRAM_SIZE:					return "/O1";
+		case OPTIMIZATION_PROGRAM_SIZE_AGGRESSIVE:		return "/O1";
+		case OPTIMIZATION_PROGRAM_BALANCED:				return "/O2";
+		case OPTIMIZATION_PROGRAM_SPEED:				return "/O2";
 	}
 
 	BUILDER_ASSERT( "Unrecognised optimization mode specified!\n" );

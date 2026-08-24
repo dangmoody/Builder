@@ -651,7 +651,7 @@ static void StringBuilder_Appendf( arena_t *arena, stringBuilder_t *builder, con
 	va_end( args );
 }
 
-static char *StringBuilder_ToString( arena_t *arena, stringBuilder_t *builder ) {
+static char *StringBuilder_ToString( arena_t *arena, stringBuilder_t *builder, uint64_t *outLength ) {
 	BUILDER_ASSERT( arena );
 	BUILDER_ASSERT( builder );
 
@@ -687,6 +687,9 @@ static char *StringBuilder_ToString( arena_t *arena, stringBuilder_t *builder ) 
 
 	result[totalLength - 1] = 0;
 
+	if ( outLength ) {
+		*outLength = totalLength;
+	}
 	return result;
 }
 
@@ -846,9 +849,9 @@ static  uint8_t * Builder_ReadEntireFile( arena_t *arena, const char *filename, 
 }
 
 static bool Builder_WriteStringBuilderToFile( arena_t *arena, const stringBuilder_t *sb, const char *filename ) {
-	// TODO: AK: We already have the size in ToString, get it from there.
-	const char *str = StringBuilder_ToString( arena, (stringBuilder_t *) sb );
-	return Builder_WriteEntireFile( filename, (uint8_t *) str,  strnlen( str, SIZE_MAX ));
+	uint64_t stringLength;
+	const char *str = StringBuilder_ToString( arena, (stringBuilder_t *) sb, stringLength );
+	return Builder_WriteEntireFile( filename, (uint8_t *) str, stringLength );
 }
 
 static bool HasCommandLineArg( int argc, char **argv, const char *arg ) {
@@ -1089,7 +1092,7 @@ static void Builder_CollectConfigsToBuild( arena_t *arena, BuildConfig *config, 
 
 			StringBuilder_Appendf( errorScratch.arena, &cycle, "%s", config->name );
 
-			char *cycleString = StringBuilder_ToString( errorScratch.arena, &cycle );
+			char *cycleString = StringBuilder_ToString( errorScratch.arena, &cycle, NULL );
 			Builder_Error( "Cyclic BuildConfig dependency detected: %s\n", cycleString );
 
 			exit( 1 );
@@ -1212,7 +1215,7 @@ static int32_t Builder_RunProcess( arena_t* results, const char *processAndArgs,
 	if ( outCapturedOutput ) {
 		BUILDER_ASSERT( results && "capturing output needs an arena to put the result in" );
 
-		*outCapturedOutput = StringBuilder_ToString( results, &capturedOutput );
+		*outCapturedOutput = StringBuilder_ToString( results, &capturedOutput, NULL );
 	}
 
 	Builder_RewindScratch( &temporaryScratch );
@@ -1339,7 +1342,7 @@ static int32_t Builder_RunProcess( arena_t* results, const char *processAndArgs,
 	if ( outCapturedOutput ) {
 		BUILDER_ASSERT( results && "capturing output needs an arena to put the result in" );
 
-		*outCapturedOutput = StringBuilder_ToString( results, &capturedOutput );
+		*outCapturedOutput = StringBuilder_ToString( results, &capturedOutput, NULL );
 	}
 
 	Builder_RewindScratch( &temporaryScratch );
@@ -1415,14 +1418,14 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 
 	stringBuilder_t tempPathBuilder = { 0 };
 	StringBuilder_Appendf( scratch.arena, &tempPathBuilder, "%s.rebuild.tmp", binaryPath );
-	const char *tempBinaryPath = StringBuilder_ToString( scratch.arena, &tempPathBuilder );
+	const char *tempBinaryPath = StringBuilder_ToString( scratch.arena, &tempPathBuilder, NULL );
 
 	stringBuilder_t compileArgs = { 0 };
 	StringBuilder_Appendf( scratch.arena, &compileArgs, "clang " );
 	StringBuilder_Appendf( scratch.arena, &compileArgs, "-o %s ", tempBinaryPath );
 	StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", sourceFile );
 
-	const char *compileCmd = StringBuilder_ToString( scratch.arena, &compileArgs );
+	const char *compileCmd = StringBuilder_ToString( scratch.arena, &compileArgs, NULL );
 
 	printf( "%s\n", compileCmd );
 
@@ -1449,7 +1452,7 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 	// the running image stays mapped and executing under its backup name until this process re-execs below
 	stringBuilder_t backupPathBuilder = { 0 };
 	StringBuilder_Appendf( scratch.arena, &backupPathBuilder, "%s.rebuild.old", binaryPath );
-	const char *backupBinaryPath = StringBuilder_ToString( scratch.arena, &backupPathBuilder );
+	const char *backupBinaryPath = StringBuilder_ToString( scratch.arena, &backupPathBuilder, NULL );
 
 	if ( !MoveFileEx( binaryPath, backupBinaryPath, MOVEFILE_REPLACE_EXISTING ) ) {
 		Builder_Error( "Failed to move currently-running '%s' out of the way: 0x%X\n", binaryPath, GetLastError() );
@@ -1478,7 +1481,7 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 		StringBuilder_Appendf( scratch.arena, &execArgs, "\"%s\" ", argv[argIndex] );
 	}
 
-	const char *execCmd = StringBuilder_ToString( scratch.arena, &execArgs );
+	const char *execCmd = StringBuilder_ToString( scratch.arena, &execArgs, NULL );
 
 	int32_t exitCode = Builder_RunProcess( NULL, execCmd, false, NULL );
 
@@ -2243,7 +2246,7 @@ static bool Builder_GetWindowsSDKInstall( arena_t *results, builderWindowsSDKIns
 
 			StringBuilder_Appendf( scratch.arena, &sb, "If you want to use this version of the Windows SDK specifically, you will need to fix this yourself.\n" );
 
-			char *message = StringBuilder_ToString( scratch.arena, &sb );
+			char *message = StringBuilder_ToString( scratch.arena, &sb, NULL );
 			Builder_Warning( "%s", message );
 
 			Builder_RewindScratch( &scratch );
@@ -2494,7 +2497,7 @@ static bool Builder_GetMSVCInstall( arena_t *results, builderMSVCInstall_t *outI
 
 			StringBuilder_Appendf( scratch.arena, &sb, "If you want to use this version of MSVC specifically, you will need to fix this yourself.\n" );
 
-			char *message = StringBuilder_ToString( scratch.arena, &sb );
+			char *message = StringBuilder_ToString( scratch.arena, &sb, NULL );
 			Builder_Warning( "%s", message );
 
 			Builder_RewindScratch( &scratch );
@@ -2925,6 +2928,7 @@ static bool Builder_CompileSourceFile( builderCompileJobPool_t *pool, builderCom
 	int32_t compileResult = Builder_RunProcess( scratch.arena, compilePacket->compileCommand, false, &compilerOutput );
 
 	if ( pool->useMSVC ) {
+#if defined( _WIN32 )
 		uint32_t fileNameStart = 0;
 		const char *sourceCurrent = compilePacket->sourceFile;
 		for ( uint32_t i = 0; sourceCurrent[i] != '\0'; ++i ) {
@@ -2977,6 +2981,7 @@ static bool Builder_CompileSourceFile( builderCompileJobPool_t *pool, builderCom
 				.compilePacketIndex = compilePacketIndex
 			};
 		}
+#endif
 	} else {
 		const char* dependencyStart = NULL;
 		const char* dependencyEnd = NULL;
@@ -3633,7 +3638,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 					{
 						arenaRewindSpot_t preHashRewind = Builder_ArenaTell( scratch.arena );
 						StringBuilder_Appendf( scratch.arena, &compileCommand, "%s", compilerVersionString );
-						configCompileCommandHash = Builder_HashString( StringBuilder_ToString( scratch.arena, &compileCommand ) );
+						configCompileCommandHash = Builder_HashString( StringBuilder_ToString( scratch.arena, &compileCommand, NULL ) );
 						Builder_RewindArena( scratch.arena, &preHashRewind );
 					}
 
@@ -3664,7 +3669,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 
 							StringBuilder_Appendf( scratch.arena, &compileCommand, compilePackets[written].intermediateFile );
 
-							compilePackets[written].compileCommand = StringBuilder_ToString( buildScratch.arena, &compileCommand );
+							compilePackets[written].compileCommand = StringBuilder_ToString( buildScratch.arena, &compileCommand, NULL );
 							compilePackets[written].sourceFile = sourceFile;
 
 							++written;
@@ -3971,7 +3976,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 								}
 							}
 #endif
-							char *args = StringBuilder_ToString( buildScratch.arena, &linkerArgs );
+							char *args = StringBuilder_ToString( buildScratch.arena, &linkerArgs, NULL );
 
 							printf( "%s\n", args );
 

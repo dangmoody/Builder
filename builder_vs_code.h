@@ -306,9 +306,10 @@ bool Builder_GenerateVSCodeJSONFiles( BuilderOptions *options, VSCodeJSONOptions
 		StringBuilder_Appendf( scratch.arena, &cppPropertiesJSONContent, "\t\"version\": 4\n" );
 		StringBuilder_Appendf( scratch.arena, &cppPropertiesJSONContent, "}\n" );
 
-		char *cppPropertiesJSONString = StringBuilder_ToString( scratch.arena, &cppPropertiesJSONContent );
+		uint64_t length;
+		char *cppPropertiesJSONString = StringBuilder_ToString( scratch.arena, &cppPropertiesJSONContent, &length );
 
-		bool wroteFile = Builder_WriteEntireFile( cppPropertiesJSONFilename, cppPropertiesJSONString );
+		bool wroteFile = Builder_WriteEntireFile( cppPropertiesJSONFilename, cppPropertiesJSONString, length );
 
 		if ( wroteFile ) {
 			printf( "Done\n" );
@@ -386,9 +387,10 @@ bool Builder_GenerateVSCodeJSONFiles( BuilderOptions *options, VSCodeJSONOptions
 		StringBuilder_Appendf( scratch.arena, &tasksJSONContent, "\t]\n" );
 		StringBuilder_Appendf( scratch.arena, &tasksJSONContent, "}\n" );
 
-		char *tasksJSONString = StringBuilder_ToString( scratch.arena, &tasksJSONContent );
+		uint64_t length;
+		char *tasksJSONString = StringBuilder_ToString( scratch.arena, &tasksJSONContent, &length );
 
-		bool wroteFile = Builder_WriteEntireFile( tasksJSONFilename, tasksJSONString );
+		bool wroteFile = Builder_WriteEntireFile( tasksJSONFilename, tasksJSONString, length );
 
 		if ( wroteFile ) {
 			printf( "Done\n" );
@@ -564,9 +566,10 @@ bool Builder_GenerateVSCodeJSONFiles( BuilderOptions *options, VSCodeJSONOptions
 		StringBuilder_Appendf( scratch.arena, &launchJSONContent, "\t]\n" );
 		StringBuilder_Appendf( scratch.arena, &launchJSONContent, "}\n" );
 
-		char *launchJSONString = StringBuilder_ToString( scratch.arena, &launchJSONContent );
+		uint64_t length;
+		char *launchJSONString = StringBuilder_ToString( scratch.arena, &launchJSONContent, &length );
 
-		bool wroteFile = Builder_WriteEntireFile( launchJSONFilename, launchJSONString );
+		bool wroteFile = Builder_WriteEntireFile( launchJSONFilename, launchJSONString, length );
 
 		if ( wroteFile ) {
 			printf( "Done\n" );

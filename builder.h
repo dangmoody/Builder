@@ -1568,7 +1568,8 @@ static uint64_t Builder_AppendHash( const uint64_t inHash, const char *string ) 
 }
 
 static uint64_t Builder_HashString( const char *string ) {
-	return Builder_AppendHash( 0, string );
+	static const uint64_t offsetBias = UINT64_C(14695981039346656037);
+	return Builder_AppendHash( offsetBias, string );
 }
 
 // we get the hash of the compile command to figure out what the name of the sourceFile should be

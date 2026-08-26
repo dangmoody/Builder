@@ -40,8 +40,7 @@ typedef struct ZedTaskConfig {
 	BuildConfig	*config;
 
 	// When you run this config, what command line arguments do you want to be passed through?
-	// NULL-terminated array.
-	const char	**args;
+	StringList	args;
 } ZedTaskConfig;
 
 typedef enum ZedDebuggerAdapter {
@@ -60,8 +59,7 @@ typedef struct ZedDebugConfig {
 	const char			*binaryName;
 
 	// When you run this debug config, what command line arguments do you want to be passed through?
-	// NULL-terminated array.
-	const char			**args;
+	StringList			args;
 
 	// You'd never guess, but this sets the "cwd" field in a Zed debug config.
 	// Leave NULL to default to '${ZED_WORKTREE_ROOT}'.
@@ -130,7 +128,6 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 				for ( uint32_t chunkConfigIndex = 0; chunkConfigIndex < chunk->count; chunkConfigIndex++ ) {
 					zedOptions->taskConfigs[configIndex++] = (ZedTaskConfig) {
 						.config	= chunk->items[chunkConfigIndex],
-						.args	= NULL,
 					};
 				}
 			}
@@ -156,17 +153,19 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 			{
 				StringBuilder_Appendf( scratch.arena, &tasksJSONContent, "\t\t\t\"%s%s\"", ARG_CONFIG, taskConfig->config->name );
 
-				const char **arg = taskConfig->args;
-
-				if ( arg && *arg ) {
+				if ( taskConfig->args.count > 0 ) {
 					StringBuilder_Appendf( scratch.arena, &tasksJSONContent, ",\n" );
 
-					while ( *arg ) {
-						StringBuilder_Appendf( scratch.arena, &tasksJSONContent, "\t\t\t\"%s\"", *arg );
+					uint32_t argIndex = 0;
 
-						arg++;
+					for ( builderStringChunk_t *argChunk = taskConfig->args.head; argChunk; argChunk = argChunk->next ) {
+						for ( uint32_t chunkArgIndex = 0; chunkArgIndex < argChunk->count; chunkArgIndex++ ) {
+							StringBuilder_Appendf( scratch.arena, &tasksJSONContent, "\t\t\t\"%s\"", argChunk->items[chunkArgIndex] );
 
-						StringBuilder_Appendf( scratch.arena, &tasksJSONContent, *arg ? ",\n" : "\n" );
+							argIndex++;
+
+							StringBuilder_Appendf( scratch.arena, &tasksJSONContent, argIndex < taskConfig->args.count ? ",\n" : "\n" );
+						}
 					}
 				} else {
 					StringBuilder_Appendf( scratch.arena, &tasksJSONContent, "\n" );
@@ -259,17 +258,19 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 			StringBuilder_Appendf( scratch.arena, &debugJSONContent, "\t\t\"label\": \"%s\",\n", debugConfig->label );
 			StringBuilder_Appendf( scratch.arena, &debugJSONContent, "\t\t\"program\": \"%s\",\n", debugConfig->binaryName );
 
-			const char **arg = debugConfig->args;
-
-			if ( arg && *arg ) {
+			if ( debugConfig->args.count > 0 ) {
 				StringBuilder_Appendf( scratch.arena, &debugJSONContent, "\t\t\"args\": [\n" );
 
-				while ( *arg ) {
-					StringBuilder_Appendf( scratch.arena, &debugJSONContent, "\t\t\t\"%s\"", *arg );
+				uint32_t argIndex = 0;
 
-					arg++;
+				for ( builderStringChunk_t *argChunk = debugConfig->args.head; argChunk; argChunk = argChunk->next ) {
+					for ( uint32_t chunkArgIndex = 0; chunkArgIndex < argChunk->count; chunkArgIndex++ ) {
+						StringBuilder_Appendf( scratch.arena, &debugJSONContent, "\t\t\t\"%s\"", argChunk->items[chunkArgIndex] );
 
-					StringBuilder_Appendf( scratch.arena, &debugJSONContent, *arg ? ",\n" : "\n" );
+						argIndex++;
+
+						StringBuilder_Appendf( scratch.arena, &debugJSONContent, argIndex < debugConfig->args.count ? ",\n" : "\n" );
+					}
 				}
 
 				StringBuilder_Appendf( scratch.arena, &debugJSONContent, "\t\t],\n" );

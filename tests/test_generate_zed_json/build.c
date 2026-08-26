@@ -25,7 +25,7 @@ int main( int argc, char **argv ) {
 	if ( HasCommandLineArg( argc, argv, "--zed" ) ) {
 		ZedTaskConfig taskConfigs[] = {
 			{ .config = config },
-			{ .config = config, .args = (const char *[]) { "--release", NULL } },
+			{ .config = config, .args = MakeStringList( "--release" ) },
 		};
 
 		ZedDebugConfig debugConfigs[] = {

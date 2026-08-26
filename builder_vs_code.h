@@ -40,8 +40,7 @@ typedef struct VSCodeTaskConfig {
 	BuildConfig	*config;
 
 	// Any additional args you want to send to Builder when building this config.
-	// NULL-terminated array.
-	const char	**additionalBuildArgs;
+	StringList	additionalBuildArgs;
 } VSCodeTaskConfig;
 
 typedef enum VSCodeDebuggerType {
@@ -89,8 +88,7 @@ typedef struct VSCodeLaunchConfig {
 	const char						*binaryName;
 
 	// When you run this config, what command line arguments do you want to be passed through?
-	// NULL-terminated array.
-	const char						**args;
+	StringList						args;
 
 	// You'd never guess, but this sets the "cwd" field in a VS Code launch config.
 	// Leave NULL to default to '${workspaceFolder}'.
@@ -364,17 +362,19 @@ bool Builder_GenerateVSCodeJSONFiles( BuilderOptions *options, VSCodeJSONOptions
 			{
 				StringBuilder_Appendf( scratch.arena, &tasksJSONContent, "\t\t\t\t\"%s%s\"", ARG_CONFIG, taskConfig->config->name );
 
-				const char **arg = taskConfig->additionalBuildArgs;
-
-				if ( arg && *arg ) {
+				if ( taskConfig->additionalBuildArgs.count > 0 ) {
 					StringBuilder_Appendf( scratch.arena, &tasksJSONContent, ",\n" );
 
-					while ( *arg ) {
-						StringBuilder_Appendf( scratch.arena, &tasksJSONContent, "\t\t\t\t\"%s\"", *arg );
+					uint32_t argIndex = 0;
 
-						arg++;
+					for ( builderStringChunk_t *argChunk = taskConfig->additionalBuildArgs.head; argChunk; argChunk = argChunk->next ) {
+						for ( uint32_t chunkArgIndex = 0; chunkArgIndex < argChunk->count; chunkArgIndex++ ) {
+							StringBuilder_Appendf( scratch.arena, &tasksJSONContent, "\t\t\t\t\"%s\"", argChunk->items[chunkArgIndex] );
 
-						StringBuilder_Appendf( scratch.arena, &tasksJSONContent, *arg ? ",\n" : "\n" );
+							argIndex++;
+
+							StringBuilder_Appendf( scratch.arena, &tasksJSONContent, argIndex < taskConfig->additionalBuildArgs.count ? ",\n" : "\n" );
+						}
 					}
 				} else {
 					StringBuilder_Appendf( scratch.arena, &tasksJSONContent, "\n" );
@@ -501,17 +501,19 @@ bool Builder_GenerateVSCodeJSONFiles( BuilderOptions *options, VSCodeJSONOptions
 			StringBuilder_Appendf( scratch.arena, &launchJSONContent, "\t\t\t\"request\": \"launch\",\n" );
 			StringBuilder_Appendf( scratch.arena, &launchJSONContent, "\t\t\t\"program\": \"%s\",\n", launchConfig->binaryName );
 
-			if ( launchConfig->args && launchConfig->args[0] ) {
+			if ( launchConfig->args.count > 0 ) {
 				StringBuilder_Appendf( scratch.arena, &launchJSONContent, "\t\t\t\"args\": [\n" );
 
-				const char **arg = launchConfig->args;
+				uint32_t argIndex = 0;
 
-				while ( *arg ) {
-					StringBuilder_Appendf( scratch.arena, &launchJSONContent, "\t\t\t\t\"%s\"", *arg );
+				for ( builderStringChunk_t *argChunk = launchConfig->args.head; argChunk; argChunk = argChunk->next ) {
+					for ( uint32_t chunkArgIndex = 0; chunkArgIndex < argChunk->count; chunkArgIndex++ ) {
+						StringBuilder_Appendf( scratch.arena, &launchJSONContent, "\t\t\t\t\"%s\"", argChunk->items[chunkArgIndex] );
 
-					arg++;
+						argIndex++;
 
-					StringBuilder_Appendf( scratch.arena, &launchJSONContent, *arg ? ",\n" : "\n" );
+						StringBuilder_Appendf( scratch.arena, &launchJSONContent, argIndex < launchConfig->args.count ? ",\n" : "\n" );
+					}
 				}
 
 				StringBuilder_Appendf( scratch.arena, &launchJSONContent, "\t\t\t],\n" );

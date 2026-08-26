@@ -29,7 +29,7 @@ int main( int argc, char **argv ) {
 
 		VSCodeTaskConfig taskConfigs[] = {
 			{ .config = config },
-			{ .config = config, .additionalBuildArgs = (const char *[]) { "--release", NULL } },
+			{ .config = config, .additionalBuildArgs = MakeStringList( "--release" ) },
 		};
 
 		VSCodeLaunchConfig launchConfigs[] = {

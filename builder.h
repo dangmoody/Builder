@@ -2696,8 +2696,6 @@ typedef struct builderCompileContext_t {
 static stringBuilder_t Builder_CreateCompilationCommand( arena_t *commandArena, builderCompileContext_t *context ) {
 	BuildConfig *config = context->config;
 
-	arenaRewindSpot_t rewind = Builder_ArenaTell( commandArena );
-
 	stringBuilder_t compileArgs = { 0 };
 	StringBuilder_Appendf( commandArena, &compileArgs, "\"%s\" ", context->compilerPath );
 
@@ -2756,7 +2754,6 @@ static stringBuilder_t Builder_CreateCompilationCommand( arena_t *commandArena, 
 
 				if ( sawWarningLevel ) {
 					Builder_Error( "MSVC only allows one warning level to be set at a time, but you specified more than one.\n" );
-					Builder_RewindArena( commandArena, &rewind );
 					return (stringBuilder_t) {0};
 				}
 
@@ -2772,7 +2769,6 @@ static stringBuilder_t Builder_CreateCompilationCommand( arena_t *commandArena, 
 						, warningLevel
 					);
 
-					Builder_RewindArena( commandArena, &rewind );
 					return (stringBuilder_t) {0};
 			}
 
@@ -2863,7 +2859,6 @@ static stringBuilder_t Builder_CreateCompilationCommand( arena_t *commandArena, 
 						, warningLevel
 					);
 
-					Builder_RewindArena( commandArena, &rewind );
 					return (stringBuilder_t) {0};
 				}
 
@@ -3633,48 +3628,46 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 					scratch_t scratch = Builder_GetScratch( buildScratch.arena );
 
 					stringBuilder_t compileCommand = Builder_CreateCompilationCommand( scratch.arena, &compileContext );
+					if ( compileCommand.head == compileCommand.tail ) {
+						Builder_Error( "Failed to create compilation command for config %s!\n", config->name );
+						Builder_RewindArena( buildScratch.arena, &configStart );
+						continue;
+					}
 
 					// hash just the config compile options
 					uint64_t configCompileCommandHash = 0;
 					{
-						arenaRewindSpot_t preHashRewind = Builder_ArenaTell( scratch.arena );
-						StringBuilder_Appendf( scratch.arena, &compileCommand, "%s", compilerVersionString );
-						configCompileCommandHash = Builder_HashString( StringBuilder_ToString( scratch.arena, &compileCommand, NULL ) );
-						Builder_RewindArena( scratch.arena, &preHashRewind );
+						stringBuilder_t compileCommandCopy = compileCommand;
+						StringBuilder_Appendf( scratch.arena, &compileCommandCopy, "%s", compilerVersionString );
+						configCompileCommandHash = Builder_HashString( StringBuilder_ToString( scratch.arena, &compileCommandCopy, NULL ) );
 					}
-
-					if ( compileCommand.head == compileCommand.tail ) {
-						Builder_Error( "Failed to create compilation command!\n");
-						exit(1);
-					}
-					arenaRewindSpot_t commandRewind = Builder_ArenaTell( scratch.arena );
 
 					uint32_t written = 0;
 
 					for ( builderStringChunk_t *chunk = globList.head; chunk; chunk = chunk->next ) {
 						for ( uint32_t globbedFileIndex = 0; globbedFileIndex < chunk->count; globbedFileIndex++ ) {
 							const char *sourceFile = chunk->items[globbedFileIndex];
-							
+							stringBuilder_t fullCompileCommand = compileCommand;
+
 							uint64_t compileCommandHash = Builder_AppendHash( configCompileCommandHash, sourceFile );
 							compilePackets[written].intermediateFile = Builder_GetIntermediateFilePath( buildScratch.arena, intermediateFolder, compileCommandHash, sourceFile );
 							compilePackets[written].compileCommandHash = compileCommandHash;
 
-							StringBuilder_Appendf( scratch.arena, &compileCommand, "%s ", sourceFile );
+							StringBuilder_Appendf( scratch.arena, &fullCompileCommand, "%s ", sourceFile );
 							if ( compileContext.useMSVC ) {
 #if defined( _WIN32 )
-								StringBuilder_Appendf( scratch.arena, &compileCommand, "/Fo" );
+								StringBuilder_Appendf( scratch.arena, &fullCompileCommand, "/Fo" );
 #endif
 							} else {
-								StringBuilder_Appendf( scratch.arena, &compileCommand, "-o " );
+								StringBuilder_Appendf( scratch.arena, &fullCompileCommand, "-o " );
 							}
 
-							StringBuilder_Appendf( scratch.arena, &compileCommand, compilePackets[written].intermediateFile );
+							StringBuilder_Appendf( scratch.arena, &fullCompileCommand, compilePackets[written].intermediateFile );
 
-							compilePackets[written].compileCommand = StringBuilder_ToString( buildScratch.arena, &compileCommand, NULL );
+							compilePackets[written].compileCommand = StringBuilder_ToString( buildScratch.arena, &fullCompileCommand, NULL );
 							compilePackets[written].sourceFile = sourceFile;
 
 							++written;
-							Builder_RewindArena( scratch.arena, &commandRewind );
 						}
 					}
 
@@ -4011,8 +4004,6 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 			}
 		}
 	}
-
-	Builder_FreeArenas( threadResultArenas, numCPUCores );
 	
 	// build summary
 	{
@@ -4111,6 +4102,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 			Builder_WriteEntireFile( postBuildData->dependencyCacheFileName, byteBuffer.data, byteBuffer.count );
 		}
 		Builder_FreeArenas( &postBuildArena, 1 );
+		Builder_FreeArenas( threadResultArenas, numCPUCores );
 	}
 
 	Builder_RewindScratch( &buildScratch );

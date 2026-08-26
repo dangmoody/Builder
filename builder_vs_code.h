@@ -181,6 +181,19 @@ bool Builder_GenerateVSCodeJSONFiles( BuilderOptions *options, VSCodeJSONOptions
 
 	const char *buildCommand = ( vsCodeOptions->buildCommand && vsCodeOptions->buildCommand[0] ) ? vsCodeOptions->buildCommand : argv[0];
 
+	// vs code wants forward slashes regardless of platform
+	{
+		char *buildCommandFixed = Builder_FormatString( scratch.arena, "%s", buildCommand );
+
+		for ( char *c = buildCommandFixed; *c; c++ ) {
+			if ( *c == '\\' ) {
+				*c = '/';
+			}
+		}
+
+		buildCommand = buildCommandFixed;
+	}
+
 	// c_cpp_properties.json
 	{
 		if ( vsCodeOptions->cppPropertiesConfigsCount == 0 ) {

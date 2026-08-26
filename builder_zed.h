@@ -116,7 +116,7 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 
 	const char *buildCommand = ( zedOptions->buildCommand && zedOptions->buildCommand[0] ) ? zedOptions->buildCommand : argv[0];
 
-	// Zed wants forward slashes regardless of platform
+	// zed wants forward slashes regardless of platform
 	{
 		char *buildCommandFixed = Builder_FormatString( scratch.arena, "%s", buildCommand );
 

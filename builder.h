@@ -3526,6 +3526,8 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 	if ( !Builder_GetMSVCInstall( buildScratch.arena, &msvcInstall ) ) {
 		return 1;
 	}
+
+	printf( "\n" );
 #endif
 
 	if ( options->compilerPath && options->compilerPath[0] ) {
@@ -4032,16 +4034,9 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 		}
 	}
 
-	// build summary
+	// write .builder-dependencies file
 	{
-		printf( "Finished:\n" );
-		printf( "    Compile : %f ms\n", totalCompileTimeMS );
-		printf( "    Link    : %f ms\n", totalLinkTimeMS );
-		printf( "    Total   : %f ms\n", Builder_TimeMS() - totalTimeStart );
-	}
-
-	{
-		printf( "Caching dependency info for incremental builds...\n" );
+		printf( "Caching dependency info for incremental builds...\n\n" );
 
 		for ( uint32_t configIndex = 0; configIndex < builtConfigs; ++configIndex ) {
 			builderPostBuildConfigDependencyData_t *postBuildData = &postBuildConfigDependencyData[configIndex];
@@ -4133,6 +4128,14 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 
 		Builder_FreeArenas( &postBuildArena, 1 );
 		Builder_FreeArenas( threadResultArenas, numCPUCores );
+	}
+
+	// build summary
+	{
+		printf( "Finished:\n" );
+		printf( "    Compile : %f ms\n", totalCompileTimeMS );
+		printf( "    Link    : %f ms\n", totalLinkTimeMS );
+		printf( "    Total   : %f ms\n", Builder_TimeMS() - totalTimeStart );
 	}
 
 	Builder_RewindScratch( &buildScratch );

@@ -116,6 +116,19 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 
 	const char *buildCommand = ( zedOptions->buildCommand && zedOptions->buildCommand[0] ) ? zedOptions->buildCommand : argv[0];
 
+	// Zed wants forward slashes regardless of platform
+	{
+		char *buildCommandFixed = Builder_FormatString( scratch.arena, "%s", buildCommand );
+
+		for ( char *c = buildCommandFixed; *c; c++ ) {
+			if ( *c == '\\' ) {
+				*c = '/';
+			}
+		}
+
+		buildCommand = buildCommandFixed;
+	}
+
 	// tasks.json
 	{
 		if ( zedOptions->taskConfigsCount == 0 ) {

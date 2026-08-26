@@ -671,9 +671,7 @@ static char *StringBuilder_ToString( arena_t *arena, stringBuilder_t *builder, u
 		current = current->next;
 	}
 
-	totalLength += 1;
-
-	result = Builder_ArenaAlloc( arena, char, totalLength );
+	result = Builder_ArenaAlloc( arena, char, totalLength + 1 );
 
 	current = builder->head;
 
@@ -685,11 +683,12 @@ static char *StringBuilder_ToString( arena_t *arena, stringBuilder_t *builder, u
 		current = current->next;
 	}
 
-	result[totalLength - 1] = 0;
+	result[totalLength] = 0;
 
 	if ( outLength ) {
 		*outLength = totalLength;
 	}
+
 	return result;
 }
 

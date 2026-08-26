@@ -61,12 +61,12 @@ int main( int argc, char **argv ) {
 	if ( HasCommandLineArg( argc, argv, "--sln" ) ) {
 		VisualStudioConfig mathlibVsConfigs[] = {
 			{ .name = "Debug",   .config = mathlib },
-			{ .name = "Release", .config = mathlib, .additionalBuildArgs = (const char *[]) { "--release", NULL }, .nmakeOutput = "bin/release/mathlib.dll" },
+			{ .name = "Release", .config = mathlib, .additionalBuildArgs = MakeStringList( "--release" ), .nmakeOutput = "bin/release/mathlib.dll" },
 		};
 
 		VisualStudioConfig appVsConfigs[] = {
 			{ .name = "Debug",   .config = app },
-			{ .name = "Release", .config = app, .additionalBuildArgs = (const char *[]) { "--release", NULL }, .nmakeOutput = "bin/release/app.exe" },
+			{ .name = "Release", .config = app, .additionalBuildArgs = MakeStringList( "--release" ), .nmakeOutput = "bin/release/app.exe" },
 		};
 
 		VisualStudioProject vsProjects[] = {
@@ -87,7 +87,7 @@ int main( int argc, char **argv ) {
 		VisualStudioSolution solution = {
 			.name			= "test_generate_visual_studio_files",
 			.path			= "visual_studio",
-			.platforms		= (const char *[]) { "x64", NULL },
+			.platforms		= MakeStringList( "x64" ),
 			.projects		= vsProjects,
 			.projectsCount	= BUILDER_COUNT_OF( vsProjects ),
 		};

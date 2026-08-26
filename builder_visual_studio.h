@@ -56,12 +56,10 @@ typedef struct VisualStudioConfig {
 	//	<your_build_script> --config=<your_config>
 	//
 	// Use this if you want any other command line arguments to be added to the end.
-	// NULL-terminated array.
-	const char	**additionalBuildArgs;
+	StringList	additionalBuildArgs;
 
 	// Default debugger command line arguments.
-	// NULL-terminated array.
-	const char	**debuggerArguments;
+	StringList	debuggerArguments;
 
 	// The directory you want to set as the CWD when running this config.
 	// Defaults to $(SolutionDir) if not set.
@@ -94,7 +92,7 @@ typedef struct VisualStudioSolution {
 
 	// All the target platforms that this Solution supports.
 	// NULL-terminated array.
-	const char			**platforms;
+	StringList			platforms;
 
 	// The name of the Solution as it appears in Visual Studio.
 	// For the sake of simplicity we keep the name of the Solution in Visual Studio and the Solution's filename the same.
@@ -595,7 +593,7 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 			validSolution = false;
 		}
 
-		if ( !solution->platforms || !solution->platforms[0] ) {
+		if ( solution->platforms.count == 0 ) {
 			Builder_Error( "You must set at least one platform when generating a Visual Studio Solution.\n" );
 			validSolution = false;
 		}
@@ -617,11 +615,15 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 
 			bool foundDefaultPlatformName = false;
 
-			for ( const char **platform = solution->platforms; *platform; platform++ ) {
-				for ( size_t defaultPlatformIndex = 0; defaultPlatformIndex < BUILDER_COUNT_OF( defaultPlatformNames ); defaultPlatformIndex++ ) {
-					if ( Builder_StringEquals( *platform, defaultPlatformNames[defaultPlatformIndex] ) ) {
-						foundDefaultPlatformName = true;
-						break;
+			for ( builderStringChunk_t *chunk = solution->platforms.head; chunk; chunk = chunk->next ) {
+				for ( uint32_t platformIndex = 0; platformIndex < chunk->count; platformIndex++ ) {
+					const char *platform = chunk->items[platformIndex];
+
+					for ( size_t defaultPlatformIndex = 0; defaultPlatformIndex < BUILDER_COUNT_OF( defaultPlatformNames ); defaultPlatformIndex++ ) {
+						if ( Builder_StringEquals( platform, defaultPlatformNames[defaultPlatformIndex] ) ) {
+							foundDefaultPlatformName = true;
+							break;
+						}
 					}
 				}
 			}
@@ -859,11 +861,15 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 				for ( uint32_t configIndex = 0; configIndex < project->configsCount; configIndex++ ) {
 					VisualStudioConfig *config = &project->configs[configIndex];
 
-					for ( const char **platform = solution->platforms; *platform; platform++ ) {
-						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<ProjectConfiguration Include=\"%s|%s\">\n", config->name, *platform );
-						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t\t<Configuration>%s</Configuration>\n", config->name );
-						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t\t<Platform>%s</Platform>\n", *platform );
-						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t</ProjectConfiguration>\n" );
+					for ( builderStringChunk_t *chunk = solution->platforms.head; chunk; chunk = chunk->next ) {
+						for ( uint32_t platformIndex = 0; platformIndex < chunk->count; platformIndex++ ) {
+							const char *platform = chunk->items[platformIndex];
+
+							StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<ProjectConfiguration Include=\"%s|%s\">\n", config->name, platform );
+							StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t\t<Configuration>%s</Configuration>\n", config->name );
+							StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t\t<Platform>%s</Platform>\n", platform );
+							StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t</ProjectConfiguration>\n" );
+						}
 					}
 				}
 
@@ -885,7 +891,6 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 			// for each config and platform, define config type, toolset, out dir, and intermediate dir
 			for ( uint32_t configIndex = 0; configIndex < project->configsCount; configIndex++ ) {
 				VisualStudioConfig *config = &project->configs[configIndex];
-				BuildConfig *buildConfig = config->config;
 
 				// folder containing the binary this config builds/debugs, or NULL if that binary has no folder component
 				// respects VisualStudioConfig::nmakeOutput if set, otherwise this is just BuildConfig::binaryFolder
@@ -895,7 +900,7 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 
 				const char *outDir = binaryFolder ? Builder_RelativePathTo( scratch.arena, projectFilesPath, binaryFolder ) : ".";
 
-				const char *intermediateFolder = buildConfig->intermediateFolder;
+				const char *intermediateFolder = options->intermediateFolder;
 				if ( intermediateFolder && binaryFolder ) {
 					intermediateFolder = Builder_FormatString( scratch.arena, "%s%c%s", binaryFolder, BUILDER_PATH_SEPARATOR, intermediateFolder );
 				} else if ( !intermediateFolder ) {
@@ -904,14 +909,18 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 
 				const char *intDir = intermediateFolder ? Builder_RelativePathTo( scratch.arena, projectFilesPath, intermediateFolder ) : ".";
 
-				for ( const char **platform = solution->platforms; *platform; platform++ ) {
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\" Label=\"Configuration\">\n", config->name, *platform );
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<ConfigurationType>Makefile</ConfigurationType>\n" );
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<UseDebugLibraries>false</UseDebugLibraries>\n" );
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<PlatformToolset>v143</PlatformToolset>\n" );
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<OutDir>%s%c</OutDir>\n", outDir, BUILDER_PATH_SEPARATOR );
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<IntDir>%s%c</IntDir>\n", intDir, BUILDER_PATH_SEPARATOR );
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t</PropertyGroup>\n" );
+				for ( builderStringChunk_t *chunk = solution->platforms.head; chunk; chunk = chunk->next ) {
+					for ( uint32_t platformIndex = 0; platformIndex < chunk->count; platformIndex++ ) {
+						const char *platform = chunk->items[platformIndex];
+
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\" Label=\"Configuration\">\n", config->name, platform );
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<ConfigurationType>Makefile</ConfigurationType>\n" );
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<UseDebugLibraries>false</UseDebugLibraries>\n" );
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<PlatformToolset>v143</PlatformToolset>\n" );
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<OutDir>%s%c</OutDir>\n", outDir, BUILDER_PATH_SEPARATOR );
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<IntDir>%s%c</IntDir>\n", intDir, BUILDER_PATH_SEPARATOR );
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t</PropertyGroup>\n" );
+					}
 				}
 			}
 
@@ -925,10 +934,14 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 			for ( uint32_t configIndex = 0; configIndex < project->configsCount; configIndex++ ) {
 				VisualStudioConfig *config = &project->configs[configIndex];
 
-				for ( const char **platform = solution->platforms; *platform; platform++ ) {
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t<ImportGroup Label=\"PropertySheets\" Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">\n", config->name, *platform );
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<Import Project=\"$(UserRootDir)%cMicrosoft.Cpp.$(Platform).user.props\" Condition=\"exists(\'$(UserRootDir)%cMicrosoft.Cpp.$(Platform).user.props\')\" Label=\"LocalAppDataPlatform\" />\n", BUILDER_PATH_SEPARATOR, BUILDER_PATH_SEPARATOR );
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t</ImportGroup>\n" );
+				for ( builderStringChunk_t *chunk = solution->platforms.head; chunk; chunk = chunk->next ) {
+					for ( uint32_t platformIndex = 0; platformIndex < chunk->count; platformIndex++ ) {
+						const char *platform = chunk->items[platformIndex];
+
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t<ImportGroup Label=\"PropertySheets\" Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">\n", config->name, platform );
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<Import Project=\"$(UserRootDir)%cMicrosoft.Cpp.$(Platform).user.props\" Condition=\"exists(\'$(UserRootDir)%cMicrosoft.Cpp.$(Platform).user.props\')\" Label=\"LocalAppDataPlatform\" />\n", BUILDER_PATH_SEPARATOR, BUILDER_PATH_SEPARATOR );
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t</ImportGroup>\n" );
+					}
 				}
 			}
 
@@ -949,70 +962,78 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 				const char *fullBinaryPath = Builder_VSGetFullBinaryPath( scratch.arena, config );
 				char *fullBinaryPathFromProject = Builder_RelativePathTo( scratch.arena, projectFilesPath, fullBinaryPath );
 
-				for ( const char **platform = solution->platforms; *platform; platform++ ) {
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">\n", config->name, *platform );
+				for ( builderStringChunk_t *chunk = solution->platforms.head; chunk; chunk = chunk->next ) {
+					for ( uint32_t platformIndex = 0; platformIndex < chunk->count; platformIndex++ ) {
+						const char *platform = chunk->items[platformIndex];
 
-					// external include paths
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<ExternalIncludePath>" );
-					for ( builderStringChunk_t *chunk = buildConfig->additionalIncludes.head; chunk; chunk = chunk->next ) {
-						for ( uint32_t includeIndex = 0; includeIndex < chunk->count; includeIndex++ ) {
-							const char *include = chunk->items[includeIndex];
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">\n", config->name, platform );
 
-							if ( Builder_PathIsAbsolute( include ) ) {
-								StringBuilder_Appendf( scratch.arena, &vcxprojContent, "%s;", include );
-							} else {
-								StringBuilder_Appendf( scratch.arena, &vcxprojContent, "%s;", Builder_RelativePathTo( scratch.arena, projectFilesPath, include ) );
+						// external include paths
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<ExternalIncludePath>" );
+						for ( builderStringChunk_t *chunk = buildConfig->additionalIncludes.head; chunk; chunk = chunk->next ) {
+							for ( uint32_t includeIndex = 0; includeIndex < chunk->count; includeIndex++ ) {
+								const char *include = chunk->items[includeIndex];
+
+								if ( Builder_PathIsAbsolute( include ) ) {
+									StringBuilder_Appendf( scratch.arena, &vcxprojContent, "%s;", include );
+								} else {
+									StringBuilder_Appendf( scratch.arena, &vcxprojContent, "%s;", Builder_RelativePathTo( scratch.arena, projectFilesPath, include ) );
+								}
 							}
 						}
-					}
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "$(ExternalIncludePath)" );
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "</ExternalIncludePath>\n" );
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "$(ExternalIncludePath)" );
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "</ExternalIncludePath>\n" );
 
-					// external library paths
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<LibraryPath>" );
-					for ( builderStringChunk_t *chunk = buildConfig->additionalLibPaths.head; chunk; chunk = chunk->next ) {
-						for ( uint32_t libPathIndex = 0; libPathIndex < chunk->count; libPathIndex++ ) {
-							const char *libPath = chunk->items[libPathIndex];
+						// external library paths
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<LibraryPath>" );
+						for ( builderStringChunk_t *chunk = buildConfig->additionalLibPaths.head; chunk; chunk = chunk->next ) {
+							for ( uint32_t libPathIndex = 0; libPathIndex < chunk->count; libPathIndex++ ) {
+								const char *libPath = chunk->items[libPathIndex];
 
-							if ( Builder_PathIsAbsolute( libPath ) ) {
-								StringBuilder_Appendf( scratch.arena, &vcxprojContent, "%s;", libPath );
-							} else {
-								StringBuilder_Appendf( scratch.arena, &vcxprojContent, "%s;", Builder_RelativePathTo( scratch.arena, projectFilesPath, libPath ) );
+								if ( Builder_PathIsAbsolute( libPath ) ) {
+									StringBuilder_Appendf( scratch.arena, &vcxprojContent, "%s;", libPath );
+								} else {
+									StringBuilder_Appendf( scratch.arena, &vcxprojContent, "%s;", Builder_RelativePathTo( scratch.arena, projectFilesPath, libPath ) );
+								}
 							}
 						}
-					}
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "$(LibraryPath)" );
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "</LibraryPath>\n" );
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "$(LibraryPath)" );
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "</LibraryPath>\n" );
 
-					// output path
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<NMakeOutput>%s</NMakeOutput>\n", fullBinaryPathFromProject );
+						// output path
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<NMakeOutput>%s</NMakeOutput>\n", fullBinaryPathFromProject );
 
-					// build command
-					// "&amp;&amp;" is "&&" xml-escaped - NMakeBuildCommandLine is xml text content, not an attribute
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<NMakeBuildCommandLine>cd /d \"%s\" &amp;&amp; \"%s\" %s%s", buildCommandDir, buildCommand, ARG_CONFIG, buildConfig->name );
-					for ( const char **arg = config->additionalBuildArgs; arg && *arg; arg++ ) {
-						StringBuilder_Appendf( scratch.arena, &vcxprojContent, " %s", *arg );
-					}
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "</NMakeBuildCommandLine>\n" );
-
-					// rebuild command
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<NMakeReBuildCommandLine>cd /d \"%s\" &amp;&amp; \"%s\" %s%s", buildCommandDir, buildCommand, ARG_CONFIG, buildConfig->name );
-					for ( const char **arg = config->additionalBuildArgs; arg && *arg; arg++ ) {
-						StringBuilder_Appendf( scratch.arena, &vcxprojContent, " %s", *arg );
-					}
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "</NMakeReBuildCommandLine>\n" );
-
-					// preprocessor definitions
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<NMakePreprocessorDefinitions>" );
-					for ( builderStringChunk_t *chunk = buildConfig->defines.head; chunk; chunk = chunk->next ) {
-						for ( uint32_t defineIndex = 0; defineIndex < chunk->count; defineIndex++ ) {
-							StringBuilder_Appendf( scratch.arena, &vcxprojContent, "%s;", chunk->items[defineIndex] );
+						// build command
+						// "&amp;&amp;" is "&&" xml-escaped - NMakeBuildCommandLine is xml text content, not an attribute
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<NMakeBuildCommandLine>cd /d \"%s\" &amp;&amp; \"%s\" %s%s", buildCommandDir, buildCommand, ARG_CONFIG, buildConfig->name );
+						for ( builderStringChunk_t *chunk = config->additionalBuildArgs.head; chunk; chunk = chunk->next ) {
+							for ( uint32_t argIndex = 0; argIndex < chunk->count; argIndex++ ) {
+								StringBuilder_Appendf( scratch.arena, &vcxprojContent, " %s", chunk->items[argIndex] );
+							}
 						}
-					}
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "$(NMakePreprocessorDefinitions)" );
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "</NMakePreprocessorDefinitions>\n" );
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "</NMakeBuildCommandLine>\n" );
 
-					StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t</PropertyGroup>\n" );
+						// rebuild command
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<NMakeReBuildCommandLine>cd /d \"%s\" &amp;&amp; \"%s\" %s%s", buildCommandDir, buildCommand, ARG_CONFIG, buildConfig->name );
+						for ( builderStringChunk_t *chunk = config->additionalBuildArgs.head; chunk; chunk = chunk->next ) {
+							for ( uint32_t argIndex = 0; argIndex < chunk->count; argIndex++ ) {
+								StringBuilder_Appendf( scratch.arena, &vcxprojContent, " %s", chunk->items[argIndex] );
+							}
+						}
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "</NMakeReBuildCommandLine>\n" );
+
+						// preprocessor definitions
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t\t<NMakePreprocessorDefinitions>" );
+						for ( builderStringChunk_t *chunk = buildConfig->defines.head; chunk; chunk = chunk->next ) {
+							for ( uint32_t defineIndex = 0; defineIndex < chunk->count; defineIndex++ ) {
+								StringBuilder_Appendf( scratch.arena, &vcxprojContent, "%s;", chunk->items[defineIndex] );
+							}
+						}
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "$(NMakePreprocessorDefinitions)" );
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "</NMakePreprocessorDefinitions>\n" );
+
+						StringBuilder_Appendf( scratch.arena, &vcxprojContent, "\t</PropertyGroup>\n" );
+					}
 				}
 			}
 
@@ -1063,24 +1084,30 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 				const char *fullBinaryPath = Builder_VSGetFullBinaryPath( scratch.arena, config );
 				char *fullBinaryPathFromProject = Builder_RelativePathTo( scratch.arena, projectFilesPath, fullBinaryPath );
 
-				for ( const char **platform = solution->platforms; *platform; platform++ ) {
-					StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">\n", config->name, *platform );
-					StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t\t<DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>\n" );	// TODO(DM): do we want to include the other debugger types?
-					StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t\t<LocalDebuggerDebuggerType>Auto</LocalDebuggerDebuggerType>\n" );
-					StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t\t<LocalDebuggerAttach>false</LocalDebuggerAttach>\n" );
-					StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t\t<LocalDebuggerCommand>%s</LocalDebuggerCommand>\n", fullBinaryPathFromProject );
-					StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t\t<LocalDebuggerWorkingDirectory>%s</LocalDebuggerWorkingDirectory>\n", ( config->runFromDirectory && config->runFromDirectory[0] ) ? config->runFromDirectory : "$(SolutionDir)" );
+				for ( builderStringChunk_t *chunk = solution->platforms.head; chunk; chunk = chunk->next ) {
+					for ( uint32_t platformIndex = 0; platformIndex < chunk->count; platformIndex++ ) {
+						const char *platform = chunk->items[platformIndex];
 
-					// if debugger arguments were specified, put those in
-					if ( config->debuggerArguments && config->debuggerArguments[0] ) {
-						StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t\t<LocalDebuggerCommandArguments>" );
-						for ( const char **arg = config->debuggerArguments; *arg; arg++ ) {
-							StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "%s ", *arg );
+						StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t<PropertyGroup Condition=\"\'$(Configuration)|$(Platform)\'==\'%s|%s\'\">\n", config->name, platform );
+						StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t\t<DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>\n" );	// TODO(DM): do we want to include the other debugger types?
+						StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t\t<LocalDebuggerDebuggerType>Auto</LocalDebuggerDebuggerType>\n" );
+						StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t\t<LocalDebuggerAttach>false</LocalDebuggerAttach>\n" );
+						StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t\t<LocalDebuggerCommand>%s</LocalDebuggerCommand>\n", fullBinaryPathFromProject );
+						StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t\t<LocalDebuggerWorkingDirectory>%s</LocalDebuggerWorkingDirectory>\n", ( config->runFromDirectory && config->runFromDirectory[0] ) ? config->runFromDirectory : "$(SolutionDir)" );
+
+						// if debugger arguments were specified, put those in
+						if ( config->debuggerArguments.count > 0 ) {
+							StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t\t<LocalDebuggerCommandArguments>" );
+							for ( builderStringChunk_t *chunk = config->debuggerArguments.head; chunk; chunk = chunk->next ) {
+								for ( uint32_t argIndex = 0; argIndex < chunk->count; argIndex++ ) {
+									StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "%s ", chunk->items[argIndex] );
+								}
+							}
+							StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "</LocalDebuggerCommandArguments>\n" );
 						}
-						StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "</LocalDebuggerCommandArguments>\n" );
-					}
 
-					StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t</PropertyGroup>\n" );
+						StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t</PropertyGroup>\n" );
+					}
 				}
 			}
 
@@ -1182,8 +1209,12 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 				for ( uint32_t configIndex = 0; configIndex < project->configsCount; configIndex++ ) {
 					VisualStudioConfig *config = &project->configs[configIndex];
 
-					for ( const char **platform = solution->platforms; *platform; platform++ ) {
-						StringBuilder_Appendf( scratch.arena, &slnContent, "\t\t%s|%s = %s|%s\n", config->name, *platform, config->name, *platform );
+					for ( builderStringChunk_t *chunk = solution->platforms.head; chunk; chunk = chunk->next ) {
+						for ( uint32_t platformIndex = 0; platformIndex < chunk->count; platformIndex++ ) {
+							const char *platform = chunk->items[platformIndex];
+
+							StringBuilder_Appendf( scratch.arena, &slnContent, "\t\t%s|%s = %s|%s\n", config->name, platform, config->name, platform );
+						}
 					}
 				}
 			}
@@ -1194,16 +1225,20 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 			for ( uint32_t projectIndex = 0; projectIndex < solution->projectsCount; projectIndex++ ) {
 				VisualStudioProject *project = &solution->projects[projectIndex];
 
+				const char *projectGuid = state.projectGuids[projectIndex];
+
 				for ( uint32_t configIndex = 0; configIndex < project->configsCount; configIndex++ ) {
 					VisualStudioConfig *config = &project->configs[configIndex];
 
-					for ( const char **platform = solution->platforms; *platform; platform++ ) {
-						const char *projectGuid = state.projectGuids[projectIndex];
+					for ( builderStringChunk_t *chunk = solution->platforms.head; chunk; chunk = chunk->next ) {
+						for ( uint32_t platformIndex = 0; platformIndex < chunk->count; platformIndex++ ) {
+							const char *platform = chunk->items[platformIndex];
 
-						// TODO: the first config and platform in this line are actually the ones that the PROJECT has, not the SOLUTION
-						// but we dont use those, and we should
-						StringBuilder_Appendf( scratch.arena, &slnContent, "\t\t{%s}.%s|%s.ActiveCfg = %s|%s\n", projectGuid, config->name, *platform, config->name, *platform );
-						StringBuilder_Appendf( scratch.arena, &slnContent, "\t\t{%s}.%s|%s.Build.0 = %s|%s\n", projectGuid, config->name, *platform, config->name, *platform );
+							// TODO: the first config and platform in this line are actually the ones that the PROJECT has, not the SOLUTION
+							// but we dont use those, and we should
+							StringBuilder_Appendf( scratch.arena, &slnContent, "\t\t{%s}.%s|%s.ActiveCfg = %s|%s\n", projectGuid, config->name, platform, config->name, platform );
+							StringBuilder_Appendf( scratch.arena, &slnContent, "\t\t{%s}.%s|%s.Build.0 = %s|%s\n", projectGuid, config->name, platform, config->name, platform );
+						}
 					}
 				}
 			}

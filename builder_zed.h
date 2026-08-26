@@ -179,9 +179,10 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 
 		StringBuilder_Appendf( scratch.arena, &tasksJSONContent, "]\n" );
 
-		char *tasksJSONString = StringBuilder_ToString( scratch.arena, &tasksJSONContent );
+		uint64_t length;
+		char *tasksJSONString = StringBuilder_ToString( scratch.arena, &tasksJSONContent, &length );
 
-		bool wroteFile = Builder_WriteEntireFile( tasksJSONFilename, tasksJSONString );
+		bool wroteFile = Builder_WriteEntireFile( tasksJSONFilename, tasksJSONString, length );
 
 		if ( wroteFile ) {
 			printf( "Done\n" );
@@ -307,9 +308,10 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 		if ( ok ) {
 			StringBuilder_Appendf( scratch.arena, &debugJSONContent, "]\n" );
 
-			char *debugJSONString = StringBuilder_ToString( scratch.arena, &debugJSONContent );
+			uint64_t length;
+			char *debugJSONString = StringBuilder_ToString( scratch.arena, &debugJSONContent, &length);
 
-			if ( !Builder_WriteEntireFile( debugJSONFilename, debugJSONString ) ) {
+			if ( !Builder_WriteEntireFile( debugJSONFilename, debugJSONString, length ) ) {
 				Builder_Error( "Failed to write \"%s\".\n", debugJSONFilename );
 				ok = false;
 			} else {

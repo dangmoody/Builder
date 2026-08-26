@@ -228,7 +228,7 @@ static char *Builder_RelativePathTo( arena_t *results, const char *from, const c
 
 	StringBuilder_Appendf( results, &sb, "%s", toFixed + common );
 
-	char *result = StringBuilder_ToString( results, &sb );
+	char *result = StringBuilder_ToString( results, &sb, NULL );
 
 	Builder_RewindScratch( &scratch );
 
@@ -639,7 +639,7 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 				StringBuilder_Appendf( errorScratch.arena, &error, "Builder will still generate the solution, but know that not setting at least one platform name to any of these defaults will cause certain fields in the property pages of your Visual Studio project to not be correct.\n" );
 				StringBuilder_Appendf( errorScratch.arena, &error, "You have been warned.\n" );
 
-				Builder_Warning( "%s", StringBuilder_ToString( errorScratch.arena, &error ) );
+				Builder_Warning( "%s", StringBuilder_ToString( errorScratch.arena, &error, NULL ) );
 
 				Builder_RewindScratch( &errorScratch );
 			}

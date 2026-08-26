@@ -2693,33 +2693,34 @@ typedef struct builderCompileContext_t {
 #endif
 } builderCompileContext_t;
 
-static stringBuilder_t Builder_CreateCompilationCommand( arena_t *commandArena, builderCompileContext_t *context ) {
+static const char * Builder_CreateCompilationCommand( arena_t *commandArena, builderCompileContext_t *context ) {
 	BuildConfig *config = context->config;
+	scratch_t scratch = Builder_GetScratch( commandArena );
 
 	stringBuilder_t compileArgs = { 0 };
-	StringBuilder_Appendf( commandArena, &compileArgs, "\"%s\" ", context->compilerPath );
+	StringBuilder_Appendf( scratch.arena, &compileArgs, "\"%s\" ", context->compilerPath );
 
 	if ( context->useMSVC ) {
 #if defined( _WIN32 )
 		builderMSVCInstall_t *msvcInstall = context->msvcInstall;
 		builderWindowsSDKInstall_t *windowsSDKInstall = context->windowsSDKInstall;
 
-		StringBuilder_Appendf( commandArena, &compileArgs, "/nologo " );	// disable MSVC spamming its copyright banner for every compilation unit
-		StringBuilder_Appendf( commandArena, &compileArgs, "/c " );
+		StringBuilder_Appendf( scratch.arena, &compileArgs, "/nologo " );	// disable MSVC spamming its copyright banner for every compilation unit
+		StringBuilder_Appendf( scratch.arena, &compileArgs, "/c " );
 
 		if ( config->languageVersion != LANGUAGE_VERSION_UNSET ) {
-			StringBuilder_Appendf( commandArena, &compileArgs, "/std:%s ", GetLanguageVersionString( config->languageVersion ) );
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "/std:%s ", GetLanguageVersionString( config->languageVersion ) );
 		}
 
 		if ( !config->removeSymbols ) {
-			StringBuilder_Appendf( commandArena, &compileArgs, "/Z7 " );
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "/Z7 " );
 		}
 
-		StringBuilder_Appendf( commandArena, &compileArgs, "%s ", Builder_GetOptimizationString_MSVC( config->optimization ) );
+		StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", Builder_GetOptimizationString_MSVC( config->optimization ) );
 
 		for ( builderStringChunk_t *chunk = config->defines.head; chunk; chunk = chunk->next ) {
 			for ( uint32_t defineIndex = 0; defineIndex < chunk->count; defineIndex++ ) {
-				StringBuilder_Appendf( commandArena, &compileArgs, "/D%s ", chunk->items[defineIndex] );
+				StringBuilder_Appendf( scratch.arena, &compileArgs, "/D%s ", chunk->items[defineIndex] );
 
 				if ( !context->debugDefineSet && _strnicmp( "_DEBUG", chunk->items[defineIndex], sizeof( "_DEBUG" ) ) == 0 ) {
 					context->debugDefineSet = true;
@@ -2730,7 +2731,7 @@ static stringBuilder_t Builder_CreateCompilationCommand( arena_t *commandArena, 
 		}
 
 		// cl.exe doesn't know where the CRT/Windows SDK headers live unless you're in a Developer Command Prompt, so point it there ourselves
-		StringBuilder_Appendf( commandArena, &compileArgs, "/I\"%s\" /I\"%s\" /I\"%s\" /I\"%s\" "
+		StringBuilder_Appendf( scratch.arena, &compileArgs, "/I\"%s\" /I\"%s\" /I\"%s\" /I\"%s\" "
 			, msvcInstall->includePath
 			, windowsSDKInstall->ucrtIncludePath
 			, windowsSDKInstall->umIncludePath
@@ -2738,12 +2739,12 @@ static stringBuilder_t Builder_CreateCompilationCommand( arena_t *commandArena, 
 
 		for ( builderStringChunk_t *chunk = config->additionalIncludes.head; chunk; chunk = chunk->next ) {
 			for ( uint32_t includeIndex = 0; includeIndex < chunk->count; includeIndex++ ) {
-				StringBuilder_Appendf( commandArena, &compileArgs, "/I%s ", chunk->items[includeIndex] );
+				StringBuilder_Appendf( scratch.arena, &compileArgs, "/I%s ", chunk->items[includeIndex] );
 			}
 		}
 
 		if ( config->warningsAsErrors ) {
-			StringBuilder_Appendf( commandArena, &compileArgs, "/WX " );
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "/WX " );
 		}
 
 		bool sawWarningLevel = false;
@@ -2754,7 +2755,8 @@ static stringBuilder_t Builder_CreateCompilationCommand( arena_t *commandArena, 
 
 				if ( sawWarningLevel ) {
 					Builder_Error( "MSVC only allows one warning level to be set at a time, but you specified more than one.\n" );
-					return (stringBuilder_t) {0};
+					Builder_RewindScratch( &scratch );
+					return NULL;
 				}
 
 				if ( !Builder_IsWarningLevelAllowed_MSVC( warningLevel ) ) {
@@ -2769,10 +2771,11 @@ static stringBuilder_t Builder_CreateCompilationCommand( arena_t *commandArena, 
 						, warningLevel
 					);
 
-					return (stringBuilder_t) {0};
+					Builder_RewindScratch( &scratch );
+					return NULL;
 			}
 
-				StringBuilder_Appendf( commandArena, &compileArgs, "%s ", warningLevel );
+				StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", warningLevel );
 
 				sawWarningLevel = true;
 			}
@@ -2780,42 +2783,42 @@ static stringBuilder_t Builder_CreateCompilationCommand( arena_t *commandArena, 
 
 		if ( context->debugDefineSet ) {
 			if ( config->useDynamicRuntimeOnWindows ) {
-				StringBuilder_Appendf( commandArena, &compileArgs, "/MDd " );
+				StringBuilder_Appendf( scratch.arena, &compileArgs, "/MDd " );
 			} else {
-				StringBuilder_Appendf( commandArena, &compileArgs, "/MTd " );
+				StringBuilder_Appendf( scratch.arena, &compileArgs, "/MTd " );
 			}
 		} else {
 			if ( config->useDynamicRuntimeOnWindows ) {
-				StringBuilder_Appendf( commandArena, &compileArgs, "/MD " );
+				StringBuilder_Appendf( scratch.arena, &compileArgs, "/MD " );
 			} else {
-				StringBuilder_Appendf( commandArena, &compileArgs, "/MT " );
+				StringBuilder_Appendf( scratch.arena, &compileArgs, "/MT " );
 			}
 		}
 
-		StringBuilder_Appendf( commandArena, &compileArgs, "/showIncludes " );
+		StringBuilder_Appendf( scratch.arena, &compileArgs, "/showIncludes " );
 #endif
 	} else {
 		if ( config->languageVersion != LANGUAGE_VERSION_UNSET ) {
-			StringBuilder_Appendf( commandArena, &compileArgs, "-std=%s ", GetLanguageVersionString( config->languageVersion ) );
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "-std=%s ", GetLanguageVersionString( config->languageVersion ) );
 		}
 
 		if ( !config->removeSymbols ) {
-			StringBuilder_Appendf( commandArena, &compileArgs, "-g " );
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "-g " );
 		}
 
-		StringBuilder_Appendf( commandArena, &compileArgs, "%s ", Builder_GetOptimizationString_Clang( config->optimization ) );
+		StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", Builder_GetOptimizationString_Clang( config->optimization ) );
 
 #if defined( __linux__ )
 		if ( config->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
-			StringBuilder_Appendf( commandArena, &compileArgs, "-fPIC " );
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "-fPIC " );
 		}
 #endif
 
-		StringBuilder_Appendf( commandArena, &compileArgs, "-c " );
+		StringBuilder_Appendf( scratch.arena, &compileArgs, "-c " );
 
 		for ( builderStringChunk_t *chunk = config->defines.head; chunk; chunk = chunk->next ) {
 			for ( uint32_t defineIndex = 0; defineIndex < chunk->count; defineIndex++ ) {
-				StringBuilder_Appendf( commandArena, &compileArgs, "-D%s ", chunk->items[defineIndex] );
+				StringBuilder_Appendf( scratch.arena, &compileArgs, "-D%s ", chunk->items[defineIndex] );
 
 #if defined( _WIN32 )
 				if ( !context->debugDefineSet && _strnicmp( "_DEBUG", chunk->items[defineIndex], sizeof( "_DEBUG" ) ) == 0 ) {
@@ -2829,20 +2832,20 @@ static stringBuilder_t Builder_CreateCompilationCommand( arena_t *commandArena, 
 
 #if defined( _WIN32 )
 		// we are handling these things for them on windows
-		StringBuilder_Appendf( commandArena, &compileArgs, " -D_MT ");
+		StringBuilder_Appendf( scratch.arena, &compileArgs, " -D_MT ");
 		if ( config->useDynamicRuntimeOnWindows ) {
-			StringBuilder_Appendf( commandArena, &compileArgs, "-D_DLL " );
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "-D_DLL " );
 		}
 #endif
 
 		for ( builderStringChunk_t *chunk = config->additionalIncludes.head; chunk; chunk = chunk->next ) {
 			for ( uint32_t includeIndex = 0; includeIndex < chunk->count; includeIndex++ ) {
-				StringBuilder_Appendf( commandArena, &compileArgs, "-I%s ", chunk->items[includeIndex] );
+				StringBuilder_Appendf( scratch.arena, &compileArgs, "-I%s ", chunk->items[includeIndex] );
 			}
 		}
 
 		if ( config->warningsAsErrors ) {
-			StringBuilder_Appendf( commandArena, &compileArgs, "-Werror " );
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "-Werror " );
 		}
 
 		for ( builderStringChunk_t *chunk = config->warningLevels.head; chunk; chunk = chunk->next ) {
@@ -2859,29 +2862,31 @@ static stringBuilder_t Builder_CreateCompilationCommand( arena_t *commandArena, 
 						, warningLevel
 					);
 
-					return (stringBuilder_t) {0};
+					Builder_RewindScratch( &scratch );
+					return NULL;
 				}
 
-				StringBuilder_Appendf( commandArena, &compileArgs, "%s ", warningLevel );
+				StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", warningLevel );
 			}
 		}
 
-		StringBuilder_Appendf( commandArena, &compileArgs, "-MD -MF - " );
+		StringBuilder_Appendf( scratch.arena, &compileArgs, "-MD -MF - " );
 	}
 
 	for ( builderStringChunk_t *chunk = config->ignoreWarnings.head; chunk; chunk = chunk->next ) {
 		for ( uint32_t ignoreWarningIndex = 0; ignoreWarningIndex < chunk->count; ignoreWarningIndex++ ) {
-			StringBuilder_Appendf( commandArena, &compileArgs, "%s ", chunk->items[ignoreWarningIndex] );
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", chunk->items[ignoreWarningIndex] );
 		}
 	}
 
 	for ( builderStringChunk_t *chunk = config->additionalCompilerArguments.head; chunk; chunk = chunk->next ) {
 		for ( uint32_t extraArgIndex = 0; extraArgIndex < chunk->count; extraArgIndex++ ) {
-			StringBuilder_Appendf( commandArena, &compileArgs, "%s ", chunk->items[extraArgIndex] );
+			StringBuilder_Appendf( scratch.arena, &compileArgs, "%s ", chunk->items[extraArgIndex] );
 		}
 	}
 	
-	return compileArgs;
+	Builder_RewindScratch( &scratch );
+	return StringBuilder_ToString( commandArena, &compileArgs, NULL );
 }
 
 typedef struct builderCompilePacket_t {
@@ -3627,27 +3632,23 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 
 					scratch_t scratch = Builder_GetScratch( buildScratch.arena );
 
-					stringBuilder_t compileCommand = Builder_CreateCompilationCommand( scratch.arena, &compileContext );
-					if ( compileCommand.head == compileCommand.tail ) {
+					const char *baseCompileCommand = Builder_CreateCompilationCommand( scratch.arena, &compileContext );
+					if ( !baseCompileCommand ) {
 						Builder_Error( "Failed to create compilation command for config %s!\n", config->name );
 						Builder_RewindArena( buildScratch.arena, &configStart );
 						continue;
 					}
 
-					// hash just the config compile options
-					uint64_t configCompileCommandHash = 0;
-					{
-						stringBuilder_t compileCommandCopy = compileCommand;
-						StringBuilder_Appendf( scratch.arena, &compileCommandCopy, "%s", compilerVersionString );
-						configCompileCommandHash = Builder_HashString( StringBuilder_ToString( scratch.arena, &compileCommandCopy, NULL ) );
-					}
+					// hash just the config compile options with the compiler version
+					uint64_t configCompileCommandHash = Builder_HashString( Builder_FormatString( scratch.arena, "%s%s", baseCompileCommand, compilerVersionString ) );
 
 					uint32_t written = 0;
 
 					for ( builderStringChunk_t *chunk = globList.head; chunk; chunk = chunk->next ) {
 						for ( uint32_t globbedFileIndex = 0; globbedFileIndex < chunk->count; globbedFileIndex++ ) {
 							const char *sourceFile = chunk->items[globbedFileIndex];
-							stringBuilder_t fullCompileCommand = compileCommand;
+							stringBuilder_t fullCompileCommand = { 0 };
+							StringBuilder_Appendf( scratch.arena, &fullCompileCommand, "%s", baseCompileCommand );
 
 							uint64_t compileCommandHash = Builder_AppendHash( configCompileCommandHash, sourceFile );
 							compilePackets[written].intermediateFile = Builder_GetIntermediateFilePath( buildScratch.arena, intermediateFolder, compileCommandHash, sourceFile );
@@ -3662,7 +3663,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 								StringBuilder_Appendf( scratch.arena, &fullCompileCommand, "-o " );
 							}
 
-							StringBuilder_Appendf( scratch.arena, &fullCompileCommand, compilePackets[written].intermediateFile );
+							StringBuilder_Appendf( scratch.arena, &fullCompileCommand, "%s ", compilePackets[written].intermediateFile );
 
 							compilePackets[written].compileCommand = StringBuilder_ToString( buildScratch.arena, &fullCompileCommand, NULL );
 							compilePackets[written].sourceFile = sourceFile;

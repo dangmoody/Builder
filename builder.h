@@ -98,15 +98,15 @@ typedef struct ConfigPtrList {
 // from Config_FormatString().
 typedef struct BuildConfig {
 	// Required, and unique across your configs.  It's what "--config=" matches against and what the build log calls it.
-	const char				*name;
+	const char		*name;
 	// Other BuildConfigs that need to be built before this one - see MakeDependencies() and AddDependencies().
 	// Building a config builds everything in here first, so you only ever have to ask for the top-level one.
-	ConfigPtrList			dependsOn;
-	const char				*binaryName;
+	ConfigPtrList	dependsOn;
+	const char		*binaryName;
 	// The folder the binary is placed into, relative to the file you pass into Builder.
 	// If this folder doesn't exist then Builder will create it for you.
 	// Leave unset to put the binary alongside the source file.
-	const char				*binaryFolder;
+	const char		*binaryFolder;
 	StringList		sourceFiles;
 	StringList		defines;
 	StringList		additionalIncludes;
@@ -116,14 +116,14 @@ typedef struct BuildConfig {
 	StringList		warningLevels;
 	StringList		ignoreWarnings;
 	StringList		additionalLinkerArguments;
-	BinaryType				binaryType;
-	LanguageVersion			languageVersion;
-	Optimization			optimization;
-	bool					removeSymbols;
-	bool					warningsAsErrors;
-	bool					useDynamicRuntimeOnWindows;
-	void					( *OnPreBuild )( struct BuildConfig *config );
-	void					( *OnPostBuild )( struct BuildConfig *config );
+	BinaryType		binaryType;
+	LanguageVersion	languageVersion;
+	Optimization	optimization;
+	bool			removeSymbols;
+	bool			warningsAsErrors;
+	bool			useDynamicRuntimeOnWindows;
+	void			( *OnPreBuild )( struct BuildConfig *config );
+	void			( *OnPostBuild )( struct BuildConfig *config );
 } BuildConfig;
 
 typedef struct BuilderOptions {

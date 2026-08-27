@@ -3884,95 +3884,35 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 					if ( needsCompilePacketCount > 0 || !Builder_GetFileLastWriteTime( binaryPath, &binaryFileWriteTime ) ) {
 						stringBuilder_t linkerArgs = { 0 };
 #if defined( _WIN32 )
-						if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
-							StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\lib.exe\" ", msvcInstall.rootFolder );
-						} else {
-							StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\link.exe\" ", msvcInstall.rootFolder );
-						}
-
-						if ( config->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
-							StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/DLL " );
-						}
-
-						if ( !config->removeSymbols ) {
-							StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/DEBUG " );
-						}
-
-						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/OUT:" );
-						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", binaryPath );
-
-						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", msvcInstall.libPath );
-						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.umLibPath );
-						StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.ucrtLibPath );
-
-						// we always have to link all files
-						for ( uint32_t intermediateIndex = 0; intermediateIndex < compilePacketCount; ++intermediateIndex ) {
-							StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", compilePackets[intermediateIndex].intermediateFile );
-						}
-
-						for ( builderStringChunk_t *chunk = config->additionalLibPaths.head; chunk; chunk = chunk->next ) {
-							for ( uint32_t libPathIndex = 0; libPathIndex < chunk->count; libPathIndex++ ) {
-								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", chunk->items[libPathIndex] );
-							}
-						}
-
-						for ( builderStringChunk_t *chunk = config->additionalLibs.head; chunk; chunk = chunk->next ) {
-							for ( uint32_t libIndex = 0; libIndex < chunk->count; libIndex++ ) {
-								const char *additionalLib = chunk->items[libIndex];
-
-								// callers sometimes already include the ".lib" extension themselves - don't double it up
-								size_t libNameLen = strlen( additionalLib );
-								bool alreadyHasExtension = libNameLen >= 4 && _stricmp( additionalLib + libNameLen - 4, ".lib" ) == 0;	// TODO: AK: 26/08/2026: use Builder_PathHasFileExtension() instead?
-
-								if ( alreadyHasExtension ) {
-									StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", additionalLib );
-								} else {
-									StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s.lib ", additionalLib );
-								}
-							}
-						}
-
-						if ( config->binaryType != BINARY_TYPE_STATIC_LIBRARY ) {
-							// clang doesn't embed /DEFAULTLIB directives the way cl.exe does
-							// so link.exe has no idea which CRT/SDK libs to pull in unless we name them ourselves
-							if ( config->useDynamicRuntimeOnWindows ) {
-								if (compileContext.debugDefineSet) {
-									StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "msvcrtd.lib msvcprtd.lib vcruntimed.lib ucrtd.lib kernel32.lib " );
-								} else {
-									StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "msvcrt.lib msvcprt.lib vcruntime.lib ucrt.lib kernel32.lib " );
-								}
-							} else {
-								if (compileContext.debugDefineSet) {
-									StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "libcmtd.lib libcpmtd.lib libvcruntimed.lib libucrtd.lib kernel32.lib " );
-								} else {
-									StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "libcmt.lib libcpmt.lib libvcruntime.lib libucrt.lib kernel32.lib " );
-								}
-							}
-						}
-
-						for ( builderStringChunk_t *chunk = config->additionalLinkerArguments.head; chunk; chunk = chunk->next ) {
-							for ( uint32_t argumentIndex = 0; argumentIndex < chunk->count; argumentIndex++ ) {
-								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", chunk->items[argumentIndex] );
-							}
-						}
+						bool useMSVCLink = useMSVC || !( Builder_PathHasFileExtension( compilerPath, "gcc" ) || Builder_PathHasFileExtension( compilerPath, "gcc.exe" ) );
 #elif defined( __linux__ )
-						if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
-							StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "ar rcs " );
-							StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", binaryPath );
+						bool useMSVCLink = false;
+#else
+#error Unrecognised platform.
+#endif
 
-							// we always have to link all files
-							for ( uint32_t intermediateIndex = 0; intermediateIndex < compilePacketCount; ++intermediateIndex ) {
-								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", compilePackets[intermediateIndex].intermediateFile );
+						if ( useMSVCLink ) {
+#if defined( _WIN32 )
+							if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
+								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\lib.exe\" ", msvcInstall.rootFolder );
+							} else {
+								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\link.exe\" ", msvcInstall.rootFolder );
 							}
-						} else {
-							StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "\"%s\" ", compilerPath );
 
 							if ( config->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
-								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-shared " );
+								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/DLL " );
 							}
 
-							StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-o " );
+							if ( !config->removeSymbols ) {
+								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/DEBUG " );
+							}
+
+							StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/OUT:" );
 							StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", binaryPath );
+
+							StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", msvcInstall.libPath );
+							StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.umLibPath );
+							StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", windowsSDKInstall.ucrtLibPath );
 
 							// we always have to link all files
 							for ( uint32_t intermediateIndex = 0; intermediateIndex < compilePacketCount; ++intermediateIndex ) {
@@ -3981,13 +3921,41 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 
 							for ( builderStringChunk_t *chunk = config->additionalLibPaths.head; chunk; chunk = chunk->next ) {
 								for ( uint32_t libPathIndex = 0; libPathIndex < chunk->count; libPathIndex++ ) {
-									StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-L%s ", chunk->items[libPathIndex] );
+									StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\" ", chunk->items[libPathIndex] );
 								}
 							}
 
 							for ( builderStringChunk_t *chunk = config->additionalLibs.head; chunk; chunk = chunk->next ) {
 								for ( uint32_t libIndex = 0; libIndex < chunk->count; libIndex++ ) {
-									StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-l%s ", chunk->items[libIndex] );
+									const char *additionalLib = chunk->items[libIndex];
+
+									// callers sometimes already include the ".lib" extension themselves, don't double it up
+									size_t libNameLen = strlen( additionalLib );
+									bool alreadyHasExtension = libNameLen >= 4 && _stricmp( additionalLib + libNameLen - 4, ".lib" ) == 0;	// TODO: AK: 26/08/2026: use Builder_PathHasFileExtension() instead?
+
+									if ( alreadyHasExtension ) {
+										StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", additionalLib );
+									} else {
+										StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s.lib ", additionalLib );
+									}
+								}
+							}
+
+							if ( config->binaryType != BINARY_TYPE_STATIC_LIBRARY ) {
+								// clang doesnt embed /DEFAULTLIB directives the way cl.exe does
+								// so link.exe has no idea which CRT/SDK libs to pull in unless we name them ourselves
+								if ( config->useDynamicRuntimeOnWindows ) {
+									if (compileContext.debugDefineSet) {
+										StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "msvcrtd.lib msvcprtd.lib vcruntimed.lib ucrtd.lib kernel32.lib " );
+									} else {
+										StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "msvcrt.lib msvcprt.lib vcruntime.lib ucrt.lib kernel32.lib " );
+									}
+								} else {
+									if (compileContext.debugDefineSet) {
+										StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "libcmtd.lib libcpmtd.lib libvcruntimed.lib libucrtd.lib kernel32.lib " );
+									} else {
+										StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "libcmt.lib libcpmt.lib libvcruntime.lib libucrt.lib kernel32.lib " );
+									}
 								}
 							}
 
@@ -3996,8 +3964,72 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 									StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", chunk->items[argumentIndex] );
 								}
 							}
-						}
 #endif
+						} else {
+							if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
+								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "ar rcs " );
+								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", binaryPath );
+
+								// we always have to link all files
+								for ( uint32_t intermediateIndex = 0; intermediateIndex < compilePacketCount; ++intermediateIndex ) {
+									StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", compilePackets[intermediateIndex].intermediateFile );
+								}
+							} else {
+								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "\"%s\" ", compilerPath );
+
+								if ( config->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
+									StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-shared " );
+
+#if defined( _WIN32 )
+									// mingw doesnt emit an import library alongside the DLL unless asked
+									// link.exe does this automatically for /DLL
+									if ( config->binaryFolder ) {
+										StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-Wl,--out-implib,%s%c%s.lib ", config->binaryFolder, BUILDER_PATH_SEPARATOR, config->binaryName );
+									} else {
+										StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-Wl,--out-implib,%s.lib ", config->binaryName );
+									}
+#endif
+								}
+
+								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-o " );
+								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", binaryPath );
+
+								// we always have to link all files
+								for ( uint32_t intermediateIndex = 0; intermediateIndex < compilePacketCount; ++intermediateIndex ) {
+									StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", compilePackets[intermediateIndex].intermediateFile );
+								}
+
+								for ( builderStringChunk_t *chunk = config->additionalLibPaths.head; chunk; chunk = chunk->next ) {
+									for ( uint32_t libPathIndex = 0; libPathIndex < chunk->count; libPathIndex++ ) {
+										StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-L%s ", chunk->items[libPathIndex] );
+									}
+								}
+
+								for ( builderStringChunk_t *chunk = config->additionalLibs.head; chunk; chunk = chunk->next ) {
+									for ( uint32_t libIndex = 0; libIndex < chunk->count; libIndex++ ) {
+										const char *additionalLib = chunk->items[libIndex];
+
+										// an explicit filename or path (e.g. "./foo.so", "foo.lib") is passed straight through
+										// "-l" is only correct for bare library names since it adds the "lib" prefix and an extension itself
+										bool isExplicitLibFile = Builder_StringContains( additionalLib, "/" ) ||
+																  Builder_StringContains( additionalLib, "\\" ) ||
+																  Builder_PathHasFileExtension( additionalLib, ".lib" );
+
+										if ( isExplicitLibFile ) {
+											StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", additionalLib );
+										} else {
+											StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-l%s ", additionalLib );
+										}
+									}
+								}
+
+								for ( builderStringChunk_t *chunk = config->additionalLinkerArguments.head; chunk; chunk = chunk->next ) {
+									for ( uint32_t argumentIndex = 0; argumentIndex < chunk->count; argumentIndex++ ) {
+										StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", chunk->items[argumentIndex] );
+									}
+								}
+							}
+						}
 						char *args = StringBuilder_ToString( buildScratch.arena, &linkerArgs, NULL );
 
 						printf( "%s\n", args );

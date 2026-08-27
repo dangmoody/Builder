@@ -538,22 +538,70 @@ static char *Builder_FormatString( arena_t *arena, const char *fmt, ... ) {
 	return result;
 }
 
+typedef enum {
+	CONSOLE_TEXT_COLOR_DEFAULT	= 0,
+	CONSOLE_TEXT_COLOR_YELLOW	= 1,
+	CONSOLE_TEXT_COLOR_RED		= 2,
+} builderConsoleTextColor_t;
+
+static void Builder_SetConsoleTextColor( const builderConsoleTextColor_t color ) {
+#if defined( _WIN32 )
+	DWORD colorWin = 0;
+
+	switch ( color ) {
+		case CONSOLE_TEXT_COLOR_DEFAULT:	colorWin = 0x07; break;
+		case CONSOLE_TEXT_COLOR_YELLOW:		colorWin = 0x0E; break;
+		case CONSOLE_TEXT_COLOR_RED:		colorWin = 0x0C; break;
+	}
+
+	BUILDER_ASSERT( colorWin && "Bad console text color specified." );
+
+	SetConsoleTextAttribute( GetStdHandle( STD_OUTPUT_HANDLE ), colorWin );
+#elif defined( __linux__ )
+	const char *colorLinux = NULL;
+
+	switch ( color ) {
+		case CONSOLE_TEXT_COLOR_DEFAULT:	colorLinux = "\033[0m"; break;
+		case CONSOLE_TEXT_COLOR_YELLOW:		colorLinux = "\033[0;31m"; break;
+		case CONSOLE_TEXT_COLOR_RED:		colorLinux = "\033[0;32m"; break;
+	}
+
+	BUILDER_ASSERT( colorLinux && "Bad console text color specified." );
+
+	printf( "%s", colorLinux );
+#else
+#error Unrecognised platform.
+#endif
+}
+
 static void Builder_Warning( const char *fmt, ... ) {
+	Builder_SetConsoleTextColor( CONSOLE_TEXT_COLOR_RED );
+
 	printf( "WARNING: " );
+
+	Builder_SetConsoleTextColor( CONSOLE_TEXT_COLOR_YELLOW );
 
 	va_list args;
 	va_start( args, fmt );
 	vprintf( fmt, args );
 	va_end( args );
+
+	Builder_SetConsoleTextColor( CONSOLE_TEXT_COLOR_DEFAULT );
 }
 
 static void Builder_Error( const char *fmt, ... ) {
+	Builder_SetConsoleTextColor( CONSOLE_TEXT_COLOR_RED );
+
 	printf( "ERROR: " );
+
+	Builder_SetConsoleTextColor( CONSOLE_TEXT_COLOR_YELLOW );
 
 	va_list args;
 	va_start( args, fmt );
 	vprintf( fmt, args );
 	va_end( args );
+
+	Builder_SetConsoleTextColor( CONSOLE_TEXT_COLOR_DEFAULT );
 }
 
 static void Builder_LogVerbose( const BuilderOptions *options, const char *fmt, ... ) {

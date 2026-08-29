@@ -27,10 +27,11 @@ int main( int argc, char **argv ) {
 		.binaryName			= "test_static_lib_program",
 		.sourceFiles		= MakeStringList( "program/main.c" ),
 		.additionalIncludes	= MakeStringList( "lib" ),
+		.additionalLibPaths = MakeStringList( "." ),
 #if defined( _WIN32 )
-		.additionalLinkerArguments = MakeStringList( "test_static_lib.lib" ),
+		.additionalLibs = MakeStringList( "test_static_lib.lib" ),
 #else
-		.additionalLinkerArguments = MakeStringList( "./test_static_lib.a" ),
+		.additionalLibs = MakeStringList( "test_static_lib.a" ),
 #endif
 		.binaryType			= BINARY_TYPE_EXE,
 	};

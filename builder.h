@@ -130,29 +130,29 @@ typedef struct BuilderOptions {
 	// The path to the compiler you want to build with.
 	// Leave NULL to use "clang" and assume it's on your PATH.
 	// On Windows, you can set this to "cl" or "cl.exe" to build with MSVC instead - Builder will locate your MSVC install automatically.
-	const char	*compilerPath;
+	const char		*compilerPath;
 
 	// What version of your compiler are you expecting to build with, if any?
 	// If the compiler Builder ends up using doesn't match this, Builder will log a warning but carry on building anyway.
 	// Leave NULL to skip this check entirely.
-	const char	*compilerVersion;
+	const char		*compilerVersion;
 
 	// The folder that intermediate build files (object files) are placed into, relative to build executable.
 	// If this folder doesn't exist then Builder will create it for you.
 	// Leave NULL to put intermediate files at ./intermediates/
-	const char	*intermediateFolder;
+	const char		*intermediateFolder;
 
 	// If no config is specified at the command line via --config=, what config do you want Builder to build by default?
-	BuildConfig	*defaultConfig;
+	BuildConfig		*defaultConfig;
 
 	// Set this to true if you want Builder to force-rebuild your program.
 	// All binaries and intermediate files will get rebuilt.
 	// This is really only useful to those who are either using an editor + command line workflow, or just hate incremental builds.
-	bool						forceRebuild;
+	bool			forceRebuild;
 
 	// Enables extra diagnostic logging throughout the build (each line prefixed "VERBOSE: ").
 	// You can set this yourself, or leave it and Builder will set it automatically if "-v" or "--verbose" is present in argv.
-	bool		verboseLogging;
+	bool			verboseLogging;
 
 	// The list of configs that gets populated when calling CreateBuildConfig().
 	// Don't write to this directly unless you know what you're doing.
@@ -242,6 +242,7 @@ int		Build( BuilderOptions *options, int argc, char **argv );
 #include <errno.h>
 #include <time.h>
 #include <pthread.h>
+#include <fcntl.h>
 #else
 #error Unrecognised platform.
 #endif
@@ -2747,6 +2748,7 @@ static const char *Builder_CreateCompilationCommand( arena_t *commandArena, buil
 	stringBuilder_t compileArgs = { 0 };
 	StringBuilder_Appendf( scratch.arena, &compileArgs, "\"%s\" ", context->compilerPath );
 
+#ifdef _WIN32
 	if ( context->useMSVC ) {
 		builderMSVCInstall_t *msvcInstall = context->msvcInstall;
 		builderWindowsSDKInstall_t *windowsSDKInstall = context->windowsSDKInstall;
@@ -2842,7 +2844,9 @@ static const char *Builder_CreateCompilationCommand( arena_t *commandArena, buil
 		}
 
 		StringBuilder_Appendf( scratch.arena, &compileArgs, "/showIncludes " );
-	} else {
+	} else
+#endif
+	{
 		if ( config->languageVersion != LANGUAGE_VERSION_UNSET ) {
 			StringBuilder_Appendf( scratch.arena, &compileArgs, "-std=%s ", GetLanguageVersionString( config->languageVersion ) );
 		}
@@ -2974,8 +2978,8 @@ static bool Builder_CompileSourceFile( builderCompileJobPool_t *pool, builderCom
 	char *compilerOutput = NULL;
 	int32_t compileResult = Builder_RunProcess( scratch.arena, compilePacket->compileCommand, false, &compilerOutput );
 
-	if ( pool->useMSVC ) {
 #if defined( _WIN32 )
+	if ( pool->useMSVC ) {
 		uint32_t fileNameStart = 0;
 		const char *sourceCurrent = compilePacket->sourceFile;
 		for ( uint32_t i = 0; sourceCurrent[i] != '\0'; ++i ) {
@@ -3029,8 +3033,9 @@ static bool Builder_CompileSourceFile( builderCompileJobPool_t *pool, builderCom
 				.compilePacketIndex	= compilePacketIndex
 			};
 		}
+	} else
 #endif
-	} else {
+	{
 		const char* dependencyStart = NULL;
 		const char* dependencyEnd = NULL;
 		const char *current = compilerOutput;
@@ -3596,14 +3601,14 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 	}
 #endif
 
+	char *compilerVersionString = NULL;
+#ifdef _WIN32
 	if ( useMSVC ) {
 		compilerPath = Builder_FormatString( buildScratch.arena, "%s\\bin\\Hostx64\\x64\\cl.exe", msvcInstall.rootFolder );
-	}
-
-	char *compilerVersionString = NULL;
-	if ( useMSVC ) {
 		compilerVersionString = Builder_FormatString( buildScratch.arena, "%d.%d.%d", msvcInstall.version.v0, msvcInstall.version.v1, msvcInstall.version.v2 );
-	} else {
+	} else
+#endif
+	{
 		char *versionCmd = Builder_FormatString( buildScratch.arena, "\"%s\" --version", compilerPath );
 		char *versionOutput = NULL;
 
@@ -3939,8 +3944,8 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 #error Unrecognised platform.
 #endif
 
-						if ( useMSVCLink ) {
 #if defined( _WIN32 )
+						if ( useMSVCLink ) {
 							if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
 								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\lib.exe\" ", msvcInstall.rootFolder );
 							} else {
@@ -4012,8 +4017,9 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 									StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", chunk->items[argumentIndex] );
 								}
 							}
+						} else
 #endif
-						} else {
+						{
 							if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
 								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "ar rcs " );
 								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", binaryPath );

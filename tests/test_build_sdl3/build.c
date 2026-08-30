@@ -2,7 +2,7 @@
 #include "../../builder.h"
 
 #define BINARY_NAME		"SDL"
-#define BINARY_FOLDER	"bin/demos/SDL3"
+#define BINARY_FOLDER	"bin"
 
 int main( int argc, char **argv ) {
 	BuilderOptions options = { 0 };
@@ -118,22 +118,70 @@ int main( int argc, char **argv ) {
 	AddDefines( sdl, "SDL_PLATFORM_WIN32", "HAVE_MODF" );
 
 	AddLibs( sdl,
-		"Ole32", "OleAut32", "Winmm", "Imm32", "Advapi32", "Shell32",
-		"Cfgmgr32", "Gdi32", "SetupAPI", "Version", "user32"
+		"Ole32",
+		"OleAut32",
+		"Winmm",
+		"Imm32",
+		"Advapi32",
+		"Shell32",
+		"Cfgmgr32",
+		"Gdi32",
+		"SetupAPI",
+		"Version",
+		"user32"
 	);
 #elif defined( __linux__ )
 	AddSourceFiles( sdl,
+		// SDL_build_config.h falls back to SDL_build_config_minimal.h on linux which forces every subsystem to its disabled/dummy backend
+		// so pull in the dummy implementations rather than the real linux backends (thread/pthread, joystick/linux, etc) since those are gated on config macros minimal.h doesn't set.
+		"src/core/linux/SDL_threadprio.c",	// core/SDL_core_unsupported.c explicitly excludes SDL_PLATFORM_LINUX, so this is the only place SDL_SetLinuxThreadPriority can come from
+		"src/core/unix/SDL_gtk.c",			// SDL.c calls SDL_Gtk_Quit() unconditionally whenever SDL_PLATFORM_UNIX is set, dummy backends or not
+		"src/dialog/dummy/*.c",
+		"src/filesystem/dummy/*.c",
+		"src/haptic/dummy/*.c",
+		"src/joystick/dummy/*.c",
+		"src/libm/*.c",						// SDL's math fallbacks (SDL_uclibc_*) - always required since minimal.h doesn't set the HAVE_<mathfunc> defines
+		"src/loadso/dummy/*.c",
+		"src/locale/dummy/*.c",
+		"src/misc/dummy/*.c",
+		"src/process/dummy/*.c",
 		"src/render/gpu/*.c",
 		"src/render/opengl/*.c",
 		"src/render/opengles2/*.c",
-		"src/render/vulkan/*.c"
+		"src/render/vulkan/*.c",
+		"src/sensor/dummy/*.c",
+		"src/thread/generic/*.c",			// SDL_THREADS_DISABLED selects this backend; there's no dummy/disabled option for time and timer below, they're mandatory on every platform
+		"src/time/unix/*.c",
+		"src/timer/unix/*.c",
+		"src/tray/dummy/*.c"
 	);
 
 	AddDefines( sdl,
-		"HAVE_LIBC", "HAVE_STDARG_H", "HAVE_STDDEF_H", "HAVE_STDINT_H", "HAVE_FLOAT_H",
-		"HAVE_LIMITS_H", "HAVE_MATH_H", "HAVE_SIGNAL_H", "HAVE_STDIO_H", "HAVE_STDLIB_H",
-		"HAVE_STRING_H", "HAVE_STRINGS_H", "HAVE_SYS_TYPES_H", "HAVE_WCHAR_H",
-		"HAVE_INTTYPES_H", "HAVE_MALLOC_H", "HAVE_MEMORY_H", "HAVE_ALLOCA_H"
+		"HAVE_LIBC",
+		"HAVE_STDARG_H",
+		"HAVE_STDDEF_H",
+		"HAVE_STDINT_H",
+		"HAVE_FLOAT_H",
+		"HAVE_LIMITS_H",
+		"HAVE_MATH_H",
+		"HAVE_SIGNAL_H",
+		"HAVE_STDIO_H",
+		"HAVE_STDLIB_H",
+		"HAVE_STRING_H",
+		"HAVE_STRINGS_H",
+		"HAVE_SYS_TYPES_H",
+		"HAVE_WCHAR_H",
+		"HAVE_INTTYPES_H",
+		"HAVE_MALLOC_H",
+		"HAVE_MEMORY_H",
+		"HAVE_ALLOCA_H",
+		// glibc has these,
+		// but nothing sets the HAVE_* flags that tell SDL_gtk.c not to provide its own fallback
+		"HAVE_GETRESUID",
+		"HAVE_GETRESGID",
+		// time/unix and timer/unix have no dummy/disabled counterpart - every platform needs a real clock
+		"SDL_TIME_UNIX",
+		"SDL_TIMER_UNIX"
 	);
 #endif
 

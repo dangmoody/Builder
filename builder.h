@@ -4063,13 +4063,17 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 										// an explicit filename or path (e.g. "./foo.so", "foo.lib") is passed straight through
 										// "-l" is only correct for bare library names since it adds the "lib" prefix and an extension itself
 										bool isExplicitLibFile = Builder_StringContains( additionalLib, "/" ) ||
-																  Builder_StringContains( additionalLib, "\\" ) ||
-																  Builder_PathHasFileExtension( additionalLib, ".lib" );
+																Builder_StringContains( additionalLib, "\\" ) ||
+																Builder_PathHasFileExtension( additionalLib, ".lib" );
 
 										if ( isExplicitLibFile ) {
 											StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", additionalLib );
 										} else {
+#if defined( _WIN32 )
 											StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-l%s ", additionalLib );
+#elif defined( __linux__ )
+											StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-l:%s ", additionalLib );
+#endif
 										}
 									}
 								}
@@ -4079,6 +4083,13 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 										StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", chunk->items[argumentIndex] );
 									}
 								}
+
+#ifdef __linux__
+								// on linux we need to guarantee that the symbols for any library that this executable links to can always be loaded regardless of where we are running the executable from
+								if ( config->binaryType == BINARY_TYPE_EXE ) {
+									StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-Wl,-rpath,\\$ORIGIN " );
+								}
+#endif
 							}
 						}
 						char *args = StringBuilder_ToString( buildScratch.arena, &linkerArgs, NULL );

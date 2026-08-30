@@ -17,17 +17,17 @@ int main( int argc, char **argv ) {
 
 	BuildConfig *programConfig = CreateBuildConfig( &options );
 	*programConfig = (BuildConfig) {
-		.name						= "program",
-		.binaryType					= BINARY_TYPE_EXE,
-		.binaryName					= "test_dynamic_lib_program",
-		.dependsOn					= MakeDependencies( libConfig ),
-		.sourceFiles				= MakeStringList( "program/main.c" ),
-		.additionalIncludes			= MakeStringList( "lib" ),
+		.name				= "program",
+		.binaryType			= BINARY_TYPE_EXE,
+		.binaryName			= "test_dynamic_lib_program",
+		.dependsOn			= MakeDependencies( libConfig ),
+		.sourceFiles		= MakeStringList( "program/main.c" ),
+		.additionalIncludes	= MakeStringList( "lib" ),
+		.additionalLibPaths	= MakeStringList( "." ),
 #if defined( _WIN32 )
-		.additionalLibs				= MakeStringList( "test_dynamic_lib.lib" ),
+		.additionalLibs		= MakeStringList( "test_dynamic_lib.lib" ),
 #else
-		.additionalLibs				= MakeStringList( "./test_dynamic_lib.so" ),
-		.additionalLinkerArguments	= MakeStringList( "-Wl,-rpath,$ORIGIN" ),
+		.additionalLibs		= MakeStringList( "test_dynamic_lib.so" ),
 #endif
 	};
 

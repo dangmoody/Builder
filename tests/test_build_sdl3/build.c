@@ -199,8 +199,7 @@ int main( int argc, char **argv ) {
 #if defined( _WIN32 )
 		.additionalLibs		= MakeStringList( BINARY_NAME ),
 #elif defined( __linux__ )
-		// ":" is GNU ld syntax for "link this exact filename", which is how the .so gets picked up without a lib prefix
-		.additionalLibs		= MakeStringList( ":" BINARY_NAME ".so" ),
+		.additionalLibs		= MakeStringList( BINARY_NAME ".so" ),
 #endif
 	};
 

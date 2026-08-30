@@ -3983,10 +3983,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 									const char *additionalLib = chunk->items[libIndex];
 
 									// callers sometimes already include the ".lib" extension themselves, don't double it up
-									size_t libNameLen = strlen( additionalLib );
-									bool alreadyHasExtension = libNameLen >= 4 && _stricmp( additionalLib + libNameLen - 4, ".lib" ) == 0;	// TODO: AK: 26/08/2026: use Builder_PathHasFileExtension() instead?
-
-									if ( alreadyHasExtension ) {
+									if ( Builder_PathEndsWith( additionalLib, ".lib" ) ) {
 										StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", additionalLib );
 									} else {
 										StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s.lib ", additionalLib );

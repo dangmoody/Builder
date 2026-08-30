@@ -91,6 +91,15 @@ typedef struct ConfigPtrList {
 	uint32_t						count;
 } ConfigPtrList;
 
+typedef enum SanitizerFlagBits {
+	SANITIZER_UNDEFINED_BEHAVIOR	= 1 << 0,
+	SANITIZER_MEMORY				= 1 << 1,
+	SANITIZER_ADDRESS				= 1 << 2,
+	SANITIZER_LEAK					= 1 << 3,
+	SANITIZER_THREAD				= 1 << 4,
+} SanitizerFlagBits;
+typedef uint32_t SanitizerFlags;
+
 // Builder owns every BuildConfig - you get a blank one from CreateBuildConfig() and fill it in, either by assigning
 // the whole struct or a field at a time.  Write to these fields directly; the list fields are the only ones that need
 // building first, which is what MakeStringList() and MakeDependencies() are for.
@@ -122,6 +131,7 @@ typedef struct BuildConfig {
 	bool			removeSymbols;
 	bool			warningsAsErrors;
 	bool			useDynamicRuntimeOnWindows;
+	SanitizerFlags	sanitizers;
 	void			( *OnPreBuild )( struct BuildConfig *config );
 	void			( *OnPostBuild )( struct BuildConfig *config );
 } BuildConfig;
@@ -497,7 +507,7 @@ static bool Builder_StringContains( const char *str, const char *substring ) {
 	return strstr( str, substring ) != NULL;
 }
 
-static bool Builder_PathHasFileExtension( const char *path, const char *extension ) {
+static bool Builder_PathEndsWith( const char *path, const char *extension ) {
 	uint64_t pathLen = strlen( path );
 	uint64_t extensionLen = strlen( extension );
 
@@ -1434,7 +1444,7 @@ static void Builder_RebuildSelfInternal( int argc, char **argv, const char *sour
 	// we need the exe filename on windows to end with ".exe"
 	// otherwise the file will fail to be found
 #ifdef _WIN32
-	if ( !Builder_PathHasFileExtension( binaryPath, ".exe" ) ) {
+	if ( !Builder_PathEndsWith( binaryPath, ".exe" ) ) {
 		binaryPath = Builder_FormatString( scratch.arena, "%s.exe", argv[0] );
 	}
 
@@ -2733,13 +2743,47 @@ static uint32_t Builder_AtomicIncrement( builderAtomic32_t *value ) {
 typedef struct builderCompileContext_t {
 	BuildConfig					*config;
 	const char					*compilerPath;
-	bool						useMSVC;
+	bool						compilerIsMSVC;
 #if defined( _WIN32 )
 	bool						debugDefineSet;
 	builderMSVCInstall_t		*msvcInstall;
 	builderWindowsSDKInstall_t	*windowsSDKInstall;
 #endif
 } builderCompileContext_t;
+
+static void Builder_AddSanitizerArgs( scratch_t *scratch, stringBuilder_t *compileArgs, const SanitizerFlags sanitizers, const char *sanitizerBaseArg ) {
+	if ( sanitizers == 0 ) {
+		return;
+	}
+
+	StringBuilder_Appendf( scratch->arena, compileArgs, "%s=", sanitizerBaseArg );
+
+	bool isFirstSanitizer = true;
+
+	for ( uint32_t sanitizerBitIndex = 0; sanitizerBitIndex < sanitizers; sanitizerBitIndex++ ) {
+		SanitizerFlagBits sanitizerFlagBit = ( 1 << sanitizerBitIndex );
+
+		if ( ( sanitizers & sanitizerFlagBit ) == 0 ) {
+			continue;
+		}
+
+		const char *sanitizerName = NULL;
+
+		switch ( sanitizerFlagBit ) {
+			case SANITIZER_UNDEFINED_BEHAVIOR:	sanitizerName = "undefined";	break;
+			case SANITIZER_MEMORY:				sanitizerName = "memory";		break;
+			case SANITIZER_ADDRESS:				sanitizerName = "address";		break;
+			case SANITIZER_LEAK:				sanitizerName = "leak";			break;
+			case SANITIZER_THREAD:				sanitizerName = "thread";		break;
+		}
+
+		StringBuilder_Appendf( scratch->arena, compileArgs, isFirstSanitizer ? "%s" : ",%s", sanitizerName );
+
+		isFirstSanitizer = false;
+	}
+
+	StringBuilder_Appendf( scratch->arena, compileArgs, " " );
+}
 
 static const char *Builder_CreateCompilationCommand( arena_t *commandArena, builderCompileContext_t *context ) {
 	BuildConfig *config = context->config;
@@ -2749,7 +2793,7 @@ static const char *Builder_CreateCompilationCommand( arena_t *commandArena, buil
 	StringBuilder_Appendf( scratch.arena, &compileArgs, "\"%s\" ", context->compilerPath );
 
 #ifdef _WIN32
-	if ( context->useMSVC ) {
+	if ( context->compilerIsMSVC ) {
 		builderMSVCInstall_t *msvcInstall = context->msvcInstall;
 		builderWindowsSDKInstall_t *windowsSDKInstall = context->windowsSDKInstall;
 
@@ -2844,6 +2888,8 @@ static const char *Builder_CreateCompilationCommand( arena_t *commandArena, buil
 		}
 
 		StringBuilder_Appendf( scratch.arena, &compileArgs, "/showIncludes " );
+
+		Builder_AddSanitizerArgs( &scratch, &compileArgs, config->sanitizers, "/fsanitize" );
 	} else
 #endif
 	{
@@ -2919,6 +2965,8 @@ static const char *Builder_CreateCompilationCommand( arena_t *commandArena, buil
 			}
 		}
 
+		Builder_AddSanitizerArgs( &scratch, &compileArgs, config->sanitizers, "-fsanitize" );
+
 		StringBuilder_Appendf( scratch.arena, &compileArgs, "-MD -MF - " );
 	}
 
@@ -2962,7 +3010,7 @@ typedef struct builderCompileJobDependencyOutput_t {
 typedef struct builderCompileJobPool_t {
 	builderCompilePacket_t				*compilePackets;
 	uint32_t							compilePacketCount;
-	bool								useMSVC;
+	bool								compilerIsMSVC;
 	builderCompileJobDependencyOutput_t	*dependencyOutputs;
 	builderAtomic32_t					dependencyOutputIndex;
 	builderAtomic32_t					nextCompileCommandIndex;
@@ -2979,7 +3027,7 @@ static bool Builder_CompileSourceFile( builderCompileJobPool_t *pool, builderCom
 	int32_t compileResult = Builder_RunProcess( scratch.arena, compilePacket->compileCommand, false, &compilerOutput );
 
 #if defined( _WIN32 )
-	if ( pool->useMSVC ) {
+	if ( pool->compilerIsMSVC ) {
 		uint32_t fileNameStart = 0;
 		const char *sourceCurrent = compilePacket->sourceFile;
 		for ( uint32_t i = 0; sourceCurrent[i] != '\0'; ++i ) {
@@ -3238,10 +3286,10 @@ static bool Builder_DoesMapContainDependency( const compileDependencyArray_t *de
 	return false;
 }
 
-static void Builder_ParseDependencyInfo( arena_t *dependencyArena, compileDependencyArray_t *dependencyArray, objectToDependency_t *dependencyMap, char *compilerOutput, bool useMSVC ) {
+static void Builder_ParseDependencyInfo( arena_t *dependencyArena, compileDependencyArray_t *dependencyArray, objectToDependency_t *dependencyMap, char *compilerOutput, bool compilerIsMSVC ) {
 	scratch_t scratch = Builder_GetScratch( dependencyArena );
 
-	if ( useMSVC ) {
+	if ( compilerIsMSVC ) {
 		// skip first line
 		char *current = strchr( compilerOutput, '\n' ) + 1;
 
@@ -3588,10 +3636,20 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 
 	const char *compilerPath = ( options->compilerPath && options->compilerPath[0] ) ? options->compilerPath : "clang";
 
-	bool useMSVC = Builder_StringEquals( compilerPath, "cl" ) || Builder_StringEquals( compilerPath, "cl.exe" );
+	bool compilerIsMSVC = Builder_StringEquals( compilerPath, "cl" ) || Builder_StringEquals( compilerPath, "cl.exe" );
+	bool compilerIsClang = Builder_PathEndsWith( compilerPath, "clang" )
+						|| Builder_PathEndsWith( compilerPath, "clang.exe" )
+						|| Builder_PathEndsWith( compilerPath, "clang++" )
+						|| Builder_PathEndsWith( compilerPath, "clang++.exe" )
+						|| Builder_PathEndsWith( compilerPath, "clang-cl" )
+						|| Builder_PathEndsWith( compilerPath, "clang-cl.exe" );
+	bool compilerIsGCC = Builder_PathEndsWith( compilerPath, "gcc" )
+						|| Builder_PathEndsWith( compilerPath, "gcc.exe" )
+						|| Builder_PathEndsWith( compilerPath, "g++" )
+						|| Builder_PathEndsWith( compilerPath, "g++.exe" );
 
 #ifndef _WIN32
-	if ( useMSVC ) {
+	if ( compilerIsMSVC ) {
 		Builder_Error(
 			"It appears you want to compile with MSVC on a non-Windows platform.\n"
 			"MSVC only supports Windows.  Sorry.\n"
@@ -3603,7 +3661,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 
 	char *compilerVersionString = NULL;
 #ifdef _WIN32
-	if ( useMSVC ) {
+	if ( compilerIsMSVC ) {
 		compilerPath = Builder_FormatString( buildScratch.arena, "%s\\bin\\Hostx64\\x64\\cl.exe", msvcInstall.rootFolder );
 		compilerVersionString = Builder_FormatString( buildScratch.arena, "%d.%d.%d", msvcInstall.version.v0, msvcInstall.version.v1, msvcInstall.version.v2 );
 	} else
@@ -3640,6 +3698,45 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 	ConfigPtrList configsToBuild = { 0 };
 
 	Builder_CollectConfigsToBuild( buildScratch.arena, targetConfig, &ancestry, &configsToBuild );
+
+	// cl.exe embeds its own /DEFAULTLIB directives for /fsanitize=... into the object file so link.exe picks the runtime up automatically there
+	// GCC doesnt link via link.exe so it handles its own sanitizer runtime
+	// clang on Windows does neither, it goes through link.exe directly so we have to name its sanitizer runtime libs ourselves which live under its resource directory
+	// we query that once up front and then only use it if some config actually needs it
+	char *clangSanitizerResourceDir = NULL;
+
+#if defined( _WIN32 )
+	if ( compilerIsClang ) {
+		bool anyConfigNeedsClangSanitizerLibs = false;
+
+		for ( buildConfigPtrChunk_t *chunk = configsToBuild.head; chunk && !anyConfigNeedsClangSanitizerLibs; chunk = chunk->next ) {
+			for ( uint32_t configIndex = 0; configIndex < chunk->count; configIndex++ ) {
+				if ( chunk->items[configIndex]->sanitizers != 0 ) {
+					anyConfigNeedsClangSanitizerLibs = true;
+					break;
+				}
+			}
+		}
+
+		if ( anyConfigNeedsClangSanitizerLibs ) {
+			char *resourceDirCmd = Builder_FormatString( buildScratch.arena, "\"%s\" -print-resource-dir", compilerPath );
+
+			Builder_RunProcess( buildScratch.arena, resourceDirCmd, true, &clangSanitizerResourceDir );
+
+			size_t resourceDirLength = clangSanitizerResourceDir ? strlen( clangSanitizerResourceDir ) : 0;
+			while ( resourceDirLength > 0 && ( clangSanitizerResourceDir[resourceDirLength - 1] == '\n' || clangSanitizerResourceDir[resourceDirLength - 1] == '\r' ) ) {
+				clangSanitizerResourceDir[--resourceDirLength] = 0;
+			}
+
+			if ( resourceDirLength == 0 ) {
+				Builder_Error( "Failed to determine Clang's resource directory (\"%s\") - needed to link the sanitizer runtime on Windows.\n", resourceDirCmd );
+				Builder_RewindScratch( &buildScratch );
+
+				return 1;
+			}
+		}
+	}
+#endif
 
 	double totalCompileTimeMS = 0.0;
 	double totalLinkTimeMS = 0.0;
@@ -3693,7 +3790,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 				builderCompileContext_t compileContext = {
 					.config				= config,
 					.compilerPath		= compilerPath,
-					.useMSVC			= useMSVC,
+					.compilerIsMSVC			= compilerIsMSVC,
 #if defined( _WIN32 )
 					.msvcInstall		= &msvcInstall,
 					.windowsSDKInstall	= &windowsSDKInstall,
@@ -3735,7 +3832,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 							compilePackets[written].compileCommandHash = compileCommandHash;
 
 							StringBuilder_Appendf( scratch.arena, &fullCompileCommand, "%s ", sourceFile );
-							if ( compileContext.useMSVC ) {
+							if ( compileContext.compilerIsMSVC ) {
 								StringBuilder_Appendf( scratch.arena, &fullCompileCommand, "/Fo" );
 							} else {
 								StringBuilder_Appendf( scratch.arena, &fullCompileCommand, "-o " );
@@ -3859,7 +3956,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 						builderCompileJobPool_t pool = {
 							.compilePackets		= compilePackets,
 							.compilePacketCount	= needsCompilePacketCount,
-							.useMSVC			= useMSVC,
+							.compilerIsMSVC			= compilerIsMSVC,
 							.dependencyOutputs	= dependencyOutputs
 						};
 
@@ -3892,7 +3989,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 							.dependencyInfos			= Builder_ArenaAlloc( &postBuildArena, builderCompileJobDependencyInfo_t, dependencyInfoCount ),
 							.dependencyInfoCount		= dependencyInfoCount,
 							.dependencyCacheFileName	= dependencyCacheFileName,
-							.usedMSVC					= useMSVC,
+							.usedMSVC					= compilerIsMSVC,
 							.didCompile					= needsCompilePacketCount > 0,
 							.objectToDependencyMap		= objectToDependencyMap,
 							.mapSize					= objectToDependencyMapCount,
@@ -3937,7 +4034,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 					if ( needsCompilePacketCount > 0 || !Builder_GetFileLastWriteTime( binaryPath, &binaryFileWriteTime ) ) {
 						stringBuilder_t linkerArgs = { 0 };
 #if defined( _WIN32 )
-						bool useMSVCLink = useMSVC || !( Builder_PathHasFileExtension( compilerPath, "gcc" ) || Builder_PathHasFileExtension( compilerPath, "gcc.exe" ) );
+						bool useMSVCLink = !compilerIsGCC;
 #elif defined( __linux__ )
 						bool useMSVCLink = false;
 #else
@@ -3995,7 +4092,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 								// clang doesnt embed /DEFAULTLIB directives the way cl.exe does
 								// so link.exe has no idea which CRT/SDK libs to pull in unless we name them ourselves
 								if ( config->useDynamicRuntimeOnWindows ) {
-									if (compileContext.debugDefineSet) {
+									if ( compileContext.debugDefineSet ) {
 										StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "msvcrtd.lib msvcprtd.lib vcruntimed.lib ucrtd.lib kernel32.lib " );
 									} else {
 										StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "msvcrt.lib msvcprt.lib vcruntime.lib ucrt.lib kernel32.lib " );
@@ -4012,6 +4109,32 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 							for ( builderStringChunk_t *chunk = config->additionalLinkerArguments.head; chunk; chunk = chunk->next ) {
 								for ( uint32_t argumentIndex = 0; argumentIndex < chunk->count; argumentIndex++ ) {
 									StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", chunk->items[argumentIndex] );
+								}
+							}
+
+							if ( !compilerIsMSVC && config->sanitizers != 0 ) {
+								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "/LIBPATH:\"%s\\lib\\windows\" ", clangSanitizerResourceDir );
+
+								for ( uint32_t sanitizerBitIndex = 0; sanitizerBitIndex < config->sanitizers; sanitizerBitIndex++ ) {
+									SanitizerFlagBits sanitizerFlagBit = ( 1 << sanitizerBitIndex );
+
+									if ( ( config->sanitizers & sanitizerFlagBit ) == 0 ) {
+										continue;
+									}
+
+									switch ( sanitizerFlagBit ) {
+										case SANITIZER_ADDRESS:
+											StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "clang_rt.asan_dynamic-x86_64.lib /WHOLEARCHIVE:clang_rt.asan_static_runtime_thunk-x86_64.lib /INFERASANLIBS:NO " );
+											break;
+
+										case SANITIZER_UNDEFINED_BEHAVIOR:
+											StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "clang_rt.ubsan_standalone-x86_64.lib dbghelp.lib shell32.lib " );
+											break;
+
+										// memory/leak/thread aren't supported by clang on Windows at all - it already rejects them at compile time
+										default:
+											break;
+									}
 								}
 							}
 						} else
@@ -4064,7 +4187,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 										// "-l" is only correct for bare library names since it adds the "lib" prefix and an extension itself
 										bool isExplicitLibFile = Builder_StringContains( additionalLib, "/" ) ||
 																Builder_StringContains( additionalLib, "\\" ) ||
-																Builder_PathHasFileExtension( additionalLib, ".lib" );
+																Builder_PathEndsWith( additionalLib, ".lib" );
 
 										if ( isExplicitLibFile ) {
 											StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", additionalLib );
@@ -4090,6 +4213,9 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 									StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-Wl,-rpath,\\$ORIGIN " );
 								}
 #endif
+
+								// GCC and clang both link the sanitizer runtime themselves when driving the link, unlike link.exe
+								Builder_AddSanitizerArgs( &buildScratch, &linkerArgs, config->sanitizers, "-fsanitize" );
 							}
 						}
 						char *args = StringBuilder_ToString( buildScratch.arena, &linkerArgs, NULL );
@@ -4178,7 +4304,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 					};
 				}
 
-				Builder_ParseDependencyInfo( &postBuildArena, &dependencyArray, dependencyMap, dependencyInfo->dependencyString, useMSVC );
+				Builder_ParseDependencyInfo( &postBuildArena, &dependencyArray, dependencyMap, dependencyInfo->dependencyString, compilerIsMSVC );
 			}
 
 			const uint64_t writeBufferInitialCapacity = 512;

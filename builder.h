@@ -288,6 +288,10 @@ int		Build( BuilderOptions *options, int argc, char **argv );
 #define BUILDER_COUNT_OF( array )	( sizeof( array ) / sizeof( array[0] ) )
 #endif
 
+#ifndef BUILDER_MAX
+#define BUILDER_MAX( x, y )			( ( (x) > (y) ) ? (x) : (y) )
+#endif
+
 // alignof is only a keyword in C++ and C23. C11 and C17 have it as a macro in <stdalign.h>, which we'd rather not
 // pull in (or clash with), and _Alignof has been a keyword since C11 anyway.
 #ifdef __cplusplus
@@ -627,6 +631,27 @@ static void Builder_LogVerbose( const BuilderOptions *options, const char *fmt, 
 	vprintf( fmt, args );
 	va_end( args );
 }
+
+typedef struct {
+	const char	*description;
+	double		timeMS;
+	const char	*suffix;
+} buildSummaryLine_t;
+
+#define BUILD_SUMMARY_PTR_CHUNK_SIZE 8
+typedef struct buildSummaryPtrChunk_t {
+	buildSummaryLine_t				*items[BUILD_SUMMARY_PTR_CHUNK_SIZE];
+	uint32_t						count;
+	struct buildSummaryPtrChunk_t	*next;
+	struct buildSummaryPtrChunk_t	*previous;
+} buildSummaryPtrChunk_t;
+
+typedef struct buildSummaryList_t {
+	struct buildSummaryPtrChunk_t	*head;
+	struct buildSummaryPtrChunk_t	*tail;
+	uint32_t						count;
+	uint32_t						lineLength;
+} buildSummaryList_t;
 
 // name of the BuildConfig the user wants built: whatever --config=<name> says, or BuilderOptions::defaultConfig if that arg wasn't given
 static const char *Builder_GetNameOfConfigToBuild( const BuilderOptions *options, int argc, char **argv ) {
@@ -993,6 +1018,49 @@ static void Builder_ConfigListPush( arena_t *arena, ConfigPtrList *list, BuildCo
 
 	list->tail->items[list->tail->count++] = config;
 	list->count++;
+}
+
+static void Builder_BuildSummaryLineListPush( arena_t *arena, buildSummaryList_t *list, buildSummaryLine_t *line ) {
+	BUILDER_ASSERT( list );
+	BUILDER_ASSERT( line );
+
+	buildSummaryPtrChunk_t *tail = list->tail ? list->tail : list->head;
+
+	if ( tail && tail->count == BUILD_SUMMARY_PTR_CHUNK_SIZE ) {
+		tail = tail->next;
+	}
+
+	if ( !tail ) {
+		buildSummaryPtrChunk_t *chunk = Builder_ArenaAlloc( arena, buildSummaryPtrChunk_t, 1 );
+		chunk->count = 0;
+		chunk->next = NULL;
+		chunk->previous = list->tail;
+
+		if ( list->tail ) {
+			list->tail->next = chunk;
+		} else {
+			list->head = chunk;
+		}
+
+		tail = chunk;
+	}
+
+	list->tail = tail;
+
+	list->tail->items[list->tail->count++] = line;
+
+	list->lineLength = BUILDER_MAX( list->lineLength, strlen( line->description ) );
+
+	list->count++;
+}
+
+static void Builder_AddBuildSummaryLine( arena_t *arena, buildSummaryList_t *list, const char *description, const double timeMS, const char *suffix ) {
+	buildSummaryLine_t *line = Builder_ArenaAlloc( arena, buildSummaryLine_t, 1 );
+	line->description = description;
+	line->timeMS = timeMS;
+	line->suffix = suffix;
+
+	Builder_BuildSummaryLineListPush( arena, list, line );
 }
 
 // only the ancestry stack pops - emptied chunks are left chained on for Builder_ConfigListPush() to pick up again
@@ -3609,6 +3677,10 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 		}
 	}
 
+	// TODO: DM: 30/08/2026: we should probably make that global long lifetime arena that we talked about
+	// there are other things that could and should go on it as well as build summaries
+	arena_t buildSummaryArena = { 0 };
+
 	// toolchain and compiler paths are used right through to the link step.
 	// this deliberately excludes the config arena: OnPreBuild/OnPostBuild callbacks run inside the loop below, so a
 	// callback calling Add*()/Set*() allocates while this scratch is open.  If the two shared an arena, the per-config
@@ -3756,6 +3828,8 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 			configsToBuildCount++;
 		}
 	}
+
+	buildSummaryList_t buildSummary = { 0 };
 
 	uint32_t builtConfigs = 0;
 	builderPostBuildConfigDependencyData_t *postBuildConfigDependencyData = Builder_ArenaAlloc( &postBuildArena, builderPostBuildConfigDependencyData_t, configsToBuildCount );
@@ -4010,7 +4084,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 							return 1;
 						}
 					} else {
-							printf( "Skipping compilation of all %u files.\n", compilePacketCount );
+						printf( "Skipping compilation of all %u files.\n", compilePacketCount );
 					}
 
 					compileTimeMS = Builder_TimeMS() - compileTimeStart;
@@ -4187,16 +4261,13 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 										// "-l" is only correct for bare library names since it adds the "lib" prefix and an extension itself
 										bool isExplicitLibFile = Builder_StringContains( additionalLib, "/" ) ||
 																Builder_StringContains( additionalLib, "\\" ) ||
-																Builder_PathEndsWith( additionalLib, ".lib" );
+																Builder_PathEndsWith( additionalLib, ".lib" ) ||
+																Builder_PathEndsWith( additionalLib, ".so" );
 
 										if ( isExplicitLibFile ) {
 											StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", additionalLib );
 										} else {
-#if defined( _WIN32 )
 											StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-l%s ", additionalLib );
-#elif defined( __linux__ )
-											StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "-l:%s ", additionalLib );
-#endif
 										}
 									}
 								}
@@ -4244,6 +4315,8 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 				printf( "    Compile : %f ms\n", compileTimeMS );
 				printf( "    Link    : %f ms\n", linkTimeMS );
 				printf( "\n" );
+
+				Builder_AddBuildSummaryLine( &buildSummaryArena, &buildSummary, config->name, compileTimeMS + linkTimeMS, ( needsCompilePacketCount == 0 ) ? "(skipped)" : NULL );
 
 				totalCompileTimeMS += compileTimeMS;
 				totalLinkTimeMS += linkTimeMS;
@@ -4351,10 +4424,24 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 
 	// build summary
 	{
+		Builder_AddBuildSummaryLine( &buildSummaryArena, &buildSummary, "Total compile", totalCompileTimeMS, NULL );
+		Builder_AddBuildSummaryLine( &buildSummaryArena, &buildSummary, "Total link", totalLinkTimeMS, NULL );
+		// Builder_AddBuildSummaryLine( &buildSummaryArena, &buildSummary, "Total .builder-dependencies read", totalBuilderDepsReadTimeMS, NULL );
+		// Builder_AddBuildSummaryLine( &buildSummaryArena, &buildSummary, "Total .builder-dependencies write", totalBuilderDepsWriteTimeMS, NULL );
+
 		printf( "Finished:\n" );
-		printf( "    Compile : %f ms\n", totalCompileTimeMS );
-		printf( "    Link    : %f ms\n", totalLinkTimeMS );
-		printf( "    Total   : %f ms\n", Builder_TimeMS() - totalTimeStart );
+		for ( buildSummaryPtrChunk_t *chunk = buildSummary.head; chunk; chunk = chunk->next ) {
+			for ( uint32_t lineIndex = 0; lineIndex < chunk->count; lineIndex++ ) {
+				buildSummaryLine_t *line = chunk->items[lineIndex];
+
+				printf( "    %-*s : %f ms %s\n", buildSummary.lineLength, line->description, line->timeMS, line->suffix ? line->suffix : "" );
+			}
+		}
+
+		// separate because we want to get the end timestamp as late as possible
+		printf( "    %-*s : %f ms\n\n", buildSummary.lineLength, "Total time", Builder_TimeMS() - totalTimeStart );
+
+		Builder_FreeArenas( &buildSummaryArena, 1 );
 	}
 
 	Builder_RewindScratch( &buildScratch );

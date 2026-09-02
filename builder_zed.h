@@ -102,6 +102,10 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 	BUILDER_ASSERT( options );
 	BUILDER_ASSERT( zedOptions );
 
+	Builder_SetCmdArgs( options, argc, argv );
+
+	Builder_SetCWD( options, argv );
+
 	const char *dotZedFolder = ".zed";
 
 	if ( !Builder_CreateFolderIfItDoesntExist( dotZedFolder ) ) {

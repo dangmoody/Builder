@@ -584,6 +584,10 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 	BUILDER_ASSERT( options );
 	BUILDER_ASSERT( solution );
 
+	Builder_SetCmdArgs( options, argc, argv );
+
+	Builder_SetCWD( options, argv );
+
 	// validate the solution
 	{
 		bool validSolution = true;

@@ -3605,20 +3605,65 @@ static void Builder_DependencyDataFromByteBuffer( arena_t *arena, const byteBuff
 	BUILDER_ASSERT( byteBuffer->count == readBytes );
 }
 
-int Build( BuilderOptions *options, int argc, char **argv ) {
-	double totalTimeStart = Builder_TimeMS();
+// set CWD to where this EXE lives
+static void Builder_SetCWD( BuilderOptions *options, char **argv ) {
+	char appPath[BUILDER_MAX_PATH] = { 0 };
 
-	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+#if defined( _WIN32 )
+	if ( GetModuleFileName( NULL, appPath, BUILDER_MAX_PATH ) == 0 ) {
+		Builder_Error( "Failed to get the CWD of \"%s\".  GetLastError: 0x%X\n", argv[0], GetLastError() );
+		exit( 1 );
+	}
 
+	char *lastSlash = strrchr( appPath, '\\' );
+	if ( lastSlash ) {
+		*lastSlash = 0;
+	}
+
+	if ( !SetCurrentDirectory( appPath ) ) {
+		Builder_Error( "Failed to set the CWD to \"%s\".  GetLastError: 0x%X\n", appPath, GetLastError() );
+		exit( 1 );
+	}
+#elif defined( __linux__ )
+	if ( readlink( "/proc/self/exe", appPath, BUILDER_MAX_PATH ) == -1 ) {
+		int err = errno;
+		Builder_Error( "Failed to get the CWD of \"%s\".  errno: %d (\"%s\")\n", argv[0], errno, strerror( err ) );
+		exit( 1 );
+	}
+
+	if ( chdir( appPath ) != -1 ) {
+		int err = errno;
+		Builder_Error( "Failed to set the CWD to \"%s\".  GetLastError: 0x%X\n", appPath, GetLastError() );
+		exit( 1 );
+	}
+#else
+#error Unrecognised platform.
+#endif
+
+	Builder_LogVerbose( options, "Set CWD to \"%s\"\n", appPath );
+}
+
+static void Builder_SetCmdArgs( BuilderOptions *options, int argc, char **argv ) {
 	for ( int argIndex = 0; argIndex < argc; argIndex++ ) {
 		if ( Builder_StringStartsWith( argv[argIndex], ARG_HELP_SHORT ) || Builder_StringStartsWith( argv[argIndex], ARG_HELP_LONG ) ) {
-			return ShowUsage( 0 );
+			ShowUsage( 0 );
+			exit( 0 );
 		}
 
 		if ( Builder_StringStartsWith( argv[argIndex], ARG_VERBOSE_SHORT ) || Builder_StringStartsWith( argv[argIndex], ARG_VERBOSE_LONG ) ) {
 			options->verboseLogging = true;
 		}
 	}
+}
+
+int Build( BuilderOptions *options, int argc, char **argv ) {
+	double totalTimeStart = Builder_TimeMS();
+
+	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+
+	Builder_SetCmdArgs( options, argc, argv );
+
+	Builder_SetCWD( options, argv );
 
 	// Names can only be checked here.  A config comes out of CreateBuildConfig() blank and gets filled in afterwards,
 	// so this is the first point at which every config actually has the name it's going to be built under.

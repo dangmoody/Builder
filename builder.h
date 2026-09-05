@@ -3362,12 +3362,12 @@ static void Builder_ThreadJoin( builderThread_t thread ) {
 #endif
 }
 
-typedef struct objectToDependency_t {
+typedef struct objectToDependencyIndicies_t {
 	uint64_t	objectHash;
 	uint64_t	dependencyCount;
 	uint64_t	dependencyCapacity;
 	uint64_t	*dependencyIndices;
-} objectToDependency_t;
+} objectToDependencyIndicies_t;
 
 typedef struct compileDependency_t {
 	const char	*dependency;
@@ -3381,22 +3381,164 @@ typedef struct compileDependencyArray_t {
 	compileDependency_t	*dependencies;
 } compileDependencyArray_t;
 
-static bool Builder_IsDependencyNewer( compileDependencyArray_t *dependencyArray, const uint64_t dependencyIndex, const uint64_t objectWriteTime ) {
-	if ( dependencyIndex >= dependencyArray->count ) {
-		Builder_Error( "Tried to fetch dependency not in array with index %llu\n", dependencyIndex );
-		return true;
+static const uint64_t g_builderDependenciesFileVersion = 1;
+
+// full list of dependencies that a config can have
+// read from and written to a file in this order
+typedef struct builderConfigDependencies_t {
+	uint64_t						fileVersion;
+	uint64_t						linkCommandHash;
+	uint64_t						binaryWriteTime;
+	uint64_t						libraryDependencyCount;
+	const char						**libraryDependencies;
+	uint64_t 						objectFileCount;
+	objectToDependencyIndicies_t	*objectDependencyMap;
+	compileDependencyArray_t		dependencyArray;
+} builderConfigDependencies_t;
+
+typedef struct byteBuffer_t {
+	uint64_t	count;
+	uint64_t	capacity;
+	uint8_t		*data;
+} byteBuffer_t;
+
+static void Builder_ByteBufferReallocIfNeeded( arena_t *arena, byteBuffer_t *byteBuffer, const uint64_t incomingByteCount ) {
+	uint64_t newCapacity = byteBuffer->capacity;
+
+	while ( byteBuffer->count + incomingByteCount > newCapacity ) {
+		BUILDER_ASSERT( ( newCapacity * 2 > newCapacity ) && "Capacity overflow in bytebuffer" );
+		newCapacity *= 2;
 	}
 
-	compileDependency_t *compileDependency = &dependencyArray->dependencies[dependencyIndex];
+	if ( newCapacity != byteBuffer->capacity ) {
+		byteBuffer->data = Builder_ArenaRealloc( arena, byteBuffer->data, uint8_t, byteBuffer->capacity, newCapacity );
+		byteBuffer->capacity = newCapacity;
+	}
+}
 
-	if ( compileDependency->writeTime == 0 ) {
-		if ( !Builder_GetFileLastWriteTime( compileDependency->dependency, &compileDependency->writeTime ) ) {
-			Builder_Error( "Failed to get write time for dependency: %s!\n", compileDependency->dependency );
-			return true;
+static void Builder_ByteBufferPushU64( arena_t *arena, byteBuffer_t *byteBuffer, const uint64_t u64 ) {
+	Builder_ByteBufferReallocIfNeeded( arena, byteBuffer, sizeof( uint64_t ) );
+
+	for ( uint32_t i = 0; i < sizeof( uint64_t ); ++i ) {
+		byteBuffer->data[byteBuffer->count++] = ( u64 >> ( i * 8 ) ) & 0xFF;
+	}
+}
+
+static uint64_t Builder_U64FromByteBuffer( byteBuffer_t *byteBuffer ) {
+	uint64_t value = 0;
+
+	if ( byteBuffer->capacity >= byteBuffer->count + sizeof( uint64_t ) ) {
+		value = *((uint64_t *) &byteBuffer->data[byteBuffer->count]);
+	}
+	
+	byteBuffer->count += sizeof( uint64_t );
+	return value;
+}
+
+static void Builder_ByteBufferPushString( arena_t *arena, byteBuffer_t *byteBuffer, const char *string, const uint64_t stringLength ) {
+	Builder_ByteBufferReallocIfNeeded( arena, byteBuffer, sizeof( uint64_t ) + stringLength );
+
+	Builder_ByteBufferPushU64 ( arena, byteBuffer, stringLength );
+	for ( uint64_t i = 0; i < stringLength; ++i ) {
+		byteBuffer->data[byteBuffer->count++] = (uint8_t) string[i];
+	}
+}
+
+static const char * Builder_StringFromByteBuffer( arena_t *arena, byteBuffer_t *byteBuffer, uint64_t *outStringLength ) {
+	const uint64_t stringLength = Builder_U64FromByteBuffer( byteBuffer );
+	char *string = NULL;
+
+	if ( byteBuffer->capacity >= byteBuffer->count + stringLength ) {
+		string = Builder_ArenaAlloc( arena, char, stringLength+1 );
+		for ( uint64_t i = 0; i < stringLength; ++i ) {
+			string[i] = (char) byteBuffer->data[byteBuffer->count + i];
+		}
+
+		string[stringLength] = '\0';
+	}
+
+	byteBuffer->count += stringLength;
+	*outStringLength = stringLength;
+	return string;
+}
+
+static byteBuffer_t Builder_ByteBufferFromConfigDependencies( arena_t *arena, const builderConfigDependencies_t *configDependencies ) {
+	const uint64_t writeBufferInitialCapacity = 512;
+	byteBuffer_t byteBuffer = {
+		.count		= 0,
+		.capacity	= writeBufferInitialCapacity,
+		.data		= Builder_ArenaAlloc( arena, uint8_t, writeBufferInitialCapacity )
+	};
+
+	Builder_ByteBufferPushU64( arena, &byteBuffer, configDependencies->fileVersion );
+
+	// for incremental link
+	Builder_ByteBufferPushU64( arena, &byteBuffer, configDependencies->linkCommandHash );
+	Builder_ByteBufferPushU64( arena, &byteBuffer, configDependencies->binaryWriteTime );
+
+	// for incremental compile
+	Builder_ByteBufferPushU64( arena, &byteBuffer, configDependencies->objectFileCount );
+	for ( uint32_t objectIndex = 0; objectIndex < configDependencies->objectFileCount; ++objectIndex ) {
+		const objectToDependencyIndicies_t *objectDependencies = &configDependencies->objectDependencyMap[objectIndex];
+		Builder_ByteBufferPushU64( arena, &byteBuffer, objectDependencies->objectHash );
+		
+		Builder_ByteBufferPushU64( arena, &byteBuffer, objectDependencies->dependencyCount );
+		for ( uint64_t indiciesIndex = 0; indiciesIndex < objectDependencies->dependencyCount; ++indiciesIndex ) {
+			Builder_ByteBufferPushU64( arena, &byteBuffer, objectDependencies->dependencyIndices[indiciesIndex] );
 		}
 	}
 
-	return compileDependency->writeTime > objectWriteTime;
+	const compileDependencyArray_t *dependencyArray = &configDependencies->dependencyArray;
+	Builder_ByteBufferPushU64( arena, &byteBuffer, dependencyArray->count );
+	for ( uint64_t dependencyIndex = 0; dependencyIndex < dependencyArray->count; ++dependencyIndex ) {
+		const compileDependency_t *dependency = &dependencyArray->dependencies[dependencyIndex];
+		Builder_ByteBufferPushString( arena, &byteBuffer, dependency->dependency, dependency->dependencyLength );
+	}
+
+	return byteBuffer;
+}
+
+static builderConfigDependencies_t Builder_ConfigDependenciesFromByteBuffer( arena_t *arena, byteBuffer_t *byteBuffer ) {
+	builderConfigDependencies_t configDependencies = { 0 };
+
+	configDependencies.fileVersion = Builder_U64FromByteBuffer( byteBuffer );
+	if ( configDependencies.fileVersion == g_builderDependenciesFileVersion ) {
+		// for incremental link
+		configDependencies.linkCommandHash = Builder_U64FromByteBuffer( byteBuffer );
+		configDependencies.binaryWriteTime = Builder_U64FromByteBuffer( byteBuffer );
+
+		// for incremental compile
+		configDependencies.objectFileCount		= Builder_U64FromByteBuffer( byteBuffer );
+		configDependencies.objectDependencyMap	= Builder_ArenaAlloc( arena, objectToDependencyIndicies_t, configDependencies.objectFileCount );
+		for ( uint64_t objectIndex = 0; objectIndex < configDependencies.objectFileCount; ++objectIndex ) {
+			objectToDependencyIndicies_t *objectDependencies = &configDependencies.objectDependencyMap[objectIndex];
+			objectDependencies->objectHash			= Builder_U64FromByteBuffer( byteBuffer );
+
+			objectDependencies->dependencyCount		= Builder_U64FromByteBuffer( byteBuffer );
+			objectDependencies->dependencyCapacity	= objectDependencies->dependencyCount; // ceil to pow2?
+			objectDependencies->dependencyIndices	= Builder_ArenaAlloc( arena, uint64_t, objectDependencies->dependencyCapacity );
+			for ( uint64_t indiciesIndex = 0; indiciesIndex < objectDependencies->dependencyCount; ++indiciesIndex ) {
+				objectDependencies->dependencyIndices[indiciesIndex] = Builder_U64FromByteBuffer( byteBuffer );
+			}
+		}
+
+		compileDependencyArray_t *dependencyArray = &configDependencies.dependencyArray;
+		dependencyArray->count 			= Builder_U64FromByteBuffer( byteBuffer );
+		dependencyArray->capacity		= dependencyArray->count;
+		dependencyArray->dependencies	= Builder_ArenaAlloc( arena, compileDependency_t, dependencyArray->capacity );
+		for ( uint64_t dependencyIndex = 0; dependencyIndex < dependencyArray->count; ++dependencyIndex ) {
+			compileDependency_t *dependency = &dependencyArray->dependencies[dependencyIndex];
+			dependency->dependency = Builder_StringFromByteBuffer( arena, byteBuffer, &dependency->dependencyLength );
+			dependency->writeTime = 0;
+		}
+
+		if ( byteBuffer->count != byteBuffer->capacity ) {
+			Builder_Warning( "Config dependency file was an unexpected size. Reached %llu of %llu bytes.\n", byteBuffer->count, byteBuffer->capacity );
+			configDependencies = (builderConfigDependencies_t) { 0 };
+		}
+	}
+
+	return configDependencies;
 }
 
 static uint64_t Builder_DependencyArrayAddUnique( arena_t *dependencyArena, compileDependencyArray_t *dependencyArray, const char *dependency ) {
@@ -3421,7 +3563,7 @@ static uint64_t Builder_DependencyArrayAddUnique( arena_t *dependencyArena, comp
 	return dependencyArray->count - 1;
 }
 
-static bool Builder_DoesMapContainDependency( const compileDependencyArray_t *dependencyArray, objectToDependency_t *dependencyMap, const char *dependency ) {
+static bool Builder_DoesMapContainDependency( const compileDependencyArray_t *dependencyArray, objectToDependencyIndicies_t *dependencyMap, const char *dependency ) {
 	for ( uint64_t mapIndex = 0; mapIndex < dependencyMap->dependencyCount; ++mapIndex ) {
 		const uint64_t dependencyIndex = dependencyMap->dependencyIndices[mapIndex];
 
@@ -3435,7 +3577,7 @@ static bool Builder_DoesMapContainDependency( const compileDependencyArray_t *de
 	return false;
 }
 
-static void Builder_ParseDependencyInfo( arena_t *dependencyArena, compileDependencyArray_t *dependencyArray, objectToDependency_t *dependencyMap, char *compilerOutput, bool compilerIsMSVC ) {
+static void Builder_ParseDependencyInfo( arena_t *dependencyArena, compileDependencyArray_t *dependencyArray, objectToDependencyIndicies_t *dependencyMap, char *compilerOutput, bool compilerIsMSVC ) {
 	scratch_t scratch = Builder_GetScratch( dependencyArena );
 
 	if ( compilerIsMSVC ) {
@@ -3577,119 +3719,15 @@ static void Builder_ParseDependencyInfo( arena_t *dependencyArena, compileDepend
 }
 
 
-typedef struct builderPostBuildConfigDependencyData_t {
+typedef struct builderPostBuildConfigData_t {
 	builderCompilePacket_t				*compilePackets;
 	uint64_t							packetCount;
+	uint64_t							compiledPacketCount;
 	builderCompileJobDependencyInfo_t	*dependencyInfos;
 	uint64_t							dependencyInfoCount;
 	const char							*dependencyCacheFileName;
-	objectToDependency_t				*objectToDependencyMap;
-	uint64_t							mapSize;
-	compileDependencyArray_t			dependencyArray;
-	uint64_t							linkCommandHash;
-	uint64_t							binaryWriteTime;
-	bool								didLink;
-} builderPostBuildConfigDependencyData_t;
-
-typedef struct byteBuffer_t {
-	arena_t		*arena;
-	uint64_t	count;
-	uint64_t	capacity;
-	uint8_t		*data;
-} byteBuffer_t;
-
-static void Builder_ByteBufferReallocIfNeeded( byteBuffer_t *byteBuffer, const uint64_t incomingByteCount ) {
-	uint64_t newCapacity = byteBuffer->capacity;
-
-	while ( byteBuffer->count + incomingByteCount > newCapacity ) {
-		BUILDER_ASSERT( ( newCapacity * 2 > newCapacity ) && "Capacity overflow in bytebuffer" );
-		newCapacity *= 2;
-	}
-
-	if ( newCapacity != byteBuffer->capacity ) {
-		byteBuffer->data = Builder_ArenaRealloc( byteBuffer->arena, byteBuffer->data, uint8_t, byteBuffer->capacity, newCapacity );
-		byteBuffer->capacity = newCapacity;
-	}
-}
-
-static void Builder_ByteBufferPushU64( byteBuffer_t *byteBuffer, const uint64_t u64 ) {
-	Builder_ByteBufferReallocIfNeeded( byteBuffer, sizeof( uint64_t ) );
-
-	for ( uint32_t i = 0; i < 8; ++i ) {
-		byteBuffer->data[byteBuffer->count++] = ( u64 >> ( i * 8 ) ) & 0xFF;
-	}
-}
-
-static void Builder_ByteBufferPushString( byteBuffer_t *byteBuffer, const char *string, const uint64_t length ) {
-	Builder_ByteBufferReallocIfNeeded( byteBuffer, sizeof( uint64_t ) + length );
-
-	Builder_ByteBufferPushU64 ( byteBuffer, length );
-
-	for ( uint64_t i = 0; i < length; ++i ) {
-		byteBuffer->data[byteBuffer->count++] = (uint8_t) string[i];
-	}
-}
-
-static uint64_t Builder_U64FromByteBuffer( const byteBuffer_t *byteBuffer, uint64_t *offset ) {
-	BUILDER_ASSERT( byteBuffer->count >= *offset + sizeof( uint64_t ) );
-
-	uint64_t *ptr = (uint64_t *) &byteBuffer->data[*offset];
-	*offset += sizeof( uint64_t );
-
-	return *ptr;
-}
-
-static const char * Builder_StringFromByteBuffer( arena_t *arena, const uint64_t length, const byteBuffer_t *byteBuffer, uint64_t *offset ) {
-	BUILDER_ASSERT( byteBuffer->count >= *offset + length );
-
-	char *string = Builder_ArenaAlloc( arena, char, length+1  );
-
-	for ( uint64_t i = 0; i < length; ++i ) {
-		string[i] = (char) byteBuffer->data[( *offset )++];
-	}
-
-	string[length] = '\0';
-
-	return string;
-}
-
-static void Builder_DependencyDataFromByteBuffer( arena_t *arena, const byteBuffer_t *byteBuffer, builderPostBuildConfigDependencyData_t *postBuildData ) {
-	uint64_t readBytes = 0;
-
-	postBuildData->linkCommandHash = Builder_U64FromByteBuffer( byteBuffer, &readBytes );
-	postBuildData->binaryWriteTime = Builder_U64FromByteBuffer( byteBuffer, &readBytes );
-
-	uint64_t dependencyMapCount = Builder_U64FromByteBuffer( byteBuffer, &readBytes );
-	objectToDependency_t *dependencyMap = Builder_ArenaAlloc( arena, objectToDependency_t, dependencyMapCount );
-
-	for ( uint64_t mapIndex = 0; mapIndex < dependencyMapCount; ++mapIndex ) {
-		dependencyMap[mapIndex].objectHash = Builder_U64FromByteBuffer( byteBuffer, &readBytes );
-		dependencyMap[mapIndex].dependencyCount = Builder_U64FromByteBuffer( byteBuffer, &readBytes );
-		dependencyMap[mapIndex].dependencyCapacity = dependencyMap[mapIndex].dependencyCount; // ceil to pow2?
-		dependencyMap[mapIndex].dependencyIndices = Builder_ArenaAlloc( arena, uint64_t, dependencyMap[mapIndex].dependencyCapacity );
-
-		for ( uint64_t dependencyIndex = 0; dependencyIndex < dependencyMap[mapIndex].dependencyCount; ++dependencyIndex ) {
-			dependencyMap[mapIndex].dependencyIndices[dependencyIndex] = Builder_U64FromByteBuffer( byteBuffer, &readBytes );
-		}
-	}
-
-	postBuildData->dependencyArray.count 		= Builder_U64FromByteBuffer( byteBuffer, &readBytes );
-	postBuildData->dependencyArray.capacity 	= postBuildData->dependencyArray.count;
-	postBuildData->dependencyArray.dependencies = Builder_ArenaAlloc( arena, compileDependency_t, postBuildData->dependencyArray.capacity );
-
-	for ( uint64_t dependencyIndex = 0; dependencyIndex < postBuildData->dependencyArray.count; ++dependencyIndex ) {
-		uint64_t stringLength = Builder_U64FromByteBuffer( byteBuffer, &readBytes );
-
-		postBuildData->dependencyArray.dependencies[dependencyIndex].dependencyLength = stringLength;
-		postBuildData->dependencyArray.dependencies[dependencyIndex].dependency = Builder_StringFromByteBuffer ( arena, stringLength, byteBuffer, &readBytes );
-		postBuildData->dependencyArray.dependencies[dependencyIndex].writeTime = 0;
-	}
-
-	postBuildData->mapSize 					= dependencyMapCount;
-	postBuildData->objectToDependencyMap 	= dependencyMap;
-
-	BUILDER_ASSERT( byteBuffer->count == readBytes );
-}
+	builderConfigDependencies_t			configDependencies;
+} builderPostBuildConfigData_t;
 
 // full path to the running EXE, outExePath must be BUILDER_MAX_PATH bytes
 static void Builder_GetExePath( char **argv, char *outExePath ) {
@@ -3724,7 +3762,7 @@ typedef struct builderLinkContext_t {
 	 bool							compilerIsGCC;
 } builderLinkContext_t;
 
-static const char * Builder_CreateLinkCommand( arena_t *commandArena, builderLinkContext_t *linkContext, builderPostBuildConfigDependencyData_t *postBuildData ) {
+static const char * Builder_CreateLinkCommand( arena_t *commandArena, builderLinkContext_t *linkContext, builderPostBuildConfigData_t *postBuildData ) {
 	scratch_t scratch = Builder_GetScratch( commandArena );
 	
 	BuildConfig *config = linkContext->config;
@@ -3820,9 +3858,10 @@ static const char * Builder_CreateLinkCommand( arena_t *commandArena, builderLin
 				}
 			}
 		}
-	} else
+
+		StringBuilder_Appendf( scratch.arena, &linkerArgs, "/VERBOSE:LIB /NOLOGO " );
+	} else {
 #endif
-	{
 		if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
 			const char *linkerProgramName = linkContext->compilerIsGCC ? "ar" : "llvm-ar";
 
@@ -3879,18 +3918,18 @@ static const char * Builder_CreateLinkCommand( arena_t *commandArena, builderLin
 				}
 			}
 
-			for ( builderStringChunk_t *chunk = config->additionalLibs.head; chunk; chunk = chunk->next ) {
-				for ( uint32_t libIndex = 0; libIndex < chunk->count; libIndex++ ) {
-					const char *additionalLib = chunk->items[libIndex];
+            for ( builderStringChunk_t *chunk = config->additionalLibs.head; chunk; chunk = chunk->next ) {
+                for ( uint32_t libIndex = 0; libIndex < chunk->count; libIndex++ ) {
+                    const char *additionalLib = chunk->items[libIndex];
 
 					// an explicit filename or path (e.g. "./foo.so", "foo.lib") is passed straight through
 					// "-l" is only correct for bare library names since it adds the "lib" prefix and an extension itself
 					bool isExplicitLibFile = Builder_StringContains( additionalLib, "/" ) ||
-											Builder_StringContains( additionalLib, "\\" ) ||
-											Builder_PathEndsWith( additionalLib, ".lib" ) ||
-												Builder_PathEndsWith(additionalLib, ".so") ||
-												Builder_PathEndsWith(additionalLib, ".a") ||
-												Builder_PathEndsWith(additionalLib, ".dylib");
+												Builder_StringContains( additionalLib, "\\" ) ||
+												Builder_PathEndsWith( additionalLib, ".lib" ) ||
+												Builder_PathEndsWith(additionalLib, ".so" ) ||
+												Builder_PathEndsWith(additionalLib, ".a" ) ||
+												Builder_PathEndsWith(additionalLib, ".dylib" );
 
 					if ( isExplicitLibFile ) {
 #if defined( _WIN32 )
@@ -3917,6 +3956,8 @@ static const char * Builder_CreateLinkCommand( arena_t *commandArena, builderLin
 
 			// GCC and clang both link the sanitizer runtime themselves when driving the link, unlike link.exe
 			Builder_AddSanitizerArgs( &scratch, &linkerArgs, config->sanitizers, "-fsanitize" );
+
+            StringBuilder_Appendf( scratch.arena, &linkerArgs, "-Wl,--trace " );
 		}
 	}
 
@@ -3929,95 +3970,6 @@ static const char * Builder_CreateLinkCommand( arena_t *commandArena, builderLin
 	const char *linkCommand = StringBuilder_ToString( commandArena, &linkerArgs, NULL );
 	Builder_RewindScratch( &scratch );
 	return linkCommand;
-}
-
-typedef struct additionalLibData_t {
-	const char *additionalLib;
-	const char *fullFileExtension;
-	bool isExplicitLibFile;
-} additionalLibData_t;
-
-typedef struct builderLibVisitCallbackData_t {
-	uint64_t binaryFileWriteTime;
-	additionalLibData_t *additionalLibs;
-	uint32_t libCount;
-	bool useMSVCLink;
-	bool shouldLink;
-} builderLibVisitCallbackData_t;
-
-static void Builder_LibVisitCallback( arena_t *resultsArena, fileInfo_t *fileInfo, void *data ) {
-	builderLibVisitCallbackData_t *callbackData = (builderLibVisitCallbackData_t *)data;
-
-	if ( callbackData->shouldLink ) {
-		return;
-	}
-
-	bool isLib = false;
-	uint64_t fileLength;
-	const char *fullFileExtension = Builder_SeekToFirstDotInFilename( fileInfo->filename, &fileLength );
-	if ( callbackData->useMSVCLink ) {
-		isLib = Builder_StringEquals( fullFileExtension, ".lib" );
-	} else {	
-		isLib = Builder_StringEquals( fullFileExtension, ".lib" ) ||
-			Builder_StringEquals( fullFileExtension, ".so") ||
-			Builder_StringEquals( fullFileExtension, ".a") ||
-			Builder_StringEquals( fullFileExtension, ".dll.a") ||
-			Builder_StringEquals( fullFileExtension, ".tbd") ||
-			Builder_StringEquals( fullFileExtension, ".dylib");
-	}
-
-	if ( !isLib ) {
-		return;
-	}
-
-	uint32_t libIndex = 0;
-	while ( libIndex < callbackData->libCount ) {
-		additionalLibData_t *libData = &callbackData->additionalLibs[libIndex];
-		
-		bool libsMatch = true;
-		if ( libData->isExplicitLibFile ) {
-			libsMatch = Builder_StringEquals( fullFileExtension, libData->fullFileExtension ) 
-				&& Builder_StringEquals( fileInfo->filename, libData->additionalLib );
-		} else {
-			if ( callbackData->useMSVCLink ) {
-				if ( !Builder_StringEquals( fullFileExtension, ".lib" ) ) {
-					libsMatch = false;
-				}
-			}
-			
-			if ( libsMatch ) {
-				libsMatch = Builder_StringStartsWith( fileInfo->filename, libData->additionalLib );
-
-				// we do an extra check if it isn't MSVC link 
-				if ( !libsMatch && !callbackData->useMSVCLink && Builder_StringStartsWith( fileInfo->filename, "lib" ) ) {
-					const char *onlyLibName = fileInfo->filename + 3;
-					libsMatch = Builder_StringStartsWith( onlyLibName, libData->additionalLib );
-				}
-			}
-		}
-
-		uint64_t fileWriteTime = 0;
-		if ( libsMatch ) {
-			if ( !Builder_GetFileLastWriteTime( fileInfo->fullFilename, &fileWriteTime ) ) {
-				Builder_Error( "Failed to get last write time of lib during visit, lib: %s\n", fileInfo->fullFilename );
-				callbackData->shouldLink = true;
-				return;
-			}
-		} else {
-			libIndex++;
-			continue;
-		}
-
-		if ( fileWriteTime > callbackData->binaryFileWriteTime ) {
-			callbackData->shouldLink = true;
-			return;
-		} else { 
-			// we found this lib already and the linker should use first one it found, we are safe to swap "remove"
-			additionalLibData_t toSwap = *libData;
-			callbackData->additionalLibs[libIndex] 					= callbackData->additionalLibs[--callbackData->libCount];
-			callbackData->additionalLibs[callbackData->libCount]	= toSwap;
-		}
-	}
 }
 
 // set CWD to where this EXE lives
@@ -4079,7 +4031,7 @@ typedef struct builderBuildContext_t {
 	arena_t									*threadResultArenas;
 	arena_t									*postBuildArena;
 	arena_t									*buildSummaryArena;
-	builderPostBuildConfigDependencyData_t	*postBuildConfigDependencyData;
+	builderPostBuildConfigData_t			*postBuildConfigDependencyData;
 
 	// accumulated over every config built
 	uint32_t								builtConfigs;
@@ -4129,8 +4081,8 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 #endif
 		};
 
-		builderPostBuildConfigDependencyData_t *postBuildData = &context->postBuildConfigDependencyData[context->builtConfigs++];
-		*postBuildData = (builderPostBuildConfigDependencyData_t){ 0 };
+		builderPostBuildConfigData_t *postBuildData = &context->postBuildConfigDependencyData[context->builtConfigs++];
+		*postBuildData = (builderPostBuildConfigData_t){ 0 };
 
 		uint32_t needsCompilePacketCount = 0;
 		if ( compilePacketCount > 0 ) {
@@ -4177,24 +4129,26 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 				}
 			}
 
-			// we do a separate pass over the data here but really we could amorphise this with the above loop
-			// also at some point we might want to go wide	over multiple threads to do this
 			postBuildData->dependencyCacheFileName = Builder_FormatString( context->postBuildArena, "%s%c%s_%" PRIu64 ".builder-dependencies", context->intermediateFolder, BUILDER_PATH_SEPARATOR, config->name, configCompileCommandHash );
+			needsCompilePacketCount = compilePacketCount;
 			if ( !options->forceRebuild ) {
-				uint64_t byteBufferSize;
+				// when we read from a byte buffer we use the count to track how much of it we have read
+				// and the capacity is how much there is to read
 				byteBuffer_t byteBuffer = { 0 };
-				byteBuffer.arena = scratch.arena;
-				byteBuffer.data = Builder_ReadEntireFile( scratch.arena, postBuildData->dependencyCacheFileName, &byteBuffer.count );
-				byteBuffer.capacity = byteBuffer.count;
-
-				uint32_t skipRecompileCount = 0;
+				byteBuffer.data = Builder_ReadEntireFile( scratch.arena, postBuildData->dependencyCacheFileName, &byteBuffer.capacity );
+				
 				// no file found means we recompile everything
 				if ( byteBuffer.data ) {
-					Builder_DependencyDataFromByteBuffer( context->postBuildArena, &byteBuffer, postBuildData );
+					postBuildData->configDependencies = Builder_ConfigDependenciesFromByteBuffer( context->postBuildArena, &byteBuffer );
+
+					builderConfigDependencies_t *configDependencies = &postBuildData->configDependencies;
+					uint32_t packetIndex = 0;
+					if ( configDependencies->fileVersion != g_builderDependenciesFileVersion ) {
+						packetIndex = needsCompilePacketCount;
+					}
 
 					// iterate through, and swap with end if a file doesn't need to recompile
-					uint32_t packetIndex = 0;
-					while ( packetIndex < ( compilePacketCount - skipRecompileCount ) ) {
+					while ( packetIndex < needsCompilePacketCount ) {
 						const char *sourceFile 	= compilePackets[packetIndex].sourceFile;
 						const char *objectFile 	= compilePackets[packetIndex].intermediateFile;
 						uint64_t objectHash 	= compilePackets[packetIndex].compileCommandHash;
@@ -4204,34 +4158,48 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 							if ( !Builder_GetFileLastWriteTime( sourceFile, &sourceWriteTime ) ) {
 								Builder_Warning( "Couldn't stat source file '%s'.\n", sourceFile ); // so we recompile it
 								packetIndex++;
-
 								continue;
 							}
 
 							// object is newer - check dependency file
 							if ( objectWriteTime > sourceWriteTime ) {
-								objectToDependency_t *objectDependency = NULL;
-								for ( uint64_t objectIndex = 0; objectIndex < postBuildData->mapSize; ++objectIndex ) {
-									if ( postBuildData->objectToDependencyMap[objectIndex].objectHash == objectHash ) {
-										objectDependency = &postBuildData->objectToDependencyMap[objectIndex];
+								objectToDependencyIndicies_t *objectDependencies = NULL;
+								for ( uint64_t objectIndex = 0; objectIndex < configDependencies->objectFileCount; ++objectIndex ) {
+									if ( configDependencies->objectDependencyMap[objectIndex].objectHash == objectHash ) {
+										objectDependencies = &configDependencies->objectDependencyMap[objectIndex];
 										break;
 									}
 								}
 
-								// we found its dependency now check it
-								if ( objectDependency ) {
+								// we found its dependencies now check them
+								if ( objectDependencies ) {
 									bool needsRecompile = false;
-									for ( uint64_t mapIndex = 0; mapIndex < objectDependency->dependencyCount; ++mapIndex ) {
-										const uint64_t dependencyIndex = objectDependency->dependencyIndices[mapIndex];
+									compileDependencyArray_t *dependencyArray = &configDependencies->dependencyArray;
+									for ( uint64_t indiciesIndex = 0; indiciesIndex < objectDependencies->dependencyCount; ++indiciesIndex ) {
+										const uint64_t dependencyIndex = objectDependencies->dependencyIndices[indiciesIndex];
 
-										if ( Builder_IsDependencyNewer( &postBuildData->dependencyArray, dependencyIndex, objectWriteTime ) ) {
+										if ( dependencyIndex >= dependencyArray->count ) {
+											Builder_Warning( "Tried to fetch dependency not in array with index %llu\n", dependencyIndex );
+											needsRecompile = true;
+											break;
+										}
+
+										compileDependency_t *compileDependency = &dependencyArray->dependencies[dependencyIndex];
+										if ( compileDependency->writeTime == 0 ) {
+											if ( !Builder_GetFileLastWriteTime( compileDependency->dependency, &compileDependency->writeTime ) ) {
+												Builder_Warning( "Failed to get write time for dependency: %s\n", compileDependency->dependency );
+												compileDependency->writeTime = UINT64_MAX;
+											}
+										}
+
+										if ( compileDependency->writeTime > objectWriteTime ) {
 											needsRecompile = true;
 											break;
 										}
 									}
 
 									if ( !needsRecompile ) {
-										const uint32_t uncheckedPacketOffset = compilePacketCount - 1 - ( skipRecompileCount++ );
+										const uint32_t uncheckedPacketOffset = --needsCompilePacketCount;
 										builderCompilePacket_t toSwap = compilePackets[packetIndex];
 										compilePackets[packetIndex] = compilePackets[uncheckedPacketOffset];
 										compilePackets[uncheckedPacketOffset] = toSwap;
@@ -4239,17 +4207,12 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 										continue;
 									}
 								}
-
 							}
 						}
 
 						packetIndex++;
 					}
 				}
-
-				needsCompilePacketCount = compilePacketCount - skipRecompileCount;
-			} else {
-				needsCompilePacketCount = compilePacketCount;
 			}
 
 			Builder_RewindScratch( &scratch );
@@ -4261,6 +4224,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 
 			if ( needsCompilePacketCount > 0 ) {
 				scratch_t scratch = Builder_GetScratch( context->buildScratch->arena );
+				postBuildData->compiledPacketCount = needsCompilePacketCount;
 
 				// TODO: DM: 09/08/2026: is it OK to create and destroy a bunch of threads for each config?
 				// only spin up additional threads once theres more than one file
@@ -4371,9 +4335,9 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 			bool shouldLink = needsCompilePacketCount > 0;
 			uint64_t binaryFileWriteTime = 0;
 			if ( !shouldLink && linkCommand ) {
-				if ( postBuildData->binaryWriteTime && Builder_GetFileLastWriteTime( binaryPath, &binaryFileWriteTime ) ) {
-					const bool binaryMismatch 		= postBuildData->binaryWriteTime != binaryFileWriteTime;
-					const bool linkCommandMismatch 	= postBuildData->linkCommandHash != linkCommandHash;
+				if ( postBuildData->configDependencies.binaryWriteTime && Builder_GetFileLastWriteTime( binaryPath, &binaryFileWriteTime ) ) {
+					const bool binaryMismatch 		= postBuildData->configDependencies.binaryWriteTime != binaryFileWriteTime;
+					const bool linkCommandMismatch 	= postBuildData->configDependencies.linkCommandHash != linkCommandHash;
 					shouldLink = binaryMismatch || linkCommandMismatch;
 				} else {
 					// binary doesn't exist or no dependency file
@@ -4382,74 +4346,11 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 			}
 
 			if ( !shouldLink && binaryFileWriteTime ) {
-				uint32_t libCount = 0;
-				for ( builderStringChunk_t *chunk = config->additionalLibs.head; chunk; chunk = chunk->next ) {
-					for ( uint32_t libIndex = 0; libIndex < chunk->count; libIndex++ ) {
-						libCount++;
-					}
-				}
-
-				uint32_t written = 0;
-				additionalLibData_t *additionalLibs = Builder_ArenaAlloc( context->buildScratch->arena, additionalLibData_t, libCount );
-				for ( builderStringChunk_t *chunk = config->additionalLibs.head; chunk; chunk = chunk->next ) {
-					for ( uint32_t libIndex = 0; libIndex < chunk->count; libIndex++ ) {
-						const char *additionalLib = chunk->items[libIndex];
-
-						const char *fullFileExtension = Builder_SeekToFirstDotInFilename( additionalLib, NULL );
-						if ( useMSVCLink ) {
-							// supposedly mixing in .a from other windows toolchains might also be usable here - do we need to handle that?
-							bool alreadyHasExtension = Builder_StringEquals( fullFileExtension, ".lib" );
-							additionalLibs[written++] = (additionalLibData_t) { 
-								.additionalLib = additionalLib,
-								.fullFileExtension = fullFileExtension,
-								.isExplicitLibFile = alreadyHasExtension
-							};
-						} else {
-							// I don't really know how to handle the fact that we allow a path separator here
-							bool isExplicitLibFile = Builder_StringContains( fullFileExtension, "/" ) ||
-													Builder_StringContains( fullFileExtension, "\\" ) ||
-													Builder_StringEquals( fullFileExtension, ".lib" ) ||
-													Builder_StringEquals( fullFileExtension, ".so" ) ||
-													Builder_StringEquals( fullFileExtension, ".a" ) ||
-													Builder_StringEquals( fullFileExtension, ".dll.a" ) ||
-													Builder_StringEquals( fullFileExtension, ".tbd" ) ||
-													Builder_StringEquals( fullFileExtension, ".dylib" );
-							additionalLibs[written++] = (additionalLibData_t) { 
-								.additionalLib = additionalLib,
-								.fullFileExtension = fullFileExtension,
-								.isExplicitLibFile = isExplicitLibFile
-							};
-						}
-					}
-				}
-
-				builderLibVisitCallbackData_t libVisitCallbackData = {
-					.binaryFileWriteTime = binaryFileWriteTime,
-					.additionalLibs = additionalLibs,
-					.libCount = libCount,
-					.useMSVCLink = useMSVCLink,
-					.shouldLink = false
-				};
-
-				if ( libCount > 0 ) {
-					for ( builderStringChunk_t *chunk = config->additionalLibPaths.head; chunk; chunk = chunk->next ) {
-						for ( uint32_t libPathIndex = 0; libPathIndex < chunk->count; libPathIndex++ ) {
-							const char *libPath = chunk->items[libPathIndex];
-							
-							Builder_VisitFiles( context->buildScratch->arena, libPath, BUILDER_FILE_VISIT_FILES, &Builder_LibVisitCallback, &libVisitCallbackData );
-
-							if ( libVisitCallbackData.shouldLink ) {
-								shouldLink = true;
-								chunk->next = NULL;
-								break;
-							}
-						}
-					}
-				}
+				shouldLink = true;
+				// CHECK DEPENDENCIES FROM LAST LINK
 			}
 			
 			if ( shouldLink && config->binaryFolder && !Builder_CreateFolderIfItDoesntExist( config->binaryFolder ) ) {
-				
 				Builder_Error( "Failed to create the binary folder \"%s\".\n", config->binaryFolder );
 				Builder_RewindScratch( context->buildScratch );
 
@@ -4458,24 +4359,23 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 			}
 
 			if ( shouldLink ) {
-				postBuildData->didLink = true;
-				postBuildData->linkCommandHash = linkCommandHash;
+				postBuildData->configDependencies.linkCommandHash = linkCommandHash;
 
 				printf( "%s\n", linkCommand );
 				int32_t linkResult = Builder_RunProcess( NULL, linkCommand, false, NULL );
 
-				if ( linkResult != 0 ) {					
+				if ( linkResult != 0 ) {
 					Builder_Error( "Link failed.\n" );
 					Builder_RewindScratch( context->buildScratch );
-					
+
 					// force the link to show as a fail
-					postBuildData->binaryWriteTime = 0;
+					postBuildData->configDependencies.binaryWriteTime = 0;
 					return BUILD_RESULT_FAILED;
 				}
 
-				if ( !Builder_GetFileLastWriteTime( binaryPath, &postBuildData->binaryWriteTime ) ) {
+				if ( !Builder_GetFileLastWriteTime( binaryPath, &postBuildData->configDependencies.binaryWriteTime ) ) {
 					Builder_Warning( "Failed to get binary write time after linking.\n" );
-					postBuildData->binaryWriteTime = 0;
+					postBuildData->configDependencies.binaryWriteTime = 0;
 				}
 			} else {
 				printf( "Skipping linking.\n" );
@@ -4511,16 +4411,18 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 	printf( "Caching dependency info for incremental builds...\n\n" );
 
 	for ( uint32_t configIndex = 0; configIndex < context->builtConfigs; ++configIndex ) {
-		builderPostBuildConfigDependencyData_t *postBuildData = &context->postBuildConfigDependencyData[configIndex];
+		builderPostBuildConfigData_t *postBuildData 	= &context->postBuildConfigDependencyData[configIndex];
+		builderConfigDependencies_t *configDependencies	= &postBuildData->configDependencies;
 
-		// only store configs that need dependencies
+		// only store dependencies for configs that need it
 		if ( postBuildData->packetCount == 0 ) {
 			continue;
 		}
 
-		// grab or create the dependency array
+		// create the dependency array if it wasn't already
+		// it is probably okay for the array to have stale dependencies
 		const uint32_t dependenciesCapcity = 16;
-		compileDependencyArray_t dependencyArray = postBuildData->dependencyArray;
+		compileDependencyArray_t dependencyArray = configDependencies->dependencyArray;
 		if ( dependencyArray.capacity == 0 ) {
 			dependencyArray = (compileDependencyArray_t) {
 				.count			= 0,
@@ -4529,78 +4431,63 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 			};
 		}
 		
-		// new mapping as the number of files could have changed, but still recover the old data
-		objectToDependency_t *objectToDependencyMapping = Builder_ArenaAlloc( context->postBuildArena, objectToDependency_t, postBuildData->packetCount );
-		for ( uint32_t packetIndex = 0; packetIndex < postBuildData->packetCount; ++packetIndex ) {
-			objectToDependency_t *dependencyMap = &objectToDependencyMapping[packetIndex];
-			*dependencyMap = (objectToDependency_t) { 0 };
-
-			for ( uint64_t mapIndex = 0; mapIndex < postBuildData->mapSize; ++mapIndex ) {
-				if ( postBuildData->objectToDependencyMap[mapIndex].objectHash == postBuildData->compilePackets[packetIndex].compileCommandHash ) {
-					*dependencyMap = postBuildData->objectToDependencyMap[mapIndex];
-					break;
-				}
+		// new mapping as the number of files could have changed
+		// plus if a file compiled we don't want to accidentally have stored stale dependency data
+		{
+			configDependencies->objectFileCount = postBuildData->packetCount;
+			objectToDependencyIndicies_t *objectToDependencyMapping = Builder_ArenaAlloc( context->postBuildArena, objectToDependencyIndicies_t, postBuildData->packetCount );
+			for ( uint32_t packetIndex = 0; packetIndex < postBuildData->compiledPacketCount; ++packetIndex ) {
+				objectToDependencyMapping[packetIndex] = (objectToDependencyIndicies_t) { 0 };
 			}
+
+			// recover the old data since these didn't compile
+			for ( uint32_t packetIndex = postBuildData->compiledPacketCount; packetIndex < postBuildData->packetCount; ++packetIndex ) {
+				objectToDependencyIndicies_t *objectDependencies = &objectToDependencyMapping[packetIndex];
+				*objectDependencies = (objectToDependencyIndicies_t) { 0 };
+				
+				for ( uint64_t objectIndex = 0; objectIndex < configDependencies->objectFileCount; ++objectIndex ) {
+					if ( configDependencies->objectDependencyMap[objectIndex].objectHash == postBuildData->compilePackets[packetIndex].compileCommandHash ) {
+						*objectDependencies = configDependencies->objectDependencyMap[objectIndex];
+						break;
+					}
+				}
+
+				BUILDER_ASSERT( objectDependencies->objectHash != 0 && "We skipped compilation of a file so should have its dependency data" );
+			}
+
+			configDependencies->objectDependencyMap = objectToDependencyMapping;
 		}
 
-		// now actually parse the dependency info, adding any new dependencies that might be in the dependency info
+		// now actually parse the current invocation's dependency info, adding any new dependencies
 		for ( uint32_t dependencyInfoIndex = 0; dependencyInfoIndex < postBuildData->dependencyInfoCount; ++dependencyInfoIndex ) {
 			builderCompileJobDependencyInfo_t *dependencyInfo = &postBuildData->dependencyInfos[dependencyInfoIndex];
 			builderCompilePacket_t *compilePacket =  &postBuildData->compilePackets[dependencyInfo->compilePacketIndex];
-			objectToDependency_t *dependencyMap = &objectToDependencyMapping[dependencyInfo->compilePacketIndex];
+			objectToDependencyIndicies_t *dependencyMap = &configDependencies->objectDependencyMap[dependencyInfo->compilePacketIndex];
 
-			if ( dependencyMap->objectHash == 0 ) {
-				*dependencyMap = (objectToDependency_t) {
-					.objectHash 		= compilePacket->compileCommandHash,
-					.dependencyCount 	= 0,
-					.dependencyCapacity	= 16,
-					.dependencyIndices	= Builder_ArenaAlloc( context->postBuildArena, uint64_t, 16 )
-				};
-			}
+			*dependencyMap = (objectToDependencyIndicies_t ) {
+				.objectHash 		= compilePacket->compileCommandHash,
+				.dependencyCount 	= 0,
+				.dependencyCapacity	= 16,
+				.dependencyIndices	= Builder_ArenaAlloc( context->postBuildArena, uint64_t, 16 )
+			};
 
 			Builder_ParseDependencyInfo( context->postBuildArena, &dependencyArray, dependencyMap, dependencyInfo->dependencyString, context->compilerIsMSVC );
 		}
 
-		// now we write out the dependency info as bytes
-		const uint64_t writeBufferInitialCapacity = 512;
-		byteBuffer_t byteBuffer = {
-			.arena		= context->postBuildArena,
-			.count		= 0,
-			.capacity	= writeBufferInitialCapacity,
-			.data		= Builder_ArenaAlloc( context->postBuildArena, uint8_t, writeBufferInitialCapacity )
-		};
-
-		// data for incremental link
-		Builder_ByteBufferPushU64( &byteBuffer, postBuildData->linkCommandHash );
-		Builder_ByteBufferPushU64( &byteBuffer, postBuildData->binaryWriteTime );
-
-		// data for incremental compile
-		Builder_ByteBufferPushU64( &byteBuffer, postBuildData->packetCount );
-
-		Builder_LogVerbose( options, "Outputting dependencies to %s:\n", postBuildData->dependencyCacheFileName );
-
+		Builder_LogVerbose( options, "\nOutputting config dependencies to %s:\n", postBuildData->dependencyCacheFileName );
 		for ( uint32_t packetIndex = 0; packetIndex < postBuildData->packetCount; ++packetIndex ) {
-			objectToDependency_t *dependencyMap = &objectToDependencyMapping[packetIndex];
+			objectToDependencyIndicies_t *dependencyMap = &configDependencies->objectDependencyMap[packetIndex];
 			builderCompilePacket_t *compilePacket = &postBuildData->compilePackets[packetIndex];
 
-			Builder_ByteBufferPushU64( &byteBuffer, dependencyMap->objectHash );
-			Builder_ByteBufferPushU64( &byteBuffer, dependencyMap->dependencyCount );
-
 			Builder_LogVerbose( options, "%s has %llu dependenc%s%c\n", compilePacket->sourceFile, dependencyMap->dependencyCount, dependencyMap->dependencyCount != 1 ? "ies" : "y", dependencyMap->dependencyCount ? ':' : '.' );
-
 			for ( uint64_t mapIndex = 0; mapIndex < dependencyMap->dependencyCount; ++mapIndex ) {
 				const uint64_t dependencyIndex = dependencyMap->dependencyIndices[mapIndex];
-				Builder_ByteBufferPushU64( &byteBuffer, dependencyIndex );
 				Builder_LogVerbose( options, "    %s\n", dependencyArray.dependencies[dependencyIndex].dependency );
 			}
 		}
-
-		Builder_ByteBufferPushU64( &byteBuffer, dependencyArray.count );
-		for ( uint64_t dependencyIndex = 0; dependencyIndex < dependencyArray.count; ++dependencyIndex ) {
-			compileDependency_t *dependency = &dependencyArray.dependencies[dependencyIndex];
-			Builder_ByteBufferPushString( &byteBuffer, dependency->dependency, dependency->dependencyLength );
-		}
-
+			
+		configDependencies->fileVersion = g_builderDependenciesFileVersion;
+		byteBuffer_t byteBuffer = Builder_ByteBufferFromConfigDependencies( context->postBuildArena, configDependencies );
 		Builder_WriteEntireFile( postBuildData->dependencyCacheFileName, byteBuffer.data, byteBuffer.count );
 	}
 }
@@ -4772,7 +4659,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 		.threadResultArenas				= threadResultArenas,
 		.postBuildArena					= &postBuildArena,
 		.buildSummaryArena				= &buildSummaryArena,
-		.postBuildConfigDependencyData	= Builder_ArenaAlloc( &postBuildArena, builderPostBuildConfigDependencyData_t, options->configs.count ),
+		.postBuildConfigDependencyData	= Builder_ArenaAlloc( &postBuildArena, builderPostBuildConfigData_t, options->configs.count ),
 	};
 
 	// the self rebuild config gets fixed up whether or not we actually build it below

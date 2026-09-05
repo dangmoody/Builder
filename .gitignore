@@ -40,6 +40,10 @@ tests/**/*.json
 x64
 *.vcxproj.user
 
+#
+# vscode stuff
+#
+.vscode/
 
 #
 # zed stuff

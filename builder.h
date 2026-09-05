@@ -2175,6 +2175,10 @@ typedef struct {
 } builderMSVCVersion_t;
 
 typedef struct {
+	const char				*compilerPath;
+	const char				*linkEXEPath;
+	const char				*libEXEPath;
+
 	const char				*rootFolder;
 	const char				*includePath;
 	const char				*libPath;
@@ -2433,10 +2437,15 @@ static void Builder_OnMSVCInstallFound( arena_t *results, fileInfo_t *fileInfo, 
 		return;
 	}
 
+	const char *rootFolder = fileInfo->fullFilename;
+
 	builderMSVCInstall_t install = {
-		.rootFolder		= Builder_FormatString( results, "%s", fileInfo->fullFilename ),
-		.includePath	= Builder_FormatString( results, "%s\\include", fileInfo->fullFilename ),
-		.libPath		= Builder_FormatString( results, "%s\\lib\\x64", fileInfo->fullFilename ),
+		.compilerPath	= Builder_FormatString( results, "%s\\bin\\Hostx64\\x64\\cl.exe", rootFolder ),
+		.linkEXEPath	= Builder_FormatString( results, "%s\\bin\\Hostx64\\x64\\link.exe", rootFolder ),
+		.libEXEPath		= Builder_FormatString( results, "%s\\bin\\Hostx64\\x64\\lib.exe", rootFolder ),
+		.rootFolder		= Builder_FormatString( results, "%s", rootFolder ),
+		.includePath	= Builder_FormatString( results, "%s\\include", rootFolder ),
+		.libPath		= Builder_FormatString( results, "%s\\lib\\x64", rootFolder ),
 		.version		= version,
 	};
 
@@ -2811,7 +2820,7 @@ static uint32_t Builder_AtomicIncrement( builderAtomic32_t *value ) {
 typedef struct builderCompileContext_t {
 	BuildConfig					*config;
 	const char					*compilerPath;
-	bool						compilerIsMSVC;
+	bool						useMSVCSyntax;
 #if defined( _WIN32 )
 	bool						debugDefineSet;
 	builderMSVCInstall_t		*msvcInstall;
@@ -2861,7 +2870,7 @@ static const char *Builder_CreateCompilationCommand( arena_t *commandArena, buil
 	StringBuilder_Appendf( scratch.arena, &compileArgs, "\"%s\" ", context->compilerPath );
 
 #ifdef _WIN32
-	if ( context->compilerIsMSVC ) {
+	if ( context->useMSVCSyntax ) {
 		builderMSVCInstall_t *msvcInstall = context->msvcInstall;
 		builderWindowsSDKInstall_t *windowsSDKInstall = context->windowsSDKInstall;
 
@@ -3757,13 +3766,16 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 	bool compilerIsClang = Builder_PathEndsWith( compilerPath, "clang" )
 						|| Builder_PathEndsWith( compilerPath, "clang.exe" )
 						|| Builder_PathEndsWith( compilerPath, "clang++" )
-						|| Builder_PathEndsWith( compilerPath, "clang++.exe" )
-						|| Builder_PathEndsWith( compilerPath, "clang-cl" )
+						|| Builder_PathEndsWith( compilerPath, "clang++.exe" );
+	bool compilerIsClangCL = Builder_PathEndsWith( compilerPath, "clang-cl" )
 						|| Builder_PathEndsWith( compilerPath, "clang-cl.exe" );
 	bool compilerIsGCC = Builder_PathEndsWith( compilerPath, "gcc" )
 						|| Builder_PathEndsWith( compilerPath, "gcc.exe" )
 						|| Builder_PathEndsWith( compilerPath, "g++" )
 						|| Builder_PathEndsWith( compilerPath, "g++.exe" );
+	// clang++ and g++ end with the same 3 characters
+	// so check if we already had compilerIsClang set to true
+	compilerIsGCC &= !compilerIsClang;
 
 #ifndef _WIN32
 	if ( compilerIsMSVC ) {
@@ -3779,7 +3791,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 	char *compilerVersionString = NULL;
 #ifdef _WIN32
 	if ( compilerIsMSVC ) {
-		compilerPath = Builder_FormatString( buildScratch.arena, "%s\\bin\\Hostx64\\x64\\cl.exe", msvcInstall.rootFolder );
+		compilerPath = msvcInstall.compilerPath;
 		compilerVersionString = Builder_FormatString( buildScratch.arena, "%d.%d.%d", msvcInstall.version.v0, msvcInstall.version.v1, msvcInstall.version.v2 );
 	} else
 #endif
@@ -3909,7 +3921,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 				builderCompileContext_t compileContext = {
 					.config				= config,
 					.compilerPath		= compilerPath,
-					.compilerIsMSVC			= compilerIsMSVC,
+					.useMSVCSyntax		= compilerIsMSVC || compilerIsClangCL,
 #if defined( _WIN32 )
 					.msvcInstall		= &msvcInstall,
 					.windowsSDKInstall	= &windowsSDKInstall,
@@ -3951,7 +3963,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 							compilePackets[written].compileCommandHash = compileCommandHash;
 
 							StringBuilder_Appendf( scratch.arena, &fullCompileCommand, "%s ", sourceFile );
-							if ( compileContext.compilerIsMSVC ) {
+							if ( compileContext.useMSVCSyntax ) {
 								StringBuilder_Appendf( scratch.arena, &fullCompileCommand, "/Fo" );
 							} else {
 								StringBuilder_Appendf( scratch.arena, &fullCompileCommand, "-o " );
@@ -4075,7 +4087,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 						builderCompileJobPool_t pool = {
 							.compilePackets		= compilePackets,
 							.compilePacketCount	= needsCompilePacketCount,
-							.compilerIsMSVC			= compilerIsMSVC,
+							.compilerIsMSVC		= compilerIsMSVC,
 							.dependencyOutputs	= dependencyOutputs
 						};
 
@@ -4163,9 +4175,9 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 #if defined( _WIN32 )
 						if ( useMSVCLink ) {
 							if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
-								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\lib.exe\" ", msvcInstall.rootFolder );
+								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "\"%s\" ", msvcInstall.libEXEPath );
 							} else {
-								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "\"%s\\bin\\Hostx64\\x64\\link.exe\" ", msvcInstall.rootFolder );
+								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "\"%s\" ", msvcInstall.linkEXEPath );
 							}
 
 							if ( config->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
@@ -4260,6 +4272,20 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 #endif
 						{
 							if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
+								// remove the filename part of the compiler path, leaving just the path (if it exists)
+								// use that path to then get the path to the linker executable since its in the same folder
+								{
+									const char *lastSlash = NULL;
+									if ( !lastSlash ) lastSlash = strrchr( compilerPath, '/' );
+									if ( !lastSlash ) lastSlash = strrchr( compilerPath, '\\' );
+
+									if ( lastSlash ) {
+										uint64_t compilerBinaryPathLength = (uint64_t) lastSlash - (uint64_t) compilerPath;
+
+										StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%.*s%c", (int) compilerBinaryPathLength, compilerPath, BUILDER_PATH_SEPARATOR );
+									}
+								}
+
 								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "ar rcs " );
 								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", binaryPath );
 

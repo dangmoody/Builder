@@ -3875,7 +3875,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 	uint32_t numCPUCores = Builder_GetNumCPUCores();
 	arena_t postBuildArena = { 0 };
 	arena_t *threadResultArenas = Builder_ArenaAlloc( buildScratch.arena, arena_t, numCPUCores );
-	for ( uint32_t arenaIndex; arenaIndex < numCPUCores; ++arenaIndex ) {
+	for ( uint32_t arenaIndex = 0; arenaIndex < numCPUCores; ++arenaIndex ) {
 		threadResultArenas[arenaIndex] = (arena_t) { 0 };
 	}
 
@@ -4282,11 +4282,12 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 									if ( lastSlash ) {
 										uint64_t compilerBinaryPathLength = (uint64_t) lastSlash - (uint64_t) compilerPath;
 
-										StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%.*s%c", (int) compilerBinaryPathLength, compilerPath, BUILDER_PATH_SEPARATOR );
+										StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "\"%.*s%car\" rcs ", (int) compilerBinaryPathLength, compilerPath, BUILDER_PATH_SEPARATOR );
+									} else {
+										StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "ar rcs " );
 									}
 								}
 
-								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "ar rcs " );
 								StringBuilder_Appendf( buildScratch.arena, &linkerArgs, "%s ", binaryPath );
 
 								// we always have to link all files

@@ -188,6 +188,18 @@ int main( int argc, char **argv ) {
 	);
 #endif
 
+	if ( HasCommandLineArg( argc, argv, "--gcc" ) ) {
+		// SDL_egl.h only falls back to its own built-in EGL/GLES declarations when _MSC_VER is defined;
+		// GCC needs the real Khronos headers vendored here
+		AddIncludes( sdl, "src/video/khronos" );
+
+#if defined( _WIN32 )
+		// MSVC/clang pull GUID_NULL, IID_IShellItem, IID_ITaskbarList3 etc in via their default libs;
+		// MinGW needs libuuid.a linked explicitly to define them
+		AddLibs( sdl, "uuid" );
+#endif
+	}
+
 	BuildConfig *demo = CreateBuildConfig( &options );
 	*demo = (BuildConfig) {
 		.name				= "demo",

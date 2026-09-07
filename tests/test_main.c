@@ -197,7 +197,7 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const char *testFolde
 
 			printf( "%s\n", output );
 
-			TEMPER_CHECK_TRUE_QM( buildEXEExitCode == 0, "Failed to run \"%s\".\n", buildEXEFilename );
+			TEMPER_CHECK_TRUE_QM( buildEXEExitCode == 0, "Failed to build \"%s\" using compiler %s.\n", buildSourceFile, compilerName );
 		}
 
 		// run the program we just built

@@ -1,11 +1,14 @@
 #define BUILDER_IMPLEMENTATION
 #include "../../builder.h"
 
+#include "../test_compiler_override.h"
+
 #define BINARY_NAME		"SDL"
 #define BINARY_FOLDER	"bin"
 
 int main( int argc, char **argv ) {
 	BuilderOptions options = { 0 };
+	ApplyCompilerOverride( &options, argc, argv );
 
 	Builder_RebuildSelf(argc,argv);
 

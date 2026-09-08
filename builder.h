@@ -4357,6 +4357,18 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 				};
 				linkCommand = Builder_CreateLinkCommand( context->buildScratch->arena, &linkContext, postBuildData );
 				linkCommandHash = Builder_HashString( linkCommand );
+
+				// this means we have no dependency file (or link data in it)
+				// which means we definitely need to link, and definitely need to force a full link
+				// otherwise we won't properly populate the dependency file
+				if ( postBuildData->configDependencies.linkCommandHash == 0 ) {
+					shouldLink = true;
+					postBuildData->didFullLink = true;
+
+					if ( useMSVCLink ) {
+						linkCommand = Builder_FormatString( context->buildScratch->arena, "%s /INCREMENTAL:NO", linkCommand );
+					}
+				}
 			}
 
 			bool forceNoIncremental = false;
@@ -4367,9 +4379,9 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 					const bool linkCommandMismatch 	= postBuildData->configDependencies.linkCommandHash != linkCommandHash;
 					shouldLink = binaryMismatch || linkCommandMismatch;
 				} else {
-					// binary doesn't exist or no dependency file
+					// binary doesn't exist, counts as a full link
 					shouldLink = true;
-					forceNoIncremental = true;
+					postBuildData->didFullLink = true;
 				}
 			}
 
@@ -4399,10 +4411,6 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 			if ( shouldLink ) {
 				postBuildData->configDependencies.linkCommandHash = linkCommandHash;
 
-				if ( forceNoIncremental && useMSVCLink ) {
-					linkCommand = Builder_FormatString( context->buildScratch->arena, "%s /INCREMENTAL:NO", linkCommand );
-					postBuildData->didFullLink = true;
-				}
 				printf( "%s\n", linkCommand );
 
 				char *linkerOutput = NULL;
@@ -4414,6 +4422,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 
 					// force the link to show as a fail
 					postBuildData->configDependencies.binaryWriteTime = 0;
+					postBuildData->configDependencies.linkCommandHash = 0;
 					return BUILD_RESULT_FAILED;
 				}
 

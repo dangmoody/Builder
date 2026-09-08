@@ -3461,7 +3461,9 @@ static const char * Builder_StringFromByteBuffer( arena_t *arena, byteBuffer_t *
 	}
 
 	byteBuffer->count += stringLength;
-	*outStringLength = stringLength;
+	if ( outStringLength ) {
+		*outStringLength = stringLength;
+	}
 	return string;
 }
 
@@ -3520,6 +3522,7 @@ static builderConfigDependencies_t Builder_ConfigDependenciesFromByteBuffer( are
 
         libraryDependencyArray_t *libraryDependencyArray    = &configDependencies.libraryDependencyArray;
         libraryDependencyArray->count		= Builder_U64FromByteBuffer( byteBuffer );
+		libraryDependencyArray->capacity		= libraryDependencyArray->count;
         libraryDependencyArray->libraries	= Builder_ArenaAlloc( arena, libraryDependency_t, libraryDependencyArray->count );
         for ( uint32_t libIndex = 0; libIndex < libraryDependencyArray->count; ++libIndex ) {
             libraryDependency_t *libDependency = &libraryDependencyArray->libraries[libIndex];
@@ -3748,6 +3751,7 @@ typedef struct builderPostBuildConfigData_t {
 	uint64_t							dependencyInfoCount;
 	const char							*dependencyCacheFileName;
 	bool								didFullLink;
+	uint64_t							nextLibraryWriteTimeToCheckIndex;
 	StringList							linkLibraryOutput;
 	builderConfigDependencies_t			configDependencies;
 } builderPostBuildConfigData_t;
@@ -4085,7 +4089,8 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 		config->OnPreBuild( config );
 	}
 
-		// build the config
+	// build the config
+	bool shouldLink;
 	{
 		printf( "Building config \"%s\":\n", config->name );
 
@@ -4106,8 +4111,6 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 
 		builderPostBuildConfigData_t *postBuildData = &context->postBuildConfigDependencyData[context->builtConfigs++];
 		*postBuildData = (builderPostBuildConfigData_t){ 0 };
-
-		uint32_t needsCompilePacketCount = 0;
 		if ( compilePacketCount > 0 ) {
 			postBuildData->packetCount = compilePacketCount;
 			postBuildData->compilePackets = Builder_ArenaAlloc( context->postBuildArena, builderCompilePacket_t, compilePacketCount );
@@ -4323,6 +4326,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 		}
 
 		// link step
+		shouldLink = false;
 		{
 			double linkTimeStart = Builder_TimeMS();
 			
@@ -4355,7 +4359,6 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 				linkCommandHash = Builder_HashString( linkCommand );
 			}
 
-			bool shouldLink = false;
 			bool forceNoIncremental = false;
 			uint64_t binaryFileWriteTime = 0;
 			if ( !shouldLink && linkCommand ) {
@@ -4376,7 +4379,9 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 					libraryDependency_t *library = &libraryDependencyArray->libraries[libIndex];
 
 					uint64_t libraryWriteTime = 0;
+					postBuildData->nextLibraryWriteTimeToCheckIndex = libIndex + 1;
 					if ( !Builder_GetFileLastWriteTime( library->libraryPath, &libraryWriteTime ) || libraryWriteTime != library->writeTime ) {
+						library->writeTime = libraryWriteTime;
 						shouldLink = true;
 						break;
 					}
@@ -4403,9 +4408,6 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 				char *linkerOutput = NULL;
 				int32_t linkResult = Builder_RunProcess( context->buildScratch->arena, linkCommand, false, &linkerOutput );
 
-				printf( "%s\n", linkCommand );
-				int32_t linkResult = Builder_RunProcess( NULL, linkCommand, false, NULL );
-
 				if ( linkResult != 0 ) {
 					Builder_Error( "Link failed.\n" );
 					Builder_RewindScratch( context->buildScratch );
@@ -4415,7 +4417,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 					return BUILD_RESULT_FAILED;
 				}
 
-				if ( linkerOutput ) {
+				if ( linkerOutput && useMSVCLink ) {
 					bool withinLibrarySearch = false;
 					const char *current = linkerOutput;
 					while ( current && *current ) {
@@ -4438,9 +4440,21 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 								}
 
 								uint64_t libPathLength = ( (uint64_t) libPathEnd ) - ( (uint64_t) libPathStart );
-								const char *library = Builder_FormatString( &postBuildArena, "%.*s", libPathLength, libPathStart );
+								const char *library = Builder_FormatString( context->postBuildArena, "%.*s", libPathLength, libPathStart );
 
-								Builder_StringListPush( &postBuildArena, &postBuildData->linkLibraryOutput, library );
+								bool found = false;
+								for ( builderStringChunk_t *chunk = postBuildData->linkLibraryOutput.head; chunk && !found; chunk = chunk->next ) {
+									for ( uint32_t foundLibsIndex = 0; foundLibsIndex < chunk->count; foundLibsIndex++ ) {
+										if ( Builder_StringEquals( library, chunk->items[foundLibsIndex] ) ) {
+											found = true;
+											break;
+										}
+									}
+								}
+
+								if ( !found ) {
+									Builder_StringListPush( context->postBuildArena, &postBuildData->linkLibraryOutput, library );
+								}
 							}
 						} else {
 							printf( "%.*s\n", (int) ( lineEnd - lineStart ), lineStart );
@@ -4477,7 +4491,11 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 	printf( "    Link    : %f ms\n", linkTimeMS );
 	printf( "\n" );
 
-	Builder_AddBuildSummaryLine( context->buildSummaryArena, &context->buildSummary, config->name, compileTimeMS + linkTimeMS, ( needsCompilePacketCount == 0 ) ? "(skipped)" : NULL );
+	const char *suffix = NULL;
+	if ( needsCompilePacketCount == 0 ) {
+		suffix = shouldLink ? "(link only)" : "(skipped)";
+	}
+	Builder_AddBuildSummaryLine( context->buildSummaryArena, &context->buildSummary, config->name, compileTimeMS + linkTimeMS, suffix );
 
 	context->totalCompileTimeMS += compileTimeMS;
 	context->totalLinkTimeMS += linkTimeMS;
@@ -4555,7 +4573,7 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 			Builder_ParseDependencyInfo( context->postBuildArena, &compileDependencyArray, dependencyMap, dependencyInfo->dependencyString, context->compilerIsMSVC );
 		}
 
-		Builder_LogVerbose( options, "\nOutputting config dependencies to %s:\n", postBuildData->dependencyCacheFileName );
+		Builder_LogVerbose( options, "Outputting config dependencies to %s:\n", postBuildData->dependencyCacheFileName );
 		for ( uint32_t packetIndex = 0; packetIndex < postBuildData->packetCount; ++packetIndex ) {
 			objectToDependencyIndicies_t *dependencyMap = &configDependencies->objectDependencyMap[packetIndex];
 			builderCompilePacket_t *compilePacket = &postBuildData->compilePackets[packetIndex];
@@ -4566,7 +4584,73 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 				Builder_LogVerbose( options, "    %s\n", compileDependencyArray.dependencies[dependencyIndex].dependency );
 			}
 		}
-			
+		
+		// incremental link dependencies
+		libraryDependencyArray_t *libraryDependencyArray = &configDependencies->libraryDependencyArray;
+		if ( libraryDependencyArray->capacity == 0 && postBuildData->linkLibraryOutput.count ) {
+			libraryDependencyArray->capacity = postBuildData->linkLibraryOutput.count;
+			libraryDependencyArray->libraries = Builder_ArenaAlloc( context->postBuildArena, libraryDependency_t, postBuildData->linkLibraryOutput.count );
+		}
+
+		// full link means we want to stamp all the old data (chances are it will be 0 anyway)
+		uint64_t libCountBeforeAppending = postBuildData->didFullLink ? 0 : libraryDependencyArray->count;
+		for ( builderStringChunk_t *chunk = postBuildData->linkLibraryOutput.head; chunk; chunk = chunk->next ) {
+			for ( uint32_t foundLibsIndex = 0; foundLibsIndex < chunk->count; foundLibsIndex++ ) {
+				const char *libPath = chunk->items[foundLibsIndex];
+				const char *libFilename = Builder_FilenameFromPath( libPath );
+
+				bool found = false;
+				for ( uint64_t libIndex = 0; libIndex < libCountBeforeAppending; ++libIndex ) {
+					libraryDependency_t *dependency = &libraryDependencyArray->libraries[libIndex];
+
+					if ( Builder_StringEquals( dependency->libraryName, libFilename ) ) {
+						found = true;
+						if ( !Builder_StringEquals( dependency->libraryPath, libPath ) ) {
+							Builder_LogVerbose( options, "Lib path being updated from %s\n", dependency->libraryPath );
+							dependency->libraryPath = libPath;
+
+							// the rest will be updated in 'bulk', this op is not fast so we optimise for it
+							// realistically we should just grab all of them upfront before doing the checks
+							// when determining if we need to linkincrementally
+							if ( libIndex < postBuildData->nextLibraryWriteTimeToCheckIndex ) {
+								Builder_GetFileLastWriteTime( libPath, &dependency->writeTime );
+							}
+							break;
+						}
+					}
+				}
+
+				if ( found ) {
+					continue;
+				}
+
+				if ( libraryDependencyArray->count == libraryDependencyArray->capacity ) {
+					libraryDependencyArray->libraries = Builder_ArenaRealloc( context->postBuildArena, libraryDependencyArray->libraries, 
+						libraryDependency_t, libraryDependencyArray->capacity, libraryDependencyArray->capacity * 2);
+					libraryDependencyArray->capacity *= 2;
+				}
+
+				libraryDependency_t *dependency = &libraryDependencyArray->libraries[libraryDependencyArray->count++];
+				dependency->libraryName = libFilename;
+				dependency->libraryPath = libPath;
+			}
+		}
+
+		// now grab the rest of the write times, we don't want to have to link next time just because we didn't do this
+		// this could also go over multiple threads if it is worthwhile
+		for ( uint64_t libIndex = postBuildData->nextLibraryWriteTimeToCheckIndex; libIndex < libraryDependencyArray->count; ++libIndex ) {
+			libraryDependency_t *dependency = &libraryDependencyArray->libraries[libIndex];
+			Builder_GetFileLastWriteTime( dependency->libraryPath, &dependency->writeTime );
+		}
+		
+		Builder_LogVerbose( options, "Library (link) dependencies:\n" );
+		for ( uint64_t libIndex = 0; libIndex < libraryDependencyArray->count; ++libIndex ) {
+			libraryDependency_t *dependency = &libraryDependencyArray->libraries[libIndex];
+			Builder_LogVerbose( options, "%s:\n", dependency->libraryName );
+			Builder_LogVerbose( options, "	PATH: %s\n", dependency->libraryPath );
+			Builder_LogVerbose( options, "	TIME: %llu\n", dependency->writeTime );
+		}
+
 		configDependencies->fileVersion = g_builderDependenciesFileVersion;
 		byteBuffer_t byteBuffer = Builder_ByteBufferFromConfigDependencies( context->postBuildArena, configDependencies );
 		Builder_WriteEntireFile( postBuildData->dependencyCacheFileName, byteBuffer.data, byteBuffer.count );

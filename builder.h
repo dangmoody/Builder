@@ -503,6 +503,19 @@ static bool Builder_StringEquals( const char *a, const char *b ) {
 	return strcmp( a, b ) == 0;
 }
 
+// strnlen() is not ISO C so linux cant use it without linking to C extension libraries
+// strict "-std=cNN" builds can hide its declaration, or on some CRTs the symbol itself, behind feature-test macros we dont control
+// so we have our own implementation
+static size_t Builder_Strnlen( const char *str, const size_t maxLength ) {
+	size_t length = 0;
+
+	while ( length < maxLength && str[length] ) {
+		length++;
+	}
+
+	return length;
+}
+
 static bool Builder_StringStartsWith( const char *str, const char *prefix ) {
 	return strncmp( str, prefix, strlen( prefix ) ) == 0;
 }
@@ -2020,8 +2033,8 @@ static bool Builder_PathMatchesPattern( const builderStringSliceArray_t *pattern
 static void Builder_GlobVisitCallback( arena_t *resultsArena, fileInfo_t *fileInfo, void *data ) {
 	builderGlobVisitCallbackData_t *callbackData = (builderGlobVisitCallbackData_t *)data;
 
-	uint32_t filenameLen = strnlen( fileInfo->filename, 255 ); // filename length maxes here I think?
-	uint32_t fullFilenameLen = strnlen( fileInfo->fullFilename, BUILDER_MAX_PATH + filenameLen );
+	uint32_t filenameLen = Builder_Strnlen( fileInfo->filename, 255 ); // filename length maxes here I think?
+	uint32_t fullFilenameLen = Builder_Strnlen( fileInfo->fullFilename, BUILDER_MAX_PATH + filenameLen );
 
 	if ( fullFilenameLen - filenameLen < callbackData->searchPathLen ) {
 		printf( "Error: Search path length was longer than full file path for file %s\n", fileInfo->fullFilename );
@@ -3343,7 +3356,7 @@ static uint64_t Builder_DependencyArrayAddUnique( arena_t *dependencyArena, comp
 
 	dependencyArray->dependencies[dependencyArray->count++] = (compileDependency_t) {
 		.dependency			= Builder_FormatString( dependencyArena, "%s", dependency ),
-		.dependencyLength	= strnlen( dependency, 512 )
+		.dependencyLength	= Builder_Strnlen( dependency, 512 )
 	};
 
 	return dependencyArray->count - 1;

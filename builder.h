@@ -3636,13 +3636,13 @@ static void Builder_SetCWD( BuilderOptions *options, char **argv ) {
 #elif defined( __linux__ )
 	if ( readlink( "/proc/self/exe", appPath, BUILDER_MAX_PATH ) == -1 ) {
 		int err = errno;
-		Builder_Error( "Failed to get the CWD of \"%s\".  errno: %d (\"%s\")\n", argv[0], errno, strerror( err ) );
+		Builder_Error( "Failed to get the CWD of \"%s\".  errno: %d (\"%s\")\n", argv[0], err, strerror( err ) );
 		exit( 1 );
 	}
 
 	if ( chdir( appPath ) != -1 ) {
 		int err = errno;
-		Builder_Error( "Failed to set the CWD to \"%s\".  GetLastError: 0x%X\n", appPath, GetLastError() );
+		Builder_Error( "Failed to set the CWD to \"%s\".  errno: %d (\"%s\")\n", appPath, err, strerror( err ) );
 		exit( 1 );
 	}
 #else

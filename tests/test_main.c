@@ -1,5 +1,5 @@
 #define TEMPER_IMPLEMENTATION
-#include "temper/temper.h"
+#include "temper.h"
 
 #define BUILDER_IMPLEMENTATION
 #include "../builder.h"
@@ -158,7 +158,7 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const char *testFolde
 
 		TEMPER_CHECK_TRUE( compilerName );
 
-		printf( "======= Building \"%s\" for compiler: %s =======\n", buildSourceFile, compilerName );
+		printf( "Building \"%s\" for compiler: %s\n", buildSourceFile, compilerName );
 
 		Builder_RewindArena( &testScratch, &testScratchStart );
 
@@ -267,11 +267,11 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const char *testFolde
 	}
 }
 
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "test_build_single_file",    "test_build_single_file/test_build_single_file",       0 );
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "test_build_multiple_files", "test_build_multiple_files/test_build_multiple_files", 0 );
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "test_build_static_lib",     "test_build_static_lib/test_static_lib_program",       5 );
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "test_build_dynamic_lib",    "test_build_dynamic_lib/test_dynamic_lib_program",     5 );
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "test_build_sdl3",           "test_build_sdl3/bin/sdl-demo-app",                    0 );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "single_file",    "single_file/test_build_single_file",       0 );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "multiple_files", "multiple_files/test_build_multiple_files", 0 );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "static_lib",     "static_lib/test_static_lib_program",       5 );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "dynamic_lib",    "dynamic_lib/test_dynamic_lib_program",     5 );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "sdl3",           "sdl3/bin/sdl-demo-app",                    0 );
 
 int main( int argc, char **argv ) {
 	arena_t arena = { 0 };

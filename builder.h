@@ -4043,9 +4043,9 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 										}
 
 									}
-
-									packetIndex++;
 								}
+
+								packetIndex++;
 							}
 						}
 

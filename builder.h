@@ -887,7 +887,7 @@ static bool Builder_WriteEntireFile( const char *filename, const uint8_t *conten
 		return false;
 	}
 
-	size_t result = fwrite( content, sizeof(uint8_t), size, file );
+	size_t result = fwrite( content, sizeof( uint8_t ), size, file );
 
 	if ( result < size ) {
 		Builder_Error( "Failed to write to file \"%s\".\n", filename );
@@ -900,48 +900,47 @@ static bool Builder_WriteEntireFile( const char *filename, const uint8_t *conten
 	return true;
 }
 
-static  uint8_t * Builder_ReadEntireFile( arena_t *arena, const char *filename, uint64_t *outSize ) {
+static uint8_t *Builder_ReadEntireFile( arena_t *arena, const char *filename, uint64_t *outSize ) {
 	BUILDER_ASSERT( arena && outSize );
 	uint8_t *result = NULL;
 	FILE *file = fopen( filename, "rb" );
 
-    if ( !file ) {
-        Builder_Error( "Failed to open file \"%s\" for reading.\n", filename );
-        return NULL;
-    }
+	if ( !file ) {
+		return NULL;
+	}
 
-    if ( fseek( file, 0, SEEK_END ) != 0 ) {
-        Builder_Error( "Failed to seek file \"%s\".\n", filename );
-        fclose( file );
-        return NULL;
-    }
+	if ( fseek( file, 0, SEEK_END ) != 0 ) {
+		Builder_Error( "Failed to seek file \"%s\".\n", filename );
+		fclose( file );
+		return NULL;
+	}
 
-    long fileSize = ftell( file );
-    if ( fileSize < 0 ) {
-        Builder_Error( "Failed to determine size of file \"%s\".\n", filename );
-        fclose( file );
-        return NULL;
-    }
+	long fileSize = ftell( file );
+	if ( fileSize < 0 ) {
+		Builder_Error( "Failed to determine size of file \"%s\".\n", filename );
+		fclose( file );
+		return NULL;
+	}
 
-    rewind( file );
-    uint8_t* buffer = Builder_ArenaAlloc( arena, uint8_t, fileSize );
-    if ( !buffer ) {
-        Builder_Error( "Memory allocation failed for file \"%s\".\n", filename );
-        fclose( file );
-        return NULL;
-    }
+	rewind( file );
+	uint8_t* buffer = Builder_ArenaAlloc( arena, uint8_t, fileSize );
+	if ( !buffer ) {
+		Builder_Error( "Memory allocation failed for file \"%s\".\n", filename );
+		fclose( file );
+		return NULL;
+	}
 
-    uint64_t readBytes = fread( buffer, sizeof(uint8_t), fileSize, file );
-    if ( readBytes < fileSize ) {
-        Builder_Error( "Failed to read entire file \"%s\".\n", filename );
-        free( buffer );
-        fclose( file );
-        return NULL;
-    }
+	uint64_t readBytes = fread( buffer, sizeof(uint8_t), fileSize, file );
+	if ( readBytes < fileSize ) {
+		Builder_Error( "Failed to read entire file \"%s\".\n", filename );
+		free( buffer );
+		fclose( file );
+		return NULL;
+	}
 
-    fclose( file );
-    *outSize = (uint64_t)fileSize;
-    return buffer;
+	fclose( file );
+	*outSize = (uint64_t)fileSize;
+	return buffer;
 }
 
 static bool Builder_WriteStringBuilderToFile( arena_t *arena, const stringBuilder_t *sb, const char *filename ) {

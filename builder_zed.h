@@ -73,6 +73,10 @@ typedef struct ZedDebugConfig {
 } ZedDebugConfig;
 
 typedef struct ZedJSONOptions {
+	// Where do you want your ".zed" folder to go?
+	// Leave NULL to put it in the same folder as where your build script is running from.
+	const char		*path;
+
 	// The command that Zed will invoke when running a task - this is your build script's own
 	// compiled binary (there is no separate standalone "Builder" executable).
 	// Leave NULL to default to argv[0], i.e. however this build script was itself invoked.
@@ -106,17 +110,18 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 
 	Builder_SetCWD( options, argv );
 
-	const char *dotZedFolder = ".zed";
+	// everything built in here goes into a file and is then done with - nothing outlives this call
+	scratch_t scratch = Builder_GetScratch( NULL );
+
+	const char *dotZedFolder = ( zedOptions->path && zedOptions->path[0] ) ? Builder_FormatString( scratch.arena, "%s%c.zed", zedOptions->path, BUILDER_PATH_SEPARATOR ) : ".zed";
 
 	if ( !Builder_CreateFolderIfItDoesntExist( dotZedFolder ) ) {
 		Builder_Error( "Failed to create \"%s\" folder.\n", dotZedFolder );
+		Builder_RewindScratch( &scratch );
 		return false;
 	}
 
 	BUILDER_ASSERT( argc > 0 && argv );
-
-	// everything built in here goes into a file and is then done with - nothing outlives this call
-	scratch_t scratch = Builder_GetScratch( NULL );
 
 	const char *buildCommand = ( zedOptions->buildCommand && zedOptions->buildCommand[0] ) ? zedOptions->buildCommand : argv[0];
 
@@ -198,7 +203,7 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 		uint64_t length;
 		char *tasksJSONString = StringBuilder_ToString( scratch.arena, &tasksJSONContent, &length );
 
-		bool wroteFile = Builder_WriteEntireFile( tasksJSONFilename, tasksJSONString, length );
+		bool wroteFile = Builder_WriteEntireFile( tasksJSONFilename, (uint8_t *) tasksJSONString, length );
 
 		if ( wroteFile ) {
 			printf( "Done\n" );
@@ -329,7 +334,7 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 			uint64_t length;
 			char *debugJSONString = StringBuilder_ToString( scratch.arena, &debugJSONContent, &length);
 
-			if ( !Builder_WriteEntireFile( debugJSONFilename, debugJSONString, length ) ) {
+			if ( !Builder_WriteEntireFile( debugJSONFilename, (uint8_t *) debugJSONString, length ) ) {
 				Builder_Error( "Failed to write \"%s\".\n", debugJSONFilename );
 				ok = false;
 			} else {

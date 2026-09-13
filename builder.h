@@ -3652,7 +3652,13 @@ static void Builder_SetCWD( BuilderOptions *options, char **argv ) {
 		exit( 1 );
 	}
 
-	if ( chdir( appPath ) != -1 ) {
+	// readlink gives the full path to the exe itself, trim it down to its containing directory
+	char *lastSlash = strrchr( appPath, '/' );
+	if ( lastSlash ) {
+		*lastSlash = 0;
+	}
+
+	if ( chdir( appPath ) == -1 ) {
 		int err = errno;
 		Builder_Error( "Failed to set the CWD to \"%s\".  errno: %d (\"%s\")\n", appPath, err, strerror( err ) );
 		exit( 1 );

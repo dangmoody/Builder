@@ -12,7 +12,9 @@
 
 typedef enum {
 	COMPILER_CLANG	= 0,
+#ifdef _WIN32
 	COMPILER_CLANG_CL,
+#endif
 	COMPILER_GCC,
 #ifdef _WIN32
 	COMPILER_MSVC,
@@ -32,7 +34,9 @@ builderMSVCInstall_t g_msvcInstall = { 0 };
 static const char *Test_GetCompilerPath( const compiler_t compiler ) {
 	switch ( compiler ) {
 		case COMPILER_CLANG:	return "../tools/clang/bin/clang";
+#ifdef _WIN32
 		case COMPILER_CLANG_CL:	return "../tools/clang/bin/clang-cl";
+#endif
 		case COMPILER_GCC:		return "../tools/gcc/bin/gcc";
 #ifdef _WIN32
 		case COMPILER_MSVC:		return g_msvcInstall.compilerPath;
@@ -147,7 +151,9 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const char *testFolde
 		const char *compilerName = NULL;
 		switch ( compiler ) {
 			case COMPILER_CLANG:	compilerName = "clang";		break;
+#ifdef _WIN32
 			case COMPILER_CLANG_CL: compilerName = "clang-cl";	break;
+#endif
 			case COMPILER_GCC:		compilerName = "gcc";		break;
 #ifdef _WIN32
 			case COMPILER_MSVC:		compilerName = "msvc";		break;

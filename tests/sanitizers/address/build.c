@@ -2,9 +2,13 @@
 #include "../../../builder.h"
 
 int main( int argc, char **argv ) {
-	Builder_RebuildSelf( argc, argv );
-
 	BuilderOptions options = { 0 };
+
+	BuildConfig selfConfig = {
+		.name			= "self",
+		.sourceFiles	= MakeStringList( "build.c" ),
+	};
+	options.selfRebuildConfig = &selfConfig;
 
 	BuildConfig *config = CreateBuildConfig( &options );
 	*config = (BuildConfig) {

@@ -10,7 +10,11 @@ int main( int argc, char **argv ) {
 	BuilderOptions options = { 0 };
 	ApplyCompilerOverride( &options, argc, argv );
 
-	Builder_RebuildSelf(argc,argv);
+	BuildConfig selfConfig = {
+		.name			= "self",
+		.sourceFiles	= MakeStringList( "build.c" ),
+	};
+	options.selfRebuildConfig = &selfConfig;
 
 	// the cross-platform half goes in the initialiser; the per-platform half is appended below, because a #if inside a
 	// macro argument list is undefined behaviour (clang's -Wembedded-directive) even though it happens to work
@@ -211,11 +215,7 @@ int main( int argc, char **argv ) {
 		.sourceFiles		= MakeStringList( "demo-app/*.cpp" ),
 		.additionalIncludes	= MakeStringList( "include" ),
 		.additionalLibPaths	= MakeStringList( BINARY_FOLDER ),
-#if defined( _WIN32 )
 		.additionalLibs		= MakeStringList( BINARY_NAME ),
-#elif defined( __linux__ )
-		.additionalLibs		= MakeStringList( BINARY_NAME ".so" ),
-#endif
 	};
 
 	options.defaultConfig = demo;

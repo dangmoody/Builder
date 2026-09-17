@@ -4,10 +4,14 @@
 #include "../test_compiler_override.h"
 
 int main( int argc, char **argv ) {
-	Builder_RebuildSelf( argc, argv );
-
 	BuilderOptions options = { 0 };
 	ApplyCompilerOverride( &options, argc, argv );
+
+	BuildConfig selfConfig = {
+		.name			= "self",
+		.sourceFiles	= MakeStringList( "build.c" ),
+	};
+	options.selfRebuildConfig = &selfConfig;
 
 	BuildConfig *libConfig = CreateBuildConfig( &options );
 	*libConfig = (BuildConfig) {

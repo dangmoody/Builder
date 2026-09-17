@@ -5,9 +5,13 @@
 #include "../../builder_visual_studio.h"
 
 int main( int argc, char **argv ) {
-	Builder_RebuildSelf( argc, argv );
-
 	BuilderOptions options = { 0 };
+
+	BuildConfig selfConfig = {
+		.name			= "self",
+		.sourceFiles	= MakeStringList( "build.c" ),
+	};
+	options.selfRebuildConfig = &selfConfig;
 
 	BuildConfig *mathlib = CreateBuildConfig( &options );
 	*mathlib = (BuildConfig) {

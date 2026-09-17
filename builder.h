@@ -150,9 +150,8 @@ typedef struct BuilderOptions {
 	// If no config is specified at the command line via --config=, what config do you want Builder to build by default?
 	BuildConfig		*defaultConfig;
 
-	// If set, Build() checks this config's source files against the running executable before building anything else.
-	// If any are newer, it builds this config through the normal pipeline, swaps the result over the running executable,
-	// and relaunches with the original argv.  Don't register it with CreateBuildConfig() - it's not a "--config=" target.
+	// The config Builder uses to rebuild the build executable itself when its source changes.
+	// Don't register it with CreateBuildConfig() - it's not a "--config=" target.
 	BuildConfig		*selfRebuildConfig;
 
 	// Set this to true if you want Builder to force-rebuild your program.

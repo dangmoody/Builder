@@ -4210,63 +4210,6 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 	char exePath[BUILDER_MAX_PATH] = { 0 };
 	Builder_GetExePath( argv, exePath );
 
-	// Names can only be checked here.  A config comes out of CreateBuildConfig() blank and gets filled in afterwards,
-	// so this is the first point at which every config actually has the name it's going to be built under.
-	for ( buildConfigPtrChunk_t *chunk = options->configs.head; chunk; chunk = chunk->next ) {
-		for ( uint32_t configIndex = 0; configIndex < chunk->count; configIndex++ ) {
-			BuildConfig *config = chunk->items[configIndex];
-
-			if ( !config->name || !config->name[0] ) {
-				Builder_Error( "One of your BuildConfigs has no name.  Every config needs one - it's what \"" ARG_CONFIG "\" matches against and what the build log calls it.\n" );
-				return 1;
-			}
-
-			// only has to look at the configs after this one, since anything before it already compared against this
-			for ( buildConfigPtrChunk_t *otherChunk = chunk; otherChunk; otherChunk = otherChunk->next ) {
-				uint32_t firstOtherIndex = ( otherChunk == chunk ) ? configIndex + 1 : 0;
-
-				for ( uint32_t otherIndex = firstOtherIndex; otherIndex < otherChunk->count; otherIndex++ ) {
-					if ( Builder_StringEquals( otherChunk->items[otherIndex]->name, config->name ) ) {
-						Builder_Error( "There is more than one BuildConfig called \"%s\".  Config names have to be unique, otherwise \"" ARG_CONFIG "%s\" has no way of telling them apart.\n", config->name, config->name );
-						return 1;
-					}
-				}
-			}
-		}
-	}
-
-	// validate cmd line args
-	const char *nameOfConfigToBuild = Builder_GetNameOfConfigToBuild( options, argc, argv );
-	BuildConfig *targetConfig = NULL;
-	{
-		if ( options->configs.count == 0 ) {
-			Builder_Error( "No BuildConfig was registered.  You must call CreateBuildConfig() at least once.\n" );
-			return 1;
-		} else if ( options->configs.count > 1 && !nameOfConfigToBuild ) {
-			Builder_Error( "You have more than 1 BuildConfig defined, but you never told me which you wanted me to build via \"" ARG_CONFIG "\".  You need to tell me what config you want me to build, or set a default via BuilderOptions::defaultConfig.\n" );
-			return 1;
-		}
-
-		if ( nameOfConfigToBuild ) {
-			for ( buildConfigPtrChunk_t *chunk = options->configs.head; chunk && !targetConfig; chunk = chunk->next ) {
-				for ( uint32_t configIndex = 0; configIndex < chunk->count; configIndex++ ) {
-					if ( Builder_StringEquals( chunk->items[configIndex]->name, nameOfConfigToBuild ) ) {
-						targetConfig = chunk->items[configIndex];
-						break;
-					}
-				}
-			}
-
-			if ( !targetConfig ) {
-				Builder_Error( "No BuildConfig found with the name \"%s\".\n", nameOfConfigToBuild );
-				return 1;
-			}
-		} else {
-			// only one config was ever registered, so there's nothing to be ambiguous about
-			targetConfig = options->configs.head->items[0];
-		}
-	}
-
 	// TODO: DM: 30/08/2026: we should probably make that global long lifetime arena that we talked about
 	// there are other things that could and should go on it as well as build summaries
 	arena_t buildSummaryArena = { 0 };
@@ -4355,15 +4298,6 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 		return 1;
 	}
 
-	// the walk happens here rather than as configs are created because dependencies get attached to a config after
-	// CreateBuildConfig() has handed it over, so this is the first point the graph is complete.
-	// its lists go on buildScratch above the toolchain paths but below the rewind spot the loop takes for each config,
-	// so the per-config rewind can't reach back and take them with it
-	ConfigPtrList ancestry = { 0 };
-	ConfigPtrList configsToBuild = { 0 };
-
-	Builder_CollectConfigsToBuild( buildScratch.arena, targetConfig, &ancestry, &configsToBuild );
-
 	// cl.exe embeds its own /DEFAULTLIB directives for /fsanitize=... into the object file so link.exe picks the runtime up automatically there
 	// GCC doesnt link via link.exe so it handles its own sanitizer runtime
 	// clang on Windows does neither, it goes through link.exe directly so we have to name its sanitizer runtime libs ourselves which live under its resource directory
@@ -4372,9 +4306,10 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 
 #if defined( _WIN32 )
 	if ( compilerIsClang ) {
+		// this runs before the target config is known so it looks at every registered config, not just the ones being built
 		bool anyConfigNeedsClangSanitizerLibs = options->selfRebuildConfig && options->selfRebuildConfig->sanitizers != 0;
 
-		for ( buildConfigPtrChunk_t *chunk = configsToBuild.head; chunk && !anyConfigNeedsClangSanitizerLibs; chunk = chunk->next ) {
+		for ( buildConfigPtrChunk_t *chunk = options->configs.head; chunk && !anyConfigNeedsClangSanitizerLibs; chunk = chunk->next ) {
 			for ( uint32_t configIndex = 0; configIndex < chunk->count; configIndex++ ) {
 				if ( chunk->items[configIndex]->sanitizers != 0 ) {
 					anyConfigNeedsClangSanitizerLibs = true;
@@ -4412,13 +4347,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 		threadResultArenas[arenaIndex] = (arena_t) { 0 };
 	}
 
-	// the self rebuild config takes a slot in the post build data too
-	uint32_t configsToBuildCount = options->selfRebuildConfig ? 1 : 0;
-	for ( buildConfigPtrChunk_t *chunk = configsToBuild.head; chunk; chunk = chunk->next ) {
-		for ( uint32_t configIndex = 0; configIndex < chunk->count; configIndex++ ) {
-			configsToBuildCount++;
-		}
-	}
+	uint32_t maxConfigsToBuild = options->configs.count + 1;	// + 1 for self rebuild config
 
 	builderBuildContext_t buildContext = {
 		.options						= options,
@@ -4438,9 +4367,12 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 		.threadResultArenas				= threadResultArenas,
 		.postBuildArena					= &postBuildArena,
 		.buildSummaryArena				= &buildSummaryArena,
-		.postBuildConfigDependencyData	= Builder_ArenaAlloc( &postBuildArena, builderPostBuildConfigDependencyData_t, configsToBuildCount ),
+		.postBuildConfigDependencyData	= Builder_ArenaAlloc( &postBuildArena, builderPostBuildConfigDependencyData_t, maxConfigsToBuild ),
 	};
 
+	// the self rebuild goes first so that the source is always the truth
+	// a stale binary would otherwise reject a config name or --config= that only exists in the edited build source, or keep building with old settings
+	// it needs the toolchain and arenas above but not the target config
 	if ( options->selfRebuildConfig ) {
 #if defined( _WIN32 )
 		// if the old binary was left around from the previous rebuild, clean it up now
@@ -4553,6 +4485,72 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 #error Unrecognised platform.
 #endif
 	}
+
+	// Names can only be checked here.  A config comes out of CreateBuildConfig() blank and gets filled in afterwards,
+	// so this is the first point at which every config actually has the name it's going to be built under.
+	for ( buildConfigPtrChunk_t *chunk = options->configs.head; chunk; chunk = chunk->next ) {
+		for ( uint32_t configIndex = 0; configIndex < chunk->count; configIndex++ ) {
+			BuildConfig *config = chunk->items[configIndex];
+
+			if ( !config->name || !config->name[0] ) {
+				Builder_Error( "One of your BuildConfigs has no name.  Every config needs one - it's what \"" ARG_CONFIG "\" matches against and what the build log calls it.\n" );
+				return 1;
+			}
+
+			// only has to look at the configs after this one, since anything before it already compared against this
+			for ( buildConfigPtrChunk_t *otherChunk = chunk; otherChunk; otherChunk = otherChunk->next ) {
+				uint32_t firstOtherIndex = ( otherChunk == chunk ) ? configIndex + 1 : 0;
+
+				for ( uint32_t otherIndex = firstOtherIndex; otherIndex < otherChunk->count; otherIndex++ ) {
+					if ( Builder_StringEquals( otherChunk->items[otherIndex]->name, config->name ) ) {
+						Builder_Error( "There is more than one BuildConfig called \"%s\".  Config names have to be unique, otherwise \"" ARG_CONFIG "%s\" has no way of telling them apart.\n", config->name, config->name );
+						return 1;
+					}
+				}
+			}
+		}
+	}
+
+	// validate cmd line args
+	const char *nameOfConfigToBuild = Builder_GetNameOfConfigToBuild( options, argc, argv );
+	BuildConfig *targetConfig = NULL;
+	{
+		if ( options->configs.count == 0 ) {
+			Builder_Error( "No BuildConfig was registered.  You must call CreateBuildConfig() at least once.\n" );
+			return 1;
+		} else if ( options->configs.count > 1 && !nameOfConfigToBuild ) {
+			Builder_Error( "You have more than 1 BuildConfig defined, but you never told me which you wanted me to build via \"" ARG_CONFIG "\".  You need to tell me what config you want me to build, or set a default via BuilderOptions::defaultConfig.\n" );
+			return 1;
+		}
+
+		if ( nameOfConfigToBuild ) {
+			for ( buildConfigPtrChunk_t *chunk = options->configs.head; chunk && !targetConfig; chunk = chunk->next ) {
+				for ( uint32_t configIndex = 0; configIndex < chunk->count; configIndex++ ) {
+					if ( Builder_StringEquals( chunk->items[configIndex]->name, nameOfConfigToBuild ) ) {
+						targetConfig = chunk->items[configIndex];
+						break;
+					}
+				}
+			}
+
+			if ( !targetConfig ) {
+				Builder_Error( "No BuildConfig found with the name \"%s\".\n", nameOfConfigToBuild );
+				return 1;
+			}
+		} else {
+			// only one config was ever registered, so there's nothing to be ambiguous about
+			targetConfig = options->configs.head->items[0];
+		}
+	}
+
+	// the walk happens here rather than as configs are created because dependencies get attached to a config after
+	// CreateBuildConfig() has handed it over, so this is the first point the graph is complete.
+	// its lists go on buildScratch above the toolchain paths but below the rewind spot the loop takes for each config,
+	// so the per-config rewind can't reach back and take them with it
+	ConfigPtrList ancestry = { 0 };
+	ConfigPtrList configsToBuild = { 0 };
+
+	Builder_CollectConfigsToBuild( buildScratch.arena, targetConfig, &ancestry, &configsToBuild );
 
 	for ( buildConfigPtrChunk_t *chunk = configsToBuild.head; chunk; chunk = chunk->next ) {
 		for ( uint32_t configIndex = 0; configIndex < chunk->count; configIndex++ ) {

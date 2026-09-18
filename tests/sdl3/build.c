@@ -10,11 +10,10 @@ int main( int argc, char **argv ) {
 	BuilderOptions options = { 0 };
 	ApplyCompilerOverride( &options, argc, argv );
 
-	BuildConfig selfConfig = {
-		.name			= "self",
+	options.selfRebuildConfig = CreateBuildConfig( &options );
+	*options.selfRebuildConfig = (BuildConfig) {
 		.sourceFiles	= MakeStringList( "build.c" ),
 	};
-	options.selfRebuildConfig = &selfConfig;
 
 	// the cross-platform half goes in the initialiser; the per-platform half is appended below, because a #if inside a
 	// macro argument list is undefined behaviour (clang's -Wembedded-directive) even though it happens to work

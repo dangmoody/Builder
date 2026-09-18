@@ -1,16 +1,16 @@
 #define BUILDER_IMPLEMENTATION
-#define BUILDER_ZED_IMPLEMENTATION
 #include "../../builder.h"
+
+#define BUILDER_ZED_IMPLEMENTATION
 #include "../../builder_zed.h"
 
 int main( int argc, char **argv ) {
 	BuilderOptions options = { 0 };
 
-	BuildConfig selfConfig = {
-		.name			= "self",
+	options.selfRebuildConfig = CreateBuildConfig( &options );
+	*options.selfRebuildConfig = (BuildConfig) {
 		.sourceFiles	= MakeStringList( "build.c" ),
 	};
-	options.selfRebuildConfig = &selfConfig;
 
 	BuildConfig *config = CreateBuildConfig( &options );
 	config->name = "config";

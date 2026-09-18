@@ -4,20 +4,21 @@
 int main( int argc, char **argv ) {
 	BuilderOptions options = { 0 };
 
-	BuildConfig selfConfig = {
-		.name			= "self",
+	options.selfRebuildConfig = CreateBuildConfig( &options );
+	*options.selfRebuildConfig = (BuildConfig) {
 		.sourceFiles	= MakeStringList( "build_tests.c" ),
 	};
-	options.selfRebuildConfig = &selfConfig;
 
-	BuildConfig *config = CreateBuildConfig( &options );
-	*config = (BuildConfig) {
-		.name			= "this_doesnt_need_to_have_a_name",
-		.binaryName		= "builder-tests",
-		.sourceFiles	= MakeStringList( "test_main.c" ),
+	BuildConfig *test = CreateBuildConfig( &options );
+	*test = (BuildConfig) {
+		.name			= "tests",
+		.binaryName		= "builder_tests",
+		.sourceFiles	= MakeStringList( "builder_tests.c" ),
 		.defines		= MakeStringList( "_CRT_SECURE_NO_WARNINGS" ),
 		.ignoreWarnings	= MakeStringList( "-Wno-switch" ),
 	};
+
+	options.defaultConfig = test;
 
 	return Build( &options, argc, argv );
 }

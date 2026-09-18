@@ -7,12 +7,6 @@ int main( int argc, char **argv ) {
 	BuilderOptions options = { 0 };
 	ApplyCompilerOverride( &options, argc, argv );
 
-	BuildConfig selfConfig = {
-		.name			= "self",
-		.sourceFiles	= MakeStringList( "build.c" ),
-	};
-	options.selfRebuildConfig = &selfConfig;
-
 	BuildConfig *config = CreateBuildConfig( &options );
 	*config = (BuildConfig) {
 		.name			= "single_file",

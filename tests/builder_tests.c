@@ -137,7 +137,7 @@ static void Test_OnGeneratedFilesFound( arena_t *resultsArena, fileInfo_t *fileI
 	}
 }
 
-TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const char *testFolder, const char *programFilename, const int32_t expectedExitCode ) {
+TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const char *testFolder, const char *programFilename, const int32_t expectedBuildEXEExitCode, const int32_t expectedProgramExitCode ) {
 	arena_t testScratch = { 0 };
 
 	const char *buildSourceFile = Builder_FormatString( &testScratch, "%s/build.c", testFolder );
@@ -203,17 +203,17 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const char *testFolde
 
 			printf( "%s\n", output );
 
-			TEMPER_CHECK_TRUE_QM( buildEXEExitCode == 0, "Failed to build \"%s\" using compiler %s.\n", buildSourceFile, compilerName );
+			TEMPER_CHECK_TRUE_QM( buildEXEExitCode == expectedBuildEXEExitCode, "\"%s\" should've returned %d but instead returned %d.\n", buildSourceFile, expectedBuildEXEExitCode, buildEXEExitCode );
 		}
 
 		// run the program we just built
-		{
+		if ( programFilename ) {
 			char *output = NULL;
 			int32_t programExitCode = Builder_RunProcess( &testScratch, programFilename, false, &output );
 
 			printf( "%s\n", output );
 
-			TEMPER_CHECK_TRUE_M( programExitCode == expectedExitCode, "Failed to run \"%s\".\n", programFilename );
+			TEMPER_CHECK_TRUE_M( programExitCode == expectedProgramExitCode, "Program \"%s\" should've returned %d but instead returned %d.\n", programFilename, expectedProgramExitCode, programExitCode );
 		}
 
 		// delete all generated files and folders
@@ -273,11 +273,12 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const char *testFolde
 	}
 }
 
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "single_file",    "single_file/test_build_single_file",       0 );
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "multiple_files", "multiple_files/test_build_multiple_files", 0 );
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "static_lib",     "static_lib/test_static_lib_program",       5 );
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "dynamic_lib",    "dynamic_lib/test_dynamic_lib_program",     5 );
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "sdl3",           "sdl3/bin/sdl-demo-app",                    0 );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "single_file",              "single_file/test_build_single_file",       0, 0 );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "multiple_files",           "multiple_files/test_build_multiple_files", 0, 0 );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "static_lib",               "static_lib/test_static_lib_program",       0, 5 );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "dynamic_lib",              "dynamic_lib/test_dynamic_lib_program",     0, 5 );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "sdl3",                     "sdl3/bin/sdl-demo-app",                    0, 0 );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "only_self_rebuild_config", NULL,                                       1, 0 );
 
 int main( int argc, char **argv ) {
 	arena_t arena = { 0 };

@@ -7,11 +7,10 @@ int main( int argc, char **argv ) {
 	BuilderOptions options = { 0 };
 	ApplyCompilerOverride( &options, argc, argv );
 
-	BuildConfig selfConfig = {
-		.name			= "self",
+	options.selfRebuildConfig = CreateBuildConfig( &options );
+	*options.selfRebuildConfig = (BuildConfig) {
 		.sourceFiles	= MakeStringList( "build.c" ),
 	};
-	options.selfRebuildConfig = &selfConfig;
 
 	BuildConfig *libConfig = CreateBuildConfig( &options );
 	*libConfig = (BuildConfig) {

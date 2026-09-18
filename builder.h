@@ -151,7 +151,6 @@ typedef struct BuilderOptions {
 	BuildConfig		*defaultConfig;
 
 	// The config Builder uses to rebuild the build executable itself when its source changes.
-	// Don't register it with CreateBuildConfig() - it's not a "--config=" target.
 	BuildConfig		*selfRebuildConfig;
 
 	// Set this to true if you want Builder to force-rebuild your program.
@@ -4306,7 +4305,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 #if defined( _WIN32 )
 	if ( compilerIsClang ) {
 		// this runs before the target config is known so it looks at every registered config, not just the ones being built
-		bool anyConfigNeedsClangSanitizerLibs = options->selfRebuildConfig && options->selfRebuildConfig->sanitizers != 0;
+		bool anyConfigNeedsClangSanitizerLibs = false;
 
 		for ( buildConfigPtrChunk_t *chunk = options->configs.head; chunk && !anyConfigNeedsClangSanitizerLibs; chunk = chunk->next ) {
 			for ( uint32_t configIndex = 0; configIndex < chunk->count; configIndex++ ) {
@@ -4346,8 +4345,6 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 		threadResultArenas[arenaIndex] = (arena_t) { 0 };
 	}
 
-	uint32_t maxConfigsToBuild = options->configs.count + 1;	// + 1 for self rebuild config
-
 	builderBuildContext_t buildContext = {
 		.options						= options,
 		.buildScratch					= &buildScratch,
@@ -4366,7 +4363,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 		.threadResultArenas				= threadResultArenas,
 		.postBuildArena					= &postBuildArena,
 		.buildSummaryArena				= &buildSummaryArena,
-		.postBuildConfigDependencyData	= Builder_ArenaAlloc( &postBuildArena, builderPostBuildConfigDependencyData_t, maxConfigsToBuild ),
+		.postBuildConfigDependencyData	= Builder_ArenaAlloc( &postBuildArena, builderPostBuildConfigDependencyData_t, options->configs.count ),
 	};
 
 	// the self rebuild goes first so that the source is always the truth
@@ -4381,9 +4378,8 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 		}
 #endif
 
-		// build a copy of the config that outputs to a temp file alongside the exe
+		// point the config at a temp file alongside the exe, whatever the user put in those fields
 		// CWD is already the exe's folder so no binaryFolder is needed
-		BuildConfig selfConfig = *options->selfRebuildConfig;
 		{
 			const char *exeName = strrchr( exePath, BUILDER_PATH_SEPARATOR );
 			exeName = exeName ? exeName + 1 : exePath;
@@ -4395,13 +4391,16 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 				exeNameLength -= strlen( exeExtension );
 			}
 
-			selfConfig.name			= selfConfig.name ? selfConfig.name : "self";
-			selfConfig.binaryName	= Builder_FormatString( buildScratch.arena, "%.*s.rebuild.tmp", (int) exeNameLength, exeName );
-			selfConfig.binaryFolder	= NULL;
-			selfConfig.binaryType	= BINARY_TYPE_EXE;
+			if ( !options->selfRebuildConfig->name ) {
+				options->selfRebuildConfig->name = "self";
+			}
+
+			options->selfRebuildConfig->binaryName = Builder_FormatString( Builder_GetConfigArena(), "%.*s.rebuild.tmp", (int) exeNameLength, exeName );
+			options->selfRebuildConfig->binaryFolder = NULL;
+			options->selfRebuildConfig->binaryType = BINARY_TYPE_EXE;
 		}
 
-		builderBuildResult_t selfRebuildResult = Builder_BuildConfig( &buildContext, &selfConfig );
+		builderBuildResult_t selfRebuildResult = Builder_BuildConfig( &buildContext, options->selfRebuildConfig );
 
 		if ( selfRebuildResult == BUILD_RESULT_FAILED ) {
 			Builder_Error( "Failed to rebuild '%s'.\n", exePath );
@@ -4409,10 +4408,12 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 			return 1;
 		}
 
-		const char *selfTempBinaryPath = Builder_GetBinaryPath( buildScratch.arena, &selfConfig );
+		const char *selfTempBinaryPath = Builder_GetBinaryPath( buildScratch.arena, options->selfRebuildConfig );
 
 		// swap the rebuilt binary over the running exe and relaunch with the original argv, so this never falls through
 		if ( selfRebuildResult == BUILD_RESULT_SUCCESS ) {
+			printf( "\"%s\" was stale and got rebuilt.\n", exePath );
+
 			// the relaunch never reaches the cache write after the loop
 			// so if we dont do this the self config would recompile every run
 			Builder_WriteDependencyCache( &buildContext );
@@ -4514,10 +4515,13 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 	const char *nameOfConfigToBuild = Builder_GetNameOfConfigToBuild( options, argc, argv );
 	BuildConfig *targetConfig = NULL;
 	{
-		if ( options->configs.count == 0 ) {
+		// the self rebuild config is registered like any other but is never a target
+		uint32_t targetableConfigCount = options->configs.count - ( options->selfRebuildConfig ? 1 : 0 );
+
+		if ( targetableConfigCount == 0 && !options->selfRebuildConfig ) {
 			Builder_Error( "No BuildConfig was registered.  You must call CreateBuildConfig() at least once.\n" );
 			return 1;
-		} else if ( options->configs.count > 1 && !nameOfConfigToBuild ) {
+		} else if ( targetableConfigCount > 1 && !nameOfConfigToBuild ) {
 			Builder_Error( "You have more than 1 BuildConfig defined, but you never told me which you wanted me to build via \"" ARG_CONFIG "\".  You need to tell me what config you want me to build, or set a default via BuilderOptions::defaultConfig.\n" );
 			return 1;
 		}
@@ -4532,13 +4536,26 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 				}
 			}
 
-			if ( !targetConfig ) {
+			if ( !targetConfig || targetConfig == options->selfRebuildConfig ) {
 				Builder_Error( "No BuildConfig found with the name \"%s\".\n", nameOfConfigToBuild );
 				return 1;
 			}
 		} else {
-			// only one config was ever registered, so there's nothing to be ambiguous about
-			targetConfig = options->configs.head->items[0];
+			for ( buildConfigPtrChunk_t *chunk = options->configs.head; chunk && !targetConfig; chunk = chunk->next ) {
+				for ( uint32_t configIndex = 0; configIndex < chunk->count; configIndex++ ) {
+					BuildConfig *config = chunk->items[configIndex];
+
+					if ( config != options->selfRebuildConfig ) {
+						targetConfig = config;
+						break;
+					}
+				}
+			}
+
+			if ( !targetConfig ) {
+				Builder_Error( "The only registered BuildConfig is BuilderOptions::selfRebuildConfig, which is useless on its own.\n" );
+				return 1;
+			}
 		}
 	}
 

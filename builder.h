@@ -3564,10 +3564,9 @@ static void Builder_SetCmdArgs( BuilderOptions *options, int argc, char **argv )
 }
 
 typedef struct builderBuildContext_t {
-	BuilderOptions							*options;
 	scratch_t								*buildScratch;
-	const char								*compilerPath;
-	const char								*compilerVersionString;
+	const char								*compilerPath;			// TODO: DM: 21/09/2026: remove this
+	const char								*compilerVersionString;	// TODO: DM: 21/09/2026: remove this
 	bool									compilerIsMSVC;
 	bool									compilerIsClangCL;
 	bool									compilerIsGCC;
@@ -3597,7 +3596,7 @@ typedef enum builderBuildResult_t {
 } builderBuildResult_t;
 
 // compiles and links one config, running its OnPreBuild/OnPostBuild either side
-static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context, BuildConfig *config ) {
+static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context, BuilderOptions *options, BuildConfig *config ) {
 	// nothing this config allocates is wanted by the next one, the toolchain paths it reads were put on buildScratch before the loop
 	// so they sit below this and the rewind can't reach them
 	arenaRewindSpot_t configStart = Builder_ArenaTell( context->buildScratch->arena );
@@ -3607,7 +3606,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 	uint32_t needsCompilePacketCount = 0;
 
 	if ( config->OnPreBuild ) {
-		Builder_LogVerbose( context->options, "Found a OnPreBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name ? config->name : "" );
+		Builder_LogVerbose( options, "Found a OnPreBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name ? config->name : "" );
 
 		config->OnPreBuild( config );
 	}
@@ -3617,7 +3616,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 		printf( "Building config \"%s\":\n", config->name );
 
 		// glob step - flattened into one array because the compile job pool indexes into it by job number
-		StringList globList = Builder_GlobFiles( context->buildScratch->arena, &config->sourceFiles, context->options );
+		StringList globList = Builder_GlobFiles( context->buildScratch->arena, &config->sourceFiles, options );
 
 		uint32_t compilePacketCount = globList.count;
 		builderCompilePacket_t *compilePackets = NULL;
@@ -3650,7 +3649,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 				return BUILD_RESULT_FAILED;
 			}
 
-			// hash just the config compile context->options with the compiler version
+			// hash just the config compile options with the compiler version
 			uint64_t configCompileCommandHash = Builder_HashString( Builder_FormatString( scratch.arena, "%s%s", baseCompileCommand, context->compilerVersionString ) );
 
 			uint32_t written = 0;
@@ -3685,7 +3684,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 
 			// we do a separate pass over the data here but really we could amorphise this with the above loop
 			// also at some point we might want to go wide	over multiple threads to do this
-			if ( !context->options->forceRebuild ) {
+			if ( !options->forceRebuild ) {
 				uint64_t byteBufferSize;
 				byteBuffer_t byteBuffer = { 0 };
 				byteBuffer.arena = scratch.arena;
@@ -4042,9 +4041,17 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 														Builder_PathEndsWith( additionalLib, ".so" );
 
 								if ( isExplicitLibFile ) {
+#if defined( _WIN32 )
 									StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "%s ", additionalLib );
+#elif defined( __linux__ )
+									StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "-l:%s ", additionalLib );
+#endif
 								} else {
+#if defined( _WIN32 )
 									StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "-l%s ", additionalLib );
+#elif defined( __linux__ )
+									StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "-l:%s%s ", additionalLib, Builder_GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
+#endif
 								}
 							}
 						}
@@ -4084,7 +4091,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 	}
 
 	if ( config->OnPostBuild ) {
-		Builder_LogVerbose( context->options, "Found a OnPostBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name ? config->name : "" );
+		Builder_LogVerbose( options, "Found a OnPostBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name ? config->name : "" );
 
 		config->OnPostBuild( config );
 	}
@@ -4105,7 +4112,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 }
 
 // writes out the .builder-dependencies file for every config that compiled something this run
-static void Builder_WriteDependencyCache( builderBuildContext_t *context ) {
+static void Builder_WriteDependencyCache( builderBuildContext_t *context, BuilderOptions *options ) {
 	printf( "Caching dependency info for incremental builds...\n\n" );
 
 	for ( uint32_t configIndex = 0; configIndex < context->builtConfigs; ++configIndex ) {
@@ -4169,7 +4176,7 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context ) {
 
 		Builder_ByteBufferPushU64( &byteBuffer, postBuildData->packetCount );
 
-		Builder_LogVerbose( context->options, "Outputting dependencies to %s:\n", postBuildData->dependencyCacheFileName );
+		Builder_LogVerbose( options, "Outputting dependencies to %s:\n", postBuildData->dependencyCacheFileName );
 
 		for ( uint32_t packetIndex = 0; packetIndex < postBuildData->packetCount; ++packetIndex ) {
 			objectToDependency_t *dependencyMap = &objectToDependencyMapping[packetIndex];
@@ -4178,12 +4185,12 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context ) {
 			Builder_ByteBufferPushU64( &byteBuffer, dependencyMap->objectHash );
 			Builder_ByteBufferPushU64( &byteBuffer, dependencyMap->dependencyCount );
 
-			Builder_LogVerbose( context->options, "%s has %llu dependenc%s%c\n", compilePacket->sourceFile, dependencyMap->dependencyCount, dependencyMap->dependencyCount != 1 ? "ies" : "y", dependencyMap->dependencyCount ? ':' : '.' );
+			Builder_LogVerbose( options, "%s has %llu dependenc%s%c\n", compilePacket->sourceFile, dependencyMap->dependencyCount, dependencyMap->dependencyCount != 1 ? "ies" : "y", dependencyMap->dependencyCount ? ':' : '.' );
 
 			for ( uint64_t mapIndex = 0; mapIndex < dependencyMap->dependencyCount; ++mapIndex ) {
 				const uint64_t dependencyIndex = dependencyMap->dependencyIndices[mapIndex];
 				Builder_ByteBufferPushU64( &byteBuffer, dependencyIndex );
-				Builder_LogVerbose( context->options, "    %s\n", dependencyArray.dependencies[dependencyIndex].dependency );
+				Builder_LogVerbose( options, "    %s\n", dependencyArray.dependencies[dependencyIndex].dependency );
 			}
 		}
 
@@ -4348,7 +4355,6 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 	}
 
 	builderBuildContext_t buildContext = {
-		.options						= options,
 		.buildScratch					= &buildScratch,
 		.compilerPath					= compilerPath,
 		.compilerVersionString			= compilerVersionString,
@@ -4402,7 +4408,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 			options->selfRebuildConfig->binaryType = BINARY_TYPE_EXE;
 		}
 
-		builderBuildResult_t selfRebuildResult = Builder_BuildConfig( &buildContext, options->selfRebuildConfig );
+		builderBuildResult_t selfRebuildResult = Builder_BuildConfig( &buildContext, options, options->selfRebuildConfig );
 
 		if ( selfRebuildResult == BUILD_RESULT_FAILED ) {
 			Builder_Error( "Failed to rebuild '%s'.\n", exePath );
@@ -4418,7 +4424,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 
 			// the relaunch never reaches the cache write after the loop
 			// so if we dont do this the self config would recompile every run
-			Builder_WriteDependencyCache( &buildContext );
+			Builder_WriteDependencyCache( &buildContext, options );
 
 			// atomically swap the freshly built binary into place
 			// never overwrite exePath in place since writing directly into a currently-executing image fails
@@ -4572,13 +4578,13 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 
 	for ( buildConfigPtrChunk_t *chunk = configsToBuild.head; chunk; chunk = chunk->next ) {
 		for ( uint32_t configIndex = 0; configIndex < chunk->count; configIndex++ ) {
-			if ( Builder_BuildConfig( &buildContext, chunk->items[configIndex] ) == BUILD_RESULT_FAILED ) {
+			if ( Builder_BuildConfig( &buildContext, options, chunk->items[configIndex] ) == BUILD_RESULT_FAILED ) {
 				return 1;
 			}
 		}
 	}
 
-	Builder_WriteDependencyCache( &buildContext );
+	Builder_WriteDependencyCache( &buildContext, options );
 
 	{
 		Builder_FreeArenas( &postBuildArena, 1 );

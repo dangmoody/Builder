@@ -15,17 +15,16 @@ int main( int argc, char **argv ) {
 	BuildConfig *libConfig = CreateBuildConfig( &options );
 	*libConfig = (BuildConfig) {
 		.name			= "lib",
-		.binaryType		= BINARY_TYPE_STATIC_LIBRARY,
 		.binaryName		= "test_static_lib",
 		.sourceFiles	= MakeStringList( "lib/mathlib.c" ),
+		.binaryType		= BINARY_TYPE_STATIC_LIBRARY,
 	};
 
 	BuildConfig *programConfig = CreateBuildConfig( &options );
 	*programConfig = (BuildConfig) {
 		.name				= "program",
-		.binaryType			= BINARY_TYPE_EXE,
-		.binaryName			= "test_static_lib_program",
 		.dependsOn			= MakeDependencies( libConfig ),
+		.binaryName			= "test_static_lib_program",
 		.sourceFiles		= MakeStringList( "program/main.c" ),
 		.additionalIncludes	= MakeStringList( "lib" ),
 #if defined( _WIN32 )
@@ -33,6 +32,7 @@ int main( int argc, char **argv ) {
 #else
 		.additionalLinkerArguments = MakeStringList( "./test_static_lib.a" ),
 #endif
+		.binaryType			= BINARY_TYPE_EXE,
 	};
 
 	options.defaultConfig = programConfig;

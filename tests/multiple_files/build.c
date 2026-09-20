@@ -15,10 +15,10 @@ int main( int argc, char **argv ) {
 	BuildConfig *config = CreateBuildConfig( &options );
 	*config = (BuildConfig) {
 		.name			= "multiple_files",
-		.binaryType		= BINARY_TYPE_EXE,
 		.binaryName		= "test_build_multiple_files",
 		.sourceFiles	= MakeStringList( "src/main.c", "src/test1.c", "src/test2.c" ),
 		.defines		= MakeStringList( "MYCONFIG_DOES_A_THING" ),
+		.binaryType		= BINARY_TYPE_EXE,
 	};
 
 	// layering onto a config that's already been filled in

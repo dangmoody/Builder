@@ -1985,8 +1985,8 @@ static StringList Builder_GlobFiles( arena_t *resultsArena, const StringList *gl
 
 			builderGlobVisitCallbackData_t callbackData = {
 				.patternSlices = Builder_SliceFilePath( scratch.arena, pattern),
-				.globResults = &globResult,
 				.searchPathLen = globPathLen,
+				.globResults = &globResult,
 				.verboseLogging = options->verboseLogging
 			};
 
@@ -2727,7 +2727,7 @@ static void Builder_AddSanitizerArgs( scratch_t *scratch, stringBuilder_t *compi
 	bool isFirstSanitizer = true;
 
 	for ( uint32_t sanitizerBitIndex = 0; sanitizerBitIndex < sanitizers; sanitizerBitIndex++ ) {
-		SanitizerFlagBits sanitizerFlagBit = ( 1 << sanitizerBitIndex );
+		SanitizerFlagBits sanitizerFlagBit = (SanitizerFlagBits) ( 1 << sanitizerBitIndex );
 
 		if ( ( sanitizers & sanitizerFlagBit ) == 0 ) {
 			continue;
@@ -3823,8 +3823,8 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 					.dependencyInfos			= Builder_ArenaAlloc( context->postBuildArena, builderCompileJobDependencyInfo_t, dependencyInfoCount ),
 					.dependencyInfoCount		= dependencyInfoCount,
 					.dependencyCacheFileName	= dependencyCacheFileName,
-					.usedMSVC					= context->compilerIsMSVC,
 					.didCompile					= needsCompilePacketCount > 0,
+					.usedMSVC					= context->compilerIsMSVC,
 					.objectToDependencyMap		= objectToDependencyMap,
 					.mapSize					= objectToDependencyMapCount,
 					.dependencyArray			= dependencyArray
@@ -3975,6 +3975,8 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 #endif
 				{
 					if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
+						const char *linkerProgramName = context->compilerIsGCC ? "ar" : "llvm-ar";
+
 						// remove the filename part of the compiler path, leaving just the path (if it exists)
 						// use that path to then get the path to the linker executable since its in the same folder
 						{
@@ -3985,9 +3987,9 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 							if ( lastSlash ) {
 								uint64_t compilerBinaryPathLength = (uint64_t) lastSlash - (uint64_t) context->compilerPath;
 
-								StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "\"%.*s%car\" rcs ", (int) compilerBinaryPathLength, context->compilerPath, BUILDER_PATH_SEPARATOR );
+								StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "\"%.*s%c%s\" rcs ", (int) compilerBinaryPathLength, context->compilerPath, BUILDER_PATH_SEPARATOR, linkerProgramName );
 							} else {
-								StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "ar rcs " );
+								StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "%s rcs ", linkerProgramName );
 							}
 						}
 

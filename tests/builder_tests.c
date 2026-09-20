@@ -45,14 +45,9 @@ static const char *Test_GetCompilerPath( const compiler_t compiler ) {
 }
 
 typedef struct {
-	const char	**fileExtensionsToDelete;
-	uint32_t	fileExtensionsToDeleteCount;
-
-	const char	**foldersToDelete;
-	uint32_t	foldersToDeleteCount;
-
-	const char	**filesToExclude;
-	uint32_t	filesToExcludeCount;
+	StringList	fileExtensionsToDelete;
+	StringList	foldersToDelete;
+	StringList	filesToExclude;
 
 	// filled out by the callback
 	StringList	deferredFilesToDelete;
@@ -101,31 +96,39 @@ static void Test_OnGeneratedFilesFound( arena_t *resultsArena, fileInfo_t *fileI
 	testCleanupContext_t *context = (testCleanupContext_t *) data;
 
 	if ( fileInfo->isDirectory ) {
-		for ( int32_t folderIndex = 0; folderIndex < context->foldersToDeleteCount; folderIndex++ ) {
-			const char *folderToCheck = context->foldersToDelete[folderIndex];
+		for ( builderStringChunk_t *chunk = context->foldersToDelete.head; chunk; chunk = chunk->next ) {
+			for ( uint32_t folderIndex = 0; folderIndex < chunk->count; folderIndex++ ) {
+				const char *folderToDelete = chunk->items[folderIndex];
 
-			if ( Builder_StringEquals( fileInfo->filename, folderToCheck ) ) {
-				// printf( "Found folder \"%s\"\n", fileInfo->filename );
+				if ( Builder_StringEquals( fileInfo->filename, folderToDelete ) ) {
+					// printf( "Found folder \"%s\"\n", fileInfo->filename );
 
-				const char *fullFilename = Builder_FormatString( resultsArena, "%s", fileInfo->fullFilename );
-				Builder_AddStringsInternal( &context->deferredFoldersToDelete, (const char *[]) { fullFilename }, 1 );
+					const char *fullFilename = Builder_FormatString( resultsArena, "%s", fileInfo->fullFilename );
+					Builder_AddStringsInternal( &context->deferredFoldersToDelete, (const char *[]) { fullFilename }, 1 );
+				}
 			}
 		}
 	} else {
-		for ( int32_t excludeFileIndex = 0; excludeFileIndex < context->filesToExcludeCount; excludeFileIndex++ ) {
-			if ( Builder_StringEquals( fileInfo->filename, context->filesToExclude[excludeFileIndex] ) ) {
-				return;
+		for ( builderStringChunk_t *chunk = context->filesToExclude.head; chunk; chunk = chunk->next ) {
+			for ( uint32_t folderIndex = 0; folderIndex < chunk->count; folderIndex++ ) {
+				const char *fileToExclude = chunk->items[folderIndex];
+
+				if ( Builder_StringEquals( fileInfo->filename, fileToExclude ) ) {
+					return;
+				}
 			}
 		}
 
-		for ( int32_t fileExtensionIndex = 0; fileExtensionIndex < context->fileExtensionsToDeleteCount; fileExtensionIndex++ ) {
-			const char *fileExtensionToCheck = context->fileExtensionsToDelete[fileExtensionIndex];
+		for ( builderStringChunk_t *chunk = context->fileExtensionsToDelete.head; chunk; chunk = chunk->next ) {
+			for ( uint32_t folderIndex = 0; folderIndex < chunk->count; folderIndex++ ) {
+				const char *fileExtensionToDelete = chunk->items[folderIndex];
 
-			if ( Builder_PathEndsWith( fileInfo->filename, fileExtensionToCheck ) ) {
-				// printf( "Found file \"%s\"\n", fileInfo->filename );
+				if ( Builder_PathEndsWith( fileInfo->filename, fileExtensionToDelete ) ) {
+					// printf( "Found file \"%s\"\n", fileInfo->filename );
 
-				const char *fullFilename = Builder_FormatString( resultsArena, "%s", fileInfo->fullFilename );
-				Builder_AddStringsInternal( &context->deferredFilesToDelete, (const char *[]) { fullFilename }, 1 );
+					const char *fullFilename = Builder_FormatString( resultsArena, "%s", fileInfo->fullFilename );
+					Builder_AddStringsInternal( &context->deferredFilesToDelete, (const char *[]) { fullFilename }, 1 );
+				}
 			}
 		}
 	}
@@ -209,10 +212,10 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const char *testFolde
 		}
 
 		// delete all generated files and folders
+		// leave this last
 		{
 			testCleanupContext_t context = {
-				.fileExtensionsToDeleteCount = 10,
-				.fileExtensionsToDelete = (const char *[]) {
+				.fileExtensionsToDelete = MakeStringList(
 					".builder-dependencies",
 					".exe",
 					".dll",
@@ -223,20 +226,16 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const char *testFolde
 					".so",
 					".a",
 					".o"
-				},
-
-				.foldersToDeleteCount = 3,
-				.foldersToDelete = (const char *[]) {
+				),
+				.foldersToDelete = MakeStringList(
 					"bin",
 					"intermediate",
 					"visual_studio",
-				},
-
-				.filesToExcludeCount = 2,
-				.filesToExclude = (const char *[]) {
+				),
+				.filesToExclude = MakeStringList(
 					"build.exe",
 					"build",
-				},
+				),
 			};
 
 			bool visited = Builder_VisitFiles( &testScratch, testFolder, BUILDER_FILE_VISIT_FILES | BUILDER_FILE_VISIT_FOLDERS | BUILDER_FILE_VISIT_RECURSIVE, Test_OnGeneratedFilesFound, &context );

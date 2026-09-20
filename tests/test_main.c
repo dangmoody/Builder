@@ -12,18 +12,14 @@
 
 typedef enum {
 	COMPILER_CLANG	= 0,
+	COMPILER_CLANGPP,
+	COMPILER_GCC,
+	COMPILER_GPP,
+	// leave windows specific compilers last
 #ifdef _WIN32
 	COMPILER_CLANG_CL,
-#endif
-	COMPILER_GCC,
-#ifdef _WIN32
 	COMPILER_MSVC,
 #endif
-
-	// c++ specific compilers
-	COMPILER_CLANGPP,
-	COMPILER_GPP,
-
 	COMPILER_COUNT
 } compiler_t;
 
@@ -34,15 +30,13 @@ builderMSVCInstall_t g_msvcInstall = { 0 };
 static const char *Test_GetCompilerPath( const compiler_t compiler ) {
 	switch ( compiler ) {
 		case COMPILER_CLANG:	return "../tools/clang/bin/clang";
-#ifdef _WIN32
-		case COMPILER_CLANG_CL:	return "../tools/clang/bin/clang-cl";
-#endif
+		case COMPILER_CLANGPP:	return "../tools/clang/bin/clang++";
 		case COMPILER_GCC:		return "../tools/gcc/bin/gcc";
+		case COMPILER_GPP:		return "../tools/gcc/bin/g++";
 #ifdef _WIN32
 		case COMPILER_MSVC:		return g_msvcInstall.compilerPath;
+		case COMPILER_CLANG_CL:	return "../tools/clang/bin/clang-cl";
 #endif
-		case COMPILER_CLANGPP:	return "../tools/clang/bin/clang++";
-		case COMPILER_GPP:		return "../tools/gcc/bin/g++";
 	}
 
 	assert( false && "Bad compiler_t specified." );
@@ -151,15 +145,13 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const char *testFolde
 		const char *compilerName = NULL;
 		switch ( compiler ) {
 			case COMPILER_CLANG:	compilerName = "clang";		break;
-#ifdef _WIN32
-			case COMPILER_CLANG_CL: compilerName = "clang-cl";	break;
-#endif
+			case COMPILER_CLANGPP:	compilerName = "clang++";	break;
 			case COMPILER_GCC:		compilerName = "gcc";		break;
+			case COMPILER_GPP:		compilerName = "g++";		break;
 #ifdef _WIN32
 			case COMPILER_MSVC:		compilerName = "msvc";		break;
+			case COMPILER_CLANG_CL: compilerName = "clang-cl";	break;
 #endif
-			case COMPILER_CLANGPP:	compilerName = "clang++";	break;
-			case COMPILER_GPP:		compilerName = "g++";		break;
 		}
 
 		TEMPER_CHECK_TRUE( compilerName );

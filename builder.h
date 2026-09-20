@@ -155,6 +155,7 @@ typedef struct BuilderOptions {
 
 	// Set this to true if you want Builder to force-rebuild your program.
 	// All binaries and intermediate files will get rebuilt.
+	// Does not apply to selfRebuildConfig, which always uses the dependency cache (otherwise it would rebuild and relaunch forever).
 	// This is really only useful to those who are either using an editor + command line workflow, or just hate incremental builds.
 	bool			forceRebuild;
 
@@ -3684,7 +3685,9 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 
 			// we do a separate pass over the data here but really we could amorphise this with the above loop
 			// also at some point we might want to go wide	over multiple threads to do this
-			if ( !options->forceRebuild ) {
+			// the self rebuild config always honours the cache
+			// otherwise forceRebuild rebuilds and re-execs every run, forever
+			if ( !options->forceRebuild || config == options->selfRebuildConfig ) {
 				uint64_t byteBufferSize;
 				byteBuffer_t byteBuffer = { 0 };
 				byteBuffer.arena = scratch.arena;

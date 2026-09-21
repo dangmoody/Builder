@@ -3785,8 +3785,10 @@ typedef struct builderLinkContext_t {
 	 const char						*clangSanitizerResourceDir;
 	 bool							useMSVCLink;
 	 bool							compilerIsMSVC;
+#if defined ( _WIN32 )
 	 bool							debugDefineSet;
-	 bool							compilerIsGCC;
+#endif
+	bool							compilerIsGCC;
 } builderLinkContext_t;
 
 static const char * Builder_CreateLinkCommand( arena_t *commandArena, builderLinkContext_t *linkContext, builderPostBuildConfigData_t *postBuildData ) {
@@ -3986,7 +3988,9 @@ static const char * Builder_CreateLinkCommand( arena_t *commandArena, builderLin
 
             StringBuilder_Appendf( scratch.arena, &linkerArgs, "-Wl,--trace " );
 		}
+#if defined ( _WIN32 )
 	}
+#endif
 
 	for ( builderStringChunk_t *chunk = config->additionalLinkerArguments.head; chunk; chunk = chunk->next ) {
 		for ( uint32_t argumentIndex = 0; argumentIndex < chunk->count; argumentIndex++ ) {
@@ -4352,7 +4356,9 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 					.clangSanitizerResourceDir 	= context->clangSanitizerResourceDir,
 					.compilerIsMSVC				= context->compilerIsMSVC,
 					.useMSVCLink 				= useMSVCLink,
+#if defined ( _WIN32 )
 					.debugDefineSet 			= compileContext.debugDefineSet,
+#endif
 					.compilerIsGCC				= context->compilerIsGCC,
 				};
 				linkCommand = Builder_CreateLinkCommand( context->buildScratch->arena, &linkContext, postBuildData );
@@ -4426,54 +4432,59 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 					return BUILD_RESULT_FAILED;
 				}
 
-				if ( linkerOutput && useMSVCLink ) {
-					bool withinLibrarySearch = false;
-					const char *current = linkerOutput;
-					while ( current && *current ) {
-						const char *lineStart = current;
-						const char *lineEnd = strchr( current, '\n' );
-						if ( !lineEnd ) {
-							lineEnd = strchr( lineEnd, '\0' );
-						}
+				if ( linkerOutput ) {
+					if ( useMSVCLink ) {
 
-						if ( !withinLibrarySearch && Builder_StringStartsWith( lineStart, "Searching libraries" ) ) {
-							withinLibrarySearch = true;
-						} else if ( withinLibrarySearch && Builder_StringStartsWith( lineStart, "Finished searching libraries" ) ) {
-							withinLibrarySearch = false;
-						} else if ( withinLibrarySearch ) {
-							if ( Builder_StringStartsWith( lineStart, "    Searching " ) ) {
-								const char *libPathStart = lineStart + sizeof("    Searching ") - 1;
-								const char *libPathEnd = lineEnd;
-								while ( *libPathEnd != ':' ) {
-									libPathEnd--;
-								}
-
-								uint64_t libPathLength = ( (uint64_t) libPathEnd ) - ( (uint64_t) libPathStart );
-								const char *library = Builder_FormatString( context->postBuildArena, "%.*s", libPathLength, libPathStart );
-
-								bool found = false;
-								for ( builderStringChunk_t *chunk = postBuildData->linkLibraryOutput.head; chunk && !found; chunk = chunk->next ) {
-									for ( uint32_t foundLibsIndex = 0; foundLibsIndex < chunk->count; foundLibsIndex++ ) {
-										if ( Builder_StringEquals( library, chunk->items[foundLibsIndex] ) ) {
-											found = true;
-											break;
+						bool withinLibrarySearch = false;
+						const char *current = linkerOutput;
+						while ( current && *current ) {
+							const char *lineStart = current;
+							const char *lineEnd = strchr( current, '\n' );
+							if ( !lineEnd ) {
+								lineEnd = strchr( lineEnd, '\0' );
+							}
+	
+							if ( !withinLibrarySearch && Builder_StringStartsWith( lineStart, "Searching libraries" ) ) {
+								withinLibrarySearch = true;
+							} else if ( withinLibrarySearch && Builder_StringStartsWith( lineStart, "Finished searching libraries" ) ) {
+								withinLibrarySearch = false;
+							} else if ( withinLibrarySearch ) {
+								if ( Builder_StringStartsWith( lineStart, "    Searching " ) ) {
+									const char *libPathStart = lineStart + sizeof("    Searching ") - 1;
+									const char *libPathEnd = lineEnd;
+									while ( *libPathEnd != ':' ) {
+										libPathEnd--;
+									}
+	
+									uint64_t libPathLength = ( (uint64_t) libPathEnd ) - ( (uint64_t) libPathStart );
+									const char *library = Builder_FormatString( context->postBuildArena, "%.*s", libPathLength, libPathStart );
+	
+									bool found = false;
+									for ( builderStringChunk_t *chunk = postBuildData->linkLibraryOutput.head; chunk && !found; chunk = chunk->next ) {
+										for ( uint32_t foundLibsIndex = 0; foundLibsIndex < chunk->count; foundLibsIndex++ ) {
+											if ( Builder_StringEquals( library, chunk->items[foundLibsIndex] ) ) {
+												found = true;
+												break;
+											}
 										}
 									}
+	
+									if ( !found ) {
+										Builder_StringListPush( context->postBuildArena, &postBuildData->linkLibraryOutput, library );
+									}
 								}
-
-								if ( !found ) {
-									Builder_StringListPush( context->postBuildArena, &postBuildData->linkLibraryOutput, library );
-								}
+							} else {
+								printf( "%.*s\n", (int) ( lineEnd - lineStart ), lineStart );
 							}
-						} else {
-							printf( "%.*s\n", (int) ( lineEnd - lineStart ), lineStart );
+	
+							current = lineEnd;
+	
+							if ( current ) {
+								current += 1;
+							}
 						}
-
-						current = lineEnd;
-
-						if ( current ) {
-							current += 1;
-						}
+					} else {
+						printf( "%s\n", linkerOutput );
 					}
 				}
 

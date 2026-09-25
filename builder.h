@@ -307,8 +307,7 @@ typedef struct BuilderOptions {
 	BuildConfig		*selfRebuildConfig;
 
 	// Set this to true if you want Builder to force-rebuild your program.
-	// All binaries and intermediate files will get rebuilt.
-	// Does not apply to selfRebuildConfig, which always uses the dependency cache (otherwise it would rebuild and relaunch forever).
+	// All binaries and intermediate files will get rebuilt, selfRebuildConfig included.
 	// This is really only useful to those who are either using an editor + command line workflow, or just hate incremental builds.
 	bool			forceRebuild;
 
@@ -459,6 +458,7 @@ int		Build( BuilderOptions *options, int argc, char **argv );
 #define ARG_VERBOSE_SHORT			"-v"
 #define ARG_VERBOSE_LONG			"--verbose"
 #define ARG_CONFIG					"--config="
+#define ARG_SELF_REBUILT			"--self-rebuilt"
 
 #define ARENA_DEFAULT_BLOCK_SIZE	( 2 * 1024 * 1024 )
 
@@ -1685,6 +1685,11 @@ static int ShowUsage( const int exitCode ) {
 		"        This must match the name of a config you registered via AddBuildConfig().\n"
 		"        If you only registered one config you don't need to specify this.\n"
 		"        If you registered more than one config you must either specify this or set BuilderOptions::defaultConfig.\n"
+		"\n"
+		"    " ARG_SELF_REBUILT " (optional):\n"
+		"        Tells Builder that this program is the freshly rebuilt one, so it skips rebuilding itself.\n"
+		"        Builder passes this itself when it relaunches your build program after rebuilding BuilderOptions::selfRebuildConfig.\n"
+		"        Pass it by hand if you want to run your build program without it checking whether it's out of date.\n"
 		"\n"
 		"    [custom arguments] (optional):\n"
 		"        Any arguments not listed here are passed through to your build program via main()'s argc/argv.\n"
@@ -3838,9 +3843,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 
 			// we do a separate pass over the data here but really we could amorphise this with the above loop
 			// also at some point we might want to go wide	over multiple threads to do this
-			// the self rebuild config always honours the cache
-			// otherwise forceRebuild rebuilds and re-execs every run, forever
-			if ( !options->forceRebuild || config == options->selfRebuildConfig ) {
+			if ( !options->forceRebuild ) {
 				uint64_t byteBufferSize;
 				byteBuffer_t byteBuffer = { 0 };
 				byteBuffer.arena = scratch.arena;
@@ -4530,9 +4533,8 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 		.postBuildConfigDependencyData	= Builder_ArenaAlloc( &postBuildArena, builderPostBuildConfigDependencyData_t, options->configs.count ),
 	};
 
-	// the self rebuild goes first so that the source is always the truth
-	// a stale binary would otherwise reject a config name or --config= that only exists in the edited build source, or keep building with old settings
-	// it needs the toolchain and arenas above but not the target config
+	// the self rebuild config gets fixed up whether or not we actually build it below
+	// the config name check and the target config filtering further down both read these fields
 	if ( options->selfRebuildConfig ) {
 #if defined( _WIN32 )
 		// if the old binary was left around from the previous rebuild, clean it up now
@@ -4563,7 +4565,14 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 			options->selfRebuildConfig->binaryFolder = NULL;
 			options->selfRebuildConfig->binaryType = BINARY_TYPE_EXE;
 		}
+	}
 
+	// the self rebuild goes first so that the source is always the truth
+	// a stale binary would otherwise reject a config name or --config= that only exists in the edited build source, or keep building with old settings
+	// it needs the toolchain and arenas above but not the target config
+	// ARG_SELF_REBUILT says we are the relaunch of a build program that was just rebuilt
+	// skip it in that case, otherwise forceRebuild would rebuild and re-exec every run forever
+	if ( options->selfRebuildConfig && !HasCommandLineArg( argc, argv, ARG_SELF_REBUILT ) ) {
 		builderBuildResult_t selfRebuildResult = Builder_BuildConfig( &buildContext, options, options->selfRebuildConfig );
 
 		if ( selfRebuildResult == BUILD_RESULT_FAILED ) {
@@ -4612,7 +4621,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 #error Unrecognised platform.
 #endif
 
-			// re-exec the freshly rebuilt binary with the original argv
+			// re-exec the freshly rebuilt binary with the original argv, plus ARG_SELF_REBUILT so it doesnt rebuild itself and relaunch again
 			// never fall through to running the (now stale-in-memory) code of the process currently executing
 			// exec/spawn dont flush stdio, so anything still buffered (e.g. when stdout is a pipe) would be lost
 			fflush( stdout );
@@ -4626,11 +4635,19 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 				StringBuilder_Appendf( buildScratch.arena, &execArgs, "\"%s\" ", argv[argIndex] );
 			}
 
+			StringBuilder_Appendf( buildScratch.arena, &execArgs, "\"%s\" ", ARG_SELF_REBUILT );
+
 			const char *execCmd = StringBuilder_ToString( buildScratch.arena, &execArgs, NULL );
 
 			exit( Builder_RunProcess( NULL, execCmd, false, NULL ) );
 #elif defined( __linux__ )
-			execv( exePath, argv );
+			// execv wants its own NULL terminated array, so copy argv and tack ARG_SELF_REBUILT on the end
+			char **newArgv = Builder_ArenaAlloc( buildScratch.arena, char *, argc + 2 );
+			memcpy( newArgv, argv, argc * sizeof( char * ) );
+			newArgv[argc] = /*(char *)*/ ARG_SELF_REBUILT;
+			newArgv[argc + 1] = NULL;
+
+			execv( exePath, newArgv );
 
 			// execv only ever returns on failure, otherwise just carries on
 			int err = errno;

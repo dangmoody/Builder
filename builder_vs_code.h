@@ -24,6 +24,65 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+
+CONTENTS:
+	1. Quick Start Guide
+
+
+1. QUICK START GUIDE
+Builder can be used to generate VS Code's c_cpp_properties.json, tasks.json, and launch.json files:
+
+	#define BUILDER_IMPLEMENTATION
+	#include "builder.h"
+
+	#define BUILDER_VS_CODE_IMPLEMENTATION
+	#include "builder_vs_code.h"
+
+	int main( int argc, char **argv ) {
+		BuilderOptions options = {};
+
+		BuildConfig *config = CreateBuildConfig( &options );
+		*config = (BuildConfig) {
+			.name			= "my_awesome_program",
+			.sourceFiles	= MakeStringList( "src/my_code.c" ),
+		};
+
+		options.defaultConfig = config;
+
+		if ( HasCommandLineArg( argc, argv, "--vscode" ) ) {
+			VSCodeCppPropertiesConfig cppPropertiesConfigs[] = {
+				{ .config = config, .intelliSenseMode = VSCODE_INTELLISENSE_MODE_LINUX_CLANG_X64 },
+			};
+
+			VSCodeTaskConfig taskConfigs[] = {
+				{ .config = config },
+			};
+
+			VSCodeLaunchConfig launchConfigs[] = {
+				{ .binaryName = "bin/my_awesome_program", .debuggerType = VSCODE_DEBUGGER_TYPE_CPPDBG_GDB },
+			};
+
+			VSCodeJSONOptions vsCodeOptions = {
+				.cppPropertiesConfigs		= cppPropertiesConfigs,
+				.cppPropertiesConfigsCount	= BUILDER_COUNT_OF( cppPropertiesConfigs ),
+				.taskConfigs				= taskConfigs,
+				.taskConfigsCount			= BUILDER_COUNT_OF( taskConfigs ),
+				.launchConfigs				= launchConfigs,
+				.launchConfigsCount			= BUILDER_COUNT_OF( launchConfigs ),
+			};
+
+			return Builder_GenerateVSCodeJSONFiles( &options, &vsCodeOptions, argc, argv ) ? 0 : 1;
+		}
+
+		return Build( &options, argc, argv );
+	}
+
+You'd then generate the JSON files with:
+
+	build.exe --vscode
+
+By default, if you call Builder_GenerateVSCodeJSONFiles() without filling in any other settings Builder will generate a JSON entry for each BuildConfig you created.
+
 ===========================================================================
 */
 

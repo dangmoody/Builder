@@ -24,6 +24,64 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+
+CONTENTS:
+	1. QUICK START GUIDE
+
+
+1. Quick Start Guide
+Builder can be used to generate Zed's tasks.json and debug.json files:
+
+	#define BUILDER_IMPLEMENTATION
+	#include "builder.h"
+
+	#define BUILDER_ZED_IMPLEMENTATION
+	#include "builder_zed.h"
+
+	int main( int argc, char **argv ) {
+		BuilderOptions options = {};
+
+		BuildConfig *config = CreateBuildConfig( &options );
+		*config = (BuildConfig) {
+			.name			= "my_awesome_program",
+			.sourceFiles	= MakeStringList( "src/my_code.c" ),
+		};
+
+		options.defaultConfig = config;
+
+		if ( HasCommandLineArg( argc, argv, "--zed" ) ) {
+			ZedTaskConfig taskConfigs[] = {
+				{ .config = config },
+			};
+
+			ZedDebugConfig debugConfigs[] = {
+				{
+					.label		= "Debug my_awesome_program",
+					.binaryName	= "bin/my_awesome_program",
+					.adapter	= ZED_DEBUGGER_ADAPTER_CODELLDB,
+					.request	= ZED_DEBUGGER_REQUEST_LAUNCH,
+				},
+			};
+
+			ZedJSONOptions zedOptions = {
+				.taskConfigs		= taskConfigs,
+				.taskConfigsCount	= BUILDER_COUNT_OF( taskConfigs ),
+				.debugConfigs		= debugConfigs,
+				.debugConfigsCount	= BUILDER_COUNT_OF( debugConfigs ),
+			};
+
+			return Builder_GenerateZedJSONFiles( &options, &zedOptions, argc, argv ) ? 0 : 1;
+		}
+
+		return Build( &options, argc, argv );
+	}
+
+You'd then generate the JSON files with:
+
+	build.exe --zed
+
+By default, if you call Builder_GenerateZedJSONFiles() without filling in any other settings Builder will generate a JSON entry for each BuildConfig you created.
+
 ===========================================================================
 */
 

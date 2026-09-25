@@ -24,6 +24,64 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+
+CONTENTS:
+	1. QUICK START GUIDE
+
+
+1. QUICK START GUIDE
+Builder can be used to generate Visual Studio Solutions (.sln and .vcxproj).  These are also compatible with Rider:
+
+	#define BUILDER_IMPLEMENTATION
+	#include "builder.h"
+
+	#define BUILDER_VISUAL_STUDIO_IMPLEMENTATION
+	#include "builder_visual_studio.h"
+
+	int main( int argc, char **argv ) {
+		BuilderOptions options = {};
+
+		BuildConfig *config = CreateBuildConfig( &options );
+		*config = (BuildConfig) {
+			.name			= "my_awesome_program",
+			.sourceFiles	= MakeStringList( "src/my_code.c" ),
+		};
+
+		options.defaultConfig = config;
+
+		if ( HasCommandLineArg( argc, argv, "--sln" ) ) {
+			VisualStudioConfig vsConfigs[] = {
+				{ .name = "Debug",   .config = config },
+				{ .name = "Release", .config = config, .additionalBuildArgs = MakeStringList( "--release" ) },
+			};
+
+			VisualStudioProject vsProjects[] = {
+				{
+					.name			= "my_awesome_program",
+					.configs		= vsConfigs,
+					.configsCount	= BUILDER_COUNT_OF( vsConfigs ),
+				},
+			};
+
+			VisualStudioSolution solution = {
+				.name			= "my_awesome_program",
+				.platforms		= MakeStringList( "x64" ),
+				.projects		= vsProjects,
+				.projectsCount	= BUILDER_COUNT_OF( vsProjects ),
+			};
+
+			return Builder_GenerateVisualStudioSolution( &options, &solution, argc, argv ) ? 0 : 1;
+		}
+
+		return Build( &options, argc, argv );
+	}
+
+You'd then generate the solution with:
+
+	build.exe --sln
+
+Generated projects will call to your build.exe.
+
 ===========================================================================
 */
 

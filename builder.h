@@ -24,7 +24,160 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-TODO: DM: 07/08/2026: table of contents (intro, installation, quick start guide, etc)
+
+CONTENTS:
+	1.  Intro
+	2.  Installation
+	3.  Quick Start Guide
+	4.  Multiple Build Configs
+	5.  BuildConfig Dependencies
+	6.  Custom Command Line Arguments
+	7.  Choosing a Compiler
+
+
+1. INTRO
+Builder is a single header file that you can use to build your C/C++ programs through C/C++ code.
+
+Builder is not a compiler.  Builder turns BuildConfigs into compiler and linker arguments, then calls the compiler that you want to use, and then calls the linker.
+
+It works on Windows (supporting Clang, GCC, and MSVC) and Linux (Clang and GCC).
+
+
+2. INSTALLATION
+	1. Download the latest release.
+	2. Put the header file(s) in your project.
+	3. ?????
+	4. Profit!
+
+
+3. QUICK START GUIDE
+You'll need a build script, which is just C/C++ code:
+
+	#define BUILDER_IMPLEMENTATION
+	#include "builder.h"
+
+	int main( int argc, char **argv ) {
+		BuilderOptions options = {};
+
+		BuildConfig *config = CreateBuildConfig( &options );
+		*config = (BuildConfig) {
+			.name			= "my_awesome_program",
+			.sourceFiles	= MakeStringList( "src/my_code.c" ),
+		};
+
+		options.selfRebuildConfig = CreateBuildConfig( &options );
+		*options.selfRebuildConfig = (BuildConfig) {
+			.name			= "self",
+			.sourceFiles	= MakeStringList( "build.c" ),
+		};
+
+		return Build( &options, argc, argv );
+	}
+
+For the first ever build you'll need to invoke your compiler manually:
+
+	clang -o build.exe build.c
+
+After that, once your build.exe is built you can just call it and, if it needs to, it will rebuild itself (if BuilderOptions::selfRebuildConfig is set):
+
+	build.exe
+
+
+4. MULTIPLE BUILD CONFIGS
+If you have multiple BuildConfigs, you must tell Builder which one you want to build with, specifically.
+
+You can do this by passing --config=<name> at the command line where <name> is the name of the BuildConfig, specified via BuildConfig::name.
+
+Using the above example, if you wanted to build "my_awesome_program" instead of the other configs you'd need to pass at the command line:
+
+	build.exe --config=my_awesome_program
+
+If you have multiple BuildConfigs but don't specify which one to build at the command line, Builder will error asking you to tell it which one you want to build.
+
+You can also use BuilderOptions::defaultConfig to tell Builder to build a specific BuildConfig by default:
+
+	options.defaultConfig = config;
+
+
+5. BUILDCONFIG DEPENDENCIES
+BuildConfigs can be built before/after other BuildConfigs through explicit ordering via BuildConfig::dependsOn:
+
+	#define BUILDER_IMPLEMENTATION
+	#include "builder.h"
+
+	int main( int argc, char **argv ) {
+		BuilderOptions options = {};
+
+		BuildConfig *mathlib = CreateBuildConfig( &options );
+		*mathlib = (BuildConfig) {
+			.name			= "mathlib",
+			.binaryName		= "mathlib",	// the file extension is automatically appended for you
+			.binaryType		= BINARY_TYPE_DYNAMIC_LIBRARY,
+			.binaryFolder	= "bin",
+			.sourceFiles	= MakeStringList( "src/mathlib/lib.c" ),
+		};
+
+		BuildConfig *app = CreateBuildConfig( &options );
+		*app = (BuildConfig) {
+			.name				= "app",
+			.binaryFolder		= "bin",
+			.binaryName			= "app",
+			.dependsOn			= MakeDependencies( mathlib ),
+			.sourceFiles		= MakeStringList( "src/app/program.c" ),
+			.additionalIncludes	= MakeStringList( "src/mathlib" ),
+			.additionalLibPaths	= MakeStringList( "bin" ),
+			.additionalLibs		= MakeStringList( "mathlib" ),
+			.binaryType			= BINARY_TYPE_EXE,
+		};
+
+		return Build( &options, argc, argv );
+	}
+
+You can then build the "app" config through the command line like normal:
+
+	build.exe --config=app
+
+Building "app" builds "mathlib" first, since it's listed in dependsOn, then links the result into "app".  You only ever need to tell Builder to build the top-level config.
+
+
+6. CUSTOM COMMAND LINE ARGUMENTS
+Builder allows you to create your own command line arguments for your builds.
+
+You can use the HasCommandLineArg function to check if the argument was passed at the command line:
+
+	#define BUILDER_IMPLEMENTATION
+	#include "builder.h"
+
+	int main( int argc, char **argv ) {
+		BuilderOptions options = {};
+
+		BuildConfig *config = CreateBuildConfig( &options );
+		*config = (BuildConfig) {
+			.name			= "my_awesome_program",
+			.sourceFiles	= MakeStringList( "src/my_code.c" ),
+		};
+
+		if ( HasCommandLineArg( argc, argv, "--release" ) ) {
+			config->optimization = OPTIMIZATION_PROGRAM_SPEED;
+		}
+
+		return Build( &options, argc, argv );
+	}
+
+You can then pass that command line argument through as normal:
+
+	build.exe --release
+
+
+7. CHOOSING A COMPILER
+By default, Builder will generate compiler arguments for Clang.
+
+If you want to use a different compiler you can do this via BuilderOptions::compilerPath and BuilderOptions::compilerVersion:
+
+	options.compilerPath = "C:/path/to/gcc";
+	options.compilerVersion = "15.1.0";	// this one is optional and warns you on a mismatch
+
+For MSVC it's recommended you just set your compiler path to "cl" and Builder will locate the MSVC toolchain and Windows SDK automatically, but a hard-coded path works too.
 
 ===========================================================================
 */

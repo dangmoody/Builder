@@ -4644,7 +4644,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 			// execv wants its own NULL terminated array, so copy argv and tack ARG_SELF_REBUILT on the end
 			char **newArgv = Builder_ArenaAlloc( buildScratch.arena, char *, argc + 2 );
 			memcpy( newArgv, argv, argc * sizeof( char * ) );
-			newArgv[argc] = /*(char *)*/ ARG_SELF_REBUILT;
+			newArgv[argc] = (char *) ARG_SELF_REBUILT;
 			newArgv[argc + 1] = NULL;
 
 			execv( exePath, newArgv );

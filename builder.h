@@ -4378,7 +4378,6 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 				}
 			}
 
-			bool forceNoIncremental = false;
 			uint64_t binaryFileWriteTime = 0;
 			if ( !shouldLink && linkCommand ) {
 				if ( postBuildData->configDependencies.binaryWriteTime && Builder_GetFileLastWriteTime( binaryPath, &binaryFileWriteTime ) ) {
@@ -4591,9 +4590,9 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 		// create the dependency array if it wasn't already
 		// it is probably okay for the array to have stale dependencies
 		const uint32_t dependenciesCapcity = 16;
-		compileDependencyArray_t compileDependencyArray = configDependencies->compileDependencyArray;
-		if ( compileDependencyArray.capacity == 0 ) {
-			compileDependencyArray = (compileDependencyArray_t) {
+		compileDependencyArray_t *compileDependencyArray = &configDependencies->compileDependencyArray;
+		if ( compileDependencyArray->capacity == 0 ) {
+			*compileDependencyArray = (compileDependencyArray_t) {
 				.count			= 0,
 				.capacity		= dependenciesCapcity,
 				.dependencies	= Builder_ArenaAlloc( context->postBuildArena, compileDependency_t, dependenciesCapcity )
@@ -4640,7 +4639,7 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 				.dependencyIndices	= Builder_ArenaAlloc( context->postBuildArena, uint64_t, 16 )
 			};
 
-			Builder_ParseDependencyInfo( context->postBuildArena, &compileDependencyArray, dependencyMap, dependencyInfo->dependencyString, context->compilerIsMSVC );
+			Builder_ParseDependencyInfo( context->postBuildArena, compileDependencyArray, dependencyMap, dependencyInfo->dependencyString, context->compilerIsMSVC );
 		}
 
 		Builder_LogVerbose( options, "Outputting config dependencies to %s:\n", postBuildData->dependencyCacheFileName );
@@ -4651,7 +4650,7 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 			Builder_LogVerbose( options, "%s has %llu dependenc%s%c\n", compilePacket->sourceFile, dependencyMap->dependencyCount, dependencyMap->dependencyCount != 1 ? "ies" : "y", dependencyMap->dependencyCount ? ':' : '.' );
 			for ( uint64_t mapIndex = 0; mapIndex < dependencyMap->dependencyCount; ++mapIndex ) {
 				const uint64_t dependencyIndex = dependencyMap->dependencyIndices[mapIndex];
-				Builder_LogVerbose( options, "    %s\n", compileDependencyArray.dependencies[dependencyIndex].dependency );
+				Builder_LogVerbose( options, "    %s\n", compileDependencyArray->dependencies[dependencyIndex].dependency );
 			}
 		}
 		

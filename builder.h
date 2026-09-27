@@ -260,6 +260,9 @@ typedef struct BuildConfig {
 	// Building a config builds everything in here first, so you only ever have to ask for the top-level one.
 	ConfigPtrList	dependsOn;
 	const char		*binaryName;
+	// The conditional link step will use this path instead of the default outputted binary path.
+	// Use if you move or rename the binary after builds.
+	const char		*binaryPathOverride;
 	// The folder the binary is placed into, relative to the file you pass into Builder.
 	// If this folder doesn't exist then Builder will create it for you.
 	// Leave unset to put the binary alongside the source file.
@@ -4380,7 +4383,8 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 
 			uint64_t binaryFileWriteTime = 0;
 			if ( !shouldLink && linkCommand ) {
-				if ( postBuildData->configDependencies.binaryWriteTime && Builder_GetFileLastWriteTime( binaryPath, &binaryFileWriteTime ) ) {
+				const char *binaryPathToUse = config->binaryPathOverride ? config->binaryPathOverride : binaryPath;
+				if ( postBuildData->configDependencies.binaryWriteTime && Builder_GetFileLastWriteTime( binaryPathToUse, &binaryFileWriteTime ) ) {
 					const bool binaryMismatch 		= postBuildData->configDependencies.binaryWriteTime != binaryFileWriteTime;
 					const bool linkCommandMismatch 	= postBuildData->configDependencies.linkCommandHash != linkCommandHash;
 					shouldLink = binaryMismatch || linkCommandMismatch;
@@ -4925,6 +4929,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 			}
 
 			options->selfRebuildConfig->binaryName = Builder_FormatString( Builder_GetConfigArena(), "%.*s.rebuild.tmp", (int) exeNameLength, exeName );
+			options->selfRebuildConfig->binaryPathOverride = exePath;
 			options->selfRebuildConfig->binaryFolder = NULL;
 			options->selfRebuildConfig->binaryType = BINARY_TYPE_EXE;
 		}

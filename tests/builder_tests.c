@@ -45,8 +45,9 @@ static const char *Test_GetCompilerPath( const compiler_t compiler ) {
 }
 
 typedef struct {
+	arena_t		*stringListArena;
+
 	StringList	fileExtensionsToDelete;
-	StringList	foldersToDelete;
 	StringList	filesToExclude;
 
 	// filled out by the callback
@@ -63,7 +64,7 @@ static bool Test_DeleteFile( const char *filename ) {
 #elif defined( __linux__ )
 	if ( remove( filename ) != 0 ) {
 		int err = errno;
-		Builder_Error( "Failed to delete file \"%s\": errno: %d\n", filename, err );
+		Builder_Error( "Failed to delete file \"%s\": errno: %d, \"%s\"\n", filename, err, strerror( err ) );
 		return false;
 	}
 #endif
@@ -80,7 +81,7 @@ static bool Test_DeleteFolder( const char *folder ) {
 #elif defined( __linux__ )
 	if ( rmdir( folder ) != 0 ) {
 		int err = errno;
-		Builder_Error( "Failed to delete folder \"%s\": errno: %d\n", folder, err );
+		Builder_Error( "Failed to delete folder \"%s\": errno: %d, \"%s\"\n", folder, err, strerror( err ) );
 		return false;
 	}
 #endif
@@ -96,18 +97,8 @@ static void Test_OnGeneratedFilesFound( arena_t *resultsArena, fileInfo_t *fileI
 	testCleanupContext_t *context = (testCleanupContext_t *) data;
 
 	if ( fileInfo->isDirectory ) {
-		for ( builderStringChunk_t *chunk = context->foldersToDelete.head; chunk; chunk = chunk->next ) {
-			for ( uint32_t folderIndex = 0; folderIndex < chunk->count; folderIndex++ ) {
-				const char *folderToDelete = chunk->items[folderIndex];
-
-				if ( Builder_StringEquals( fileInfo->filename, folderToDelete ) ) {
-					// printf( "Found folder \"%s\"\n", fileInfo->filename );
-
-					const char *fullFilename = Builder_FormatString( resultsArena, "%s", fileInfo->fullFilename );
-					Builder_AddStringsInternal( &context->deferredFoldersToDelete, (const char *[]) { fullFilename }, 1 );
-				}
-			}
-		}
+		const char *fullFilename = Builder_FormatString( resultsArena, "%s", fileInfo->fullFilename );
+		Builder_StringListPush( context->stringListArena, &context->deferredFoldersToDelete, fullFilename );
 	} else {
 		for ( builderStringChunk_t *chunk = context->filesToExclude.head; chunk; chunk = chunk->next ) {
 			for ( uint32_t folderIndex = 0; folderIndex < chunk->count; folderIndex++ ) {
@@ -119,22 +110,25 @@ static void Test_OnGeneratedFilesFound( arena_t *resultsArena, fileInfo_t *fileI
 			}
 		}
 
-		for ( builderStringChunk_t *chunk = context->fileExtensionsToDelete.head; chunk; chunk = chunk->next ) {
+		bool foundFile = false;
+
+		for ( builderStringChunk_t *chunk = context->fileExtensionsToDelete.head; chunk && !foundFile; chunk = chunk->next ) {
 			for ( uint32_t folderIndex = 0; folderIndex < chunk->count; folderIndex++ ) {
 				const char *fileExtensionToDelete = chunk->items[folderIndex];
 
 				if ( Builder_PathEndsWith( fileInfo->filename, fileExtensionToDelete ) ) {
-					// printf( "Found file \"%s\"\n", fileInfo->filename );
-
 					const char *fullFilename = Builder_FormatString( resultsArena, "%s", fileInfo->fullFilename );
-					Builder_AddStringsInternal( &context->deferredFilesToDelete, (const char *[]) { fullFilename }, 1 );
+					Builder_StringListPush( context->stringListArena, &context->deferredFilesToDelete, fullFilename );
+
+					foundFile = true;
+					break;
 				}
 			}
 		}
 	}
 }
 
-TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const char *testFolder, const char *programFilename, const int32_t expectedBuildEXEExitCode, const int32_t expectedProgramExitCode ) {
+TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const char *testFolder, const char *programFilename, const int32_t expectedBuildEXEExitCode, const int32_t expectedProgramExitCode, const bool alsoCompileCPP ) {
 	arena_t testScratch = { 0 };
 
 	const char *buildSourceFile = Builder_FormatString( &testScratch, "%s/build.c", testFolder );
@@ -144,6 +138,10 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const char *testFolde
 
 	for ( int32_t compilerIndex = 0; compilerIndex < COMPILER_COUNT; compilerIndex++ ) {
 		compiler_t compiler = (compiler_t) compilerIndex;
+
+		if ( !alsoCompileCPP && ( compiler == COMPILER_CLANGPP || compiler == COMPILER_GPP ) ) {
+			continue;
+		}
 
 		const char *compilerName = NULL;
 		switch ( compiler ) {
@@ -199,6 +197,10 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const char *testFolde
 			printf( "%s\n", output );
 
 			TEMPER_CHECK_TRUE_QM( buildEXEExitCode == expectedBuildEXEExitCode, "\"%s\" should've returned %d but instead returned %d.\n", buildSourceFile, expectedBuildEXEExitCode, buildEXEExitCode );
+
+			if ( expectedBuildEXEExitCode != 0 ) {
+				printf( "Build was expected to fail, and we got the exit code we were looking for.  This is fine.\n" );
+			}
 		}
 
 		// run the program we just built
@@ -209,12 +211,17 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const char *testFolde
 			printf( "%s\n", output );
 
 			TEMPER_CHECK_TRUE_M( programExitCode == expectedProgramExitCode, "Program \"%s\" should've returned %d but instead returned %d.\n", programFilename, expectedProgramExitCode, programExitCode );
+
+			if ( expectedProgramExitCode != 0 ) {
+				printf( "Program was expected to fail, and we got the exit code we were looking for.  This is fine.\n" );
+			}
 		}
 
 		// delete all generated files and folders
 		// leave this last
 		{
 			testCleanupContext_t context = {
+				.stringListArena = &testScratch,
 				.fileExtensionsToDelete = MakeStringList(
 					".builder-dependencies",
 					".exe",
@@ -225,12 +232,10 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const char *testFolde
 					".ilk",
 					".so",
 					".a",
-					".o"
-				),
-				.foldersToDelete = MakeStringList(
-					"bin",
-					"intermediate",
-					"visual_studio",
+					".o",
+					// wayland generated files are just auto-generated C source and header files
+					".c",
+					".h"
 				),
 				.filesToExclude = MakeStringList(
 					"build.exe",
@@ -238,8 +243,27 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const char *testFolde
 				),
 			};
 
-			bool visited = Builder_VisitFiles( &testScratch, testFolder, BUILDER_FILE_VISIT_FILES | BUILDER_FILE_VISIT_FOLDERS | BUILDER_FILE_VISIT_RECURSIVE, Test_OnGeneratedFilesFound, &context );
-			TEMPER_CHECK_TRUE( visited );
+			// if this test contains any of the folders that we care about:
+			// 	delete every file inside it
+			// 	add it a list of folders to delete later
+			{
+				StringList foldersToDelete = MakeStringList(
+					"bin",
+					"intermediate",
+					"visual_studio",
+				);
+
+				for ( builderStringChunk_t *chunk = foldersToDelete.head; chunk; chunk = chunk->next ) {
+					for ( uint32_t fileIndex = 0; fileIndex < chunk->count; fileIndex++ ) {
+						const char *folderToCheck = Builder_FormatString( &testScratch, "%s%c%s", testFolder, BUILDER_PATH_SEPARATOR, chunk->items[fileIndex] );
+
+						if ( Builder_FolderExists( folderToCheck ) ) {
+							bool visited = Builder_VisitFiles( &testScratch, folderToCheck, BUILDER_FILE_VISIT_FILES | BUILDER_FILE_VISIT_FOLDERS | BUILDER_FILE_VISIT_RECURSIVE, Test_OnGeneratedFilesFound, &context );
+							TEMPER_CHECK_TRUE( visited );
+						}
+					}
+				}
+			}
 
 			for ( builderStringChunk_t *chunk = context.deferredFilesToDelete.head; chunk; chunk = chunk->next ) {
 				for ( uint32_t fileIndex = 0; fileIndex < chunk->count; fileIndex++ ) {
@@ -261,15 +285,19 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const char *testFolde
 				}
 			}
 		}
+
+		printf( "\n" );
 	}
 }
 
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "single_file",              "single_file/test_build_single_file",       0, 0 );
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "multiple_files",           "multiple_files/test_build_multiple_files", 0, 0 );
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "static_lib",               "static_lib/test_static_lib_program",       0, 5 );
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "dynamic_lib",              "dynamic_lib/test_dynamic_lib_program",     0, 5 );
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "sdl3",                     "sdl3/bin/sdl-demo-app",                    0, 0 );
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "only_self_rebuild_config", NULL,                                       1, 0 );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "single_file",              "single_file/test_build_single_file",       0, 0, true  );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "multiple_files",           "multiple_files/test_build_multiple_files", 0, 0, true  );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "static_lib",               "static_lib/test_static_lib_program",       0, 5, true  );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "dynamic_lib",              "dynamic_lib/test_dynamic_lib_program",     0, 5, true  );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "only_self_rebuild_config", NULL,                                       1, 0, true  );
+// the SDL test basically tests everything builder can do, more or less
+// so leave it last
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "sdl3",                     "sdl3/bin/sdl-demo-app",                    0, 0, false );
 
 int main( int argc, char **argv ) {
 	arena_t arena = { 0 };

@@ -4350,17 +4350,28 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 				linkCommand = Builder_CreateLinkCommand( context->buildScratch->arena, &linkContext, postBuildData );
 				linkCommandHash = Builder_HashString( linkCommand );
 
-				// append the .o files after hashing to deal with file order inconsistencies due to globbing and rebuilds
+				// insert the .o files after hashing to deal with file order inconsistencies due to globbing and rebuilds
 				// also we really don't need to hash them since we already link if we compiled something
 				{
 					scratch_t scratch = Builder_GetScratch( context->buildScratch->arena );
 					
 					stringBuilder_t linkerArgs = { 0 };
-					StringBuilder_Appendf( scratch.arena, &linkerArgs, "%s ", linkCommand );
+
+					const char *insertPosition = linkCommand;
+					if ( Builder_StringContains( insertPosition, "rcs" ) ) {
+						insertPosition = strstr( insertPosition, binaryPath );
+						insertPosition += Builder_Strnlen( binaryPath, BUILDER_MAX_PATH ) + 1;
+					} else {
+						insertPosition = strchr( insertPosition, '\"' ) + 1;
+						insertPosition = strchr( insertPosition, '\"' ) + 2;
+					}
+					StringBuilder_Appendf( scratch.arena, &linkerArgs, "%.*s", (int) ( insertPosition - linkCommand ), linkCommand );
 
 					for ( uint32_t intermediateIndex = 0; intermediateIndex < postBuildData->packetCount; ++intermediateIndex ) {
 						StringBuilder_Appendf( scratch.arena, &linkerArgs, "%s ", postBuildData->compilePackets[intermediateIndex].intermediateFile );
 					}
+					
+					StringBuilder_Appendf( scratch.arena, &linkerArgs, "%s", insertPosition );
 
 					linkCommand = StringBuilder_ToString( context->buildScratch->arena, &linkerArgs, NULL );
 					Builder_RewindScratch( &scratch );

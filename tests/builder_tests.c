@@ -23,10 +23,6 @@ typedef enum {
 	COMPILER_COUNT
 } compiler_t;
 
-#ifdef _WIN32
-builderMSVCInstall_t g_msvcInstall = { 0 };
-#endif
-
 static const char *Test_GetCompilerPath( const compiler_t compiler ) {
 	switch ( compiler ) {
 		case COMPILER_CLANG:	return "../tools/clang/bin/clang";

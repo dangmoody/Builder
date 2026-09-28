@@ -2259,6 +2259,11 @@ typedef struct {
 	builderWindowsSDKVersion_t	version;
 } builderWindowsSDKInstall_t;
 
+#ifdef _WIN32
+builderMSVCInstall_t		g_msvcInstall = { 0 };
+builderWindowsSDKInstall_t	g_windowsSDKInstall = { 0 };
+#endif
+
 typedef struct {
 	builderWindowsSDKVersion_t	versions[BUILDER_MAX_TOOLCHAIN_VERSIONS];
 	uint32_t					versionsCount;
@@ -2871,8 +2876,6 @@ typedef struct builderCompileContext_t {
 	bool						useMSVCSyntax;
 #if defined( _WIN32 )
 	bool						debugDefineSet;
-	builderMSVCInstall_t		*msvcInstall;
-	builderWindowsSDKInstall_t	*windowsSDKInstall;
 #endif
 } builderCompileContext_t;
 
@@ -2919,9 +2922,6 @@ static const char *Builder_CreateCompilationCommand( arena_t *commandArena, buil
 
 #ifdef _WIN32
 	if ( context->useMSVCSyntax ) {
-		builderMSVCInstall_t *msvcInstall = context->msvcInstall;
-		builderWindowsSDKInstall_t *windowsSDKInstall = context->windowsSDKInstall;
-
 		StringBuilder_Appendf( scratch.arena, &compileArgs, "/nologo " );	// disable MSVC spamming its copyright banner for every compilation unit
 		StringBuilder_Appendf( scratch.arena, &compileArgs, "/c " );
 
@@ -2949,10 +2949,10 @@ static const char *Builder_CreateCompilationCommand( arena_t *commandArena, buil
 
 		// cl.exe doesn't know where the CRT/Windows SDK headers live unless you're in a Developer Command Prompt, so point it there ourselves
 		StringBuilder_Appendf( scratch.arena, &compileArgs, "/I\"%s\" /I\"%s\" /I\"%s\" /I\"%s\" "
-			, msvcInstall->includePath
-			, windowsSDKInstall->ucrtIncludePath
-			, windowsSDKInstall->umIncludePath
-			, windowsSDKInstall->sharedIncludePath );
+			, g_msvcInstall.includePath
+			, g_windowsSDKInstall.ucrtIncludePath
+			, g_windowsSDKInstall.umIncludePath
+			, g_windowsSDKInstall.sharedIncludePath );
 
 		for ( builderStringChunk_t *chunk = config->additionalIncludes.head; chunk; chunk = chunk->next ) {
 			for ( uint32_t includeIndex = 0; includeIndex < chunk->count; includeIndex++ ) {
@@ -3729,10 +3729,6 @@ typedef struct builderBuildContext_t {
 	bool									compilerIsMSVC;
 	bool									compilerIsClangCL;
 	bool									compilerIsGCC;
-#if defined( _WIN32 )
-	builderMSVCInstall_t					*msvcInstall;
-	builderWindowsSDKInstall_t				*windowsSDKInstall;
-#endif
 	char									*clangSanitizerResourceDir;
 	const char								*intermediateFolder;
 	uint32_t								numCPUCores;
@@ -3784,10 +3780,6 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 			.config				= config,
 			.compilerPath		= context->compilerPath,
 			.useMSVCSyntax		= context->compilerIsMSVC || context->compilerIsClangCL,
-#if defined( _WIN32 )
-			.msvcInstall		= context->msvcInstall,
-			.windowsSDKInstall	= context->windowsSDKInstall,
-#endif
 		};
 
 		const char *dependencyCacheFileName = NULL;
@@ -4036,9 +4028,9 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 #if defined( _WIN32 )
 				if ( useMSVCLink ) {
 					if ( config->binaryType == BINARY_TYPE_STATIC_LIBRARY ) {
-						StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "\"%s\" ", context->msvcInstall->libEXEPath );
+						StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "\"%s\" ", g_msvcInstall.libEXEPath );
 					} else {
-						StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "\"%s\" ", context->msvcInstall->linkEXEPath );
+						StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "\"%s\" ", g_msvcInstall.linkEXEPath );
 					}
 
 					if ( config->binaryType == BINARY_TYPE_DYNAMIC_LIBRARY ) {
@@ -4052,9 +4044,9 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 					StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "/OUT:" );
 					StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "%s ", binaryPath );
 
-					StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "/LIBPATH:\"%s\" ", context->msvcInstall->libPath );
-					StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "/LIBPATH:\"%s\" ", context->windowsSDKInstall->umLibPath );
-					StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "/LIBPATH:\"%s\" ", context->windowsSDKInstall->ucrtLibPath );
+					StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "/LIBPATH:\"%s\" ", g_msvcInstall.libPath );
+					StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "/LIBPATH:\"%s\" ", g_windowsSDKInstall.umLibPath );
+					StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "/LIBPATH:\"%s\" ", g_windowsSDKInstall.ucrtLibPath );
 
 					// we always have to link all files
 					for ( uint32_t intermediateIndex = 0; intermediateIndex < compilePacketCount; ++intermediateIndex ) {
@@ -4388,13 +4380,11 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 
 	// only query for windows SDK and MSVC installations after verifying cmd line args and
 #ifdef _WIN32
-	builderWindowsSDKInstall_t windowsSDKInstall = { 0 };
-	if ( !Builder_GetWindowsSDKInstall( buildScratch.arena, &windowsSDKInstall ) ) {
+	if ( !Builder_GetWindowsSDKInstall( buildScratch.arena, &g_windowsSDKInstall ) ) {
 		return 1;
 	}
 
-	builderMSVCInstall_t msvcInstall = { 0 };
-	if ( !Builder_GetMSVCInstall( buildScratch.arena, &msvcInstall ) ) {
+	if ( !Builder_GetMSVCInstall( buildScratch.arena, &g_msvcInstall ) ) {
 		return 1;
 	}
 
@@ -4436,8 +4426,8 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 	char *compilerVersionString = NULL;
 #ifdef _WIN32
 	if ( compilerIsMSVC ) {
-		compilerPath = msvcInstall.compilerPath;
-		compilerVersionString = Builder_FormatString( buildScratch.arena, "%d.%d.%d", msvcInstall.version.v0, msvcInstall.version.v1, msvcInstall.version.v2 );
+		compilerPath = g_msvcInstall.compilerPath;
+		compilerVersionString = Builder_FormatString( buildScratch.arena, "%d.%d.%d", g_msvcInstall.version.v0, g_msvcInstall.version.v1, g_msvcInstall.version.v2 );
 	} else
 #endif
 	{
@@ -4520,10 +4510,6 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 		.compilerIsMSVC					= compilerIsMSVC,
 		.compilerIsClangCL				= compilerIsClangCL,
 		.compilerIsGCC					= compilerIsGCC,
-#if defined( _WIN32 )
-		.msvcInstall					= &msvcInstall,
-		.windowsSDKInstall				= &windowsSDKInstall,
-#endif
 		.clangSanitizerResourceDir		= clangSanitizerResourceDir,
 		.intermediateFolder				= intermediateFolder,
 		.numCPUCores					= numCPUCores,

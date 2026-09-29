@@ -4,8 +4,11 @@
 #define BUILDER_COMPILATION_DATABASE_IMPLEMENTATION
 #include "../../builder_compilation_database.h"
 
+#include "../test_compiler_override.h"
+
 int main( int argc, char **argv ) {
 	BuilderOptions options = { 0 };
+	ApplyCompilerOverride( &options, argc, argv );
 
 	options.selfRebuildConfig = CreateBuildConfig( &options );
 	*options.selfRebuildConfig = (BuildConfig) {

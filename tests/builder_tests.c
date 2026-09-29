@@ -407,6 +407,110 @@ TEMPER_TEST( TestVSCodeJSON, TEMPER_FLAG_SHOULD_RUN ) {
 	}
 }
 
+TEMPER_TEST( TestZedJSON, TEMPER_FLAG_SHOULD_RUN ) {
+	arena_t testScratch = { 0 };
+
+	const char *testFolder = "zed_json";
+
+	const char *buildEXEFilename = Builder_FormatString( &testScratch, "%s/build%s", testFolder, Builder_GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
+	const char *dotZedFolder = Builder_FormatString( &testScratch, "%s/.zed", testFolder );
+
+	typedef struct {
+		const char	*filename;
+		StringList	expectedEntries;
+	} expectedJSONFile_t;
+
+	expectedJSONFile_t expectedFiles[] = {
+		{
+			.filename = Builder_FormatString( &testScratch, "%s/tasks.json", dotZedFolder ),
+			.expectedEntries = MakeStringList(
+				"\"label\": \"Build config\"",
+				Builder_FormatString( &testScratch, "\"command\": \"%s\"", buildEXEFilename ),
+				"\"" ARG_CONFIG "config\"",
+				"\"--release\"",
+			),
+		},
+		{
+			.filename = Builder_FormatString( &testScratch, "%s/debug.json", dotZedFolder ),
+			.expectedEntries = MakeStringList(
+				"\"label\": \"Debug test_generate_zed_json (debug)\"",
+				"\"label\": \"Debug test_generate_zed_json (release)\"",
+				"\"program\": \"bin/debug/test_generate_zed_json\"",
+				"\"program\": \"bin/release/test_generate_zed_json\"",
+				"\"cwd\": \"${ZED_WORKTREE_ROOT}\"",
+				"\"adapter\": \"CodeLLDB\"",
+				"\"request\": \"launch\"",
+			),
+		},
+	};
+
+	// build the build EXE
+	{
+		printf( "Running %s...\n", buildEXEFilename );
+
+		char *output = NULL;
+		int32_t buildCMDExitCode = Builder_RunProcess( &testScratch, buildEXEFilename, false, &output );
+
+		printf( "%s\n", output );
+
+		TEMPER_CHECK_TRUE_QM( buildCMDExitCode == 0, "Failed to run the build executable.\n" );
+	}
+
+	// generate the json files
+	{
+		const char *buildArgs = Builder_FormatString( &testScratch, "%s --zed", buildEXEFilename );
+
+		printf( "Test build.exe args: %s\n", buildArgs );
+
+		char *output = NULL;
+		int32_t buildEXEExitCode = Builder_RunProcess( &testScratch, buildArgs, false, &output );
+
+		printf( "%s\n", output );
+
+		TEMPER_CHECK_TRUE_QM( buildEXEExitCode == 0, "\"%s\" should've returned 0 but instead returned %d.\n", buildArgs, buildEXEExitCode );
+	}
+
+	// check each file has everything we asked for
+	for ( uint32_t fileIndex = 0; fileIndex < BUILDER_COUNT_OF( expectedFiles ); fileIndex++ ) {
+		expectedJSONFile_t *expectedFile = &expectedFiles[fileIndex];
+
+		uint64_t fileSize = 0;
+		uint8_t *fileData = Builder_ReadEntireFile( &testScratch, expectedFile->filename, &fileSize );
+
+		TEMPER_CHECK_TRUE_M( fileData, "Failed to read \"%s\".  It should've been generated.\n", expectedFile->filename );
+
+		if ( !fileData ) {
+			continue;
+		}
+
+		// file data isnt null terminated
+		const char *fileContents = Builder_FormatString( &testScratch, "%.*s", (int) fileSize, (const char *) fileData );
+
+		for ( builderStringChunk_t *chunk = expectedFile->expectedEntries.head; chunk; chunk = chunk->next ) {
+			for ( uint32_t entryIndex = 0; entryIndex < chunk->count; entryIndex++ ) {
+				const char *expectedEntry = chunk->items[entryIndex];
+
+				TEMPER_CHECK_TRUE_M( Builder_StringContains( fileContents, expectedEntry ), "\"%s\" is missing expected entry: %s\n", expectedFile->filename, expectedEntry );
+			}
+		}
+	}
+
+	// make the test clean up after itself
+	{
+		for ( uint32_t fileIndex = 0; fileIndex < BUILDER_COUNT_OF( expectedFiles ); fileIndex++ ) {
+			const char *filename = expectedFiles[fileIndex].filename;
+
+			bool deleted = Test_DeleteFile( filename );
+
+			TEMPER_CHECK_TRUE_M( deleted, "Failed to delete file \"%s\".  The tests should properly clean up after themselves.\n", filename );
+		}
+
+		bool deleted = Test_DeleteFolder( dotZedFolder );
+
+		TEMPER_CHECK_TRUE_M( deleted, "Failed to delete folder \"%s\".  The tests should properly clean up after themselves.\n", dotZedFolder );
+	}
+}
+
 TEMPER_TEST( TestCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 	arena_t testScratch = { 0 };
 

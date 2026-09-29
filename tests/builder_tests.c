@@ -297,6 +297,116 @@ TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "sdl3",                     "sdl3/bin/
 
 // generates compile_commands.json for each compiler and checks clangd and clang-tidy can both use it
 // both of those tools exit non-zero if they can't load the database or the source files fail to compile with it
+TEMPER_TEST( TestVSCodeJSON, TEMPER_FLAG_SHOULD_RUN ) {
+	arena_t testScratch = { 0 };
+
+	const char *testFolder = "vs_code_json";
+
+	const char *buildEXEFilename = Builder_FormatString( &testScratch, "%s/build%s", testFolder, Builder_GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
+	const char *dotVSCodeFolder = Builder_FormatString( &testScratch, "%s/.vscode", testFolder );
+
+	typedef struct {
+		const char	*filename;
+		StringList	expectedEntries;
+	} expectedJSONFile_t;
+
+	expectedJSONFile_t expectedFiles[] = {
+		{
+			.filename = Builder_FormatString( &testScratch, "%s/c_cpp_properties.json", dotVSCodeFolder ),
+			.expectedEntries = MakeStringList(
+				"\"name\": \"config\"",
+				"\"intelliSenseMode\": \"linux-clang-x64\"",
+				"\"version\": 4",
+			),
+		},
+		{
+			.filename = Builder_FormatString( &testScratch, "%s/tasks.json", dotVSCodeFolder ),
+			.expectedEntries = MakeStringList(
+				"\"label\": \"Build config\"",
+				Builder_FormatString( &testScratch, "\"command\": \"%s\"", buildEXEFilename ),
+				"\"" ARG_CONFIG "config\"",
+				"\"--release\"",
+			),
+		},
+		{
+			.filename = Builder_FormatString( &testScratch, "%s/launch.json", dotVSCodeFolder ),
+			.expectedEntries = MakeStringList(
+				"\"program\": \"bin/debug/test_generate_vs_code_json\"",
+				"\"program\": \"bin/release/test_generate_vs_code_json\"",
+				"\"type\": \"cppdbg\"",
+				"\"MIMode\": \"gdb\"",
+				"\"cwd\": \"${workspaceFolder}\"",
+			),
+		},
+	};
+
+	// build the build EXE
+	{
+		printf( "Running %s...\n", buildEXEFilename );
+
+		char *output = NULL;
+		int32_t buildCMDExitCode = Builder_RunProcess( &testScratch, buildEXEFilename, false, &output );
+
+		printf( "%s\n", output );
+
+		TEMPER_CHECK_TRUE_QM( buildCMDExitCode == 0, "Failed to run the build executable.\n" );
+	}
+
+	// generate the json files
+	{
+		const char *buildArgs = Builder_FormatString( &testScratch, "%s --vscode", buildEXEFilename );
+
+		printf( "Test build.exe args: %s\n", buildArgs );
+
+		char *output = NULL;
+		int32_t buildEXEExitCode = Builder_RunProcess( &testScratch, buildArgs, false, &output );
+
+		printf( "%s\n", output );
+
+		TEMPER_CHECK_TRUE_QM( buildEXEExitCode == 0, "\"%s\" should've returned 0 but instead returned %d.\n", buildArgs, buildEXEExitCode );
+	}
+
+	// check each file has everything we asked for
+	for ( uint32_t fileIndex = 0; fileIndex < BUILDER_COUNT_OF( expectedFiles ); fileIndex++ ) {
+		expectedJSONFile_t *expectedFile = &expectedFiles[fileIndex];
+
+		uint64_t fileSize = 0;
+		uint8_t *fileData = Builder_ReadEntireFile( &testScratch, expectedFile->filename, &fileSize );
+
+		TEMPER_CHECK_TRUE_M( fileData, "Failed to read \"%s\".  It should've been generated.\n", expectedFile->filename );
+
+		if ( !fileData ) {
+			continue;
+		}
+
+		// file data isnt null terminated
+		const char *fileContents = Builder_FormatString( &testScratch, "%.*s", (int) fileSize, (const char *) fileData );
+
+		for ( builderStringChunk_t *chunk = expectedFile->expectedEntries.head; chunk; chunk = chunk->next ) {
+			for ( uint32_t entryIndex = 0; entryIndex < chunk->count; entryIndex++ ) {
+				const char *expectedEntry = chunk->items[entryIndex];
+
+				TEMPER_CHECK_TRUE_M( Builder_StringContains( fileContents, expectedEntry ), "\"%s\" is missing expected entry: %s\n", expectedFile->filename, expectedEntry );
+			}
+		}
+	}
+
+	// make the test clean up after itself
+	{
+		for ( uint32_t fileIndex = 0; fileIndex < BUILDER_COUNT_OF( expectedFiles ); fileIndex++ ) {
+			const char *filename = expectedFiles[fileIndex].filename;
+
+			bool deleted = Test_DeleteFile( filename );
+
+			TEMPER_CHECK_TRUE_M( deleted, "Failed to delete file \"%s\".  The tests should properly clean up after themselves.\n", filename );
+		}
+
+		bool deleted = Test_DeleteFolder( dotVSCodeFolder );
+
+		TEMPER_CHECK_TRUE_M( deleted, "Failed to delete folder \"%s\".  The tests should properly clean up after themselves.\n", dotVSCodeFolder );
+	}
+}
+
 TEMPER_TEST( TestCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 	arena_t testScratch = { 0 };
 
@@ -314,7 +424,6 @@ TEMPER_TEST( TestCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 	);
 
 	// build the build EXE
-	// running it with --compile-commands never calls Build() so it never rebuilds itself, once is enough
 	{
 		printf( "Running %s...\n", buildEXEFilename );
 

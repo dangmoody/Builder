@@ -39,6 +39,7 @@ tests/**/*.json
 .vs
 x64
 *.vcxproj.user
+visual_studio/
 
 
 #

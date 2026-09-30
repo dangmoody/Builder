@@ -1,10 +1,10 @@
 // run: clang -o generate_solution.exe generate_solution.c to make the EXE
 
 #define BUILDER_IMPLEMENTATION
-#include "../builder.h"
+#include "builder.h"
 
 #define BUILDER_VISUAL_STUDIO_IMPLEMENTATION
-#include "../builder_visual_studio.h"
+#include "builder_visual_studio.h"
 
 typedef struct testFolderList_t {
 	const char	**names;
@@ -33,11 +33,13 @@ int main( int argc, char **argv ) {
 
 	arena_t arena = { 0 };
 
+	options.selfRebuildConfig = CreateBuildConfig( &options );
+
 	BuildConfig *builderConfig = CreateBuildConfig( &options );
 	*builderConfig = (BuildConfig) {
 		.name			= "builder",
 		.binaryType		= BINARY_TYPE_STATIC_LIBRARY,
-		.sourceFiles	= MakeStringList( "../*.h" ),
+		.sourceFiles	= MakeStringList( "*.h" ),
 	};
 
 	VisualStudioConfig *builderVsConfigs = Builder_ArenaAlloc( &arena, VisualStudioConfig, 2 );
@@ -45,7 +47,7 @@ int main( int argc, char **argv ) {
 	builderVsConfigs[1] = (VisualStudioConfig) { .name = "Release", .config = builderConfig, .additionalBuildArgs = MakeStringList( "--release" ) };
 
 	testFolderList_t testFolders = { 0 };
-	Builder_VisitFiles( &arena, "../tests/", BUILDER_FILE_VISIT_FOLDERS, OnTestFolderFound, &testFolders );
+	Builder_VisitFiles( &arena, "tests/", BUILDER_FILE_VISIT_FOLDERS, OnTestFolderFound, &testFolders );
 
 	uint32_t projectsCount = testFolders.count + 1;
 	VisualStudioProject *projects = Builder_ArenaAlloc( &arena, VisualStudioProject, projectsCount );
@@ -64,8 +66,8 @@ int main( int argc, char **argv ) {
 			.name			= testName,
 			.binaryType		= BINARY_TYPE_STATIC_LIBRARY,
 			.sourceFiles	= MakeStringList(
-				Config_FormatString( "../tests/%s/**/*.c", testName ),
-				Config_FormatString( "../tests/%s/**/*.h", testName )
+				Config_FormatString( "tests/%s/**/*.c", testName ),
+				Config_FormatString( "tests/%s/**/*.h", testName )
 			),
 		};
 

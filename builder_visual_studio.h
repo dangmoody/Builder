@@ -364,7 +364,7 @@ static bool Builder_VSIsSourceFile( const char *path ) {
 	static const char *sourceExtensions[] = { ".c", ".cpp", ".cc", ".cxx" };
 
 	for ( size_t i = 0; i < BUILDER_COUNT_OF( sourceExtensions ); i++ ) {
-		if ( Builder_PathHasFileExtension( path, sourceExtensions[i] ) ) {
+		if ( Builder_PathEndsWith( path, sourceExtensions[i] ) ) {
 			return true;
 		}
 	}
@@ -376,7 +376,7 @@ static bool Builder_VSIsHeaderFile( const char *path ) {
 	static const char *headerExtensions[] = { ".h", ".hpp", ".hh", ".hxx", ".inl" };
 
 	for ( size_t i = 0; i < BUILDER_COUNT_OF( headerExtensions ); i++ ) {
-		if ( Builder_PathHasFileExtension( path, headerExtensions[i] ) ) {
+		if ( Builder_PathEndsWith( path, headerExtensions[i] ) ) {
 			return true;
 		}
 	}
@@ -581,7 +581,7 @@ static void Builder_VSDeleteOldProjectFilesCallback( arena_t *resultsArena, file
 	static const char *extensionsToDelete[] = { ".sln", ".vcxproj", ".vcxproj.user", ".vcxproj.filters" };
 
 	for ( size_t extensionIndex = 0; extensionIndex < BUILDER_COUNT_OF( extensionsToDelete ); extensionIndex++ ) {
-		if ( Builder_PathHasFileExtension( fileInfo->fullFilename, extensionsToDelete[extensionIndex] ) ) {
+		if ( Builder_PathEndsWith( fileInfo->fullFilename, extensionsToDelete[extensionIndex] ) ) {
 #if defined( _WIN32 )
 			bool deleted = DeleteFileA( fileInfo->fullFilename ) != 0;
 #elif defined( __linux__ )

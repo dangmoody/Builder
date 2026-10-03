@@ -16,7 +16,7 @@ int main( int argc, char **argv ) {
 	*config = (BuildConfig) {
 		.name			= "multiple_files",
 		.binaryName		= "test_build_multiple_files",
-		.sourceFiles	= MakeStringList( "src/main.c", "src/test1.c", "src/test2.c" ),
+		.sourceFiles	= MakeStringList( "src/*.c" ),
 		.defines		= MakeStringList( "MYCONFIG_DOES_A_THING" ),
 		.binaryType		= BINARY_TYPE_EXE,
 	};

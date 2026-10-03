@@ -246,7 +246,8 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN,
 	const bool alsoCompileCPP,
 	const char *sourceFileToEdit,
 	const char *headerFileToEdit,
-	const uint32_t headerDependentCount )
+	const uint32_t headerDependentCount,
+	const char *newSourceFile )
 {
 	arena_t testScratch = { 0 };
 
@@ -416,6 +417,37 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN,
 			TEMPER_CHECK_TRUE_M( compiledFileCount == 1, "Only \"%s\" should've been rebuilt after fixing its link error, but %u files were compiled.\n", sourceFileToEdit, compiledFileCount );
 		}
 
+		// add a file then build again
+		// only the new file should be compiled
+		if ( newSourceFile ) {
+			// valid C and C++
+			// the prototype is there so -Wmissing-prototypes doesnt complain
+			const char *newSourceFileContents =
+				"void Test_NewFileFunction( void );\n"
+				"void Test_NewFileFunction( void ) {}\n";
+
+			bool written = Builder_WriteEntireFile( newSourceFile, (const uint8_t *) newSourceFileContents, strlen( newSourceFileContents ) );
+
+			TEMPER_CHECK_TRUE_QM( written, "Failed to create \"%s\".\n", newSourceFile );
+
+			// dont quit on failure, the new file still needs deleting
+			char *output = Test_RunProcess( &testScratch, buildArgs, 0, false );
+
+			uint32_t compiledFileCount = Test_GetCompiledFileCount( output );
+
+			TEMPER_CHECK_TRUE_M( compiledFileCount == 1, "Only \"%s\" should've been compiled after adding it, but %u files were compiled.\n", newSourceFile, compiledFileCount );
+		}
+
+		// remove the file we just created then build again
+		// the build should succeed
+		if ( newSourceFile ) {
+			bool deleted = Test_DeleteFile( newSourceFile );
+
+			TEMPER_CHECK_TRUE_M( deleted, "Failed to delete \"%s\".  It's been left behind, delete it by hand.\n", newSourceFile );
+
+			Test_RunProcess( &testScratch, buildArgs, 0, true );
+		}
+
 		// delete all generated files and folders
 		// leave this last
 		{
@@ -489,14 +521,14 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN,
 	}
 }
 
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "single_file",             "single_file/test_build_single_file",        0, 0, true,  "single_file/main.c",         NULL,                        0 );
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "multiple_files",           "multiple_files/test_build_multiple_files", 0, 0, true,  "multiple_files/src/test1.c", "multiple_files/src/test.h", 3 );
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "static_lib",               "static_lib/test_static_lib_program",       0, 5, true,  "static_lib/program/main.c",  "static_lib/lib/mathlib.h",  2 );
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "dynamic_lib",              "dynamic_lib/test_dynamic_lib_program",     0, 5, true,  "dynamic_lib/program/main.c", "dynamic_lib/lib/mathlib.h", 2 );
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "only_self_rebuild_config", NULL,                                       1, 0, true,  NULL,                         NULL,                        0 );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "single_file",             "single_file/test_build_single_file",        0, 0, true,  "single_file/main.c",         NULL,                        0, NULL                                         );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "multiple_files",           "multiple_files/test_build_multiple_files", 0, 0, true,  "multiple_files/src/test1.c", "multiple_files/src/test.h", 3, "multiple_files/src/builder_test_new_file.c" );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "static_lib",               "static_lib/test_static_lib_program",       0, 5, true,  "static_lib/program/main.c",  "static_lib/lib/mathlib.h",  2, NULL                                         );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "dynamic_lib",              "dynamic_lib/test_dynamic_lib_program",     0, 5, true,  "dynamic_lib/program/main.c", "dynamic_lib/lib/mathlib.h", 2, NULL                                         );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "only_self_rebuild_config", NULL,                                       1, 0, true,  NULL,                         NULL,                        0, NULL                                         );
 // the SDL test basically tests everything builder can do, more or less
 // so leave it last
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "sdl3",                     "sdl3/bin/sdl-demo-app",                    0, 0, false, "sdl3/demo-app/demo-app.cpp", "sdl3/src/audio/SDL_wave.h", 1 );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "sdl3",                     "sdl3/bin/sdl-demo-app",                    0, 0, false, "sdl3/demo-app/demo-app.cpp", "sdl3/src/audio/SDL_wave.h", 1, "sdl3/demo-app/builder_test_new_file.cpp"    );
 
 TEMPER_TEST( TestVisualStudio, TEMPER_FLAG_SHOULD_RUN ) {
 	// TODO: DM: 29/09/2026: this

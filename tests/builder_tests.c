@@ -1,8 +1,8 @@
-#define TEMPER_IMPLEMENTATION
-#include "temper.h"
-
 #define BUILDER_IMPLEMENTATION
 #include "../builder.h"
+
+#define TEMPER_IMPLEMENTATION
+#include "temper.h"
 
 #if defined( _WIN32 )
 #define TEST_DEBUG_BREAK __debugbreak
@@ -124,7 +124,130 @@ static void Test_OnGeneratedFilesFound( arena_t *resultsArena, fileInfo_t *fileI
 	}
 }
 
-TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const char *testFolder, const char *programFilename, const int32_t expectedBuildEXEExitCode, const int32_t expectedProgramExitCode, const bool alsoCompileCPP ) {
+typedef struct {
+	const char	*objectFilePrefix;
+
+	// filled out by the callback
+	const char	*objectFilename;
+	uint32_t	matchCount;
+} testFindObjectContext_t;
+
+static void Test_OnIntermediateFileFound( arena_t *resultsArena, fileInfo_t *fileInfo, void *data ) {
+	BUILDER_ASSERT( resultsArena );
+	BUILDER_ASSERT( fileInfo );
+	BUILDER_ASSERT( data );
+
+	testFindObjectContext_t *context = (testFindObjectContext_t *) data;
+
+	if ( fileInfo->isDirectory ) {
+		return;
+	}
+
+	if ( !Builder_StringStartsWith( fileInfo->filename, context->objectFilePrefix ) ) {
+		return;
+	}
+
+	if ( !Builder_PathEndsWith( fileInfo->filename, ".o" ) ) {
+		return;
+	}
+
+	context->objectFilename = Builder_FormatString( resultsArena, "%s", fileInfo->fullFilename );
+	context->matchCount++;
+}
+
+static char *Test_RunProcess( arena_t *arena, const char *args, const int32_t expectedExitCode, const bool quitOnFail ) {
+	printf( "Running: %s\n", args );
+
+	char *output = NULL;
+	int32_t exitCode = Builder_RunProcess( arena, args, false, &output );
+
+	printf( "%s\n", output );
+
+	if ( quitOnFail ) {
+		TEMPER_CHECK_TRUE_QM( exitCode == expectedExitCode, "\"%s\" should've returned %d but instead returned %d.\n", args, expectedExitCode, exitCode );
+	} else {
+		TEMPER_CHECK_TRUE_M( exitCode == expectedExitCode, "\"%s\" should've returned %d but instead returned %d.\n", args, expectedExitCode, exitCode );
+	}
+
+	return output;
+}
+
+typedef struct {
+	const char	*filename;
+	uint8_t		*originalContents;
+	uint64_t	originalSize;
+} testFileEdit_t;
+
+static testFileEdit_t Test_AppendToFile( arena_t *arena, const char *filename, const char *text ) {
+	testFileEdit_t edit = { .filename = filename };
+
+	edit.originalContents = Builder_ReadEntireFile( arena, filename, &edit.originalSize );
+
+	TEMPER_CHECK_TRUE_QM( edit.originalContents, "Failed to read \"%s\".\n", filename );
+
+	const char *editedContents = Builder_FormatString( arena, "%.*s\n%s\n", edit.originalSize, (const char *) edit.originalContents, text );
+
+	bool written = Builder_WriteEntireFile( filename, (const uint8_t *) editedContents, strlen( editedContents ) );
+
+	TEMPER_CHECK_TRUE_QM( written, "Failed to edit \"%s\".\n", filename );
+
+	return edit;
+}
+
+static void Test_UndoFileEdit( const testFileEdit_t *edit ) {
+	bool written = Builder_WriteEntireFile( edit->filename, edit->originalContents, edit->originalSize );
+
+	TEMPER_CHECK_TRUE_QM( written, "Failed to undo the edit to \"%s\".  It's been left modified, restore it by hand.\n", edit->filename );
+}
+
+// every config that compiles anything prints "Compiling <count> files ..."
+// so add them all up to get how many files got compiled across the whole build
+static uint32_t Test_GetCompiledFileCount( const char *buildOutput ) {
+	const char *compilingPrefix = "Compiling ";
+
+	uint32_t totalCount = 0;
+
+	for ( const char *found = strstr( buildOutput, compilingPrefix ); found; found = strstr( found + 1, compilingPrefix ) ) {
+		uint32_t count = 0;
+		if ( sscanf( found + strlen( compilingPrefix ), "%u files", &count ) != 1 ) {
+			continue;
+		}
+
+		totalCount += count;
+	}
+
+	return totalCount;
+}
+
+static void Test_CheckIncrementalRebuild( arena_t *arena, const char *buildArgs, const char *fileToEdit, const uint32_t expectedCompiledFileCount ) {
+	testFileEdit_t edit = Test_AppendToFile( arena, fileToEdit, "// builder test edit" );
+
+	// dont quit on failure, the edit still needs undoing
+	char *output = Test_RunProcess( arena, buildArgs, 0, false );
+
+	uint32_t compiledFileCount = Test_GetCompiledFileCount( output );
+
+	TEMPER_CHECK_TRUE_M( compiledFileCount == expectedCompiledFileCount, "Editing \"%s\" should've rebuilt %u files, but %u files were compiled.\n", fileToEdit, expectedCompiledFileCount, compiledFileCount );
+
+	Test_UndoFileEdit( &edit );
+
+	output = Test_RunProcess( arena, buildArgs, 0, true );
+
+	compiledFileCount = Test_GetCompiledFileCount( output );
+
+	TEMPER_CHECK_TRUE_M( compiledFileCount == expectedCompiledFileCount, "Undoing the edit to \"%s\" should've rebuilt %u files, but %u files were compiled.\n", fileToEdit, expectedCompiledFileCount, compiledFileCount );
+}
+
+TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN,
+	const char *testFolder,
+	const char *programFilename,
+	const int32_t expectedBuildEXEExitCode,
+	const int32_t expectedProgramExitCode,
+	const bool alsoCompileCPP,
+	const char *sourceFileToEdit,
+	const char *headerFileToEdit,
+	const uint32_t headerDependentCount )
+{
 	arena_t testScratch = { 0 };
 
 	const char *buildSourceFilename = Builder_FormatString( &testScratch, "%s/build.c", testFolder );
@@ -159,40 +282,16 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const char *testFolde
 
 		// initial build test
 		{
-			char *output = NULL;
+			const char *buildCMDArgs = Builder_FormatString( &testScratch, "%s -o %s %s", Test_GetCompilerPath( COMPILER_CLANG ), buildEXEFilename, buildSourceFilename );
 
-			stringBuilder_t sb = { 0 };
-			StringBuilder_Appendf( &testScratch, &sb, "%s ", Test_GetCompilerPath( COMPILER_CLANG ) );
-			StringBuilder_Appendf( &testScratch, &sb, "-o " );
-			StringBuilder_Appendf( &testScratch, &sb, "%s ", buildEXEFilename );
-			StringBuilder_Appendf( &testScratch, &sb, "%s ", buildSourceFilename );
-			char *buildCMDArgs = StringBuilder_ToString( &testScratch, &sb, NULL );
-
-			printf( "Raw compile args: %s\n", buildCMDArgs );
-
-			int32_t buildCMDExitCode = Builder_RunProcess( &testScratch, buildCMDArgs, false, &output );
-
-			printf( "%s\n", output );
-
-			TEMPER_CHECK_TRUE_QM( buildCMDExitCode == 0, "Failed to do initial build of %s via the raw compiler argument.\n", buildSourceFilename );
+			Test_RunProcess( &testScratch, buildCMDArgs, 0, true );
 		}
+
+		const char *buildArgs = Builder_FormatString( &testScratch, "%s --%s", buildEXEFilename, compilerName );
 
 		// run the build EXE
 		{
-			char *output = NULL;
-
-			stringBuilder_t sb = { 0 };
-			StringBuilder_Appendf( &testScratch, &sb, "%s ", buildEXEFilename );
-			StringBuilder_Appendf( &testScratch, &sb, "--%s ", compilerName );
-			const char *buildArgs = StringBuilder_ToString( &testScratch, &sb, NULL );
-
-			printf( "Test build.exe args: %s\n", buildArgs );
-
-			int32_t buildEXEExitCode = Builder_RunProcess( &testScratch, buildArgs, false, &output );
-
-			printf( "%s\n", output );
-
-			TEMPER_CHECK_TRUE_QM( buildEXEExitCode == expectedBuildEXEExitCode, "\"%s\" should've returned %d but instead returned %d.\n", buildSourceFilename, expectedBuildEXEExitCode, buildEXEExitCode );
+			Test_RunProcess( &testScratch, buildArgs, expectedBuildEXEExitCode, true );
 
 			if ( expectedBuildEXEExitCode != 0 ) {
 				printf( "Build was expected to fail, and we got the exit code we were looking for.  This is fine.\n" );
@@ -201,16 +300,120 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const char *testFolde
 
 		// run the program we just built
 		if ( programFilename ) {
-			char *output = NULL;
-			int32_t programExitCode = Builder_RunProcess( &testScratch, programFilename, false, &output );
-
-			printf( "%s\n", output );
-
-			TEMPER_CHECK_TRUE_M( programExitCode == expectedProgramExitCode, "Program \"%s\" should've returned %d but instead returned %d.\n", programFilename, expectedProgramExitCode, programExitCode );
+			Test_RunProcess( &testScratch, programFilename, expectedProgramExitCode, false );
 
 			if ( expectedProgramExitCode != 0 ) {
 				printf( "Program was expected to fail, and we got the exit code we were looking for.  This is fine.\n" );
 			}
+		}
+
+		// make a partial edit to the source file and rebuild
+		// only the source file(s) we edited should get rebuilt
+		// afterwards undo the change and build again so its like we never touched it
+		if ( sourceFileToEdit ) {
+			Test_CheckIncrementalRebuild( &testScratch, buildArgs, sourceFileToEdit, 1 );
+		}
+
+		// change the local header file that one of our source files depends on
+		// only the source file(s) that rely on that header should get rebuilt
+		// afterwards undo the change and build again so its like we never touched it
+		if ( headerFileToEdit ) {
+			Test_CheckIncrementalRebuild( &testScratch, buildArgs, headerFileToEdit, headerDependentCount );
+		}
+
+		// delete one of the intermediate files
+		// only the source file that intermediate file is built from should get rebuilt
+		if ( sourceFileToEdit ) {
+			// object files are named after the source file without its folder or extension
+			const char *sourceFilename = NULL;
+			if ( !sourceFilename ) sourceFilename = strrchr( sourceFileToEdit, '/' );
+			if ( !sourceFilename ) sourceFilename = strrchr( sourceFileToEdit, '\\' );
+			if ( !sourceFilename ) {
+				sourceFilename = sourceFileToEdit;
+			} else {
+				sourceFilename++;
+			}
+
+			const char *extension = strrchr( sourceFilename, '.' );
+			uint64_t sourceFilenameLength = extension ? (uint64_t) ( extension - sourceFilename ) : strlen( sourceFilename );
+
+			testFindObjectContext_t context = {
+				.objectFilePrefix = Builder_FormatString( &testScratch, "%.*s_", sourceFilenameLength, sourceFilename ),
+			};
+
+			const char *intermediateFolder = Builder_FormatString( &testScratch, "%s%cintermediate", testFolder, BUILDER_PATH_SEPARATOR );
+
+			bool visited = Builder_VisitFiles( &testScratch, intermediateFolder, BUILDER_FILE_VISIT_FILES, Test_OnIntermediateFileFound, &context );
+
+			TEMPER_CHECK_TRUE_QM( visited, "Failed to look through \"%s\".\n", intermediateFolder );
+			TEMPER_CHECK_TRUE_QM( context.matchCount == 1, "Expected to find exactly 1 object file for \"%s\" in \"%s\", but found %u.\n", sourceFileToEdit, intermediateFolder, context.matchCount );
+
+			bool deleted = Test_DeleteFile( context.objectFilename );
+
+			TEMPER_CHECK_TRUE_QM( deleted, "Failed to delete \"%s\".\n", context.objectFilename );
+
+			char *output = Test_RunProcess( &testScratch, buildArgs, 0, true );
+
+			uint32_t compiledFileCount = Test_GetCompiledFileCount( output );
+
+			TEMPER_CHECK_TRUE_M( compiledFileCount == 1, "Only \"%s\" should've been rebuilt after deleting \"%s\", but %u files were compiled.\n", sourceFileToEdit, context.objectFilename, compiledFileCount );
+		}
+
+		// dont change anything but build again
+		// the build should be totally skipped, nothing should happen
+		// builder only links when something compiled or the binary is missing, so nothing compiling means nothing happened
+		if ( expectedBuildEXEExitCode == 0 ) {
+			char *output = Test_RunProcess( &testScratch, buildArgs, 0, false );
+
+			uint32_t compiledFileCount = Test_GetCompiledFileCount( output );
+
+			TEMPER_CHECK_TRUE_M( compiledFileCount == 0, "Nothing changed so the build should've been skipped, but %u files were compiled.\n", compiledFileCount );
+		}
+
+		// make a change to the code that will cause a compilation error
+		// the build should fail
+		// afterwards undo the change and build again so its like we never touched it
+		if ( sourceFileToEdit ) {
+			testFileEdit_t edit = Test_AppendToFile( &testScratch, sourceFileToEdit, "this wont compile" );
+
+			// dont quit on failure, the edit still needs undoing
+			Test_RunProcess( &testScratch, buildArgs, 1, false );
+
+			Test_UndoFileEdit( &edit );
+
+			char *output = Test_RunProcess( &testScratch, buildArgs, 0, true );
+
+			uint32_t compiledFileCount = Test_GetCompiledFileCount( output );
+
+			TEMPER_CHECK_TRUE_M( compiledFileCount == 1, "Only \"%s\" should've been rebuilt after fixing its compile error, but %u files were compiled.\n", sourceFileToEdit, compiledFileCount );
+		}
+
+		// make a change to the code that will cause a link error
+		// the build should fail
+		// afterwards undo the change and build again so its like we never touched it
+		if ( sourceFileToEdit ) {
+			const char *linkErrorCode =
+				"void Test_UndefinedFunction( void );\n"
+				"void Test_CauseLinkError( void );\n"
+				"void Test_CauseLinkError( void ) { Test_UndefinedFunction(); }";
+
+			testFileEdit_t edit = Test_AppendToFile( &testScratch, sourceFileToEdit, linkErrorCode );
+
+			// dont quit on failure, the edit still needs undoing
+			char *output = Test_RunProcess( &testScratch, buildArgs, 1, false );
+
+			// the edited file still has to compile
+			uint32_t compiledFileCount = Test_GetCompiledFileCount( output );
+
+			TEMPER_CHECK_TRUE_M( compiledFileCount == 1, "Only \"%s\" should've been compiled before the link failed, but %u files were compiled.\n", sourceFileToEdit, compiledFileCount );
+
+			Test_UndoFileEdit( &edit );
+
+			output = Test_RunProcess( &testScratch, buildArgs, 0, true );
+
+			compiledFileCount = Test_GetCompiledFileCount( output );
+
+			TEMPER_CHECK_TRUE_M( compiledFileCount == 1, "Only \"%s\" should've been rebuilt after fixing its link error, but %u files were compiled.\n", sourceFileToEdit, compiledFileCount );
 		}
 
 		// delete all generated files and folders
@@ -286,17 +489,19 @@ TEMPER_TEST_PARAMETRIC( TestBuild, TEMPER_FLAG_SHOULD_RUN, const char *testFolde
 	}
 }
 
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "single_file",             "single_file/test_build_single_file",        0, 0, true  );
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "multiple_files",           "multiple_files/test_build_multiple_files", 0, 0, true  );
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "static_lib",               "static_lib/test_static_lib_program",       0, 5, true  );
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "dynamic_lib",              "dynamic_lib/test_dynamic_lib_program",     0, 5, true  );
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "only_self_rebuild_config", NULL,                                       1, 0, true  );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "single_file",             "single_file/test_build_single_file",        0, 0, true,  "single_file/main.c",         NULL,                        0 );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "multiple_files",           "multiple_files/test_build_multiple_files", 0, 0, true,  "multiple_files/src/test1.c", "multiple_files/src/test.h", 3 );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "static_lib",               "static_lib/test_static_lib_program",       0, 5, true,  "static_lib/program/main.c",  "static_lib/lib/mathlib.h",  2 );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "dynamic_lib",              "dynamic_lib/test_dynamic_lib_program",     0, 5, true,  "dynamic_lib/program/main.c", "dynamic_lib/lib/mathlib.h", 2 );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "only_self_rebuild_config", NULL,                                       1, 0, true,  NULL,                         NULL,                        0 );
 // the SDL test basically tests everything builder can do, more or less
 // so leave it last
-TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "sdl3",                     "sdl3/bin/sdl-demo-app",                    0, 0, false );
+TEMPER_INVOKE_PARAMETRIC_TEST( TestBuild, "sdl3",                     "sdl3/bin/sdl-demo-app",                    0, 0, false, "sdl3/demo-app/demo-app.cpp", "sdl3/src/audio/SDL_wave.h", 1 );
 
-// generates compile_commands.json for each compiler and checks clangd and clang-tidy can both use it
-// both of those tools exit non-zero if they can't load the database or the source files fail to compile with it
+TEMPER_TEST( TestVisualStudio, TEMPER_FLAG_SHOULD_RUN ) {
+	// TODO: DM: 29/09/2026: this
+}
+
 TEMPER_TEST( TestVSCodeJSON, TEMPER_FLAG_SHOULD_RUN ) {
 	arena_t testScratch = { 0 };
 
@@ -341,29 +546,13 @@ TEMPER_TEST( TestVSCodeJSON, TEMPER_FLAG_SHOULD_RUN ) {
 	};
 
 	// build the build EXE
-	{
-		printf( "Running %s...\n", buildEXEFilename );
-
-		char *output = NULL;
-		int32_t buildCMDExitCode = Builder_RunProcess( &testScratch, buildEXEFilename, false, &output );
-
-		printf( "%s\n", output );
-
-		TEMPER_CHECK_TRUE_QM( buildCMDExitCode == 0, "Failed to run the build executable.\n" );
-	}
+	Test_RunProcess( &testScratch, buildEXEFilename, 0, true );
 
 	// generate the json files
 	{
 		const char *buildArgs = Builder_FormatString( &testScratch, "%s --vscode", buildEXEFilename );
 
-		printf( "Test build.exe args: %s\n", buildArgs );
-
-		char *output = NULL;
-		int32_t buildEXEExitCode = Builder_RunProcess( &testScratch, buildArgs, false, &output );
-
-		printf( "%s\n", output );
-
-		TEMPER_CHECK_TRUE_QM( buildEXEExitCode == 0, "\"%s\" should've returned 0 but instead returned %d.\n", buildArgs, buildEXEExitCode );
+		Test_RunProcess( &testScratch, buildArgs, 0, true );
 	}
 
 	// check each file has everything we asked for
@@ -380,7 +569,7 @@ TEMPER_TEST( TestVSCodeJSON, TEMPER_FLAG_SHOULD_RUN ) {
 		}
 
 		// file data isnt null terminated
-		const char *fileContents = Builder_FormatString( &testScratch, "%.*s", (int) fileSize, (const char *) fileData );
+		const char *fileContents = Builder_FormatString( &testScratch, "%.*s", fileSize, (const char *) fileData );
 
 		for ( builderStringChunk_t *chunk = expectedFile->expectedEntries.head; chunk; chunk = chunk->next ) {
 			for ( uint32_t entryIndex = 0; entryIndex < chunk->count; entryIndex++ ) {
@@ -445,29 +634,13 @@ TEMPER_TEST( TestZedJSON, TEMPER_FLAG_SHOULD_RUN ) {
 	};
 
 	// build the build EXE
-	{
-		printf( "Running %s...\n", buildEXEFilename );
-
-		char *output = NULL;
-		int32_t buildCMDExitCode = Builder_RunProcess( &testScratch, buildEXEFilename, false, &output );
-
-		printf( "%s\n", output );
-
-		TEMPER_CHECK_TRUE_QM( buildCMDExitCode == 0, "Failed to run the build executable.\n" );
-	}
+	Test_RunProcess( &testScratch, buildEXEFilename, 0, true );
 
 	// generate the json files
 	{
 		const char *buildArgs = Builder_FormatString( &testScratch, "%s --zed", buildEXEFilename );
 
-		printf( "Test build.exe args: %s\n", buildArgs );
-
-		char *output = NULL;
-		int32_t buildEXEExitCode = Builder_RunProcess( &testScratch, buildArgs, false, &output );
-
-		printf( "%s\n", output );
-
-		TEMPER_CHECK_TRUE_QM( buildEXEExitCode == 0, "\"%s\" should've returned 0 but instead returned %d.\n", buildArgs, buildEXEExitCode );
+		Test_RunProcess( &testScratch, buildArgs, 0, true );
 	}
 
 	// check each file has everything we asked for
@@ -484,7 +657,7 @@ TEMPER_TEST( TestZedJSON, TEMPER_FLAG_SHOULD_RUN ) {
 		}
 
 		// file data isnt null terminated
-		const char *fileContents = Builder_FormatString( &testScratch, "%.*s", (int) fileSize, (const char *) fileData );
+		const char *fileContents = Builder_FormatString( &testScratch, "%.*s", fileSize, (const char *) fileData );
 
 		for ( builderStringChunk_t *chunk = expectedFile->expectedEntries.head; chunk; chunk = chunk->next ) {
 			for ( uint32_t entryIndex = 0; entryIndex < chunk->count; entryIndex++ ) {
@@ -528,16 +701,7 @@ TEMPER_TEST( TestCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 	);
 
 	// build the build EXE
-	{
-		printf( "Running %s...\n", buildEXEFilename );
-
-		char *output = NULL;
-		int32_t buildCMDExitCode = Builder_RunProcess( &testScratch, buildEXEFilename, false, &output );
-
-		printf( "%s\n", output );
-
-		TEMPER_CHECK_TRUE_QM( buildCMDExitCode == 0, "Failed to run the build executable.\n" );
-	}
+	Test_RunProcess( &testScratch, buildEXEFilename, 0, true );
 
 	arenaRewindSpot_t testScratchStart = Builder_ArenaTell( &testScratch );
 
@@ -566,14 +730,7 @@ TEMPER_TEST( TestCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 		{
 			const char *buildArgs = Builder_FormatString( &testScratch, "%s --%s --compile-commands", buildEXEFilename, compilerName );
 
-			printf( "Test build.exe args: %s\n", buildArgs );
-
-			char *output = NULL;
-			int32_t buildEXEExitCode = Builder_RunProcess( &testScratch, buildArgs, false, &output );
-
-			printf( "%s\n", output );
-
-			TEMPER_CHECK_TRUE_QM( buildEXEExitCode == 0, "\"%s\" should've returned 0 but instead returned %d.\n", buildArgs, buildEXEExitCode );
+			Test_RunProcess( &testScratch, buildArgs, 0, true );
 		}
 
 		// clangd
@@ -581,14 +738,7 @@ TEMPER_TEST( TestCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 			for ( uint32_t sourceFileIndex = 0; sourceFileIndex < chunk->count; sourceFileIndex++ ) {
 				const char *clangdArgs = Builder_FormatString( &testScratch, "%s --check=%s", clangdPath, chunk->items[sourceFileIndex] );
 
-				printf( "clangd args: %s\n", clangdArgs );
-
-				char *output = NULL;
-				int32_t clangdExitCode = Builder_RunProcess( &testScratch, clangdArgs, false, &output );
-
-				printf( "%s\n", output );
-
-				TEMPER_CHECK_TRUE_M( clangdExitCode == 0, "\"%s\" should've returned 0 but instead returned %d.\n", clangdArgs, clangdExitCode );
+				Test_RunProcess( &testScratch, clangdArgs, 0, false );
 			}
 		}
 
@@ -605,14 +755,7 @@ TEMPER_TEST( TestCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 
 			const char *clangTidyArgs = StringBuilder_ToString( &testScratch, &sb, NULL );
 
-			printf( "clang-tidy args: %s\n", clangTidyArgs );
-
-			char *output = NULL;
-			int32_t clangTidyExitCode = Builder_RunProcess( &testScratch, clangTidyArgs, false, &output );
-
-			printf( "%s\n", output );
-
-			TEMPER_CHECK_TRUE_M( clangTidyExitCode == 0, "\"%s\" should've returned 0 but instead returned %d.\n", clangTidyArgs, clangTidyExitCode );
+			Test_RunProcess( &testScratch, clangTidyArgs, 0, false );
 		}
 
 		// make the test clean up after itself

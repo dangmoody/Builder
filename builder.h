@@ -962,7 +962,7 @@ static bool Builder_GetFileLastWriteTime( const char *path, uint64_t *outTime ) 
 		return false;
 	}
 
-	*outTime = (uint64_t) fileStat.st_mtime;
+	*outTime = ( (uint64_t) fileStat.st_mtim.tv_sec * 1000000000ULL ) + (uint64_t) fileStat.st_mtim.tv_nsec;
 
 	return true;
 #else

@@ -4,8 +4,12 @@
 #define BUILDER_VISUAL_STUDIO_IMPLEMENTATION
 #include "../../builder_visual_studio.h"
 
+#include "../test_compiler_override.h"
+
 int main( int argc, char **argv ) {
 	BuilderOptions options = { 0 };
+
+	ApplyCompilerOverride( &options, argc, argv );
 
 	options.selfRebuildConfig = CreateBuildConfig( &options );
 	*options.selfRebuildConfig = (BuildConfig) {
@@ -40,21 +44,28 @@ int main( int argc, char **argv ) {
 		.dependsOn			= MakeDependencies( mathlib ),
 		.sourceFiles		= MakeStringList( "src/app/**/*.c" ),
 		.additionalIncludes	= MakeStringList( "src" ),
-		.additionalLibPaths	= MakeStringList( "bin/debug" ),
 #if defined( _WIN32 )
 		.additionalLibs		= MakeStringList( "mathlib.lib" ),
 #else
-		.additionalLibs		= MakeStringList( "./bin/debug/mathlib.so" ),
 		.additionalLinkerArguments = MakeStringList( "-Wl,-rpath,$ORIGIN" ),
 #endif
 	};
 
+	// link against the mathlib that was built for the same config as us
 	if ( HasCommandLineArg( argc, argv, "--release" ) ) {
 		app->binaryFolder = "bin/release";
 		app->optimization = OPTIMIZATION_PROGRAM_SPEED;
+		app->additionalLibPaths = MakeStringList( "bin/release" );
+#if !defined( _WIN32 )
+		app->additionalLibs = MakeStringList( "./bin/release/mathlib.so" );
+#endif
 		AddDefines( app, "NDEBUG" );
 	} else {
 		app->binaryFolder = "bin/debug";
+		app->additionalLibPaths = MakeStringList( "bin/debug" );
+#if !defined( _WIN32 )
+		app->additionalLibs = MakeStringList( "./bin/debug/mathlib.so" );
+#endif
 		AddDefines( app, "_DEBUG" );
 	}
 
@@ -63,13 +74,13 @@ int main( int argc, char **argv ) {
 
 	if ( HasCommandLineArg( argc, argv, "--sln" ) ) {
 		VisualStudioConfig mathlibVsConfigs[] = {
-			{ .name = "Debug",   .config = mathlib },
-			{ .name = "Release", .config = mathlib, .additionalBuildArgs = MakeStringList( "--release" ), .nmakeOutput = "bin/release/mathlib.dll" },
+			{ .name = "Debug",   .config = mathlib, .additionalBuildArgs = MakeStringList( "--clang" ) },
+			{ .name = "Release", .config = mathlib, .additionalBuildArgs = MakeStringList( "--clang", "--release" ), .nmakeOutput = "bin/release/mathlib.dll" },
 		};
 
 		VisualStudioConfig appVsConfigs[] = {
-			{ .name = "Debug",   .config = app },
-			{ .name = "Release", .config = app, .additionalBuildArgs = MakeStringList( "--release" ), .nmakeOutput = "bin/release/app.exe" },
+			{ .name = "Debug",   .config = app, .additionalBuildArgs = MakeStringList( "--clang" ) },
+			{ .name = "Release", .config = app, .additionalBuildArgs = MakeStringList( "--clang", "--release" ), .nmakeOutput = "bin/release/app.exe" },
 		};
 
 		VisualStudioProject vsProjects[] = {

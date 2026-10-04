@@ -258,7 +258,7 @@ bool Builder_GenerateCompilationDatabase( BuilderOptions *options, CompilationDa
 	uint64_t length;
 	char *contentString = StringBuilder_ToString( scratch.arena, &content, &length );
 
-	if ( !Builder_WriteEntireFile( compilationDatabaseFilename, (uint8_t *) contentString, length ) ) {
+	if ( !Builder_WriteEntireFile( compilationDatabaseFilename, contentString, length ) ) {
 		Builder_Error( "Failed to write \"%s\".\n", compilationDatabaseFilename );
 		Builder_RewindScratch( &scratch );
 		return false;

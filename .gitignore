@@ -10,6 +10,7 @@ bug_reports
 intermediate
 *.cpp.d
 doc/notes/
+*.rebuild.old
 
 # ignore tools folder, but dont ignore 7zip
 tools/*

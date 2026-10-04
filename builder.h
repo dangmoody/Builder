@@ -2263,6 +2263,7 @@ typedef struct {
 	const char					*ucrtIncludePath;
 	const char					*umIncludePath;
 	const char					*sharedIncludePath;
+	const char					*winrtIncludePath;
 	const char					*ucrtLibPath;
 	const char					*umLibPath;
 
@@ -2393,11 +2394,12 @@ static bool Builder_GetWindowsSDKInstall( arena_t *results, builderWindowsSDKIns
 		char *ucrtIncludeFolder = Builder_FormatString( results, "%sinclude\\%d.%d.%d.%d\\ucrt", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
 		char *umIncludeFolder = Builder_FormatString( results, "%sinclude\\%d.%d.%d.%d\\um", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
 		char *sharedIncludeFolder = Builder_FormatString( results, "%sinclude\\%d.%d.%d.%d\\shared", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
+		char *winrtIncludeFolder = Builder_FormatString( results, "%sinclude\\%d.%d.%d.%d\\winrt", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
 		char *ucrtLibFolder = Builder_FormatString( results, "%sLib\\%d.%d.%d.%d\\ucrt\\x64", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
 		char *umLibFolder = Builder_FormatString( results, "%sLib\\%d.%d.%d.%d\\um\\x64", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
 
 		uint32_t missingFoldersCount = 0;
-		const char *missingFolders[5] = { 0 };
+		const char *missingFolders[6] = { 0 };
 
 		if ( !Builder_FolderExists( ucrtIncludeFolder ) ) {
 			missingFolders[missingFoldersCount++] = ucrtIncludeFolder;
@@ -2409,6 +2411,10 @@ static bool Builder_GetWindowsSDKInstall( arena_t *results, builderWindowsSDKIns
 
 		if ( !Builder_FolderExists( sharedIncludeFolder ) ) {
 			missingFolders[missingFoldersCount++] = sharedIncludeFolder;
+		}
+
+		if ( !Builder_FolderExists( winrtIncludeFolder ) ) {
+			missingFolders[missingFoldersCount++] = winrtIncludeFolder;
 		}
 
 		if ( !Builder_FolderExists( ucrtLibFolder ) ) {
@@ -2433,6 +2439,7 @@ static bool Builder_GetWindowsSDKInstall( arena_t *results, builderWindowsSDKIns
 				"    include/<version>/ucrt\n"
 				"    include/<version>/um\n"
 				"    include/<version>/shared\n"
+				"    include/<version>/winrt\n"
 				"    Lib/<version>/ucrt/x64\n"
 				"    Lib/<version>/um/x64\n"
 			);
@@ -2454,6 +2461,7 @@ static bool Builder_GetWindowsSDKInstall( arena_t *results, builderWindowsSDKIns
 		outSDK->ucrtIncludePath		= ucrtIncludeFolder;
 		outSDK->umIncludePath		= umIncludeFolder;
 		outSDK->sharedIncludePath	= sharedIncludeFolder;
+		outSDK->winrtIncludePath	= winrtIncludeFolder;
 		outSDK->ucrtLibPath			= ucrtLibFolder;
 		outSDK->umLibPath			= umLibFolder;
 		outSDK->version				= *version;
@@ -2954,11 +2962,12 @@ static const char *Builder_CreateCompilationCommand( arena_t *commandArena, buil
 		}
 
 		// cl.exe doesn't know where the CRT/Windows SDK headers live unless you're in a Developer Command Prompt, so point it there ourselves
-		StringBuilder_Appendf( scratch.arena, &compileArgs, "/I\"%s\" /I\"%s\" /I\"%s\" /I\"%s\" "
+		StringBuilder_Appendf( scratch.arena, &compileArgs, "/I\"%s\" /I\"%s\" /I\"%s\" /I\"%s\" /I\"%s\" "
 			, g_msvcInstall.includePath
 			, g_windowsSDKInstall.ucrtIncludePath
 			, g_windowsSDKInstall.umIncludePath
-			, g_windowsSDKInstall.sharedIncludePath );
+			, g_windowsSDKInstall.sharedIncludePath
+			, g_windowsSDKInstall.winrtIncludePath );
 
 		for ( builderStringChunk_t *chunk = config->additionalIncludes.head; chunk; chunk = chunk->next ) {
 			for ( uint32_t includeIndex = 0; includeIndex < chunk->count; includeIndex++ ) {

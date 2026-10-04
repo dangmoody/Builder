@@ -40,6 +40,23 @@ static const char *Test_GetCompilerPath( const compiler_t compiler ) {
 	return NULL;
 }
 
+static const char *Test_GetCompilerName( const compiler_t compiler ) {
+	switch ( compiler ) {
+		case COMPILER_CLANG:	return "clang";
+		case COMPILER_CLANGPP:	return "clang++";
+		case COMPILER_GCC:		return "gcc";
+		case COMPILER_GPP:		return "g++";
+#ifdef _WIN32
+		case COMPILER_MSVC:		return "msvc";
+		case COMPILER_CLANG_CL:	return "clang-cl";
+#endif
+	}
+
+	assert( false && "Bad compiler_t specified." );
+
+	return NULL;
+}
+
 static bool Test_DeleteFile( const char *filename ) {
 #if defined( _WIN32 )
 	if ( !DeleteFile( filename ) ) {
@@ -328,17 +345,7 @@ TEMPER_TEST_PARAMETRIC( Test_Build, TEMPER_FLAG_SHOULD_RUN,
 			continue;
 		}
 
-		const char *compilerName = NULL;
-		switch ( compiler ) {
-			case COMPILER_CLANG:	compilerName = "clang";		break;
-			case COMPILER_CLANGPP:	compilerName = "clang++";	break;
-			case COMPILER_GCC:		compilerName = "gcc";		break;
-			case COMPILER_GPP:		compilerName = "g++";		break;
-#ifdef _WIN32
-			case COMPILER_MSVC:		compilerName = "msvc";		break;
-			case COMPILER_CLANG_CL: compilerName = "clang-cl";	break;
-#endif
-		}
+		const char *compilerName = Test_GetCompilerName( compiler );
 
 		TEMPER_CHECK_TRUE( compilerName );
 
@@ -902,17 +909,7 @@ TEMPER_TEST( TestCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 	for ( int32_t compilerIndex = 0; compilerIndex < COMPILER_COUNT; compilerIndex++ ) {
 		compiler_t compiler = (compiler_t) compilerIndex;
 
-		const char *compilerName = NULL;
-		switch ( compiler ) {
-			case COMPILER_CLANG:	compilerName = "clang";		break;
-			case COMPILER_CLANGPP:	compilerName = "clang++";	break;
-			case COMPILER_GCC:		compilerName = "gcc";		break;
-			case COMPILER_GPP:		compilerName = "g++";		break;
-#ifdef _WIN32
-			case COMPILER_MSVC:		compilerName = "msvc";		break;
-			case COMPILER_CLANG_CL: compilerName = "clang-cl";	break;
-#endif
-		}
+		const char *compilerName = Test_GetCompilerName( compiler );
 
 		TEMPER_CHECK_TRUE( compilerName );
 

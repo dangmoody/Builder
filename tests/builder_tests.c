@@ -369,10 +369,6 @@ TEMPER_TEST_PARAMETRIC( Test_Build, TEMPER_FLAG_SHOULD_RUN,
 		// run the program we just built
 		if ( programFilename ) {
 			Test_RunProcess( &testScratch, programFilename, expectedProgramExitCode, false );
-
-			if ( expectedProgramExitCode != 0 ) {
-				printf( "Program was expected to fail, and we got the exit code we were looking for.  This is fine.\n" );
-			}
 		}
 
 		// make a partial edit to the source file and rebuild

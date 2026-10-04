@@ -1039,7 +1039,7 @@ static bool Builder_CreateFolderIfItDoesntExist( const char *path ) {
 	return success;
 }
 
-static bool Builder_WriteEntireFile( const char *filename, const uint8_t *content, const uint64_t size ) {
+static bool Builder_WriteEntireFile( const char *filename, const char *content, const uint64_t size ) {
 	FILE *file = fopen( filename, "wb" );
 
 	if ( !file ) {
@@ -1060,7 +1060,7 @@ static bool Builder_WriteEntireFile( const char *filename, const uint8_t *conten
 	return true;
 }
 
-static uint8_t *Builder_ReadEntireFile( arena_t *arena, const char *filename, uint64_t *outSize ) {
+static char *Builder_ReadEntireFile( arena_t *arena, const char *filename, uint64_t *outSize ) {
 	BUILDER_ASSERT( arena && outSize );
 	uint8_t *result = NULL;
 	FILE *file = fopen( filename, "rb" );
@@ -1083,14 +1083,14 @@ static uint8_t *Builder_ReadEntireFile( arena_t *arena, const char *filename, ui
 	}
 
 	rewind( file );
-	uint8_t* buffer = Builder_ArenaAlloc( arena, uint8_t, fileSize );
+	char *buffer = Builder_ArenaAlloc( arena, char, fileSize );
 	if ( !buffer ) {
 		Builder_Error( "Memory allocation failed for file \"%s\".\n", filename );
 		fclose( file );
 		return NULL;
 	}
 
-	uint64_t readBytes = fread( buffer, sizeof(uint8_t), fileSize, file );
+	uint64_t readBytes = fread( buffer, sizeof( uint8_t ), fileSize, file );
 	if ( readBytes < fileSize ) {
 		Builder_Error( "Failed to read entire file \"%s\".\n", filename );
 		free( buffer );
@@ -1099,14 +1099,16 @@ static uint8_t *Builder_ReadEntireFile( arena_t *arena, const char *filename, ui
 	}
 
 	fclose( file );
-	*outSize = (uint64_t)fileSize;
+
+	*outSize = (uint64_t) fileSize;
+
 	return buffer;
 }
 
 static bool Builder_WriteStringBuilderToFile( arena_t *arena, const stringBuilder_t *sb, const char *filename ) {
 	uint64_t stringLength;
 	const char *str = StringBuilder_ToString( arena, (stringBuilder_t *) sb, &stringLength );
-	return Builder_WriteEntireFile( filename, (uint8_t *) str, stringLength );
+	return Builder_WriteEntireFile( filename, str, stringLength );
 }
 
 static bool HasCommandLineArg( int argc, char **argv, const char *arg ) {
@@ -3139,7 +3141,7 @@ typedef struct builderCompileJobDependencyOutput_t {
 typedef struct builderCompileJobPool_t {
 	builderCompilePacket_t				*compilePackets;
 	uint32_t							compilePacketCount;
-	bool								compilerIsMSVC;
+	bool								useMSVCSyntax;
 	builderCompileJobDependencyOutput_t	*dependencyOutputs;
 	builderAtomic32_t					dependencyOutputIndex;
 	builderAtomic32_t					nextCompileCommandIndex;
@@ -3156,7 +3158,7 @@ static bool Builder_CompileSourceFile( builderCompileJobPool_t *pool, builderCom
 	int32_t compileResult = Builder_RunProcess( scratch.arena, compilePacket->compileCommand, false, &compilerOutput );
 
 #if defined( _WIN32 )
-	if ( pool->compilerIsMSVC ) {
+	if ( pool->useMSVCSyntax ) {
 		uint32_t fileNameStart = 0;
 		const char *sourceCurrent = compilePacket->sourceFile;
 		for ( uint32_t i = 0; sourceCurrent[i] != '\0'; ++i ) {
@@ -3164,6 +3166,10 @@ static bool Builder_CompileSourceFile( builderCompileJobPool_t *pool, builderCom
 				fileNameStart = i + 1;
 			}
 		}
+
+		// cl echoes the source file name before its /showIncludes notes, clang-cl doesn't
+		// so the dependency block starts at the first include note instead of at the file name
+		const char *includePrefix = "Note: including file: ";
 
 		const char *dependencyStart = NULL;
 		const char *dependencyEnd = NULL;
@@ -3173,29 +3179,29 @@ static bool Builder_CompileSourceFile( builderCompileJobPool_t *pool, builderCom
 			const char *lineStart = current;
 			const char *lineEnd = strchr( current, '\n' );
 			if ( !lineEnd ) {
-				lineEnd = strchr( lineEnd, '\0' );
+				lineEnd = strchr( current, '\0' );
 			}
 
-			if ( !dependencyStart && Builder_StringStartsWith( lineStart, fileName ) ) {
+			bool isIncludeNote = Builder_StringStartsWith( lineStart, includePrefix );
+
+			if ( !dependencyStart && isIncludeNote ) {
 				dependencyStart = lineStart;
-			} else if ( dependencyStart && !dependencyEnd ) {
-				if ( !Builder_StringStartsWith( lineStart, "Note: including file: " ) ) {
-					dependencyEnd = current;
-					printf( "%.*s\n", (int) ( lineEnd - lineStart ), lineStart );
-				}
-			} else {
+			} else if ( dependencyStart && !dependencyEnd && !isIncludeNote ) {
+				dependencyEnd = lineStart;
+			}
+
+			bool inDependencyBlock = dependencyStart && !dependencyEnd;
+			bool isFileNameEcho = ( lineStart == compilerOutput ) && Builder_StringStartsWith( lineStart, fileName );
+
+			if ( !inDependencyBlock && !isFileNameEcho ) {
 				printf( "%.*s\n", (int) ( lineEnd - lineStart ), lineStart );
 			}
 
-			current = lineEnd;
-
-			if ( current ) {
-				current += 1;
-			}
+			current = ( *lineEnd == '\0' ) ? NULL : lineEnd + 1;
 		}
 
 		if ( !dependencyEnd && dependencyStart ) {
-			dependencyEnd = current;
+			dependencyEnd = strchr( dependencyStart, '\0' );
 		}
 
 		if ( dependencyStart && dependencyEnd ) {
@@ -3220,7 +3226,7 @@ static bool Builder_CompileSourceFile( builderCompileJobPool_t *pool, builderCom
 			const char *lineStart = current;
 			const char *lineEnd = strchr( current, '\n' );
 			if ( !lineEnd ) {
-				lineEnd = strchr( lineEnd, '\0' );
+				lineEnd = strchr( current, '\0' );
 			}
 
 			// find the part of the output that is dependencies
@@ -3243,10 +3249,7 @@ static bool Builder_CompileSourceFile( builderCompileJobPool_t *pool, builderCom
 				printf( "%.*s\n", (int) ( lineEnd - lineStart ), lineStart );
 			}
 
-			current = lineEnd;
-			if ( current ) {
-				current += 1;
-			}
+			current = ( *lineEnd == '\0' ) ? NULL : lineEnd + 1;
 		}
 
 		if ( dependencyStart && dependencyEnd ) {
@@ -3415,12 +3418,12 @@ static bool Builder_DoesMapContainDependency( const compileDependencyArray_t *de
 	return false;
 }
 
-static void Builder_ParseDependencyInfo( arena_t *dependencyArena, compileDependencyArray_t *dependencyArray, objectToDependency_t *dependencyMap, char *compilerOutput, bool compilerIsMSVC ) {
+static void Builder_ParseDependencyInfo( arena_t *dependencyArena, compileDependencyArray_t *dependencyArray, objectToDependency_t *dependencyMap, char *compilerOutput, bool useMSVCSyntax ) {
 	scratch_t scratch = Builder_GetScratch( dependencyArena );
 
-	if ( compilerIsMSVC ) {
-		// skip first line
-		char *current = strchr( compilerOutput, '\n' ) + 1;
+	if ( useMSVCSyntax ) {
+		// the captured block starts at the first include note
+		char *current = compilerOutput;
 
 		const char *includeDependencyPrefix = "Note: including file: ";
 		const uint64_t includeDependencyPrefixLength = strlen( includeDependencyPrefix );
@@ -3465,8 +3468,8 @@ static void Builder_ParseDependencyInfo( arena_t *dependencyArena, compileDepend
 				break;
 			}
 
-			// /r/n
-			current = dependencyEnd + 2;
+			// cl ends lines with \r\n but clang-cl only uses \n
+			current = dependencyEnd + ( ( *dependencyEnd == '\r' ) ? 2 : 1 );
 
 			if ( !Builder_StringStartsWith( current, includeDependencyPrefix ) ) {
 				break;
@@ -3843,7 +3846,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 				uint64_t byteBufferSize;
 				byteBuffer_t byteBuffer = { 0 };
 				byteBuffer.arena = scratch.arena;
-				byteBuffer.data = Builder_ReadEntireFile( scratch.arena, dependencyCacheFileName, &byteBuffer.count );
+				byteBuffer.data = (uint8_t *) Builder_ReadEntireFile( scratch.arena, dependencyCacheFileName, &byteBuffer.count );
 				byteBuffer.capacity = byteBuffer.count;
 
 				uint32_t skipRecompileCount = 0;
@@ -3944,7 +3947,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 				builderCompileJobPool_t pool = {
 					.compilePackets		= compilePackets,
 					.compilePacketCount	= needsCompilePacketCount,
-					.compilerIsMSVC		= context->compilerIsMSVC,
+					.useMSVCSyntax		= context->compilerIsMSVC || context->compilerIsClangCL,
 					.dependencyOutputs	= dependencyOutputs
 				};
 
@@ -4317,7 +4320,7 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 				};
 			}
 
-			Builder_ParseDependencyInfo( context->postBuildArena, &dependencyArray, dependencyMap, dependencyInfo->dependencyString, context->compilerIsMSVC );
+			Builder_ParseDependencyInfo( context->postBuildArena, &dependencyArray, dependencyMap, dependencyInfo->dependencyString, context->compilerIsMSVC || context->compilerIsClangCL );
 		}
 
 		const uint64_t writeBufferInitialCapacity = 512;
@@ -4355,7 +4358,7 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 			Builder_ByteBufferPushString( &byteBuffer, dependency->dependency, dependency->dependencyLength );
 		}
 
-		Builder_WriteEntireFile( postBuildData->dependencyCacheFileName, byteBuffer.data, byteBuffer.count );
+		Builder_WriteEntireFile( postBuildData->dependencyCacheFileName, (char *) byteBuffer.data, byteBuffer.count );
 	}
 }
 

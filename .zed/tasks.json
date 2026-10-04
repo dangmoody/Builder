@@ -1,0 +1,134 @@
+// See https://zed.dev/docs/tasks for documentation.
+[
+	{
+		"label": "Build: single_file",
+		"command": "clang build.c -o build && ./build",
+		"cwd": "$ZED_WORKTREE_ROOT/tests/single_file",
+		"allow_concurrent_runs": false,
+		"reveal": "always",
+	},
+	{
+		"label": "Build: multiple_files",
+		"command": "clang build.c -o build && ./build",
+		"cwd": "$ZED_WORKTREE_ROOT/tests/multiple_files",
+		"allow_concurrent_runs": false,
+		"reveal": "always",
+	},
+	{
+		"label": "Build: static_lib",
+		"command": "clang build.c -o build && ./build",
+		"cwd": "$ZED_WORKTREE_ROOT/tests/static_lib",
+		"allow_concurrent_runs": false,
+		"reveal": "always",
+	},
+	{
+		"label": "Build: dynamic_lib",
+		"command": "clang build.c -o build && ./build",
+		"cwd": "$ZED_WORKTREE_ROOT/tests/dynamic_lib",
+		"allow_concurrent_runs": false,
+		"reveal": "always",
+	},
+	{
+		"label": "Build: sdl3",
+		"command": "clang build.c -o build && ./build",
+		"cwd": "$ZED_WORKTREE_ROOT/tests/sdl3",
+		"allow_concurrent_runs": false,
+		"reveal": "always",
+	},
+
+	{
+		"label": "Build: sanitizers/address",
+		"command": "clang build.c -o build && ./build",
+		"cwd": "$ZED_WORKTREE_ROOT/tests/sanitizers/address",
+		"allow_concurrent_runs": false,
+		"reveal": "always",
+	},
+	{
+		"label": "Build: sanitizers/leak",
+		"command": "clang build.c -o build && ./build",
+		"cwd": "$ZED_WORKTREE_ROOT/tests/sanitizers/leak",
+		"allow_concurrent_runs": false,
+		"reveal": "always",
+	},
+	{
+		"label": "Build: sanitizers/memory",
+		"command": "clang build.c -o build && ./build",
+		"cwd": "$ZED_WORKTREE_ROOT/tests/sanitizers/memory",
+		"allow_concurrent_runs": false,
+		"reveal": "always",
+	},
+	{
+		"label": "Build: sanitizers/thread",
+		"command": "clang build.c -o build && ./build",
+		"cwd": "$ZED_WORKTREE_ROOT/tests/sanitizers/thread",
+		"allow_concurrent_runs": false,
+		"reveal": "always",
+	},
+	{
+		"label": "Build: sanitizers/undefined_behavior",
+		"command": "clang build.c -o build && ./build",
+		"cwd": "$ZED_WORKTREE_ROOT/tests/sanitizers/undefined_behavior",
+		"allow_concurrent_runs": false,
+		"reveal": "always",
+	},
+
+	{
+		"label": "Build: visual_studio_files (debug)",
+		"command": "clang build.c -o build && ./build",
+		"cwd": "$ZED_WORKTREE_ROOT/tests/visual_studio_files",
+		"allow_concurrent_runs": false,
+		"reveal": "always",
+	},
+	{
+		"label": "Build: visual_studio_files (release)",
+		"command": "clang build.c -o build && ./build --release",
+		"cwd": "$ZED_WORKTREE_ROOT/tests/visual_studio_files",
+		"allow_concurrent_runs": false,
+		"reveal": "always",
+	},
+
+	{
+		"label": "Build: vs_code_json (debug)",
+		"command": "clang build.c -o build && ./build",
+		"cwd": "$ZED_WORKTREE_ROOT/tests/vs_code_json",
+		"allow_concurrent_runs": false,
+		"reveal": "always",
+	},
+	{
+		"label": "Build: vs_code_json (release)",
+		"command": "clang build.c -o build && ./build --release",
+		"cwd": "$ZED_WORKTREE_ROOT/tests/vs_code_json",
+		"allow_concurrent_runs": false,
+		"reveal": "always",
+	},
+
+	{
+		"label": "Build: zed_json (debug)",
+		"command": "clang build.c -o build && ./build",
+		"cwd": "$ZED_WORKTREE_ROOT/tests/zed_json",
+		"allow_concurrent_runs": false,
+		"reveal": "always",
+	},
+	{
+		"label": "Build: zed_json (release)",
+		"command": "clang build.c -o build && ./build --release",
+		"cwd": "$ZED_WORKTREE_ROOT/tests/zed_json",
+		"allow_concurrent_runs": false,
+		"reveal": "always",
+	},
+
+	{
+		"label": "Build: build_tests",
+		"command": "clang build_tests.c -o build_tests && ./build_tests",
+		"cwd": "$ZED_WORKTREE_ROOT/tests",
+		"allow_concurrent_runs": false,
+		"reveal": "always",
+	},
+	{
+		"label": "Build: builder_tests",
+		"command": "./build_tests",
+		"cwd": "$ZED_WORKTREE_ROOT/tests",
+		"allow_concurrent_runs": false,
+		"reveal": "always",
+	},
+]

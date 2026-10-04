@@ -188,8 +188,14 @@ For MSVC it's recommended you just set your compiler path to "cl" and Builder wi
 extern "C" {
 #endif
 
+#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+
+#ifdef _WIN32
+#pragma clang diagnostic ignored "-Wmicrosoft-goto"
+#endif
+#endif // __clang__
 
 #include <stdint.h>
 #include <inttypes.h>
@@ -449,6 +455,8 @@ int		Build( BuilderOptions *options, int argc, char **argv );
 #define BUILDER_ALIGNOF( type )		alignof( type )
 #elif defined( __STDC_VERSION__ ) && __STDC_VERSION__ >= 201112L
 #define BUILDER_ALIGNOF( type )		_Alignof( type )
+#elif defined( _MSC_VER )
+#define BUILDER_ALIGNOF( type )		__alignof( type )
 #else
 #define BUILDER_ALIGNOF( type )		__alignof__( type )
 #endif
@@ -2305,6 +2313,8 @@ static bool Builder_GetWindowsSDKInstall( arena_t *results, builderWindowsSDKIns
 	builderFoundWindowsSDKVersionData_t foundData = { 0 };
 	bool found = false;
 
+	DWORD windowsSDKRootLength = 0;
+	const char *winSDKRegKey = "KitsRoot10";
 	const char *winSDKRegPath = "SOFTWARE\\Microsoft\\Windows Kits\\Installed Roots";
 	LSTATUS status = RegOpenKeyExA( HKEY_LOCAL_MACHINE, winSDKRegPath, 0, KEY_QUERY_VALUE | KEY_WOW64_32KEY | KEY_ENUMERATE_SUB_KEYS, &key );
 
@@ -2319,9 +2329,6 @@ static bool Builder_GetWindowsSDKInstall( arena_t *results, builderWindowsSDKIns
 		goto cleanup;
 	}
 
-	const char *winSDKRegKey = "KitsRoot10";
-
-	DWORD windowsSDKRootLength = 0;
 	status = RegQueryValueExA( key, winSDKRegKey, NULL, NULL, NULL, &windowsSDKRootLength );
 
 	if ( status == ERROR_SUCCESS ) {
@@ -2552,8 +2559,14 @@ static bool Builder_GetMSVCInstall( arena_t *results, builderMSVCInstall_t *outI
 		return false;
 	}
 
-	ISetupConfiguration *setupConfig = NULL;
+	bool foundMSVCInstall = false;
+	uint32_t useVersionIndex = 0;
+	builderFoundMSVCInstallData_t foundData = { 0 };
+	IEnumSetupInstances *instances = NULL;
+	ISetupInstance *instance = NULL;
+	ULONG foundInstance = 0;
 
+	ISetupConfiguration *setupConfig = NULL;
 #ifdef __cplusplus
 	hr = CoCreateInstance( CLSID_SetupConfiguration, NULL, CLSCTX_INPROC_SERVER, IID_ISetupConfiguration, (void **) &setupConfig );
 #else
@@ -2570,9 +2583,6 @@ static bool Builder_GetMSVCInstall( arena_t *results, builderMSVCInstall_t *outI
 		goto cleanup;
 	}
 
-	IEnumSetupInstances *instances = NULL;
-	ISetupInstance *instance = NULL;
-
 	hr = setupConfig->vtable->EnumInstances( setupConfig, &instances );
 
 	if ( FAILED( hr ) ) {
@@ -2585,10 +2595,7 @@ static bool Builder_GetMSVCInstall( arena_t *results, builderMSVCInstall_t *outI
 		goto cleanup;
 	}
 
-	ULONG foundInstance = 0;
 	hr = instances->vtable->Next( instances, 1, &instance, &foundInstance );
-
-	builderFoundMSVCInstallData_t foundData = { 0 };
 
 	while ( foundInstance ) {
 		BSTR visualStudioInstallationPathWide = NULL;
@@ -2651,9 +2658,6 @@ static bool Builder_GetMSVCInstall( arena_t *results, builderMSVCInstall_t *outI
 	// newest version first
 	qsort( foundData.installs, foundData.installsCount, sizeof( builderMSVCInstall_t ), Builder_CompareMSVCInstallVersions );
 
-	bool found = false;
-	uint32_t useVersionIndex = 0;
-
 	for ( uint32_t versionIndex = 0; versionIndex < foundData.installsCount; versionIndex++ ) {
 		builderMSVCInstall_t *install = &foundData.installs[versionIndex];
 
@@ -2695,12 +2699,12 @@ static bool Builder_GetMSVCInstall( arena_t *results, builderMSVCInstall_t *outI
 		}
 
 		useVersionIndex = versionIndex;
-		found = true;
+		foundMSVCInstall = true;
 
 		break;
 	}
 
-	if ( !found ) {
+	if ( !foundMSVCInstall ) {
 		success = Builder_MSVCNotInstalled();
 		goto cleanup;
 	}
@@ -4100,7 +4104,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 						StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "/LIBPATH:\"%s\\lib\\windows\" ", context->clangSanitizerResourceDir );
 
 						for ( uint32_t sanitizerBitIndex = 0; sanitizerBitIndex < config->sanitizers; sanitizerBitIndex++ ) {
-							SanitizerFlagBits sanitizerFlagBit = ( 1 << sanitizerBitIndex );
+							SanitizerFlagBits sanitizerFlagBit = (SanitizerFlagBits) ( 1 << sanitizerBitIndex );
 
 							if ( ( config->sanitizers & sanitizerFlagBit ) == 0 ) {
 								continue;
@@ -4551,6 +4555,17 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 			options->selfRebuildConfig->binaryFolder = NULL;
 			options->selfRebuildConfig->binaryType = BINARY_TYPE_EXE;
 		}
+
+#if defined( _WIN32 )
+		// GCC ignores #pragma comment( lib ) so the libs that builder.h itself needs must be named explicitly
+		if ( compilerIsGCC ) {
+			AddLibs( options->selfRebuildConfig, "ole32", "oleaut32", "advapi32" );
+
+			// __thread requires libwinpthread-1.dll because GCC on windows links its runtime by default by default
+			// so make the self rebuild config link to it statically to avoid this
+			AddLinkerArguments( options->selfRebuildConfig, "-static" );
+		}
+#endif
 	}
 
 	// the self rebuild goes first so that the source is always the truth

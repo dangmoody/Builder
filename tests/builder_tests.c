@@ -284,6 +284,25 @@ static void Test_CheckIncrementalRebuild( arena_t *arena, const char *buildArgs,
 	TEMPER_CHECK_TRUE_M( compiledFileCount == expectedCompiledFileCount, "Undoing the edit to \"%s\" should've rebuilt %u files, but %u files were compiled.\n", fileToEdit, expectedCompiledFileCount, compiledFileCount );
 }
 
+TEMPER_TEST( Test_CleanupBeforeAnything, TEMPER_FLAG_SHOULD_RUN ) {
+	arena_t testScratch = { 0 };
+
+	// some test folders are nested inside other folders (eg. sanitizers/address) so look recursively
+	testDeleteFolderContext_t context = {
+		.stringListArena = &testScratch,
+	};
+
+	bool visited = Builder_VisitFiles( &testScratch, ".", BUILDER_FILE_VISIT_FOLDERS | BUILDER_FILE_VISIT_RECURSIVE, Test_OnFolderContentsFound, &context );
+
+	TEMPER_CHECK_TRUE_QM( visited, "Failed to look through the tests folder.\n" );
+
+	for ( builderStringChunk_t *chunk = context.folders.head; chunk; chunk = chunk->next ) {
+		for ( uint32_t folderIndex = 0; folderIndex < chunk->count; folderIndex++ ) {
+			Test_DeleteGeneratedFolders( &testScratch, chunk->items[folderIndex] );
+		}
+	}
+}
+
 TEMPER_TEST_PARAMETRIC( Test_Build, TEMPER_FLAG_SHOULD_RUN,
 	const char *testFolder,
 	const char *programFilename,

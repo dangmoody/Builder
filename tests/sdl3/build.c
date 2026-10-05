@@ -33,8 +33,6 @@ static void GenerateWaylandProtocols( BuildConfig *config ) {
 int main( int argc, char **argv ) {
 	BuilderOptions options = { 0 };
 	ApplyCompilerOverride( &options, argc, argv );
-	options.consolidateCompilerArgs = true;
-	options.forceRebuild = true;
 
 	options.selfRebuildConfig = CreateBuildConfig( &options );
 	*options.selfRebuildConfig = (BuildConfig) {

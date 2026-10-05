@@ -755,8 +755,8 @@ static void Builder_SetConsoleTextColor( const builderConsoleTextColor_t color )
 
 	switch ( color ) {
 		case CONSOLE_TEXT_COLOR_DEFAULT:	colorLinux = "\033[0m"; break;
-		case CONSOLE_TEXT_COLOR_YELLOW:		colorLinux = "\033[0;31m"; break;
-		case CONSOLE_TEXT_COLOR_RED:		colorLinux = "\033[0;32m"; break;
+		case CONSOLE_TEXT_COLOR_YELLOW:		colorLinux = "\033[1;33m"; break;
+		case CONSOLE_TEXT_COLOR_RED:		colorLinux = "\033[1;31m"; break;
 	}
 
 	BUILDER_ASSERT( colorLinux && "Bad console text color specified." );

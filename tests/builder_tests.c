@@ -347,6 +347,14 @@ TEMPER_TEST_PARAMETRIC( Test_Build, TEMPER_FLAG_SHOULD_RUN,
 			continue;
 		}
 
+		// HACK: DM: 05/10/2026: on windows the filesystem can update slow enough that we need to give it time to flush its file updates to disk
+		// otherwise we can end up getting LNK1104 errors because we are trying to access PDBs that are still being hogged by windows
+		// windows defender can also hog them for longer than you'd think, it turns out
+		// on linux this just isnt a problem (surprise, surprise)
+#ifdef _WIN32
+		Sleep( 100 );
+#endif
+
 		const char *compilerName = Test_GetCompilerName( compiler );
 
 		TEMPER_CHECK_TRUE( compilerName );

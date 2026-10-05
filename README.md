@@ -1,315 +1,410 @@
 # Builder
 
-Configure C/C++ builds by writing C++ instead of learning a separate build language.
+Distributed under the [MIT License](LICENSE).
 
-**BUILDER IS NOT A COMPILER.** - it turns your build config into compiler arguments and calls the compiler.
+## Intro
 
-On windows it supports Clang, MSVC, and GCC.
+Builder is a single header file that you can use to build your C/C++ programs through C/C++ code.
 
-On Linux it supports Clang and GCC.
+Builder is not a compiler.  Builder turns BuildConfigs into compiler and linker arguments, then calls the compiler that you want to use, and then calls the linker.
+
+It works on Windows (supporting Clang, GCC, and MSVC) and Linux (Clang and GCC).
 
 ## Installation
 
 1. Download the latest release.
-2. Extract the archive somewhere.
-3. **Optional:** Add Builder to your `PATH`.
+2. Put the header file(s) in your project.
+3. ?????
+4. Profit!
 
-## Quick Start
+## Quick Start Guide
 
-When pointed at a **single** C/C++ source file, Builder will compile it:
+You'll need a build script, which is just C/C++ code:
 
-```
-builder main.cpp
-```
+```c
+#define BUILDER_IMPLEMENTATION
+#include "builder.h"
 
-By default, Builder uses its bundled Clang, outputs the binary in the same folder, and names it after the source file. No config required.
+int main( int argc, char **argv ) {
+	BuilderOptions options = { 0 };
 
-### Configuring your build
-
-For multiple source files, and extra options, add `SetBuilderOptions` to your source file.
-
-```cpp
-#include <builder.h> // Builder will automatically resolve this include for you.
-
-BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArgs *args ) {
-	BuildConfig config = {
-		.binaryName   = "my-program",
-		.binaryFolder = "bin",
-		.sourceFiles  = { "src/**/*.cpp" },
-		.defines      = { "MY_DEFINE=1" },
+	BuildConfig *config = CreateBuildConfig( &options );
+	*config = (BuildConfig) {
+		.name			= "my_awesome_program",
+		.sourceFiles	= MakeStringList( "src/my_code.c" ),
 	};
 
-	AddBuildConfig( options, &config );
+	options.selfRebuildConfig = CreateBuildConfig( &options );
+	*options.selfRebuildConfig = (BuildConfig) {
+		.name			= "self",
+		.sourceFiles	= MakeStringList( "build.c" ),
+	};
+
+	return Build( &options, argc, argv );
 }
-
-int main() { ... }
 ```
 
-Any problems pass `-v` or `--verbose` when calling builder.
+For the first ever build you'll need to invoke your compiler manually:
 
-### Separating build code from program code
-
-`BUILDER_DOING_USER_CONFIG_BUILD` is defined when Builder is compiling your source file into a config DLL. Use it to keep build code out of your program, and/or put `SetBuilderOptions` in a dedicated build file entirely:
-
-```cpp
-#if BUILDER_DOING_USER_CONFIG_BUILD
-#include <builder.h>
-BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArgs *args ) { ... }
-#endif
+```
+clang -o build.exe build.c	# Windows
+clang -o build build.c		# Linux
 ```
 
-Adding `SetBuilderOptions` to a dedicated build file is recommended as it better supports incremental building.
+After that, once your `build.exe` is built you can just call it and, if it needs to, it will rebuild itself (if `BuilderOptions::selfRebuildConfig` is set):
 
-See [`include/builder.h`](include/builder.h) for the full API reference.
+```
+build.exe
+```
+
+Builder sets the working directory to the folder containing your build executable, so all relative paths in your build script are relative to that.
+
+## Multiple Build Configs
+
+If you have multiple BuildConfigs, you must tell Builder which one you want to build with, specifically.
+
+You can do this by passing `--config=<name>` at the command line where `<name>` is the name of the BuildConfig, specified via `BuildConfig::name`.
+
+Using the above example, if you wanted to build `"my_awesome_program"` instead of the other configs you'd need to pass at the command line:
+
+```
+build.exe --config=my_awesome_program
+```
+
+If you have multiple BuildConfigs but don't specify which one to build at the command line, Builder will error asking you to tell it which one you want to build.
+
+You can also use `BuilderOptions::defaultConfig` to tell Builder to build a specific BuildConfig by default:
+
+```c
+options.defaultConfig = config;
+```
+
+## BuildConfig Dependencies
+
+BuildConfigs can be built before/after other BuildConfigs through explicit ordering via `BuildConfig::dependsOn`:
+
+```c
+#define BUILDER_IMPLEMENTATION
+#include "builder.h"
+
+int main( int argc, char **argv ) {
+	BuilderOptions options = { 0 };
+
+	BuildConfig *mathlib = CreateBuildConfig( &options );
+	*mathlib = (BuildConfig) {
+		.name			= "mathlib",
+		.binaryName		= "mathlib",	// the file extension is automatically appended for you
+		.binaryType		= BINARY_TYPE_DYNAMIC_LIBRARY,
+		.binaryFolder	= "bin",
+		.sourceFiles	= MakeStringList( "src/mathlib/lib.c" ),
+	};
+
+	BuildConfig *app = CreateBuildConfig( &options );
+	*app = (BuildConfig) {
+		.name				= "app",
+		.binaryFolder		= "bin",
+		.binaryName			= "app",
+		.dependsOn			= MakeDependencies( mathlib ),
+		.sourceFiles		= MakeStringList( "src/app/program.c" ),
+		.additionalIncludes	= MakeStringList( "src/mathlib" ),
+		.additionalLibPaths	= MakeStringList( "bin" ),
+		.additionalLibs		= MakeStringList( "mathlib" ),
+		.binaryType			= BINARY_TYPE_EXE,
+	};
+
+	return Build( &options, argc, argv );
+}
+```
+
+You can then build the `"app"` config through the command line like normal:
+
+```
+build.exe --config=app
+```
+
+Building `"app"` builds `"mathlib"` first, since it's listed in `dependsOn`.  You only ever need to tell Builder to build the top-level config.
+
+`dependsOn` only controls build order, it does not link anything for you.  `"app"` links against `"mathlib"` because it lists it in `additionalLibs` and `additionalLibPaths`.
 
 ## Custom Command Line Arguments
 
-Any unrecognised flags are forwarded to your build script via `CommandLineArgs`:
+Builder allows you to create your own command line arguments for your builds.
 
-```cpp
-/* build.cpp */
-BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArgs *args ) {
-	bool release = HasCommandLineArg( args, "--release" );
+You can use the `HasCommandLineArg` function to check if the argument was passed at the command line:
 
-	options->forceRebuild = HasCommandLineArg( args, "--clean" );
+```c
+#define BUILDER_IMPLEMENTATION
+#include "builder.h"
 
-	// --jobs=8  →  "8"
-	const char *jobs = GetCommandLineArgValue( args, "--jobs" );
-}
-```
+int main( int argc, char **argv ) {
+	BuilderOptions options = { 0 };
 
-```
-builder build.cpp --release --jobs=8 --clean
-```
-
-Run `builder -h` for built-in flags.
-
-## Multiple Configs
-
-```cpp
-/* build.cpp */
-BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArgs *args ) {
-	BuildConfig appConfig = {
-		.name         = "app",
-		.binaryName   = "my-program",
-		.binaryFolder = "bin",
-		.sourceFiles  = { "src/**/*.cpp" },
+	BuildConfig *config = CreateBuildConfig( &options );
+	*config = (BuildConfig) {
+		.name			= "my_awesome_program",
+		.sourceFiles	= MakeStringList( "src/my_code.c" ),
 	};
 
-	BuildConfig testsConfig = {
-		.name         = "tests",
-		.binaryName   = "my-program-tests",
-		.binaryFolder = "bin",
-		.sourceFiles  = { "src/**/*.cpp", "tests/**/*.cpp" },
-		.defines      = { "TESTS_ENABLED" },
-	};
+	if ( HasCommandLineArg( argc, argv, "--release" ) ) {
+		config->optimization = OPTIMIZATION_PROGRAM_SPEED;
+	}
 
-	AddBuildConfig( options, &appConfig );
-	AddBuildConfig( options, &testsConfig );
+	return Build( &options, argc, argv );
 }
 ```
 
+You can then pass that command line argument through as normal:
+
 ```
-builder build.cpp --config=app
-builder build.cpp --config=tests
+build.exe --release
 ```
-
-If two `BuildConfig`s have the same name, Builder will fail to do the build.  All `BuildConfig`s MUST have unique names.
-
-## Building Libraries
-
-Set `binaryType` on a `BuildConfig`:
-
-```cpp
-BuildConfig myLib = {
-	.name       = "my-lib",
-	.binaryType = BINARY_TYPE_STATIC_LIBRARY,  // or BINARY_TYPE_DYNAMIC_LIBRARY
-	// ...
-};
-```
-
-Use `dependsOn` to express build order. Dependencies are built first and registered automatically - only call `AddBuildConfig` on the top-level config:
-
-```cpp
-BuildConfig program = {
-	.name      = "program",
-	.dependsOn = { myLib },
-	// ...
-};
-
-AddBuildConfig( options, &program );  // also registers myLib
-```
-
-## Extra Build Steps
-
-`OnPreBuild` and `OnPostBuild` let you run custom build steps such as copying files and codegen. These are available at two scopes:
-*  Export level (`BUILDER_CALLBACK`): runs before/after the entire build and is exported like `SetBuilderOptions`.
-* `BuildConfig` level: only runs before/after that specific config builds.
-
-```cpp
-#include <builder.h>
-#include <stdio.h>
-#include <time.h>
-
-// this happens before ANY build step
-BUILDER_CALLBACK void OnPreBuild() {}
-
-// this happens after EVERY build step
-BUILDER_CALLBACK void OnPostBuild() {}
-
-static void PreBuild( BuildConfig *config ) {
-	FILE *buildInfoHeader = fopen( "src/generated/build_info.h", "w" );
-	fprintf( buildInfoHeader, "#pragma once\n" );
-	fprintf( buildInfoHeader, "#define BUILD_TIMESTAMP %lldLL\n", (long long) time( NULL ) );
-	fclose( buildInfoHeader );
-}
-
-static void PostBuild( BuildConfig *config ) {
-#ifdef _WIN32
-	system( "copy bin\\engine.dll bin\\game\\" );
-#else
-	system( "cp bin/engine.dll bin/game/" );
-#endif
-}
-
-BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArgs *args ) {
-	BuildConfig config = {
-		.binaryName   = "game",
-		.binaryFolder = "bin/game",
-		.sourceFiles  = { "src/**/*.cpp" },
-		.OnPreBuild   = PreBuild,
-		.OnPostBuild  = PostBuild,
-	};
-
-	AddBuildConfig( options, &config );
-}
-```
-In this example, the flow would be `OnPreBuild` -> `PreBuild` -> Config Builds -> `PostBuild` -> `OnPostBuild`.
 
 ## Choosing a Compiler
 
-By default Builder uses its bundled Clang install. Override it in your build script:
+By default, Builder will generate compiler arguments for Clang.
 
-```cpp
-options->compilerPath    = "C:/path/to/gcc";
-options->compilerVersion = "15.1.0";  // optional - warns on mismatch
+If you want to use a different compiler you can do this via `BuilderOptions::compilerPath` and `BuilderOptions::compilerVersion`:
+
+```c
+options.compilerPath = "C:/path/to/gcc";
+options.compilerVersion = "15.1.0";	// this one is optional and warns you on a mismatch
 ```
 
-### MSVC
+For MSVC it's recommended you just set your compiler path to `"cl"` and Builder will locate the MSVC toolchain and Windows SDK automatically.
 
-Set `compilerPath` to `"cl"` and Builder will locate the MSVC toolchain and Windows SDK automatically. A hard-coded path works too but requires you to manage SDK paths yourself.
+## Visual Studio
 
-### Windows Runtime
+Builder can be used to generate Visual Studio Solutions (`.sln` and `.vcxproj`).  These are also compatible with Rider:
 
-On Windows, the C and C++ runtimes come in both static and dynamic (DLL) variants. By default Builder links against the static runtime. Set `linkAgainstWindowsDynamicRuntime` to link against the dynamic runtime instead:
+```c
+#define BUILDER_IMPLEMENTATION
+#include "builder.h"
 
-```cpp
-options->linkAgainstWindowsDynamicRuntime = true;
-```
+#define BUILDER_VISUAL_STUDIO_IMPLEMENTATION
+#include "builder_visual_studio.h"
 
-This adds the `_DLL` preprocessor definition, which changes linking behavior to use the dynamic runtime. It has no effect on Linux.
+int main( int argc, char **argv ) {
+	BuilderOptions options = { 0 };
 
-## Visual Studio and Rider
-
-```cpp
-BUILDER_CALLBACK void SetBuilderOptions( BuilderOptions *options, CommandLineArgs *args ) {
-	BuildConfig config = {
-		.binaryName   = "my-game",
-		.binaryFolder = "bin",
-		.sourceFiles  = { "src/**/*.cpp" },
-		// ...
+	BuildConfig *config = CreateBuildConfig( &options );
+	*config = (BuildConfig) {
+		.name			= "my_awesome_program",
+		.sourceFiles	= MakeStringList( "src/my_code.c" ),
 	};
 
-	AddBuildConfig( options, &config );
+	options.defaultConfig = config;
 
-	// pass --sln to generate; skips compilation
-	options->generateSolution = HasCommandLineArg( args, "--sln" );
-	options->solution = {
-		.name      = "my-game",
-		.path      = "visual_studio",
-		.platforms = { "x64" },
-		.projects  = {
+	if ( HasCommandLineArg( argc, argv, "--sln" ) ) {
+		VisualStudioConfig vsConfigs[] = {
+			{ .name = "Debug",   .config = config },
+			{ .name = "Release", .config = config, .additionalBuildArgs = MakeStringList( "--release" ) },
+		};
+
+		VisualStudioProject vsProjects[] = {
 			{
-				.name    = "my-game",
-				.extraFiles = { "include/**/*.h" }, // these files show in the project
-				.configs = {
-					{ "debug",   config, {             }, {} },
-					{ "release", config, { "--release" }, {} },
-				},
+				.name			= "my_awesome_program",
+				.configs		= vsConfigs,
+				.configsCount	= BUILDER_COUNT_OF( vsConfigs ),
 			},
-		},
-	};
+		};
+
+		VisualStudioSolution solution = {
+			.name			= "my_awesome_program",
+			.platforms		= MakeStringList( "x64" ),
+			.projects		= vsProjects,
+			.projectsCount	= BUILDER_COUNT_OF( vsProjects ),
+		};
+
+		return Builder_GenerateVisualStudioSolution( &options, &solution, argc, argv ) ? 0 : 1;
+	}
+
+	return Build( &options, argc, argv );
 }
 ```
 
-Generated projects call Builder - Visual Studio project property edits have no effect. Re-run Builder to update them. Generated solutions also open in JetBrains Rider.
+You'd then generate the solution with:
+
+```
+build.exe --sln
+```
+
+Generated projects will call to your `build.exe`.
 
 ## VS Code
 
-```cpp
-// pass --vscode to generate; skips compilation
-options->generateVSCodeJSONFiles = HasCommandLineArg( args, "--vscode" );
-options->vsCodeJSONOptions = {
-	.builderPath          = "builder",
-	.cppPropertiesConfigs = {
-		{ debugConfig, VSCODE_INTELLISENSE_MODE_LINUX_CLANG_X64 },
-	},
-	.taskConfigs          = {
-		{ debugConfig                    },
-		{ releaseConfig, { "--release" } },
-	},
-	.launchConfigs        = {
-		{ .binaryName = "bin/debug/my-program",   .debuggerType = VSCODE_DEBUGGER_TYPE_CPPVSDBG   },
-		{ .binaryName = "bin/release/my-program", .debuggerType = VSCODE_DEBUGGER_TYPE_CPPDBG_GDB },
-	},
-};
+Builder can be used to generate VS Code's `c_cpp_properties.json`, `tasks.json`, and `launch.json` files:
+
+```c
+#define BUILDER_IMPLEMENTATION
+#include "builder.h"
+
+#define BUILDER_VS_CODE_IMPLEMENTATION
+#include "builder_vs_code.h"
+
+int main( int argc, char **argv ) {
+	BuilderOptions options = { 0 };
+
+	BuildConfig *config = CreateBuildConfig( &options );
+	*config = (BuildConfig) {
+		.name			= "my_awesome_program",
+		.sourceFiles	= MakeStringList( "src/my_code.c" ),
+	};
+
+	options.defaultConfig = config;
+
+	if ( HasCommandLineArg( argc, argv, "--vscode" ) ) {
+		VSCodeCppPropertiesConfig cppPropertiesConfigs[] = {
+			{ .config = config, .intelliSenseMode = VSCODE_INTELLISENSE_MODE_LINUX_CLANG_X64 },
+		};
+
+		VSCodeTaskConfig taskConfigs[] = {
+			{ .config = config },
+		};
+
+		VSCodeLaunchConfig launchConfigs[] = {
+			{ .binaryName = "bin/my_awesome_program", .debuggerType = VSCODE_DEBUGGER_TYPE_CPPDBG_GDB },
+		};
+
+		VSCodeJSONOptions vsCodeOptions = {
+			.cppPropertiesConfigs		= cppPropertiesConfigs,
+			.cppPropertiesConfigsCount	= BUILDER_COUNT_OF( cppPropertiesConfigs ),
+			.taskConfigs				= taskConfigs,
+			.taskConfigsCount			= BUILDER_COUNT_OF( taskConfigs ),
+			.launchConfigs				= launchConfigs,
+			.launchConfigsCount			= BUILDER_COUNT_OF( launchConfigs ),
+		};
+
+		return Builder_GenerateVSCodeJSONFiles( &options, &vsCodeOptions, argc, argv ) ? 0 : 1;
+	}
+
+	return Build( &options, argc, argv );
+}
 ```
 
-Generates `.vscode/c_cpp_properties.json`, `.vscode/tasks.json`, and `.vscode/launch.json`. `builderPath` defaults to `"builder"`, assuming it is on your `PATH`.
+You'd then generate the JSON files with:
+
+```
+build.exe --vscode
+```
+
+By default, if you call `Builder_GenerateVSCodeJSONFiles()` without filling in any other settings Builder will generate a JSON entry for each BuildConfig you created.
 
 ## Zed
 
-```cpp
-// pass --zed to generate; skips compilation
-options->generateZedJSONFiles = HasCommandLineArg( args, "--zed" );
-options->zedJSONOptions = {
-	.builderPath  = "builder",
-	.taskConfigs  = {
-		{ debugConfig                    },
-		{ releaseConfig, { "--release" } },
-	},
-	.debugConfigs = {
-		{ .binaryName = "bin/debug/my-program"   },
-		{ .binaryName = "bin/release/my-program" },
-	},
-};
+Builder can be used to generate Zed's `tasks.json` and `debug.json` files:
+
+```c
+#define BUILDER_IMPLEMENTATION
+#include "builder.h"
+
+#define BUILDER_ZED_IMPLEMENTATION
+#include "builder_zed.h"
+
+int main( int argc, char **argv ) {
+	BuilderOptions options = { 0 };
+
+	BuildConfig *config = CreateBuildConfig( &options );
+	*config = (BuildConfig) {
+		.name			= "my_awesome_program",
+		.sourceFiles	= MakeStringList( "src/my_code.c" ),
+	};
+
+	options.defaultConfig = config;
+
+	if ( HasCommandLineArg( argc, argv, "--zed" ) ) {
+		ZedTaskConfig taskConfigs[] = {
+			{ .config = config },
+		};
+
+		ZedDebugConfig debugConfigs[] = {
+			{
+				.label		= "Debug my_awesome_program",
+				.binaryName	= "bin/my_awesome_program",
+				.adapter	= ZED_DEBUGGER_ADAPTER_CODELLDB,
+				.request	= ZED_DEBUGGER_REQUEST_LAUNCH,
+			},
+		};
+
+		ZedJSONOptions zedOptions = {
+			.taskConfigs		= taskConfigs,
+			.taskConfigsCount	= BUILDER_COUNT_OF( taskConfigs ),
+			.debugConfigs		= debugConfigs,
+			.debugConfigsCount	= BUILDER_COUNT_OF( debugConfigs ),
+		};
+
+		return Builder_GenerateZedJSONFiles( &options, &zedOptions, argc, argv ) ? 0 : 1;
+	}
+
+	return Build( &options, argc, argv );
+}
 ```
 
-Generates `.zed/tasks.json` and `.zed/debug.json`.
+You'd then generate the JSON files with:
+
+```
+build.exe --zed
+```
+
+By default, if you call `Builder_GenerateZedJSONFiles()` without filling in any other settings Builder will generate a JSON entry for each BuildConfig you created.
 
 ## Compilation Database
 
-```cpp
-options->generateCompilationDatabase = true;
+Builder can be used to generate a `compile_commands.json` file (a JSON Compilation Database).
+
+Clangd, CLion, VS Code, and anything else that supports the format can use it for code completion and navigation:
+[https://clang.llvm.org/docs/JSONCompilationDatabase.html](https://clang.llvm.org/docs/JSONCompilationDatabase.html)
+
+```c
+#define BUILDER_IMPLEMENTATION
+#include "builder.h"
+
+#define BUILDER_COMPILATION_DATABASE_IMPLEMENTATION
+#include "builder_compilation_database.h"
+
+int main( int argc, char **argv ) {
+	BuilderOptions options = { 0 };
+
+	BuildConfig *config = CreateBuildConfig( &options );
+	*config = (BuildConfig) {
+		.name			= "my_awesome_program",
+		.sourceFiles	= MakeStringList( "src/my_code.c" ),
+	};
+
+	options.defaultConfig = config;
+
+	if ( HasCommandLineArg( argc, argv, "--compile-commands" ) ) {
+		CompilationDatabaseOptions compilationDatabaseOptions = { 0 };
+
+		return Builder_GenerateCompilationDatabase( &options, &compilationDatabaseOptions, argc, argv ) ? 0 : 1;
+	}
+
+	return Build( &options, argc, argv );
+}
 ```
 
-Generates `compile_commands.json` on a successful build. Compatible with clangd, CLion, VS Code, and other tools that support the [JSON Compilation Database](https://clang.llvm.org/docs/JSONCompilationDatabase.html) format.
+You'd then generate the `compile_commands.json` file with:
 
+```
+build.exe --compile-commands
+```
+
+By default, if you call `Builder_GenerateCompilationDatabase()` without filling in any other settings Builder will generate an entry for every source file of every BuildConfig you created.
+
+Nothing gets compiled - the commands are the same ones Builder would run, minus the output file.
 
 ## Motivation
 
-C++ has no standard build system, so at some point every C++ programmer has to pick one and every option asks the same thing of you: learn a new language.  CMake has its own DSL, Makefiles have their own syntax and rules, Premake uses Lua, Meson uses Python.  Even if you learn one well, the knowledge doesn't transfer to the next project that uses a different one and you have to learn a project's build system all over again.
+C/C++ has no standard build system, so at some point every C/C++ programmer has to pick one and every option asks the same thing of you: learn a new language.  CMake has its own DSL, Makefiles have their own syntax and rules, Premake uses Lua, Meson uses Python.  Even if you learn one well, the knowledge doesn't transfer to the next project that uses a different one and you have to learn a project's build system all over again.
 
-You already know C++.  Why should configuring a C++ build require learning anything else?
+You already know C/C++.  Why should configuring a C/C++ build require learning anything else?
 
-Builder's answer is to not require it.  Your build config is just a C++ source file.  The types are C++ structs.  The logic is C++.  If you can write C++, you already know how to use Builder.
+Builder's answer is to not require it.  Your build config is just a C/C++ source file.  The types are C structs.  The logic is C/C++.  If you can write C/C++, you already know how to use Builder.
 
 ## Contributing
 
 Yes!
 
 Please see [Contributing.md](doc/Contributing.md).
-
 
 ## Credits
 

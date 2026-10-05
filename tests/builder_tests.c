@@ -4,6 +4,8 @@
 #define TEMPER_IMPLEMENTATION
 #include "temper.h"
 
+#include "sanitizers/sanitizer_test_args.h"
+
 #if defined( _WIN32 )
 #define TEST_DEBUG_BREAK __debugbreak
 #elif defined( __linux__ )
@@ -529,6 +531,152 @@ TEMPER_INVOKE_PARAMETRIC_TEST( Test_Build, "only_self_rebuild_config", NULL,    
 // the SDL test basically tests everything builder can do, more or less
 // so leave it last
 TEMPER_INVOKE_PARAMETRIC_TEST( Test_Build, "sdl3",                     "sdl3/bin/sdl-demo-app",                    0, 0, false, "sdl3/demo-app/demo-app.cpp", "sdl3/src/audio/SDL_wave.h", 1, "sdl3/demo-app/builder_test_new_file.cpp"    );
+
+TEMPER_TEST( Test_Sanitizers, TEMPER_FLAG_SHOULD_RUN ) {
+	arena_t testScratch = { 0 };
+
+	typedef struct {
+		SanitizerFlagBits	flag;
+		const char			*argName;
+		const char			*expectedReport;
+	} testSanitizer_t;
+
+	static const testSanitizer_t sanitizers[] = {
+		{ SANITIZER_UNDEFINED_BEHAVIOR,	SANITIZER_TEST_ARG_UNDEFINED_BEHAVIOR,	"runtime error:"	},
+		{ SANITIZER_MEMORY,				SANITIZER_TEST_ARG_MEMORY,				"MemorySanitizer"	},
+		{ SANITIZER_ADDRESS,			SANITIZER_TEST_ARG_ADDRESS,				"AddressSanitizer"	},
+		{ SANITIZER_LEAK,				SANITIZER_TEST_ARG_LEAK,				"LeakSanitizer"		},
+		{ SANITIZER_THREAD,				SANITIZER_TEST_ARG_THREAD,				"ThreadSanitizer"	},
+	};
+
+	const SanitizerFlags allSanitizers = SANITIZER_UNDEFINED_BEHAVIOR | SANITIZER_MEMORY | SANITIZER_ADDRESS | SANITIZER_LEAK | SANITIZER_THREAD;
+
+	const char *testFolder = "sanitizers";
+
+	const char *buildEXEFilename = Builder_FormatString( &testScratch, "%s/build%s", testFolder, Builder_GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
+	const char *programFilename = Builder_FormatString( &testScratch, "%s/test_sanitizers%s", testFolder, Builder_GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
+
+	arenaRewindSpot_t testScratchStart = Builder_ArenaTell( &testScratch );
+
+	for ( int32_t compilerIndex = 0; compilerIndex < COMPILER_COUNT; compilerIndex++ ) {
+		compiler_t compiler = (compiler_t) compilerIndex;
+
+		const char *compilerName = Test_GetCompilerName( compiler );
+
+		TEMPER_CHECK_TRUE( compilerName );
+
+		// which sanitizers this compiler can do at all on this platform
+		SanitizerFlags supportedSanitizers = 0;
+		switch ( compiler ) {
+#if defined( _WIN32 )
+			case COMPILER_CLANG:
+			case COMPILER_CLANGPP:
+			case COMPILER_CLANG_CL:
+				supportedSanitizers = SANITIZER_ADDRESS | SANITIZER_UNDEFINED_BEHAVIOR;
+				break;
+
+			case COMPILER_MSVC:
+				supportedSanitizers = SANITIZER_ADDRESS;
+				break;
+
+			case COMPILER_GCC:
+			case COMPILER_GPP:
+				supportedSanitizers = 0;
+				break;
+#elif defined( __linux__ )
+			case COMPILER_CLANG:
+			case COMPILER_CLANGPP:
+				supportedSanitizers = allSanitizers;
+				break;
+
+			case COMPILER_GCC:
+			case COMPILER_GPP:
+				supportedSanitizers = allSanitizers & ~SANITIZER_MEMORY;
+				break;
+#endif
+		}
+
+		for ( SanitizerFlags mask = 1; mask <= allSanitizers; mask++ ) {
+			Builder_RewindArena( &testScratch, &testScratchStart );
+
+			// check the compiler supports every sanitizer in this combination, and that they can all run together
+			bool supported = true;
+			{
+				bool hasThread = ( mask & SANITIZER_THREAD ) != 0;
+				bool hasMemory = ( mask & SANITIZER_MEMORY ) != 0;
+				bool hasAddressOrLeak = ( mask & ( SANITIZER_ADDRESS | SANITIZER_LEAK ) ) != 0;
+
+				if ( ( mask & ~supportedSanitizers ) != 0 ) {
+					supported = false;
+				}
+
+				if ( hasThread && ( hasMemory || hasAddressOrLeak ) ) {
+					supported = false;
+				}
+
+				if ( hasMemory && hasAddressOrLeak ) {
+					supported = false;
+				}
+
+				// clangs standalone leak sanitizer runtime has no ubsan in it, and clang wont link the ubsan runtime alongside it
+				bool isClang = compiler == COMPILER_CLANG || compiler == COMPILER_CLANGPP;
+				bool hasUndefinedAndStandaloneLeak = ( mask & ( SANITIZER_UNDEFINED_BEHAVIOR | SANITIZER_LEAK | SANITIZER_ADDRESS ) ) == ( SANITIZER_UNDEFINED_BEHAVIOR | SANITIZER_LEAK );
+
+				if ( isClang && hasUndefinedAndStandaloneLeak ) {
+					supported = false;
+				}
+			}
+
+			// build
+			{
+				stringBuilder_t sb = { 0 };
+				StringBuilder_Appendf( &testScratch, &sb, "%s --%s", buildEXEFilename, compilerName );
+
+				for ( uint32_t sanitizerIndex = 0; sanitizerIndex < BUILDER_COUNT_OF( sanitizers ); sanitizerIndex++ ) {
+					if ( ( mask & sanitizers[sanitizerIndex].flag ) == 0 ) {
+						continue;
+					}
+
+					StringBuilder_Appendf( &testScratch, &sb, " --%s", sanitizers[sanitizerIndex].argName );
+				}
+
+				const char *buildArgs = StringBuilder_ToString( &testScratch, &sb, NULL );
+
+				printf( "Building sanitizer combination for compiler %s (expected to %s)\n", compilerName, supported ? "succeed" : "fail" );
+
+				Test_RunProcess( &testScratch, buildArgs, supported ? 0 : 1, false );
+			}
+
+			// run the program once per sanitizer and trigger the bug that sanitizer should catch
+			// exit codes differ between sanitizers (ubsan doesnt even fail) so check the report instead
+			if ( supported ) {
+				for ( uint32_t sanitizerIndex = 0; sanitizerIndex < BUILDER_COUNT_OF( sanitizers ); sanitizerIndex++ ) {
+					const testSanitizer_t *sanitizer = &sanitizers[sanitizerIndex];
+
+					if ( ( mask & sanitizer->flag ) == 0 ) {
+						continue;
+					}
+
+					const char *programArgs = Builder_FormatString( &testScratch, "%s %s", programFilename, sanitizer->argName );
+
+					printf( "Running: %s\n", programArgs );
+
+					char *output = NULL;
+					Builder_RunProcess( &testScratch, programArgs, false, &output );
+
+					printf( "%s\n", output );
+
+					TEMPER_CHECK_TRUE_M( output && Builder_StringContains( output, sanitizer->expectedReport ), "\"%s\" built with %s should've reported \"%s\".\n", programArgs, compilerName, sanitizer->expectedReport );
+				}
+			}
+
+			// wipe everything so the next combination gets fully rebuilt
+			Test_DeleteGeneratedFolders( &testScratch, testFolder );
+
+			printf( "\n" );
+		}
+	}
+}
 
 TEMPER_TEST( Test_VisualStudio, TEMPER_FLAG_SHOULD_RUN ) {
 #if defined( _WIN32 )

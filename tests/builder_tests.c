@@ -520,6 +520,7 @@ TEMPER_TEST_PARAMETRIC( Test_Build, TEMPER_FLAG_SHOULD_RUN,
 	}
 }
 
+TEMPER_INVOKE_PARAMETRIC_TEST( Test_Build, "minimal",                  "minimal/minimal",                          0, 0, true,  "minimal/main.c",             NULL,                        0, NULL                                         );
 TEMPER_INVOKE_PARAMETRIC_TEST( Test_Build, "single_file",              "single_file/test_build_single_file",       0, 0, true,  "single_file/main.c",         NULL,                        0, NULL                                         );
 TEMPER_INVOKE_PARAMETRIC_TEST( Test_Build, "multiple_files",           "multiple_files/test_build_multiple_files", 0, 0, true,  "multiple_files/src/test1.c", "multiple_files/src/test.h", 3, "multiple_files/src/builder_test_new_file.c" );
 TEMPER_INVOKE_PARAMETRIC_TEST( Test_Build, "static_lib",               "static_lib/test_static_lib_program",       0, 5, true,  "static_lib/program/main.c",  "static_lib/lib/mathlib.h",  2, NULL                                         );

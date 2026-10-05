@@ -57,7 +57,7 @@ You'll need a build script, which is just C/C++ code:
 	#include "builder.h"
 
 	int main( int argc, char **argv ) {
-		BuilderOptions options = {};
+		BuilderOptions options = { 0 };
 
 		BuildConfig *config = CreateBuildConfig( &options );
 		*config = (BuildConfig) {
@@ -106,7 +106,7 @@ BuildConfigs can be built before/after other BuildConfigs through explicit order
 	#include "builder.h"
 
 	int main( int argc, char **argv ) {
-		BuilderOptions options = {};
+		BuilderOptions options = { 0 };
 
 		BuildConfig *mathlib = CreateBuildConfig( &options );
 		*mathlib = (BuildConfig) {
@@ -149,7 +149,7 @@ You can use the HasCommandLineArg function to check if the argument was passed a
 	#include "builder.h"
 
 	int main( int argc, char **argv ) {
-		BuilderOptions options = {};
+		BuilderOptions options = { 0 };
 
 		BuildConfig *config = CreateBuildConfig( &options );
 		*config = (BuildConfig) {
@@ -265,6 +265,7 @@ typedef struct BuildConfig {
 	// Other BuildConfigs that need to be built before this one - see MakeDependencies() and AddDependencies().
 	// Building a config builds everything in here first, so you only ever have to ask for the top-level one.
 	ConfigPtrList	dependsOn;
+	// Leave unset to use name.
 	const char		*binaryName;
 	// The folder the binary is placed into, relative to the file you pass into Builder.
 	// If this folder doesn't exist then Builder will create it for you.
@@ -303,7 +304,7 @@ typedef struct BuilderOptions {
 
 	// The folder that intermediate build files (object files) are placed into, relative to build executable.
 	// If this folder doesn't exist then Builder will create it for you.
-	// Leave NULL to put intermediate files at ./intermediates/
+	// Leave NULL to put intermediate files at ./intermediate/
 	const char		*intermediateFolder;
 
 	// If no config is specified at the command line via --config=, what config do you want Builder to build by default?
@@ -661,6 +662,10 @@ void *Builder_ArenaAllocateInternal( arena_t *arena, size_t size, size_t alignme
 
 static bool Builder_StringEquals( const char *a, const char *b ) {
 	return strcmp( a, b ) == 0;
+}
+
+static bool Builder_StringIsEmpty( const char *str ) {
+	return !str || !str[0];
 }
 
 // strnlen() is not ISO C so linux cant use it without linking to C extension libraries
@@ -1320,7 +1325,7 @@ void Builder_AddStringsInternal( StringList *list, const char **strings, uint32_
 	for ( uint32_t stringIndex = 0; stringIndex < count; stringIndex++ ) {
 		const char *string = strings[stringIndex];
 
-		BUILDER_ASSERT( string && string[0] && "Adding an empty entry to a BuildConfig list doesn't do anything." );
+		BUILDER_ASSERT( !Builder_StringIsEmpty( string ) && "Adding an empty entry to a BuildConfig list doesn't do anything." );
 
 		// the string itself isn't copied - almost every entry is a literal, and Config_FormatString() covers the rest
 		Builder_StringListPush( configArena, list, string );
@@ -1692,7 +1697,7 @@ static int ShowUsage( const int exitCode ) {
 		"\n"
 		"    " ARG_CONFIG "<config> (optional):\n"
 		"        Sets the config to build to <config>.\n"
-		"        This must match the name of a config you registered via AddBuildConfig().\n"
+		"        This must match the name of a config you created via CreateBuildConfig().\n"
 		"        If you only registered one config you don't need to specify this.\n"
 		"        If you registered more than one config you must either specify this or set BuilderOptions::defaultConfig.\n"
 		"\n"
@@ -3727,12 +3732,12 @@ static void Builder_SetCWD( BuilderOptions *options, char **argv ) {
 
 static void Builder_SetCmdArgs( BuilderOptions *options, int argc, char **argv ) {
 	for ( int argIndex = 0; argIndex < argc; argIndex++ ) {
-		if ( Builder_StringStartsWith( argv[argIndex], ARG_HELP_SHORT ) || Builder_StringStartsWith( argv[argIndex], ARG_HELP_LONG ) ) {
+		if ( Builder_StringEquals( argv[argIndex], ARG_HELP_SHORT ) || Builder_StringEquals( argv[argIndex], ARG_HELP_LONG ) ) {
 			ShowUsage( 0 );
 			exit( 0 );
 		}
 
-		if ( Builder_StringStartsWith( argv[argIndex], ARG_VERBOSE_SHORT ) || Builder_StringStartsWith( argv[argIndex], ARG_VERBOSE_LONG ) ) {
+		if ( Builder_StringEquals( argv[argIndex], ARG_VERBOSE_SHORT ) || Builder_StringEquals( argv[argIndex], ARG_VERBOSE_LONG ) ) {
 			options->verboseLogging = true;
 		}
 	}
@@ -4053,7 +4058,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 						StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "/DLL " );
 					}
 
-					if ( !config->removeSymbols ) {
+					if ( !config->removeSymbols && config->binaryType != BINARY_TYPE_STATIC_LIBRARY ) {
 						StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "/DEBUG " );
 					}
 
@@ -4407,11 +4412,11 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 	printf( "\n" );
 #endif
 
-	if ( options->compilerPath && options->compilerPath[0] ) {
+	if ( !Builder_StringIsEmpty( options->compilerPath ) ) {
 		Builder_LogVerbose( options, "Found override compiler backend \"%s\" from BuilderOptions::compilerPath.\n", options->compilerPath );
 	}
 
-	const char *compilerPath = ( options->compilerPath && options->compilerPath[0] ) ? options->compilerPath : "clang";
+	const char *compilerPath = !Builder_StringIsEmpty( options->compilerPath ) ? options->compilerPath : "clang";
 
 	bool compilerIsMSVC = Builder_StringEquals( compilerPath, "cl" ) || Builder_StringEquals( compilerPath, "cl.exe" );
 	bool compilerIsClang = Builder_PathEndsWith( compilerPath, "clang" )
@@ -4454,7 +4459,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 		compilerVersionString = Builder_ExtractVersionNumber( buildScratch.arena, versionOutput );
 	}
 
-	if ( options->compilerVersion && options->compilerVersion[0] ) {
+	if ( !Builder_StringIsEmpty( options->compilerVersion ) ) {
 		if ( !Builder_StringEquals( compilerVersionString, options->compilerVersion ) ) {
 			Builder_Warning( "You are using compiler version \"%s\", but \"%s\" was set as BuilderOptions::compilerVersion.  I will continue building anyway, but you may not get what you expect.\n", compilerVersionString, options->compilerVersion );
 		}
@@ -4472,12 +4477,12 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 
 	// cl.exe embeds its own /DEFAULTLIB directives for /fsanitize=... into the object file so link.exe picks the runtime up automatically there
 	// GCC doesnt link via link.exe so it handles its own sanitizer runtime
-	// clang on Windows does neither, it goes through link.exe directly so we have to name its sanitizer runtime libs ourselves which live under its resource directory
+	// clang and clang-cl on Windows do neither, they go through link.exe directly so we have to name their sanitizer runtime libs ourselves which live under the resource directory
 	// we query that once up front and then only use it if some config actually needs it
 	char *clangSanitizerResourceDir = NULL;
 
 #if defined( _WIN32 )
-	if ( compilerIsClang ) {
+	if ( compilerIsClang || compilerIsClangCL ) {
 		// this runs before the target config is known so it looks at every registered config, not just the ones being built
 		bool anyConfigNeedsClangSanitizerLibs = false;
 
@@ -4686,9 +4691,13 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 		for ( uint32_t configIndex = 0; configIndex < chunk->count; configIndex++ ) {
 			BuildConfig *config = chunk->items[configIndex];
 
-			if ( !config->name || !config->name[0] ) {
+			if ( Builder_StringIsEmpty( config->name ) ) {
 				Builder_Error( "One of your BuildConfigs has no name.  Every config needs one - it's what \"" ARG_CONFIG "\" matches against and what the build log calls it.\n" );
 				return 1;
+			}
+
+			if ( Builder_StringIsEmpty( config->binaryName ) ) {
+				config->binaryName = config->name;
 			}
 
 			// only has to look at the configs after this one, since anything before it already compared against this

@@ -41,7 +41,7 @@ https://clang.llvm.org/docs/JSONCompilationDatabase.html
 	#include "builder_compilation_database.h"
 
 	int main( int argc, char **argv ) {
-		BuilderOptions options = {};
+		BuilderOptions options = { 0 };
 
 		BuildConfig *config = CreateBuildConfig( &options );
 		*config = (BuildConfig) {
@@ -133,7 +133,7 @@ bool Builder_GenerateCompilationDatabase( BuilderOptions *options, CompilationDa
 
 	scratch_t scratch = Builder_GetScratch( NULL );
 
-	const char *compilerPath = ( options->compilerPath && options->compilerPath[0] ) ? options->compilerPath : "clang";
+	const char *compilerPath = !Builder_StringIsEmpty( options->compilerPath ) ? options->compilerPath : "clang";
 
 	bool compilerIsMSVC = Builder_StringEquals( compilerPath, "cl" ) || Builder_StringEquals( compilerPath, "cl.exe" );
 	bool compilerIsClangCL = Builder_PathEndsWith( compilerPath, "clang-cl" ) || Builder_PathEndsWith( compilerPath, "clang-cl.exe" );
@@ -191,7 +191,7 @@ bool Builder_GenerateCompilationDatabase( BuilderOptions *options, CompilationDa
 
 	const char *compilationDatabaseFilename = COMPILATION_DATABASE_FILENAME;
 
-	if ( compilationDatabaseOptions->path && compilationDatabaseOptions->path[0] ) {
+	if ( !Builder_StringIsEmpty( compilationDatabaseOptions->path ) ) {
 		if ( !Builder_CreateFolderIfItDoesntExist( compilationDatabaseOptions->path ) ) {
 			Builder_Error( "Failed to create \"%s\" folder.\n", compilationDatabaseOptions->path );
 			Builder_RewindScratch( &scratch );

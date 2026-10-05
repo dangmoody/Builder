@@ -39,7 +39,7 @@ Builder can be used to generate Zed's tasks.json and debug.json files:
 	#include "builder_zed.h"
 
 	int main( int argc, char **argv ) {
-		BuilderOptions options = {};
+		BuilderOptions options = { 0 };
 
 		BuildConfig *config = CreateBuildConfig( &options );
 		*config = (BuildConfig) {
@@ -171,7 +171,7 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 	// everything built in here goes into a file and is then done with - nothing outlives this call
 	scratch_t scratch = Builder_GetScratch( NULL );
 
-	const char *dotZedFolder = ( zedOptions->path && zedOptions->path[0] ) ? Builder_FormatString( scratch.arena, "%s%c.zed", zedOptions->path, BUILDER_PATH_SEPARATOR ) : ".zed";
+	const char *dotZedFolder = !Builder_StringIsEmpty( zedOptions->path ) ? Builder_FormatString( scratch.arena, "%s%c.zed", zedOptions->path, BUILDER_PATH_SEPARATOR ) : ".zed";
 
 	if ( !Builder_CreateFolderIfItDoesntExist( dotZedFolder ) ) {
 		Builder_Error( "Failed to create \"%s\" folder.\n", dotZedFolder );
@@ -181,7 +181,7 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 
 	BUILDER_ASSERT( argc > 0 && argv );
 
-	const char *buildCommand = ( zedOptions->buildCommand && zedOptions->buildCommand[0] ) ? zedOptions->buildCommand : argv[0];
+	const char *buildCommand = !Builder_StringIsEmpty( zedOptions->buildCommand ) ? zedOptions->buildCommand : argv[0];
 
 	// zed wants forward slashes regardless of platform
 	{
@@ -328,7 +328,7 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 		for ( uint32_t debugConfigIndex = 0; debugConfigIndex < zedOptions->debugConfigsCount; debugConfigIndex++ ) {
 			ZedDebugConfig *debugConfig = &zedOptions->debugConfigs[debugConfigIndex];
 
-			if ( !debugConfig->label || !debugConfig->label[0] ) {
+			if ( Builder_StringIsEmpty( debugConfig->label ) ) {
 				Builder_Error( "When generating Zed debug configs (for your debug.json), the label must be set to something.  It cannot be empty.\n" );
 				ok = false;
 				break;
@@ -357,7 +357,7 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 			}
 
 			{
-				const char *cwd = ( debugConfig->cwd && debugConfig->cwd[0] ) ? debugConfig->cwd : "${ZED_WORKTREE_ROOT}";
+				const char *cwd = !Builder_StringIsEmpty( debugConfig->cwd ) ? debugConfig->cwd : "${ZED_WORKTREE_ROOT}";
 				StringBuilder_Appendf( scratch.arena, &debugJSONContent, "\t\t\"cwd\": \"%s\",\n", cwd );
 			}
 

@@ -39,7 +39,7 @@ Builder can be used to generate VS Code's c_cpp_properties.json, tasks.json, and
 	#include "builder_vs_code.h"
 
 	int main( int argc, char **argv ) {
-		BuilderOptions options = {};
+		BuilderOptions options = { 0 };
 
 		BuildConfig *config = CreateBuildConfig( &options );
 		*config = (BuildConfig) {
@@ -242,7 +242,7 @@ bool Builder_GenerateVSCodeJSONFiles( BuilderOptions *options, VSCodeJSONOptions
 	// everything built in here goes into a file and is then done with - nothing outlives this call
 	scratch_t scratch = Builder_GetScratch( NULL );
 
-	const char *buildCommand = ( vsCodeOptions->buildCommand && vsCodeOptions->buildCommand[0] ) ? vsCodeOptions->buildCommand : argv[0];
+	const char *buildCommand = !Builder_StringIsEmpty( vsCodeOptions->buildCommand ) ? vsCodeOptions->buildCommand : argv[0];
 
 	// vs code wants forward slashes regardless of platform
 	{
@@ -288,7 +288,7 @@ bool Builder_GenerateVSCodeJSONFiles( BuilderOptions *options, VSCodeJSONOptions
 			VSCodeCppPropertiesConfig *cppPropertiesConfig = &vsCodeOptions->cppPropertiesConfigs[configIndex];
 			BuildConfig *config = cppPropertiesConfig->config;
 
-			const char *configName = ( cppPropertiesConfig->name && cppPropertiesConfig->name[0] ) ? cppPropertiesConfig->name : config->name;
+			const char *configName = !Builder_StringIsEmpty( cppPropertiesConfig->name ) ? cppPropertiesConfig->name : config->name;
 
 			StringBuilder_Appendf( scratch.arena, &cppPropertiesJSONContent, "\t\t{\n" );
 			StringBuilder_Appendf( scratch.arena, &cppPropertiesJSONContent, "\t\t\t\"name\": \"%s\",\n", configName );
@@ -317,7 +317,7 @@ bool Builder_GenerateVSCodeJSONFiles( BuilderOptions *options, VSCodeJSONOptions
 				StringBuilder_Appendf( scratch.arena, &cppPropertiesJSONContent, "\t\t\t],\n" );
 			}
 
-			if ( options->compilerPath && options->compilerPath[0] ) {
+			if ( !Builder_StringIsEmpty( options->compilerPath ) ) {
 				StringBuilder_Appendf( scratch.arena, &cppPropertiesJSONContent, "\t\t\t\"compilerPath\": \"%s\",\n", options->compilerPath );
 			}
 
@@ -547,8 +547,8 @@ bool Builder_GenerateVSCodeJSONFiles( BuilderOptions *options, VSCodeJSONOptions
 			{
 				VSCodeDebuggerType debuggerType = ( launchConfig->debuggerType == VSCODE_DEBUGGER_TYPE_UNSET ) ? VSCODE_DEBUGGER_TYPE_CPPDBG_GDB : launchConfig->debuggerType;
 
-				bool hasPlatformConfigs = ( launchConfig->linuxDebugger.miMode && launchConfig->linuxDebugger.miMode[0] )
-					|| ( launchConfig->windowsDebugger.miMode && launchConfig->windowsDebugger.miMode[0] );
+				bool hasPlatformConfigs = !Builder_StringIsEmpty( launchConfig->linuxDebugger.miMode )
+					|| !Builder_StringIsEmpty( launchConfig->windowsDebugger.miMode );
 
 				switch ( debuggerType ) {
 					case VSCODE_DEBUGGER_TYPE_CPPDBG_GDB:
@@ -596,26 +596,26 @@ bool Builder_GenerateVSCodeJSONFiles( BuilderOptions *options, VSCodeJSONOptions
 			}
 
 			{
-				const char *cwd = ( launchConfig->cwd && launchConfig->cwd[0] ) ? launchConfig->cwd : "${workspaceFolder}";
+				const char *cwd = !Builder_StringIsEmpty( launchConfig->cwd ) ? launchConfig->cwd : "${workspaceFolder}";
 				StringBuilder_Appendf( scratch.arena, &launchJSONContent, "\t\t\t\"cwd\": \"%s\",\n", cwd );
 			}
 
-			if ( launchConfig->linuxDebugger.miMode && launchConfig->linuxDebugger.miMode[0] ) {
+			if ( !Builder_StringIsEmpty( launchConfig->linuxDebugger.miMode ) ) {
 				StringBuilder_Appendf( scratch.arena, &launchJSONContent, "\t\t\t\"linux\": {\n" );
 				StringBuilder_Appendf( scratch.arena, &launchJSONContent, "\t\t\t\t\"MIMode\": \"%s\",\n", launchConfig->linuxDebugger.miMode );
 
-				if ( launchConfig->linuxDebugger.miDebuggerPath && launchConfig->linuxDebugger.miDebuggerPath[0] ) {
+				if ( !Builder_StringIsEmpty( launchConfig->linuxDebugger.miDebuggerPath ) ) {
 					StringBuilder_Appendf( scratch.arena, &launchJSONContent, "\t\t\t\t\"miDebuggerPath\": \"%s\",\n", launchConfig->linuxDebugger.miDebuggerPath );
 				}
 
 				StringBuilder_Appendf( scratch.arena, &launchJSONContent, "\t\t\t},\n" );
 			}
 
-			if ( launchConfig->windowsDebugger.miMode && launchConfig->windowsDebugger.miMode[0] ) {
+			if ( !Builder_StringIsEmpty( launchConfig->windowsDebugger.miMode ) ) {
 				StringBuilder_Appendf( scratch.arena, &launchJSONContent, "\t\t\t\"windows\": {\n" );
 				StringBuilder_Appendf( scratch.arena, &launchJSONContent, "\t\t\t\t\"MIMode\": \"%s\",\n", launchConfig->windowsDebugger.miMode );
 
-				if ( launchConfig->windowsDebugger.miDebuggerPath && launchConfig->windowsDebugger.miDebuggerPath[0] ) {
+				if ( !Builder_StringIsEmpty( launchConfig->windowsDebugger.miDebuggerPath ) ) {
 					StringBuilder_Appendf( scratch.arena, &launchJSONContent, "\t\t\t\t\"miDebuggerPath\": \"%s\",\n", launchConfig->windowsDebugger.miDebuggerPath );
 				}
 

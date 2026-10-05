@@ -4231,12 +4231,18 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 														Builder_PathEndsWith( additionalLib, ".lib" ) ||
 														Builder_PathEndsWith( additionalLib, ".so" );
 
+								// libs are named by their real filename, so "libm" means libm.so/libm.a
+								// "-l" adds the "lib" prefix back on itself, so strip ours off
+								const char *libPrefix = "lib";
+
 								if ( isExplicitLibFile ) {
 #if defined( _WIN32 )
 									StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "%s ", additionalLib );
 #elif defined( __linux__ )
 									StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "-l:%s ", additionalLib );
 #endif
+								} else if ( Builder_StringStartsWith( additionalLib, libPrefix ) ) {
+									StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "-l%s ", additionalLib + strlen( libPrefix ) );
 								} else {
 #if defined( _WIN32 )
 									StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "-l%s ", additionalLib );

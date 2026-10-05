@@ -211,8 +211,7 @@ int main( int argc, char **argv ) {
 		sdl->OnPreBuild = GenerateWaylandProtocols;
 	}
 
-	// not AddLibs() - on linux builder turns bare lib names into "-l:<name>.so" which doesn't resolve system libs like libm
-	AddLinkerArguments( sdl, "-lm" );
+	AddLibs( sdl, "libm" );
 #endif
 
 	if ( HasCommandLineArg( argc, argv, "--gcc" ) ) {
@@ -223,7 +222,7 @@ int main( int argc, char **argv ) {
 #if defined( _WIN32 )
 		// MSVC/clang pull GUID_NULL, IID_IShellItem, IID_ITaskbarList3 etc in via their default libs;
 		// MinGW needs libuuid.a linked explicitly to define them
-		AddLibs( sdl, "uuid" );
+		AddLibs( sdl, "libuuid" );
 #endif
 	}
 

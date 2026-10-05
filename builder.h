@@ -3039,7 +3039,9 @@ static const char *Builder_CreateCompilationCommand( arena_t *commandArena, buil
 
 		StringBuilder_Appendf( scratch.arena, &compileArgs, "/showIncludes " );
 
-		Builder_AddSanitizerArgs( &scratch, &compileArgs, config->sanitizers, "/fsanitize" );
+		// clang-cl only accepts the slash form for address
+		// so use the dash form which both it and cl.exe accept for everything
+		Builder_AddSanitizerArgs( &scratch, &compileArgs, config->sanitizers, "-fsanitize" );
 	} else
 #endif
 	{
@@ -3833,6 +3835,17 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 				return BUILD_RESULT_FAILED;
 			}
 
+#if defined( _WIN32 )
+			// msvc only supports the address sanitizer
+			// the other sanitizers it supports arent exposed by builder because they're specific to msvc
+			// cl.exe only warns about the others and carries on, so the build would silently go ahead without them
+			if ( context->compilerIsMSVC && ( config->sanitizers & ~SANITIZER_ADDRESS ) != 0 ) {
+				Builder_Error( "Config \"%s\" uses sanitizers that MSVC doesn't support.  MSVC only supports SANITIZER_ADDRESS.\n", config->name );
+				Builder_RewindArena( context->buildScratch->arena, &configStart );
+				return BUILD_RESULT_FAILED;
+			}
+#endif
+
 			// hash just the config compile options with the compiler version
 			uint64_t configCompileCommandHash = Builder_HashString( Builder_FormatString( scratch.arena, "%s%s", baseCompileCommand, context->compilerVersionString ) );
 
@@ -4146,13 +4159,15 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 								continue;
 							}
 
+							// msvc ships sanitizer libs with the same names as clang's, and msvc's lib folder is searched first
+							// so pass clang's by full path otherwise we link msvc's, which clang's runtime isnt compatible with
 							switch ( sanitizerFlagBit ) {
 								case SANITIZER_ADDRESS:
-									StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "clang_rt.asan_dynamic-x86_64.lib /WHOLEARCHIVE:clang_rt.asan_static_runtime_thunk-x86_64.lib /INFERASANLIBS:NO " );
+									StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "\"%s\\lib\\windows\\clang_rt.asan_dynamic-x86_64.lib\" /WHOLEARCHIVE:\"%s\\lib\\windows\\clang_rt.asan_static_runtime_thunk-x86_64.lib\" /INFERASANLIBS:NO ", context->clangSanitizerResourceDir, context->clangSanitizerResourceDir );
 									break;
 
 								case SANITIZER_UNDEFINED_BEHAVIOR:
-									StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "clang_rt.ubsan_standalone-x86_64.lib dbghelp.lib shell32.lib " );
+									StringBuilder_Appendf( context->buildScratch->arena, &linkerArgs, "\"%s\\lib\\windows\\clang_rt.ubsan_standalone-x86_64.lib\" dbghelp.lib shell32.lib ", context->clangSanitizerResourceDir );
 									break;
 
 								// memory/leak/thread aren't supported by clang on Windows at all - it already rejects them at compile time
@@ -4283,6 +4298,39 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 				}
 
 				linkTimeMS = Builder_TimeMS() - linkTimeStart;
+
+#if defined( _WIN32 )
+				// the asan runtime is a DLL on windows, so the binary wont even start unless the DLL sits next to it
+				// msvc and clang both ship their own copy
+				// msvc picks the debug flavour of the runtime when using the debug CRT
+				if ( useMSVCLink && ( config->sanitizers & SANITIZER_ADDRESS ) && ( config->binaryType != BINARY_TYPE_STATIC_LIBRARY ) ) {
+					const char *dllName = "clang_rt.asan_dynamic-x86_64.dll";
+					const char *dllFolder = NULL;
+
+					if ( context->compilerIsMSVC ) {
+						dllFolder = Builder_FormatString( context->buildScratch->arena, "%s\\bin\\Hostx64\\x64", g_msvcInstall.rootFolder );
+
+						if ( compileContext.debugDefineSet ) {
+							dllName = "clang_rt.asan_dbg_dynamic-x86_64.dll";
+						}
+					} else {
+						dllFolder = Builder_FormatString( context->buildScratch->arena, "%s\\lib\\windows", context->clangSanitizerResourceDir );
+					}
+
+					const char *asanRuntimeSrc = Builder_FormatString( context->buildScratch->arena, "%s\\%s", dllFolder, dllName );
+
+					const char *asanRuntimeDst = dllName;
+					if ( config->binaryFolder ) {
+						asanRuntimeDst = Builder_FormatString( context->buildScratch->arena, "%s%c%s", config->binaryFolder, BUILDER_PATH_SEPARATOR, dllName );
+					}
+
+					if ( !CopyFileA( asanRuntimeSrc, asanRuntimeDst, FALSE ) ) {
+						Builder_Error( "Failed to copy the ASan runtime \"%s\" to \"%s\": GetLastError(): 0x%X\n", asanRuntimeSrc, asanRuntimeDst, GetLastError() );
+						Builder_RewindScratch( context->buildScratch );
+						return BUILD_RESULT_FAILED;
+					}
+				}
+#endif
 			}
 		}
 	}

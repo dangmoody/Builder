@@ -48,6 +48,7 @@ If you need the changelog notes from the older non-1.0 versions, you can find th
 	* Builder also enables this automatically if a config has _DLL in its defines.
 * Removed BuildConfig::noDefaultLibs.
 * Removed BuildConfig::removeFileExtension.
+	* As far as I could tell, no-one was using this one.  Let me know if I was wrong and I'll reimplement it.
 * Removed GetCommandLineArgValue().
 * Removed BUILDER_CALLBACK and the global OnPreBuild() and OnPostBuild() callbacks.
 	* You now control your own main(), so just run your code before and/or after calling Build().

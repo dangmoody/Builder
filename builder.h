@@ -318,6 +318,11 @@ typedef struct BuilderOptions {
 	// This is really only useful to those who are either using an editor + command line workflow, or just hate incremental builds.
 	bool			forceRebuild;
 
+	// If this is true then Builder will show all the shared compiler arguments for each source file first, followed by the source file it's building to what intermediate file.
+	// If this is false then Builder will show every compiler argument for every source file (the literal compiler arguments that got generated for each source file).
+	// This can be useful when you are building lots of compilation units.
+	bool			consolidateCompilerArgs;
+
 	// Enables extra diagnostic logging throughout the build (each line prefixed "VERBOSE: ").
 	// You can set this yourself, or leave it and Builder will set it automatically if "-v" or "--verbose" is present in argv.
 	bool			verboseLogging;
@@ -3156,6 +3161,7 @@ typedef struct builderCompileJobPool_t {
 	builderCompilePacket_t				*compilePackets;
 	uint32_t							compilePacketCount;
 	bool								useMSVCSyntax;
+	bool								consolidateCompilerArgs;
 	builderCompileJobDependencyOutput_t	*dependencyOutputs;
 	builderAtomic32_t					dependencyOutputIndex;
 	builderAtomic32_t					nextCompileCommandIndex;
@@ -3166,7 +3172,13 @@ static bool Builder_CompileSourceFile( builderCompileJobPool_t *pool, builderCom
 	scratch_t scratch = Builder_GetScratch( NULL );
 
 	builderCompilePacket_t *compilePacket = &pool->compilePackets[compilePacketIndex];
-	printf( "%s\n", compilePacket->compileCommand );
+
+	// consolidated mode already printed the shared args once, so only show what this file builds into
+	if ( pool->consolidateCompilerArgs ) {
+		printf( "%s -> %s\n", compilePacket->sourceFile, compilePacket->intermediateFile );
+	} else {
+		printf( "%s\n", compilePacket->compileCommand );
+	}
 
 	char *compilerOutput = NULL;
 	int32_t compileResult = Builder_RunProcess( scratch.arena, compilePacket->compileCommand, false, &compilerOutput );
@@ -3928,6 +3940,12 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 				needsCompilePacketCount = compilePacketCount;
 			}
 
+			// show the shared args once instead of per file
+			// done here because baseCompileCommand dies with this scratch
+			if ( options->consolidateCompilerArgs && needsCompilePacketCount > 0 ) {
+				printf( "Building with the following command line options for each source file:\n%s\n", baseCompileCommand );
+			}
+
 			Builder_RewindScratch( &scratch );
 		}
 
@@ -3959,10 +3977,11 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 				}
 
 				builderCompileJobPool_t pool = {
-					.compilePackets		= compilePackets,
-					.compilePacketCount	= needsCompilePacketCount,
-					.useMSVCSyntax		= context->compilerIsMSVC || context->compilerIsClangCL,
-					.dependencyOutputs	= dependencyOutputs
+					.compilePackets				= compilePackets,
+					.compilePacketCount			= needsCompilePacketCount,
+					.useMSVCSyntax				= context->compilerIsMSVC || context->compilerIsClangCL,
+					.consolidateCompilerArgs	= options->consolidateCompilerArgs,
+					.dependencyOutputs			= dependencyOutputs
 				};
 
 				if ( numAdditionalThreads > 0 ) {

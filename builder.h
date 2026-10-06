@@ -33,6 +33,8 @@ CONTENTS:
 	5.  BuildConfig Dependencies
 	6.  Custom Command Line Arguments
 	7.  Choosing a Compiler
+	8.  Contributing
+	9.  Credits
 
 
 1. INTRO
@@ -178,6 +180,24 @@ If you want to use a different compiler you can do this via BuilderOptions::comp
 	options.compilerVersion = "15.1.0";	// this one is optional and warns you on a mismatch
 
 For MSVC it's recommended you just set your compiler path to "cl" and Builder will locate the MSVC toolchain and Windows SDK automatically, but a hard-coded path works too.
+
+
+8. CONTRIBUTING
+
+Yes!
+
+See doc/Contributing.md, which came with this file.
+
+
+9. CREDITS
+Builder would not have been possible without the following people who deserve, at the very least, a special thanks:
+
+	* Dale Green
+	* Aiden Knight (File globbing, better incremental compilation, Windows dynamic runtime, and lots of other small things)
+	* Ed Owen (Compilation database support, QoL improvements)
+	* Yann Richeux (Bug fixes)
+	* Tom Whitcombe (Visual Studio project generation)
+	* Mike Young (Linux platform code)
 
 ===========================================================================
 */

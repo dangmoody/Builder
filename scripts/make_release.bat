@@ -12,7 +12,9 @@ if [%version%]==[] (
 pushd %~dp0
 pushd ..
 
-.\\tools\\7zip-win64\\7za.exe a -tzip .\\releases\\builder_%version%_win64.zip builder.h builder_visual_studio.h builder_vs_code.h builder_zed.h builder_compilation_database.h
+if exist .\\releases\\builder_%version%.zip del .\\releases\\builder_%version%.zip
+
+.\\tools\\7zip-win64\\7za.exe a -tzip .\\releases\\builder_%version%.zip builder.h builder_visual_studio.h builder_vs_code.h builder_zed.h builder_compilation_database.h doc\\CHANGELOG.txt doc\\CHANGELOG_OLD.txt doc\\Contributing.md README.md LICENSE
 
 popd
 popd

@@ -24,6 +24,21 @@ builderDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")/..
 
 pushd ${builderDir}
 
+# build and run tests
+pushd tests
+
+if ! ./build_tests; then
+	echo "ERROR: Failed to build the tests!  A release cannot be made while the tests don't compile"
+	exit 1
+fi
+
+if ! ./builder_tests; then
+	echo "ERROR: Tests failed to run successfully!  A release cannot be made while the tests don't work"
+	exit 1
+fi
+
+popd
+
 rm -f releases/builder_${version}.zip
 
 7za a -tzip releases/builder_${version}.zip builder.h builder_visual_studio.h builder_vs_code.h builder_zed.h builder_compilation_database.h doc/CHANGELOG.txt doc/CHANGELOG_OLD.txt doc/Contributing.md README.md LICENSE

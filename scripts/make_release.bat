@@ -12,6 +12,25 @@ if [%version%]==[] (
 pushd %~dp0
 pushd ..
 
+:: build and run tests
+pushd tests
+
+.\\build_tests.exe
+
+if %errorlevel% NEQ 0 (
+	echo ERROR: Failed to build the tests!  A release cannot be made while the tests dont compile
+	exit /B %errorlevel%
+)
+
+.\\builder_tests.exe
+
+if %errorlevel% NEQ 0 (
+	echo ERROR: Tests failed to run successfully!  A release cannot be made while the tests dont work
+	exit /B %errorlevel%
+)
+
+popd
+
 if exist .\\releases\\builder_%version%.zip del .\\releases\\builder_%version%.zip
 
 .\\tools\\7zip-win64\\7za.exe a -tzip .\\releases\\builder_%version%.zip builder.h builder_visual_studio.h builder_vs_code.h builder_zed.h builder_compilation_database.h doc\\CHANGELOG.txt doc\\CHANGELOG_OLD.txt doc\\Contributing.md README.md LICENSE

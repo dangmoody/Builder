@@ -33,7 +33,15 @@ popd
 
 if exist .\\releases\\builder_%version%.zip del .\\releases\\builder_%version%.zip
 
-.\\tools\\7zip-win64\\7za.exe a -tzip .\\releases\\builder_%version%.zip builder.h builder_visual_studio.h builder_vs_code.h builder_zed.h builder_compilation_database.h doc\\CHANGELOG.txt doc\\CHANGELOG_OLD.txt doc\\Contributing.md README.md LICENSE
+set tempFolder=.\\releases\\temp
+
+robocopy .\\doc %tempFolder%\\doc CHANGELOG.txt
+robocopy .\\doc %tempFolder%\\doc CHANGELOG_OLD.txt
+robocopy .\\doc %tempFolder%\\doc Contributing.md
+
+.\\tools\\7zip-win64\\7za.exe a -tzip .\\releases\\builder_%version%.zip builder.h builder_visual_studio.h builder_vs_code.h builder_zed.h builder_compilation_database.h %tempFolder%\\doc README.md LICENSE
+
+rd /s /Q %tempFolder%
 
 popd
 popd

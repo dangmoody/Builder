@@ -170,6 +170,10 @@ You can then pass that command line argument through as normal:
 
 	build.exe --release
 
+For arguments of the form "--key=value", use GetCommandLineArgValue to get the value.  It returns NULL if the argument wasn't passed:
+
+	const char *version = GetCommandLineArgValue( argc, argv, "--version" );	// "1.2.3" for --version=1.2.3
+
 
 7. CHOOSING A COMPILER
 By default, Builder will generate compiler arguments for Clang.
@@ -1160,7 +1164,8 @@ static bool Builder_WriteStringBuilderToFile( arena_t *arena, const stringBuilde
 	return Builder_WriteEntireFile( filename, str, stringLength );
 }
 
-static bool HasCommandLineArg( int argc, char **argv, const char *arg ) {
+// Returns true if the exact argument 'arg' is present in the command line args, otherwise returns false.
+bool HasCommandLineArg( int argc, char **argv, const char *arg ) {
 	for ( int argIndex = 0; argIndex < argc; argIndex++ ) {
 		if ( Builder_StringEquals( argv[argIndex], arg ) ) {
 			return true;
@@ -1168,6 +1173,23 @@ static bool HasCommandLineArg( int argc, char **argv, const char *arg ) {
 	}
 
 	return false;
+}
+
+// Returns the value after '=' for args of the form "--key=value", or NULL if not found.
+const char *GetCommandLineArgValue( int argc, char **argv, const char *arg ) {
+	size_t argLength = strlen( arg );
+
+	for ( int argIndex = 0; argIndex < argc; argIndex++ ) {
+		const char *currentArg = argv[argIndex];
+
+		if ( !Builder_StringStartsWith( currentArg, arg ) || currentArg[argLength] != '=' ) {
+			continue;
+		}
+
+		return currentArg + argLength + 1;
+	}
+
+	return NULL;
 }
 
 #define STRING_CHUNK_SIZE 16
@@ -1753,6 +1775,7 @@ static int ShowUsage( const int exitCode ) {
 		"    [custom arguments] (optional):\n"
 		"        Any arguments not listed here are passed through to your build program via main()'s argc/argv.\n"
 		"        Use HasCommandLineArg( int, char **, const char * ) to query for them.\n"
+		"        Use GetCommandLineArgValue( int, char **, const char * ) to get the value of args like \"--key=value\".\n"
 		"\n"
 	);
 

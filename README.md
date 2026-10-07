@@ -159,6 +159,12 @@ You can then pass that command line argument through as normal:
 build.exe --release
 ```
 
+For arguments of the form `--key=value`, use `GetCommandLineArgValue` to get the value.  It returns `NULL` if the argument wasn't passed:
+
+```c
+const char *version = GetCommandLineArgValue( argc, argv, "--version" );	// "1.2.3" for --version=1.2.3
+```
+
 ## Choosing a Compiler
 
 By default, Builder will generate compiler arguments for Clang.

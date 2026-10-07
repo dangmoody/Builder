@@ -22,6 +22,7 @@ If you need the changelog notes from the older non-1.0 versions, you can find th
 		* BUILDER_DOING_USER_CONFIG_BUILD is now removed.
 		* CommandLineArgs is now removed.
 			* HasCommandLineArg() now takes (argc, argv) as the first parameters instead.
+			* GetCommandLineArgValue() now takes (argc, argv) as the first parameters instead.
 		* SetBuilderOptions( BuilderOptions *, CommandLineArgs * ) is now removed.
 	* This is a breaking change.  Every previous concept of "run builder.exe against your build source file" no longer applies.
 		* The build source file is no longer passed as a command line argument.
@@ -49,7 +50,6 @@ If you need the changelog notes from the older non-1.0 versions, you can find th
 * Removed BuildConfig::noDefaultLibs.
 * Removed BuildConfig::removeFileExtension.
 	* As far as I could tell, no-one was using this one.  Let me know if I was wrong and I'll reimplement it.
-* Removed GetCommandLineArgValue().
 * Removed BUILDER_CALLBACK and the global OnPreBuild() and OnPostBuild() callbacks.
 	* You now control your own main(), so just run your code before and/or after calling Build().
 * Added BuilderOptions::selfRebuildConfig.

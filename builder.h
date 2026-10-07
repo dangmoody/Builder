@@ -720,14 +720,14 @@ static bool Builder_StringContains( const char *str, const char *substring ) {
 // returns the position just after the last slash
 static const char * Builder_FilenameFromPath( const char *path, uint64_t pathLength ) {
 	const char *filename = path;
-    
+
     if ( filename ) {
         filename = path + pathLength;
         while ( path != --filename ) {
             if ( *filename == '\\' || *filename == '/' ) {
                 filename++;
                 break;
-            } 
+            }
         }
     }
 
@@ -3491,7 +3491,7 @@ static uint64_t Builder_U64FromByteBuffer( byteBuffer_t *byteBuffer ) {
 	if ( byteBuffer->capacity >= byteBuffer->count + sizeof( uint64_t ) ) {
 		value = *((uint64_t *) &byteBuffer->data[byteBuffer->count]);
 	}
-	
+
 	byteBuffer->count += sizeof( uint64_t );
 	return value;
 }
@@ -3538,7 +3538,7 @@ static byteBuffer_t Builder_ByteBufferFromConfigDependencies( arena_t *arena, co
 	// for incremental link
 	Builder_ByteBufferPushU64( arena, &byteBuffer, configDependencies->linkCommandHash );
 	Builder_ByteBufferPushU64( arena, &byteBuffer, configDependencies->binaryWriteTime );
-    
+
     const libraryDependencyArray_t *libraryDependencyArray = &configDependencies->libraryDependencyArray;
 	Builder_ByteBufferPushU64( arena, &byteBuffer, libraryDependencyArray->count );
 	for ( uint32_t libIndex = 0; libIndex < libraryDependencyArray->count; ++libIndex ) {
@@ -3552,7 +3552,7 @@ static byteBuffer_t Builder_ByteBufferFromConfigDependencies( arena_t *arena, co
 	for ( uint32_t objectIndex = 0; objectIndex < configDependencies->objectFileCount; ++objectIndex ) {
 		const objectToDependencyIndicies_t *objectDependencies = &configDependencies->objectDependencyMap[objectIndex];
 		Builder_ByteBufferPushU64( arena, &byteBuffer, objectDependencies->objectHash );
-		
+
 		Builder_ByteBufferPushU64( arena, &byteBuffer, objectDependencies->dependencyCount );
 		for ( uint64_t indiciesIndex = 0; indiciesIndex < objectDependencies->dependencyCount; ++indiciesIndex ) {
 			Builder_ByteBufferPushU64( arena, &byteBuffer, objectDependencies->dependencyIndices[indiciesIndex] );
@@ -3850,9 +3850,9 @@ typedef struct builderLinkContext_t {
 
 static const char * Builder_CreateLinkCommand( arena_t *commandArena, builderLinkContext_t *linkContext, builderPostBuildConfigData_t *postBuildData ) {
 	scratch_t scratch = Builder_GetScratch( commandArena );
-	
+
 	BuildConfig *config = linkContext->config;
-	
+
 	stringBuilder_t linkerArgs = { 0 };
 #if defined( _WIN32 )
 	if ( linkContext->useMSVCLink ) {
@@ -4218,7 +4218,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 				// and the capacity is how much there is to read
 				byteBuffer_t byteBuffer = { 0 };
 				byteBuffer.data = (uint8_t *) Builder_ReadEntireFile( scratch.arena, postBuildData->dependencyCacheFileName, &byteBuffer.capacity );
-				
+
 				// no file found means we recompile everything
 				if ( byteBuffer.data ) {
 					postBuildData->configDependencies = Builder_ConfigDependenciesFromByteBuffer( context->postBuildArena, &byteBuffer );
@@ -4391,7 +4391,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 		shouldLink = needsCompilePacketCount > 0; // if we compiled something we obviously have to link
 		{
 			double linkTimeStart = Builder_TimeMS();
-			
+
 			const char *binaryPath = Builder_GetBinaryPath( context->buildScratch->arena, config );
 			const char *linkCommand = NULL;
 			uint64_t linkCommandHash = 0;
@@ -4424,7 +4424,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 				// also we really don't need to hash them since we already link if we compiled something
 				{
 					scratch_t scratch = Builder_GetScratch( context->buildScratch->arena );
-					
+
 					stringBuilder_t linkerArgs = { 0 };
 
 					const char *insertPosition = strstr( linkCommand, binaryPath );
@@ -4434,7 +4434,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 					for ( uint32_t intermediateIndex = 0; intermediateIndex < postBuildData->packetCount; ++intermediateIndex ) {
 						StringBuilder_Appendf( scratch.arena, &linkerArgs, "%s ", postBuildData->compilePackets[intermediateIndex].intermediateFile );
 					}
-					
+
 					StringBuilder_Appendf( scratch.arena, &linkerArgs, "%s", insertPosition );
 
 					linkCommand = StringBuilder_ToString( context->buildScratch->arena, &linkerArgs, NULL );
@@ -4447,7 +4447,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 				if ( postBuildData->configDependencies.linkCommandHash == 0 ) {
 					shouldLink = true;
 					postBuildData->didFullLink = true;
-					
+
 #if defined ( _WIN32 )
 					if ( useMSVCLink ) {
 						linkCommand = Builder_FormatString( context->buildScratch->arena, "%s /INCREMENTAL:NO", linkCommand );
@@ -4484,7 +4484,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 					}
 				}
 			}
-			
+
 			if ( shouldLink && config->binaryFolder && !Builder_CreateFolderIfItDoesntExist( config->binaryFolder ) ) {
 				Builder_Error( "Failed to create the binary folder \"%s\".\n", config->binaryFolder );
 				Builder_RewindScratch( context->buildScratch );
@@ -4513,7 +4513,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 							if ( !lineEnd ) {
 								lineEnd = strchr( lineStart, '\0' );
 							}
-	
+
 							if ( !withinLibrarySearch && Builder_StringStartsWith( lineStart, "Searching libraries" ) ) {
 								withinLibrarySearch = true;
 							} else if ( withinLibrarySearch && Builder_StringStartsWith( lineStart, "Finished searching libraries" ) ) {
@@ -4525,10 +4525,10 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 									while ( *libPathEnd != ':' ) {
 										libPathEnd--;
 									}
-	
+
 									uint64_t libPathLength = ( (uint64_t) libPathEnd ) - ( (uint64_t) libPathStart );
 									const char *library = Builder_FormatString( context->postBuildArena, "%.*s", libPathLength, libPathStart );
-	
+
 									bool found = false;
 									for ( builderStringChunk_t *chunk = postBuildData->linkLibraryOutput.head; chunk && !found; chunk = chunk->next ) {
 										for ( uint32_t foundLibsIndex = 0; foundLibsIndex < chunk->count; foundLibsIndex++ ) {
@@ -4538,7 +4538,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 											}
 										}
 									}
-	
+
 									if ( !found ) {
 										Builder_StringListPush( context->postBuildArena, &postBuildData->linkLibraryOutput, library );
 									}
@@ -4546,9 +4546,9 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 							} else {
 								printf( "%.*s\n", (int) ( lineEnd - lineStart ), lineStart );
 							}
-	
+
 							current = lineEnd;
-	
+
 							if ( current ) {
 								current += 1;
 							}
@@ -4565,15 +4565,15 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 								lineEnd = strchr( lineStart, '\0' );
 							}
 							uint64_t lineLength = ( (uint64_t) lineEnd ) - ( (uint64_t) lineStart );
-							
+
 							// isolate only the --trace outputs
 							// TODO: AK: 26/09/2026: this seems brittle
 							const char *filename = Builder_FilenameFromPath( lineStart, lineLength );
 							const char *dotPos = strchr( filename, '.' );
 							const char *spacePos = dotPos ? strchr( dotPos, ' ' ) : NULL;
-							bool isTraceOutput = dotPos && dotPos < lineEnd 
-								&& ( !spacePos || spacePos > lineEnd ) 
-								&& !Builder_StringStartsWith( lineStart, "clang:" ); 
+							bool isTraceOutput = dotPos && dotPos < lineEnd
+								&& ( !spacePos || spacePos > lineEnd )
+								&& !Builder_StringStartsWith( lineStart, "clang:" );
 							if ( isTraceOutput ) {
 								// TODO: AK: 26/09/2026: What happens if their intermediate and bin folder overlaps? Will we let them do that?
 								if ( !Builder_StringStartsWith( lineStart, context->intermediateFolder ) ) {
@@ -4588,7 +4588,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 											}
 										}
 									}
-									
+
 									if ( !found ) {
 										Builder_StringListPush( context->postBuildArena, &postBuildData->linkLibraryOutput, library );
 									}
@@ -4623,7 +4623,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 			} else {
 				printf( "Skipping linking.\n" );
 			}
-			
+
 			linkTimeMS = Builder_TimeMS() - linkTimeStart;
 
 #if defined( _WIN32 )
@@ -4710,7 +4710,7 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 				.dependencies	= Builder_ArenaAlloc( context->postBuildArena, compileDependency_t, dependenciesCapcity )
 			};
 		}
-		
+
 		// new mapping as the number of files could have changed
 		// plus if a file compiled we don't want to accidentally have stored stale dependency data
 		{
@@ -4723,8 +4723,8 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 			for ( uint32_t packetIndex = postBuildData->compiledPacketCount; packetIndex < postBuildData->packetCount; ++packetIndex ) {
 				objectToDependencyIndicies_t *objectDependencies = &objectToDependencyMapping[packetIndex];
 				*objectDependencies = (objectToDependencyIndicies_t) { 0 };
-				
-				printf( "Finding old data for %s with hash %llu\n", postBuildData->compilePackets[packetIndex].sourceFile, postBuildData->compilePackets[packetIndex].compileCommandHash );
+
+				printf( "Finding old data for %s with hash %" PRIu64 "\n", postBuildData->compilePackets[packetIndex].sourceFile, postBuildData->compilePackets[packetIndex].compileCommandHash );
 				for ( uint64_t objectIndex = 0; objectIndex < configDependencies->objectFileCount; ++objectIndex ) {
 					if ( configDependencies->objectDependencyMap[objectIndex].objectHash == postBuildData->compilePackets[packetIndex].compileCommandHash ) {
 						*objectDependencies = configDependencies->objectDependencyMap[objectIndex];
@@ -4766,7 +4766,7 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 				Builder_LogVerbose( options, "    %s\n", compileDependencyArray->dependencies[dependencyIndex].dependency );
 			}
 		}
-		
+
 		// incremental link dependencies
 		libraryDependencyArray_t *libraryDependencyArray = &configDependencies->libraryDependencyArray;
 		if ( libraryDependencyArray->capacity == 0 && postBuildData->linkLibraryOutput.count ) {
@@ -4807,7 +4807,7 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 				}
 
 				if ( libraryDependencyArray->count == libraryDependencyArray->capacity ) {
-					libraryDependencyArray->libraries = Builder_ArenaRealloc( context->postBuildArena, libraryDependencyArray->libraries, 
+					libraryDependencyArray->libraries = Builder_ArenaRealloc( context->postBuildArena, libraryDependencyArray->libraries,
 						libraryDependency_t, libraryDependencyArray->capacity, libraryDependencyArray->capacity * 2);
 					libraryDependencyArray->capacity *= 2;
 				}
@@ -4824,7 +4824,7 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 			libraryDependency_t *dependency = &libraryDependencyArray->libraries[libIndex];
 			Builder_GetFileLastWriteTime( dependency->libraryPath, &dependency->writeTime );
 		}
-		
+
 		Builder_LogVerbose( options, "Library (link) dependencies:\n" );
 		for ( uint64_t libIndex = 0; libIndex < libraryDependencyArray->count; ++libIndex ) {
 			libraryDependency_t *dependency = &libraryDependencyArray->libraries[libIndex];

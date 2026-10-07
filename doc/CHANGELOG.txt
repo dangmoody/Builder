@@ -1,522 +1,101 @@
-v0.14.0, 24/07/2026:
+v1.0.0, <RELEASE DATE HERE>:
 
-This version introduces a new version number despite minimal changes that would otherwise only constitute a patch number bump because Builder got rewritten a fair amount internally between this version and the last one.
+This release is now v1.0.0!
 
-* Visual Studio:
-	* Replaced VisualStudioProject::codeFolders and fileExtensions with VisualStudioProject::extraFiles (thanks @aiden-knight!).
-		* Project files are now populated directly from your BuildConfig's source files (which already support glob patterns), so you no longer need to separately declare code folders or file extensions.
-		* Use extraFiles to add any additional files you want in the project (e.g. headers) via glob patterns, relative to your build script.
-		* This is a breaking change.  If you were using codeFolders/fileExtensions, switch to extraFiles.
-	* Fixed a crash when generating Visual Studio solutions.
-* Fixed several bugs in file globbing so more patterns are now matched correctly.
-* BuildConfig::OnPreBuild and BuildConfig::OnPostBuild now receive the BuildConfig * they're building.
-	* This is a breaking change.  Update your callback signatures to: void ( BuildConfig *config ).
+Everything has been completely rewritten from the ground up.
 
-----------------------------------------------------------------
+I am happy with the API and usage patterns now, so I no longer consider things as subject to change.
 
-v0.13.0, 22/05/2026:
+If you need the changelog notes from the older non-1.0 versions, you can find them in CHANGELOG_OLD.txt, but they will be removed from future releases at a later date.
 
-* Source files are now compiled in parallel across multiple threads.
-	* This makes builds significantly faster.
-	* The number of threads spawned is whichever is smaller: the number of CPU cores (including hyperthreads) or the number of source files.
-* Release archives are now drastically smaller.
-	* The bundled Clang installation previously included the full LLVM toolchain: Fortran/MLIR tools, LLDB, dozens of standalone LLVM utilities, all static libraries, and development headers.  The vast majority of this was never used by Builder.
-* Visual Studio:
-	* Added VisualStudioConfig::runFromDirectory so you can control what directory project configs run from.
-		* Defaults to $(SolutionDir) if not set.
-	* The message about no file extensions being set is now only shown in verbose mode.
-* Fixed subtle bug where some source file paths wouldn't get resolved correctly.
-
-----------------------------------------------------------------
-
-v0.12.0, 01/05/2026:
-
-* Added VS Code JSON file generation.
-	* Builder can now generate .vscode/tasks.json, .vscode/launch.json, and .vscode/c_cpp_properties.json.
-	* Enable this by setting BuilderOptions::generateVSCodeJSONFiles to true and filling out BuilderOptions::vsCodeJSONOptions.
-* Added Zed Editor JSON file generation.
-	* Builder can now generate .zed/tasks.json and .zed/debug.json files for Zed.
-	* Enable this by setting BuilderOptions::generateZedJSONFiles to true and filling out BuilderOptions::zedJSONOptions.
-* Fixed file globbing.
-* Significantly improved README (thanks @aiden-knight!).
-* Added GetCommandLineArgValue( CommandLineArgs *, const char * ).
-	* Returns the value after '=' for args of the form "--key=value", or NULL if not found.
-* Added BuilderOptions::linkAgainstWindowsDynamicRuntime (thanks @aiden-knight!).
-	* On Windows, links against the dynamic C/C++ runtime (DLL) instead of the static runtime.
-	* Sets the _DLL preprocessor definition, which changes linking behavior accordingly.
-	* Has no effect on Linux.
-* Added BuildConfig::noDefaultLibs (thanks @aiden-knight!).
-	* Setting this to true tells Builder not to link against the compiler's default libraries.
-	* On MSVC, this passes /NODEFAULTLIB to the linker.
-	* On Clang (Windows), Builder always passes /NODEFAULTLIB to the linker internally.  When noDefaultLibs is false (the default), Builder explicitly links the correct CRT libraries based on your build configuration (_DEBUG, _DLL).  When noDefaultLibs is true, those libs are omitted entirely.
-	* On Linux, this passes -nodefaultlibs to Clang, which does not exclude libgcc. Use BuildConfig::additionalLinkerArguments to pass -nostdlib if you need that.
-* MSVC:
-	* Builder now warns when a Windows SDK or MSVC installation is malformed (i.e. missing expected folders), and skips it in favour of the next newest valid version.
-	* Fixed a bug where setting BuilderOptions::compilerPath to a full path to cl.exe would leave the linker path uninitialised, causing a crash or silent failure at link time.
-		* Builder now derives the linker path from the same directory as the compiler path in this case.
-	* Builder now throws an error if the Windows SDK registry key KitsRoot10 can't be found under SOFTWARE/Microsoft/Windows Kits/Installed Roots instead of crashing like it used to.
-	* Builder now emits a warning when OPTIMIZATION_LEVEL_O3 is used with the MSVC backend.
-		* MSVC has no /O3 equivalent, so Builder falls back to /O2.
-		* The warning is only shown once per build, regardless of how many configs or source files use it.
-
-----------------------------------------------------------------
-
-v0.11.3, 12/04/2026:
-
-* Fixed a bug where modifying your build source file would not trigger a full rebuild of the config (and its dependencies).
-* Fixed a bug where the --verbose command line argument was not working.
-* ShowUsage() now mentions custom command line arguments and how to use them.
-
-----------------------------------------------------------------
-
-v0.11.2, 03/04/2026:
-
-* Windows:
-	* Fixed Builder selecting an older MSVC installation over a newer one when multiple Visual Studio installations are present.
-		* When enumerating installations, Builder was validating each version's include and lib paths against whichever installation happened to be enumerated last, rather than the one the version actually belonged to.
-		* This caused newer versions (e.g. from VS 2022) to be skipped and an older one (e.g. VS 2019 Build Tools) to be used instead.
-* BuildConfig::additionalLibs no longer requires file extensions on Windows.
-	* Builder now automatically appends .lib to all entries in additionalLibs when building on Windows.
-	* NOTE: If you were already specifying .lib extensions in additionalLibs, you must remove them or your build will break.
-
-----------------------------------------------------------------
-
-v0.11.1, 02/04/2026:
-
-* Windows:
-	* Fixed a crash that could happen if you had multiple Visual Studio installations.
-		* When using Builder's Clang backend, Clang was being called as the linker driver, which caused it to auto-detect your Visual Studio installations and try to invoke their link.exe.
-		* If that link.exe wasn't on your PATH, the build would fail with a cryptic "program not executable" error.
-		* Builder now calls link.exe directly itself, so it is no longer affected by whatever Clang decides to detect on your machine.
-	* If MSVC isn't installed on your machine, Builder now shows a clear error telling you to install it via the Visual Studio Installer or the MS Build Tools, rather than showing a raw error code and moving on.
-		* HRESULT codes from Windows COM calls are now also shown in hex, as God intended.
-	* Windows SDK and MSVC installation queries are now deferred until after command line arguments are parsed, so -v/--verbose is correctly respected during those steps.
-* Put a bunch more information into verbose logging (-v, --verbose):
-	* User feedback highlighted that this had gone ignored for a while.
-	* From now on, verbose mode will start to log everything and the kitchen sink.
-	* This version is simply a first pass, more stuff will get logged in future.
-
-----------------------------------------------------------------
-
-v0.11.0, 30/03/2026:
-
-* Added support for user-defined command line arguments.
-	* You can now pass your own custom arguments to Builder on the command line and check for them inside your build scripts.
-	* Your SetBuilderOptions should now have the function signature: SetBuilderOptions( BuilderOptions *options, CommandLineArgs *args ).
-	* The function HasCommandLineArg( CommandLineArgs *, const char * ) has also been added.
-* Added BuildConfig::OnPreBuild and BuildConfig::OnPostBuild.
-* Fixed a bug where Builder would silently fail if your Windows SDK installation was malformed.
-	* Apparently, Clang doesn't come with some of its own CRT headers and relies on the Windows SDK for this.
-	* So now Builder does the following for a Clang or MSVC build on Windows:
-		* Finds the latest available Windows SDK installation, and throws an error if one can't be found.
-		* Includes the ucrt, um, and shared include and lib folders for a build on Windows.
-* Added BuildConfig::intermediateFolder.
-	* This is relative to BuildConfig::binaryFolder.
-	* If this is unset, Builder will put intermediate files in the same folder as BuildConfig::binaryFolder.
-* The build times for all BuildConfigs now also get shown in the build summary when the build finishes.
-
-----------------------------------------------------------------
-
-v0.10.3, 13/03/2026:
-
-* On Linux, additional library linking syntax is now fully explicit.
-	* Builder will now just take whatever you put in your additional library and pass that to the linker as is.
-	* Previously if your additional library entry began with a "lib" prefix, then Builder would remove that prefix for you before passing the argument to the linker.  If it didn't, then it would automatically prepend with a colon.
-	* This can be confusing and can also not be exactly what the user asked Builder to do, so now Builder will not do any modification of the additional library that you specify.
-	* So now:
-		* If you are linking to a library that starts with "lib" you do not need to specify that yourself anymore.  Follow the original rules of the linker.
-		* If you want Builder to make a -l: argument, you must specify the colon yourself.
-	* This can always be revisited at a later date if we find that some other way is preferred.
-* Added BuildConfig::additionalLinkerArguments.
-* Fixed overridden compiler paths that were reliant on the PATH environment variable being set not working on Linux.
-
-----------------------------------------------------------------
-
-v0.10.2, 07/03/2026:
-
-* Added BuilderOptions::consolidateCompilerArgs.
-	* When this is enabled it will show all the shared arguments that will be used to compile each source file instead of repeating all the compiler arguments every time for every source file.
-	* It can make the build output easier to read when building lots of source files.
-* MSVC:
-	* Added the "um" and "shared" folders from the Windows SDK to the list of default include folders that the MSVC backend includes when compiling.
-* Visual Studio:
-	* If VisualStudioProject::codeFolders is empty when the solution is being created then Builder will go through each BuildConfig that project knows about and take a superset of all of those folders instead, if it can, instead of erroring.
-	* If VisualStudioProject::fileExtensions is empty when the solution is being created then Builder will use some default file extensions instead of erroring.
-		* Those defaults are currently: c, cpp, cc, cxx, h, hpp, inl
-
-----------------------------------------------------------------
-
-v0.10.1, 27/02/2026:
-
-* Fixed stdout of subprocesses being mangled.
-* MSVC:
-	* Fixed compiler and linker args not showing.
-	* Fixed compiler path and version not being set if anything other than "cl" was specified.
-* Visual Studio:
-	* Fixed execution time not showing when Visual Studio solution generation was requested.
-	* The intermediate folder is no longer created inside the same folder as your Visual Studio solution and instead now actually goes to the binary folder that the user specifies.
-
-----------------------------------------------------------------
-
-v0.10.0, 19/02/2026:
-
-* All snake_case coding conventions have been completely dropped.
-	* Functions are now PascalCase.  For example: set_builder_options is now SetBuilderOptions.
-	* Variables are now camelCase.  For example: generate_solution is now generateSolution.
-	* This change was made because the internal codebase conventions were different from the public API and it was annoying me.
-* Added support for generating compilation database JSON files (thanks @eddyowen!).
-	* You can generate this via BuilderOptions::generateCompilationDatabase.
-	* For editors that support this (CLion, Visual Studio Code, and others), this allows projects using Builder to have syntax highlighting and IntelliSense support without any additional setup.
-* Added BuilderOptions::forceRebuild.
-	* This is really only useful to those who are either using an editor + command line workflow, or just hate incremental builds.
-* Added LANGUAGE_VERSION_C11, LANGUAGE_VERSION_C17, and LANGUAGE_VERSION_C23.
-	* Microsoft's post-C99 support isn't great, so you'll need to take care of that yourself, but Builder at least exposes the options for you now.
-* Better warning message when the version of the override compiler you want to use doesn't match what Builder found.
-* Fixed root-folder source files not getting included in the build when globbing.
-* Fixed crash that could sometimes happen when getting the current directory on Linux.
-* MSVC:
-	* Rewrote how MSVC compiler paths and versions are queried for, as well as Windows SDK and MSVC include/lib paths.
-		* It's more robust, but also means that builds using MSVC are faster now.
-	* Fixed additional library paths not getting detected properly by MSVC.
-	* Fixed bad option being sent to link.exe when making DLLs.
-	* Fixed bad /std flag that got generated when setting the language version.
-
-----------------------------------------------------------------
-
-v0.9.1, 26/12/2025:
-
-* Stopped the program from crashing if the overridden compiler can't be found.  Instead, show an error and exit gracefully.
-
-----------------------------------------------------------------
-
-v0.9.0, 01/12/2025:
-
-* Added support for Linux!
-	* Building binaries works the same as it does on Windows.
-	* By default, as per Linux conventions:
-		* Executables are not given a file extension (so in this case BuildConfig::remove_file_extension will not actually do anything).
-		* Dynamic libraries have the default file extension .so.
-		* Static libraries have the default file extension .a.
-	* Debugging via Rider on Linux currently doesn't work due to MSBuild only half working on Linux.
-		* This works on Windows, though.
-		* The limitation here is coming from Microsoft.
-	* Thanks @Mike430 for helping out with this!
-* Added BuildConfig::additional_compiler_arguments.
-	* These get added to the end of your final list of arguments that you will send to the compiler.
-	* Useful for things like -fPIC etc.
-* Fixed overriding BuilderOptions::compiler_path not working if the path wasn't absolute.
-* Fixed crash where Builder still tried to find the intermediate file after a build failed.
-* Visual Studio:
-	* Fixed generated SLNs not checking to see if they were on Windows before including some Windows-specific dependencies.
-	* Fixed generated SLNs not working properly in Rider.
-	* Fixed Visual Studio installations sometimes not getting detected.
-	* Fixed the entire project getting deleted if a Visual Studio path wasn't specified when generating the project files (thanks @Yann4 for finding out about this one!).
-* Log when doing (and skipping) user config builds.
-
-----------------------------------------------------------------
-
-v0.8.0, 13/08/2025:
-
-WARNING: There are a lot of big changes in this release.  Some of them make this version of Builder very incompatible with previous versions.
-
-* "First time setup" (downloading and installing Clang for you) has been entirely removed.
-	* Users must now set the path to whatever compiler they want to use via BuilderOptions::compiler_path.  If one is not set, then Builder will use the default portable install of Clang that it comes with (more on that below).
-	* Having Builder download and manage a Clang install for you has been an experiment from day one, but we're finding that it causes friction because people are now being forced into a specific Clang install which can cause issues with other tools.
-		* Visual Studio, for instance, has a dependency to a specific Clang version depending on what version of the IDE you are using.
-	* The automated Clang download has proven to be quite brittle for various users depending on their internet connection.  If the download failed then the user would either have to manually install Clang at the correct location or Builder would be unusable; this is unacceptable.
-	* Letting the user specify the path to their own compiler means none of this is an issue anymore.
-	* Builder is a build tool, not a compiler.  So let's stop pretending that it is one.
-	* The user should have full control over their system and Builder shouldn't be dictating what software they use.
-	* Thanks @DaleGreen, @Yann4, and @Mike430 for the feedback and helping me see sense.
-* Added support for compiling with MSVC and GCC.
-	* Because you can now set the path to your own compiler, it only makes sense to add multi-compiler support now.
-	* If your BuildConfig::compiler_path ends with "gcc" or "gcc.exe" then Builder will know to build with GCC.
-		* For GCC, as with Clang, you can either set BuilderOptions::compiler_path to the absolute path of your compiler, or you can add the compiler to your PATH and just put the name of the compiler in BuilderOptions::compiler_path.  It's entirely your choice.
-	* For MSVC, just set BuilderOptions::compiler_path to "cl" or "cl.exe" and let Builder detect the version(s) of MSVC you have.  You can use absolute paths if you want, but then you'll also have to get all the paths to all the correct Windows SDK includes and libraries and it's a bit of pain.
-* Builder now comes with a portable install of Clang.
-	* Users are now the ones who dictate what compiler Builder will compile their own code with, but Builder needs to know about a compiler beforehand when compiling the build source file into a DLL.
-	* This is strictly for compiling the user config DLL ONLY and nothing else (but there's obviously nothing stopping you from compiling your own code with it if you wanted to).
-	* Giving Builder it's own copy of Clang that it only uses in that specific case is the only solution I can think of that means Builder can still build its user config DLLs without forcing the user to have a specific compiler installed on their machine (If you have a better idea, do let me know!).
+* Builder is now a single header file (builder.h) instead of a standalone builder.exe.
+	* There is no separate Builder executable to install or put on your PATH anymore.  All the core building functionality of Builder is now self-contained inside builder.h.
+	* Your build script #includes "builder.h" (which can now be local to your project), #defines BUILDER_IMPLEMENTATION in exactly one translation unit, and calls Build() itself from its own main().
+	* You compile and run that build script directly (e.g. clang -o build.exe build.c) and then run the compiled program instead of running a separate builder tool against it.
+		* Because you now build this yourself, you can now configure the user config build yourself.
+		* That compiled build.exe is now the program you use to build with.
+			* It also means that program is easily small enough to live inside a GitHub project as it's really only ever going to be a couple hundred kilobytes big now.
+			* GitHub's individual file limit in repositories is 100MB at the time of writing, so you'll be fine.
 	* Therefore:
-		* BUILDER_CLANG_VERSION_MAJOR, BUILDER_CLANG_VERSION_MINOR, and BUILDER_CLANG_VERSION_PATCH have all been removed.
-		* Builder is no longer small enough to fit inside a single GitHub repository without using Git LFS.  Therefore, you should treat Builder as a program that you install centrally on your PC instead of a program that you can drop into an individual repository.
-* Removed .build_info files.
-	* The only reason we initially had these was because we thought it was a good idea to read from these when doing a build from Visual Studio, but the fact of the matter is that the only data that actually needs to get cached is the include dependencies for each source file that gets built.
-	* We instead now have .include_dependencies files which cache this information, but that's it.
-	* We have all the caching we need already in the form the build settings DLL.  If that DLL exists then Builder runs it, if it doesn't then Builder compiles it beforehand.  _This_ is what tells us what build settings we have and it's all we need.  We don't need a config file or a DSL for this.
-	* This also means that all building behaviour for both the build settings DLL and the actual code build you want to do has been completely unified.  This means that Builder now has less code in it than before and runs faster.
-* Added BuildConfig::language_version.
-	* This lets you explicitly set what version of C or C++ you want to build your program with.
-	* For example, LANGUAGE_VERSION_C99 will set -std=c99 in the command line args when calling Clang, and so on.
-* Added BuilderOptions::compiler_version.
-	* This lets you set the expected version of the compiler that you're using.
-	* If this doesn't match the version that your compiler actually is then Builder will generate a warning.
-	* This is useful in teams where you want people to be on the same compiler version.
-	* Different compiler versions can introduce new features/warnings and generally otherwise break things, so having something that highlights that two people are on a different compiler version can help against weird behaviour that exists on one machine but not another.
-* Fixed very out of date help text when passing -h or --help (whoops!).
-
-----------------------------------------------------------------
-
-v0.7.0, 27/06/2025:
-
-* Reduced build times (round 2)!
-	* Instead of compiling all source files into a single intermediate file and then passing that to Clang, we now build one intermediate file per compilation unit.
-		* This means faster full rebuilds as well as incremental builds (even SUC builds are faster).
-		* These newly created intermediate files go inside <binary folder>/intermediate.
-	* As a result of the new way we build binaries, all old .build_info files are incompatible.  You will need to delete your .builder folder and rebuild.  Sorry!
-* Added better support for wildcard file resolution so now it works more like Linux.
-	* Before, doing something like src/*.cpp would resolve ALL .cpp files in the src folder as well any found in subfolders.  Now it will NOT resolve files in subfolders.
-	* If you want subfolder file resolution you must follow the linux convention (E.G.: src/**/*.cpp).
-* Added BuildConfig::warning_levels.
-	* Before we used to add all Clang warning levels to builds by default, but now we enable none of them by default.
-	* This is to let people decide how strict they want the compiler to be (we already offered options like this with BuildConfig::warnings_as_errors).
-	* Clang can be quite strict as it is, so let's not annoy people unnecessarily.
-* Added some more timing metrics when doing builds.
-	* We now time more than just the total time taken to run Builder.exe from start to finish.
-	* We're doing this to get a better idea of where build time is being spent when using Builder and therefore how we can make Builder faster.
-	* We now also log:
-		* User config build.
-		* Visual Studio solution generation time.
-		* The time taken to just run the compiler subprocess.
-		* .build_info file read and write time.
-		* Dependency file read time.
-		* Maybe more, in future.
-* Removed all default ignored warnings.
-	* Because users can now set their own warning level(s) for their builds, it makes no sense for Builder to ignore a bunch by default.
-	* This gives you more control over your builds.
-* Moved some extraneous logging when generating a Visual Studio solution to only show when verbose logging (-v) argument is specified.
-* Hide unecessary warning that gets fired when doing a hashmap lookup.
-* Fixed builds failing when building the same source file from a different folder location.
-* Fixed builds not skipping when binary has already been built.
-
-----------------------------------------------------------------
-
-v0.6.4, 07/04/2025:
-
-* Reduced build times!
-	* #include dependency resolution is now done through Clang's -MD arg, which is faster than the custom solution Builder had for this.
-	* This will produce .d files that get put into the .builder folder.
-* Fixed Builder hanging if a Visual Studio project had multiple folders in its name.
-* Fixed BuildConfig::warnings_as_errors not being read from/written to the .build_info file.
-* Better and more accurate documentation.
-* Moved Clang version into builder.h so that users can see and check what version of Clang Builder uses, if they need to.
-* Refactored a bunch of things internally that will mean nothing to the end-user, but internally things are a lot cleaner now.
-
-----------------------------------------------------------------
-
-v0.6.3, 08/03/2025:
-
-* Old Visual Studio files now get deleted when generating a solution.
-	* If a user renamed a project, for example, then the project under the old name would get kept around causing subtle storage bloat.  This change fixes that.
-
-----------------------------------------------------------------
-
-v0.6.2, 02/03/2025:
-
-* Change all std::vector<const char*> in builder.h to std::vector<std::string>.
-	* It's totally feasible that users want to set those fields dynamically, so that necessitated this change.
-* Log when writing to .build_info file.
-
-----------------------------------------------------------------
-
-v0.6.1, 28/02/2025:
-
-* Fixed Visual Studio filters still not showing correctly.
-* Fix .sln files containing GlobalSection(NestedProjects) even if no project folders were requested.
-
-----------------------------------------------------------------
-
-v0.6.0, 23/02/2025:
-
-* Visual Studio:
-	* Added support for project folders.  Projects that now have slashes in their names will cause Builder to put that project inside a project folder in the Solution Explorer.
-		* For example: If you set a VisualStudioProject::name to be "games/shooter" then Builder will create a project called "shooter" that is inside a project folder called "games".
-	* Fixed top-level files and some subfolders inside VisualStudioProject::code_folders not getting added to the Visual Studio project.
-	* Fixed IntelliSense not correctly showing additional include and library paths.
-* on_pre_build() and on_post_build() now always use the path of the input file as the CWD.
-* Refactored the system that reads and writes .build_info files.
-	* The old way used to be one system for reading the files and another for writing, but now it's one unified system that does both.
-	* This new system works with pre-existing .build_info files.
-
-----------------------------------------------------------------
-
-v0.5.8, 09/02/2025:
-
-* Fixed the way Builder checks for duplicate BuildConfigs when calling add_build_config().
-	* Builder now hashes the BuildConfig and checks the hashes when adding a new BuildConfig in order to determine if it's a duplicate or not.
-	* You can find this code at the bottom of builder.h.  It's not meant to be used by users (as the comment shows).
-* Refactored rebuild skipping.  It's more robust now.
-
-----------------------------------------------------------------
-
-v0.5.7, 08/02/2025:
-
-* Throw an error if multiple BuildConfigs have an empty name.
-* Throw an error if specifying a config whilst also trying to generate a Visual Studio solution.
-	* Having Builder actually do both of those things feels hacky so I'm deliberately not allowing it to do both right now.
-* Input file path is no longer allocated via temp storage, which now gets reset.
-* Visual Studio files are now written via one single call to file_write_entire(), as opposed to lots of file_write*() calls.
-	* More stable this way and faster too!
-
-----------------------------------------------------------------
-
-v0.5.6, 02/02/2025:
-
-* Fixed temp storage overflows which caused Builder to crash.
-* Fixed builds incorrectly being skipped if an old version of the binary with the same name existed.
-
-----------------------------------------------------------------
-
-v0.5.5, 21/01/2025:
-
-* Builder now serializes it's version number into all .build_info files.
-	* This is to detect whether or not we need to rebuild between new versions of builder.
-	* As a result of this, all old .build_info files are out of date and will need to be deleted before using this version.
-* Fixed Visual Studio filters not showing all the files in their correct folder/subfolder.
-
-----------------------------------------------------------------
-
-v0.5.4, 17/01/2025:
-
-* Fixed builds getting skipped if Builder can't find the .build_info file or if the expected .build_info file name changes.
-* Fixed path from Visual Studio solution to Builder being null if the input file didn't also contain a path.
-
-----------------------------------------------------------------
-
-v0.5.3, 07/01/2025:
-
-* Builder now officially ships under the MIT license.
-	* I forgot to change the license when I made Builder publicly available - whoops!
-
-----------------------------------------------------------------
-
-v0.5.2, 05/01/2025:
-
-* Fixed a crash when sometimes trying to generate a .sln file.
-* Fixed a crash when sometimes trying to build from Visual Studio.
-* Fixed the binary folder being called "null" when the build source file doesn't contain a path.
-* Fixed "default" build config not getting written to .build_info file in a default build.
-* Fixed source files sometimes not getting resolved when the build source file contains a path.
-* Fixed duplicate files sometimes not getting treated as duplicates when tracking them in the .build_info file.
-* Fixed source file paths sometimes being null when serializing a .build_info file.
-* Better output in the console when generating a Visual Studio solution.
-
-----------------------------------------------------------------
-
-v0.5.1, 01/01/2025:
-
-* Some of the documentation was out of date; can't be having that!
-
-----------------------------------------------------------------
-
-v0.5.0, 28/12/2024:
-
-* BuildConfig::source_files now supports wildcards.
-	* This will make adding source files to your projects a lot less tedious, since you now won't need to tell Builder about every individual new source file that you add.
-* BuildConfig::additional_includes and BuildConfig::additional_lib_paths are now arrays of std::strings.
-	* This was done because sometimes you want to add something to these arrays that is queried dynamically at runtime (E.G.: based off an environment variable via a call to getenv()) and the memory would otherwise get lost.
-* Removed VisualStudioConfig::output_directory.
-	* This only existed because Builder wasn't smart enough to figure this out for you, but it is now.
-* User config build context now #defines _CRT_SECURE_NO_WARNINGS for you by default.
-	* This means you can now call functions that are banned by that #define if you need to, for some reason.
-* Fixed the following bugs:
-	* If multiple configs are specified in the build source file but none were passed at the command line then Builder will now throw an error about this.
-	* Paths to source files are now resolved properly when building from visual studio.
-	* Includes that were commented out are no longer included in the .build_info file.
-		* Because this include is ultimately not included in the build, Builder shouldn't care about it.  The file name/path could be wrong, and the file could not exist.
-	* Files that got overwritten did not get wiped, leaving lots of trailing garbage content.
-
-----------------------------------------------------------------
-
-v0.4.0, 18/12/2024:
-
-* Added BuildConfig::depends_on.
-	* This allows you to specify build dependencies.  Builder will recursively build everything inside BuildConfig::depends_on first.
-	* Because of this, all of your old .build_info files will not work with this version of Builder.  Delete those beforehand.
-* Added VisualStudioConfig::name, which just lets you set the name of the config as it will appear in Visual Studio.
-	* This is because BuildConfig::name MUST be unique, so you then have to tell Visual Studio which of your BuildConfigs are classified as what in the eyes of Visual Studio.
-* Added error logging for all file operations.
-	* Some users have reported errors coming from Builder when it attempts to create the binary folder they specify, for instance, but it works fine on others and the problem isn't obvious yet.  We need more logging.
-* Made some improvements for Visual Studio support:
-	* The user-requested the Visual Studio solution path is now created for you automatically.
-	* Header files and .inl files are now added to the solution.
-	* Add all files in subfolders, recursively.
-	* Changed the way you tell Builder what files to add to your Visual Studio solution:
-		* VisualStudioProject::source_files has been replaced for VisualStudioProject::code_folders and VisualStudioProject::file_extensions.
-		* VisualStudioProject::code_folders tells Builder what folders your code lives in (without any search filters).
-		* VisualStudioProject::file_extensions tells Builder what file types you want to include in your project (across any of the folders inside VisualStudioProject::code_folders).
-* Fixed a bug where building via a .build_info file didn't call the on_pre_build() or on_post_build() callbacks.
-* Rebuild skipping:
-	* Checking the timestamps of each file we know about seems to have been completely broken at some point.  It's now been fixed.
-	* Add check for if the binary itself exists.  It's possible to delete the binary after a build without touching any of the source files.
-* The user config build step will now only happen if doing a build from a C++ file or if the .dll can't be found or loaded when doing a build from a .build_info file.
-
-----------------------------------------------------------------
-
-v0.3.0, 02/11/2024:
-
-* All the members of BuilderOptions have been moved to a new struct called "BuildConfig".
-	* This is because BuilderOptions refers to more than just compiling code now.
-	* See builder.h for what BuilderOptions now contains, but you'll see that things have been made much simpler.
-	* Additionally, BuilderOptions::config got renamed to BuildConfig::name.
-* The entry point set_visual_studio_options() no longer exists.  Instead, all Visual Studio solution generation code must now be written inside set_builder_options().
-	* If you want to generate a solution now, set BuilderOptions::generate_solution to true, and fill out all the members of BuilderOptions::solution like you were doing before.
-	* This is much better because you don't need to duplicate half the code that was inside set_builder_options() to begin with, and you can just use the BuildConfigs that you had already written to generate your Visual Studio solutions and projects.
-	* As a result of this, the functions add_visual_studio_project() and add_visual_studio_config() were removed because they're not needed.
-* BuildConfig::name no longer gets set via the --config command line argument.
-	* Instead, Builder will check the config set via the command line against the names of all the BuildConfigs you added to BuilderOptions::configs.  If Builder matches one of the names of the configs to the command line input, then it will use that one when compiling.  Otherwise it will throw an error saying it can't find this config with this name.  They MUST match exactly (case sensitive).
-	* With this change, all of the members inside BuildConfig can now be set by you and there no more special rules for which members you can and can't write to.  This makes things much simpler.
-
-----------------------------------------------------------------
-
-v0.2.0, 26/10/2024:
-
-* .build_info files have been massively refactored:
-	* .build_info files are now binary files.
-	* Instead of .build_info only containing all source files used in the build (and all the header files we can find) we now serialize all members of BuilderOptions and, if it exists, the Visual Studio solution/projects you generated.
-	* As a result of these changes, all .build_info files were made with an older version of Builder will no longer work.
-	* When generating a Visual Studio solution, a .build_info file will now get generated (this should've been happening before, but it wasn't).
-	* The default values of BuilderOptions are now correctly serialized into the .build_info file that gets generated when you generate a Visual Studio solution.
-* Added BuilderOptions::warnings_as_errors.
-* Added helper functions add_visual_studio_project( VisualStudioSolution* ) and add_visual_studio_config( VisualStudioProject* ) inside builder.h to help with generating Visual Studio solutions.
-* Added -v and --verbose command line arguments, which output more things.
-	* This will be useful for helping diagnose problems, mostly.
-	* This doesn't output a whole lot extra right now, but that will change in future.
-* If no input file is specified, Builder will now tell you that you can pass -h as a command line arg to get help on how to use Builder.
-* Builder will now fatal error if it can't create the binary folder that you specify inside set_builder_options().
-* Better, more helpful information is displayed when you use the help command line argument.
-* Intermediate files no longer contain the file extension of the input file in the output binary file name when the input file is a C++ code file.
-* Make things clearer in the README.
-* Removed VisualStudioConfig::build_source_file.
-	* We don't generate a separate source file every time we generate a Visual Studio project config anymore because we can now use the build info that gets generated with the solution instead, so this became redundant.
-* on_pre_build() and on_post_build() no longer have BuilderOptions* as a parameter, since it's not known how likely people are to need access to BuilderOptions in those functions, currently.
-	* This is the only time I see a change like this happening.  I should have thought longer about how users are going to use these entry points, what they were going to use them for, and what data they actually needed.
-	* If it turns out that users actually need BuilderOptions here then I'll put it back, but I want to know for certain that they need it before I do that.
-
-----------------------------------------------------------------
-
-v0.1.1, 12/10/2024:
-
-* Builder will no longer crash if it can't resolve a source file to include in the build and will instead show you an error saying it can't resolve the source file(s) and exit.
-* Fixed another ABI incompatibility issue between Builder and the user config DLL that caused a crash when trying to write to any of the std::vectors.
-* Fixed a bunch of things that were broken for generating Visual Studio project files after removing our dependency to Core.
-* VisualStudioSolution::path is now relative to the source file that implements set_visual_studio_options, as the documentation says.
-
-----------------------------------------------------------------
-
-v0.1.0, 11/10/2024:
-
-* Add set_builder_options( BuilderOptions* ), which lets you customize your builds how you want via C++.
-* Add --nuke command line argument that will delete all the contents of a folder, followed by the folder itself.
-* Add --config=<config> command line argument which lets you specify your own configs.
-	* BuilderOptions::config gets set to this, so you can use it to configure your builds based off config.
-* Add on_pre_build( BuilderOptions* ) and on_post_build( BuilderOptions* ), which run just before and just after your build, respectively.
-* Add Visual Studio solution and project generation.
-	* This is done by using the entry point set_visual_studio_options( VisualStudioOptions* ).
-* Expose all optimisation levels that Clang provides via BuilderOptions, instead of just a boolean toggling them on/off.
-* Detect if a specific version of Clang is installed.  If it's not, then download and install it automatically.
-	* This doesn't override any pre-existing version of Clang, nor does this set any environment variables.
-* Set default output path to the same folder as the source file you are building.
-* Set default binary name to the same as the source file except the file ends with .exe instead of .cpp.
-* Remove Clang-specific syntax from defines, additional_includes, additional_lib_paths, and additional_libs in BuilderOptions.
-	* Can't remove it from the ignore_warnings just yet.  That list probably needs to be moved into a Clang-specific set of options.
+		* Builder's bundled Clang install is now removed.
+			* You now MUST have a compiler already available (Clang, GCC, MSVC, or Clang-cl on Windows) for both (re-)compiling your build script and building your project.
+		* BUILDER_DOING_USER_CONFIG_BUILD is now removed.
+		* CommandLineArgs is now removed.
+			* HasCommandLineArg() now takes (argc, argv) as the first parameters instead.
+		* SetBuilderOptions( BuilderOptions *, CommandLineArgs * ) is now removed.
+	* This is a breaking change.  Every previous concept of "run builder.exe against your build source file" no longer applies.
+		* The build source file is no longer passed as a command line argument.
+* The public API in builder.h is now plain C instead of C++.
+	* Initializer lists were comfy, but the STL is dog-slow (shocker), bloats the size of a binary, and requiring it alienates C programmers.
+	* C++ programmers can still use the C API no problem.
+	* Every std::vector<std::string> field is now a StringList.
+		* Use MakeStringList(...) to fill them, or the Add*( config, ... ) macros: AddSourceFiles, AddDefines, AddIncludes, AddCompilerArguments, AddLibPaths, AddLibs, AddWarningLevels, AddIgnoreWarnings, AddLinkerArguments.
+	* Every std::string field is now a const char *.
+		* Builder stores the pointer, it does not copy the string.
+	* BuildConfig::dependsOn is now a ConfigPtrList of BuildConfig pointers instead of copies.
+		* Use MakeDependencies(...) or AddDependencies( config, ... ) to fill it.
+* AddBuildConfig() and AddBuildConfigUnique() are now removed.
+	* Use CreateBuildConfig( BuilderOptions * ) instead, which returns a BuildConfig * for you to fill out.
+	* Then call Build( BuilderOptions *, int argc, char **argv ) from your main().
+* BuildConfig::name is now required, even if you only have one config.
+* OptimizationLevel is now Optimization, and BuildConfig::optimizationLevel is now BuildConfig::optimization.
+	* OPTIMIZATION_LEVEL_O0 is now OPTIMIZATION_DISABLED.
+	* OPTIMIZATION_LEVEL_O1 is now OPTIMIZATION_PROGRAM_SIZE (which is now -Os on Clang/GCC).
+	* OPTIMIZATION_LEVEL_O2 is now OPTIMIZATION_PROGRAM_BALANCED.
+	* OPTIMIZATION_LEVEL_O3 is now OPTIMIZATION_PROGRAM_SPEED.
+	* The default is now OPTIMIZATION_NONE, which passes no optimization flag to the compiler at all (previously -O0 or /Od).
+* BuilderOptions::linkAgainstWindowsDynamicRuntime is now BuildConfig::useDynamicRuntimeOnWindows, so it can be set per config.
+	* Builder also enables this automatically if a config has _DLL in its defines.
+* Removed BuildConfig::noDefaultLibs.
+* Removed BuildConfig::removeFileExtension.
+	* As far as I could tell, no-one was using this one.  Let me know if I was wrong and I'll reimplement it.
+* Removed GetCommandLineArgValue().
+* Removed BUILDER_CALLBACK and the global OnPreBuild() and OnPostBuild() callbacks.
+	* You now control your own main(), so just run your code before and/or after calling Build().
+* Added BuilderOptions::selfRebuildConfig.
+	* This is a BuildConfig * (created via CreateBuildConfig()) that you can use to tell Builder how to rebuild your build source file when it's changed.
+	* This means you only ever need the raw compiler invocation once, when first ever building your build source file.
+* Removed --nuke as a command line option.
+	* Users typically clean their binaries manually via their file explorer, and if they need command line functionality then the OS already provides this.
+	* The only time they're "deleting" binary files from within their editor is if they're "rebuilding", which we already have a dedicated mechanism for.
+* Removed --visual-studio-build as a command line option.
+* Builder now sets the working directory to the folder containing the build executable.
+	* All relative paths in your BuildConfigs and generator options are now relative to the build executable instead of the build source file.
+* If BuilderOptions::compilerPath is not set, Builder now uses "clang" from your PATH.
+* Linux:
+	* -lstdc++ is no longer added automatically.  Use clang++ or add -lstdc++ to BuildConfig::additionalLinkerArguments yourself.
+	* Library names in BuildConfig::additionalLibs without a path or extension are now linked as -l:<name>.so.
+* BuildConfig::OnPreBuild now runs before source files are globbed, so any source files it generates get picked up.
+* BuildConfig::OnPostBuild now also runs when a build is skipped.
+* Added support for clang-cl.
+	* I don't know why people are using this, but they are, so there you go (don't say I never get you anything).
+* BuildConfig::intermediateFolder is now BuilderOptions::intermediateFolder.
+	* It is now relative to the build executable and defaults to "intermediate".
+* Intermediate files are now named <source file name>_<hash>.o, where the hash is made from the compile command, the compiler version, and the source file path.
+	* This means two source files with the same name in different folders (e.g. "src/render/util.c" and "src/audio/util.c") no longer overwrite each other's object file.
+	* Changing a config's compiler arguments or upgrading your compiler now only rebuilds the affected object files.
+* VS Code JSON generation is now in builder_vs_code.h.
+	* BuilderOptions::generateVSCodeJSONFiles and BuilderOptions::vsCodeJSONOptions are now removed.
+	* You must now manually invoke generation yourself by calling Builder_GenerateVSCodeJSONFiles( BuilderOptions *, VSCodeJSONOptions *, int argc, char **argv ).
+	* #define BUILDER_VS_CODE_IMPLEMENTATION before including builder_vs_code.h.
+	* VSCodeJSONOptions::builderPath is now VSCodeJSONOptions::buildCommand, and defaults to your build executable.
+	* Every std::vector field is now a pointer plus a matching *Count field (e.g. taskConfigs and taskConfigsCount).
+* Zed JSON generation is now in builder_zed.h.
+	* BuilderOptions::generateZedJSONFiles and BuilderOptions::zedJSONOptions are now removed.
+	* You must now manually invoke generation yourself by calling Builder_GenerateZedJSONFiles( BuilderOptions *, ZedJSONOptions *, int argc, char **argv ).
+	* #define BUILDER_ZED_IMPLEMENTATION before including builder_zed.h.
+	* ZedJSONOptions::builderPath is now ZedJSONOptions::buildCommand, and defaults to your build executable.
+	* Every std::vector field is now a pointer plus a matching *Count field (e.g. taskConfigs and taskConfigsCount).
+* Compilation database generation is now in builder_compilation_database.h.
+	* BuilderOptions::generateCompilationDatabase is now removed.
+	* You must now manually invoke generation yourself by calling Builder_GenerateCompilationDatabase( BuilderOptions *, CompilationDatabaseOptions *, int argc, char **argv ).
+	* #define BUILDER_COMPILATION_DATABASE_IMPLEMENTATION before including builder_compilation_database.h.
+	* The compilation database is now generated without compiling anything.
+	* Each entry now uses a single "command" string instead of an "arguments" array.
+* Visual Studio Solution generation is now in builder_visual_studio.h.
+	* BuilderOptions::generateSolution and BuilderOptions::solution are now removed.
+	* You must now manually invoke generation yourself by calling Builder_GenerateVisualStudioSolution( BuilderOptions *, VisualStudioSolution *, int argc, char **argv ).
+	* #define BUILDER_VISUAL_STUDIO_IMPLEMENTATION before including builder_visual_studio.h.
+	* VisualStudioConfig::options is now VisualStudioConfig::config, and is now a BuildConfig *.
+	* Every std::vector field is now a pointer plus a matching *Count field (e.g. projects and projectsCount).
+	* Generated projects no longer have a clean command, since --nuke is removed.  So cleaning Builder projects now don't do anything.

@@ -4,11 +4,11 @@ set -e
 
 ShowUsage() {
 	echo "Usage:"
-	echo "make_release.bat \<version\>"
+	echo "make_release.sh <version>"
 	echo
 	echo "Arguments:"
-	echo     "\<version\> (required):"
-	echo         "The version of the release that you are making (example: v1.2.3 - 1 would be the major version, 2 would be the minor version, and 3 would be the patch version)"
+	echo "    <version> (required):"
+	echo "        The version of the release that you are making (example: v1.2.3 - 1 would be the major version, 2 would be the minor version, and 3 would be the patch version)"
 
 	exit 1
 }
@@ -16,7 +16,7 @@ ShowUsage() {
 version=$1
 
 if [[ -z "$version" ]]; then
-	echo ERROR: Release version was not set!  Please specify a release version
+	echo "ERROR: Release version was not set!  Please specify a release version"
 	ShowUsage
 fi
 
@@ -24,27 +24,23 @@ builderDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")/..
 
 pushd ${builderDir}
 
-# build builder and tests
-source ${builderDir}/scripts/build.sh release
-echo ""
+# build and run tests
+pushd tests
 
-source ${builderDir}/scripts/build_tests.sh release
+if ! ./build_tests; then
+	echo "ERROR: Failed to build the tests!  A release cannot be made while the tests don't compile"
+	exit 1
+fi
 
-# run the tests and make sure they pass
-pushd ${builderDir}/tests
-../bin/builder_tests_release
+if ! ./builder_tests; then
+	echo "ERROR: Tests failed to run successfully!  A release cannot be made while the tests don't work"
+	exit 1
+fi
+
 popd
 
-mkdir -p releases
+rm -f releases/builder_${version}.zip
 
-echo "Smoke-testing trimmed Clang..."
-printf 'int main(void) { return 0; }\n' > releases/smoke.c
-"${builderDir}/clang/bin/clang" -o releases/smoke_test releases/smoke.c
-rm releases/smoke.c releases/smoke_test
-echo "Done."
-echo ""
-
-echo "Making release archive..."
-tar cvf releases/builder_${version}_linux.tar.xz -I 'xz -9e --lzma2=dict=256M' ./bin/builder ./bin/libclang.so ./bin/libclang.so.20.1 clang include doc/CHANGELOG.txt doc/Contributing.md README.md LICENSE
+7za a -tzip releases/builder_${version}.zip builder.h builder_visual_studio.h builder_vs_code.h builder_zed.h builder_compilation_database.h doc/CHANGELOG.txt doc/CHANGELOG_OLD.txt doc/Contributing.md README.md LICENSE
 
 popd

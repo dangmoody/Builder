@@ -6,6 +6,30 @@
 #define BINARY_NAME		"SDL"
 #define BINARY_FOLDER	"bin"
 
+#if defined( __linux__ )
+#define WAYLAND_PROTOCOLS_FOLDER	"intermediate/wayland-generated-protocols"
+
+// SDL's wayland backend includes client headers and links protocol glue that wayland-scanner generates from wayland-protocols/*.xml
+static void GenerateWaylandProtocols( BuildConfig *config ) {
+	(void) config;
+
+	const char *cmd =
+		"mkdir -p " WAYLAND_PROTOCOLS_FOLDER " && "
+		"for xml in wayland-protocols/*.xml; do "
+			"name=$(basename \"$xml\" .xml); "
+			"h=" WAYLAND_PROTOCOLS_FOLDER "/$name-client-protocol.h; "
+			"c=" WAYLAND_PROTOCOLS_FOLDER "/$name-protocol.c; "
+			"[ \"$h\" -nt \"$xml\" ] || wayland-scanner client-header \"$xml\" \"$h\" || exit 1; "
+			"[ \"$c\" -nt \"$xml\" ] || wayland-scanner private-code \"$xml\" \"$c\" || exit 1; "
+		"done";
+
+	if ( system( cmd ) != 0 ) {
+		fprintf( stderr, "Failed to generate wayland protocols.  Is wayland-scanner installed?\n" );
+		exit( 1 );
+	}
+}
+#endif
+
 int main( int argc, char **argv ) {
 	BuilderOptions options = { 0 };
 	ApplyCompilerOverride( &options, argc, argv );
@@ -71,12 +95,13 @@ int main( int argc, char **argv ) {
 		.defines			= MakeStringList( "DLL_EXPORT" ),
 		.additionalIncludes	= MakeStringList(
 			"src",	// this feels dirty, are we sure we want to do this?
-			"include",
-			"include/build_config"
+			"include"
 		),
 	};
 
 #if defined( _WIN32 )
+	AddIncludes( sdl, "include/build_config" );
+
 	// TODO(DM): 14/06/2025: we cant just do "src/**/windows/*.c" here because
 	//	- "hidapi/windows/hid.c" includes "hidapi_descriptor_reconstruct.c" which we dont want to use on windows and it isnt platform wrapped
 	//	- apparently we only want two source files from "src/thread/generic" so we cant glob that either
@@ -137,58 +162,56 @@ int main( int argc, char **argv ) {
 		"user32"
 	);
 #elif defined( __linux__ )
+	// SDL ships no hand-written linux build config, so build_config_linux/SDL_build_config.h is the one SDL's cmake generates
+	// configured with x11 + wayland (both dlopen'd at runtime, so only headers needed at build time) and no external audio/dbus/udev/libusb deps
+	// the source list below mirrors what that cmake config compiles
+	AddIncludes( sdl, "build_config_linux" );
+
 	AddSourceFiles( sdl,
-		// SDL_build_config.h falls back to SDL_build_config_minimal.h on linux which forces every subsystem to its disabled/dummy backend
-		// so pull in the dummy implementations rather than the real linux backends (thread/pthread, joystick/linux, etc) since those are gated on config macros minimal.h doesn't set.
-		"src/core/linux/SDL_threadprio.c",	// core/SDL_core_unsupported.c explicitly excludes SDL_PLATFORM_LINUX, so this is the only place SDL_SetLinuxThreadPriority can come from
-		"src/core/unix/SDL_gtk.c",			// SDL.c calls SDL_Gtk_Quit() unconditionally whenever SDL_PLATFORM_UNIX is set, dummy backends or not
-		"src/dialog/dummy/*.c",
-		"src/filesystem/dummy/*.c",
-		"src/haptic/dummy/*.c",
-		"src/joystick/dummy/*.c",
-		"src/libm/*.c",						// SDL's math fallbacks (SDL_uclibc_*) - always required since minimal.h doesn't set the HAVE_<mathfunc> defines
-		"src/loadso/dummy/*.c",
-		"src/locale/dummy/*.c",
-		"src/misc/dummy/*.c",
-		"src/process/dummy/*.c",
+		"src/camera/v4l2/*.c",
+		"src/core/linux/SDL_evdev.c",
+		"src/core/linux/SDL_evdev_capabilities.c",
+		"src/core/linux/SDL_evdev_kbd.c",
+		"src/core/linux/SDL_threadprio.c",
+		"src/core/unix/*.c",
+		"src/dialog/unix/*.c",
+		"src/filesystem/posix/*.c",
+		"src/filesystem/unix/*.c",
+		"src/gpu/vulkan/*.c",
+		"src/haptic/linux/*.c",
+		"src/joystick/linux/*.c",
+		"src/libm/*.c",
+		"src/loadso/dlopen/*.c",
+		"src/locale/unix/*.c",
+		"src/misc/unix/*.c",
+		"src/power/linux/*.c",
+		"src/process/posix/*.c",
 		"src/render/gpu/*.c",
 		"src/render/opengl/*.c",
 		"src/render/opengles2/*.c",
 		"src/render/vulkan/*.c",
 		"src/sensor/dummy/*.c",
-		"src/thread/generic/*.c",			// SDL_THREADS_DISABLED selects this backend; there's no dummy/disabled option for time and timer below, they're mandatory on every platform
+		"src/storage/steam/*.c",
+		"src/thread/pthread/*.c",
 		"src/time/unix/*.c",
 		"src/timer/unix/*.c",
-		"src/tray/dummy/*.c"
+		"src/tray/unix/*.c",
+		"src/video/x11/*.c"
 	);
 
-	AddDefines( sdl,
-		"HAVE_LIBC",
-		"HAVE_STDARG_H",
-		"HAVE_STDDEF_H",
-		"HAVE_STDINT_H",
-		"HAVE_FLOAT_H",
-		"HAVE_LIMITS_H",
-		"HAVE_MATH_H",
-		"HAVE_SIGNAL_H",
-		"HAVE_STDIO_H",
-		"HAVE_STDLIB_H",
-		"HAVE_STRING_H",
-		"HAVE_STRINGS_H",
-		"HAVE_SYS_TYPES_H",
-		"HAVE_WCHAR_H",
-		"HAVE_INTTYPES_H",
-		"HAVE_MALLOC_H",
-		"HAVE_MEMORY_H",
-		"HAVE_ALLOCA_H",
-		// glibc has these,
-		// but nothing sets the HAVE_* flags that tell SDL_gtk.c not to provide its own fallback
-		"HAVE_GETRESUID",
-		"HAVE_GETRESGID",
-		// time/unix and timer/unix have no dummy/disabled counterpart - every platform needs a real clock
-		"SDL_TIME_UNIX",
-		"SDL_TIMER_UNIX"
-	);
+	// only build the wayland backend if its headers and wayland-scanner are installed
+	// x11-only machines skip it entirely and SDL falls back to x11
+	bool hasWayland = system( "pkg-config --exists wayland-client wayland-cursor wayland-egl xkbcommon && command -v wayland-scanner > /dev/null" ) == 0;
+
+	if ( hasWayland ) {
+		AddDefines( sdl, "SDL_VIDEO_DRIVER_WAYLAND" );
+		AddIncludes( sdl, WAYLAND_PROTOCOLS_FOLDER );
+		AddSourceFiles( sdl, "src/video/wayland/*.c", WAYLAND_PROTOCOLS_FOLDER "/*.c" );
+
+		sdl->OnPreBuild = GenerateWaylandProtocols;
+	}
+
+	AddLibs( sdl, "libm" );
 #endif
 
 	if ( HasCommandLineArg( argc, argv, "--gcc" ) ) {
@@ -199,7 +222,7 @@ int main( int argc, char **argv ) {
 #if defined( _WIN32 )
 		// MSVC/clang pull GUID_NULL, IID_IShellItem, IID_ITaskbarList3 etc in via their default libs;
 		// MinGW needs libuuid.a linked explicitly to define them
-		AddLibs( sdl, "uuid" );
+		AddLibs( sdl, "libuuid" );
 #endif
 	}
 

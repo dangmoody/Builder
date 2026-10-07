@@ -12,7 +12,36 @@ if [%version%]==[] (
 pushd %~dp0
 pushd ..
 
-.\\tools\\7zip-win64\\7za.exe a -tzip .\\releases\\builder_%version%_win64.zip builder.h builder_visual_studio.h builder_vs_code.h builder_zed.h
+:: build and run tests
+pushd tests
+
+.\\build_tests.exe
+
+if %errorlevel% NEQ 0 (
+	echo ERROR: Failed to build the tests!  A release cannot be made while the tests dont compile
+	exit /B %errorlevel%
+)
+
+.\\builder_tests.exe
+
+if %errorlevel% NEQ 0 (
+	echo ERROR: Tests failed to run successfully!  A release cannot be made while the tests dont work
+	exit /B %errorlevel%
+)
+
+popd
+
+if exist .\\releases\\builder_%version%.zip del .\\releases\\builder_%version%.zip
+
+set tempFolder=.\\releases\\temp
+
+robocopy .\\doc %tempFolder%\\doc CHANGELOG.txt
+robocopy .\\doc %tempFolder%\\doc CHANGELOG_OLD.txt
+robocopy .\\doc %tempFolder%\\doc Contributing.md
+
+.\\tools\\7zip-win64\\7za.exe a -tzip .\\releases\\builder_%version%.zip builder.h builder_visual_studio.h builder_vs_code.h builder_zed.h builder_compilation_database.h %tempFolder%\\doc README.md LICENSE
+
+rd /s /Q %tempFolder%
 
 popd
 popd

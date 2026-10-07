@@ -33,6 +33,8 @@ CONTENTS:
 	5.  BuildConfig Dependencies
 	6.  Custom Command Line Arguments
 	7.  Choosing a Compiler
+	8.  Contributing
+	9.  Credits
 
 
 1. INTRO
@@ -57,7 +59,7 @@ You'll need a build script, which is just C/C++ code:
 	#include "builder.h"
 
 	int main( int argc, char **argv ) {
-		BuilderOptions options = {};
+		BuilderOptions options = { 0 };
 
 		BuildConfig *config = CreateBuildConfig( &options );
 		*config = (BuildConfig) {
@@ -106,7 +108,7 @@ BuildConfigs can be built before/after other BuildConfigs through explicit order
 	#include "builder.h"
 
 	int main( int argc, char **argv ) {
-		BuilderOptions options = {};
+		BuilderOptions options = { 0 };
 
 		BuildConfig *mathlib = CreateBuildConfig( &options );
 		*mathlib = (BuildConfig) {
@@ -149,7 +151,7 @@ You can use the HasCommandLineArg function to check if the argument was passed a
 	#include "builder.h"
 
 	int main( int argc, char **argv ) {
-		BuilderOptions options = {};
+		BuilderOptions options = { 0 };
 
 		BuildConfig *config = CreateBuildConfig( &options );
 		*config = (BuildConfig) {
@@ -179,6 +181,24 @@ If you want to use a different compiler you can do this via BuilderOptions::comp
 
 For MSVC it's recommended you just set your compiler path to "cl" and Builder will locate the MSVC toolchain and Windows SDK automatically, but a hard-coded path works too.
 
+
+8. CONTRIBUTING
+
+Yes!
+
+See doc/Contributing.md, which came with this file.
+
+
+9. CREDITS
+Builder would not have been possible without the following people who deserve, at the very least, a special thanks:
+
+	* Dale Green
+	* Aiden Knight (File globbing, better incremental compilation, Windows dynamic runtime, and lots of other small things)
+	* Ed Owen (Compilation database support, QoL improvements)
+	* Yann Richeux (Bug fixes)
+	* Tom Whitcombe (Visual Studio project generation)
+	* Mike Young (Linux platform code)
+
 ===========================================================================
 */
 
@@ -188,8 +208,14 @@ For MSVC it's recommended you just set your compiler path to "cl" and Builder wi
 extern "C" {
 #endif
 
+#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+
+#ifdef _WIN32
+#pragma clang diagnostic ignored "-Wmicrosoft-goto"
+#endif
+#endif // __clang__
 
 #include <stdint.h>
 #include <inttypes.h>
@@ -259,6 +285,7 @@ typedef struct BuildConfig {
 	// Other BuildConfigs that need to be built before this one - see MakeDependencies() and AddDependencies().
 	// Building a config builds everything in here first, so you only ever have to ask for the top-level one.
 	ConfigPtrList	dependsOn;
+	// Leave unset to use name.
 	const char		*binaryName;
 	// The conditional link step will use this path instead of the default outputted binary path.
 	// Use if you move or rename the binary after builds.
@@ -300,7 +327,7 @@ typedef struct BuilderOptions {
 
 	// The folder that intermediate build files (object files) are placed into, relative to build executable.
 	// If this folder doesn't exist then Builder will create it for you.
-	// Leave NULL to put intermediate files at ./intermediates/
+	// Leave NULL to put intermediate files at ./intermediate/
 	const char		*intermediateFolder;
 
 	// If no config is specified at the command line via --config=, what config do you want Builder to build by default?
@@ -313,6 +340,11 @@ typedef struct BuilderOptions {
 	// All binaries and intermediate files will get rebuilt, selfRebuildConfig included.
 	// This is really only useful to those who are either using an editor + command line workflow, or just hate incremental builds.
 	bool			forceRebuild;
+
+	// If this is true then Builder will show all the shared compiler arguments for each source file first, followed by the source file it's building to what intermediate file.
+	// If this is false then Builder will show every compiler argument for every source file (the literal compiler arguments that got generated for each source file).
+	// This can be useful when you are building lots of compilation units.
+	bool			consolidateCompilerArgs;
 
 	// Enables extra diagnostic logging throughout the build (each line prefixed "VERBOSE: ").
 	// You can set this yourself, or leave it and Builder will set it automatically if "-v" or "--verbose" is present in argv.
@@ -452,6 +484,8 @@ int		Build( BuilderOptions *options, int argc, char **argv );
 #define BUILDER_ALIGNOF( type )		alignof( type )
 #elif defined( __STDC_VERSION__ ) && __STDC_VERSION__ >= 201112L
 #define BUILDER_ALIGNOF( type )		_Alignof( type )
+#elif defined( _MSC_VER )
+#define BUILDER_ALIGNOF( type )		__alignof( type )
 #else
 #define BUILDER_ALIGNOF( type )		__alignof__( type )
 #endif
@@ -658,6 +692,10 @@ static bool Builder_StringEquals( const char *a, const char *b ) {
 	return strcmp( a, b ) == 0;
 }
 
+static bool Builder_StringIsEmpty( const char *str ) {
+	return !str || !str[0];
+}
+
 // strnlen() is not ISO C so linux cant use it without linking to C extension libraries
 // strict "-std=cNN" builds can hide its declaration, or on some CRTs the symbol itself, behind feature-test macros we dont control
 // so we have our own implementation
@@ -762,8 +800,8 @@ static void Builder_SetConsoleTextColor( const builderConsoleTextColor_t color )
 
 	switch ( color ) {
 		case CONSOLE_TEXT_COLOR_DEFAULT:	colorLinux = "\033[0m"; break;
-		case CONSOLE_TEXT_COLOR_YELLOW:		colorLinux = "\033[0;31m"; break;
-		case CONSOLE_TEXT_COLOR_RED:		colorLinux = "\033[0;32m"; break;
+		case CONSOLE_TEXT_COLOR_YELLOW:		colorLinux = "\033[1;33m"; break;
+		case CONSOLE_TEXT_COLOR_RED:		colorLinux = "\033[1;31m"; break;
 	}
 
 	BUILDER_ASSERT( colorLinux && "Bad console text color specified." );
@@ -982,7 +1020,7 @@ static bool Builder_GetFileLastWriteTime( const char *path, uint64_t *outTime ) 
 		return false;
 	}
 
-	*outTime = (uint64_t) fileStat.st_mtime;
+	*outTime = ( (uint64_t) fileStat.st_mtim.tv_sec * 1000000000ULL ) + (uint64_t) fileStat.st_mtim.tv_nsec;
 
 	return true;
 #else
@@ -1051,7 +1089,7 @@ static bool Builder_CreateFolderIfItDoesntExist( const char *path ) {
 	return success;
 }
 
-static bool Builder_WriteEntireFile( const char *filename, const uint8_t *content, const uint64_t size ) {
+static bool Builder_WriteEntireFile( const char *filename, const char *content, const uint64_t size ) {
 	FILE *file = fopen( filename, "wb" );
 
 	if ( !file ) {
@@ -1072,7 +1110,7 @@ static bool Builder_WriteEntireFile( const char *filename, const uint8_t *conten
 	return true;
 }
 
-static uint8_t *Builder_ReadEntireFile( arena_t *arena, const char *filename, uint64_t *outSize ) {
+static char *Builder_ReadEntireFile( arena_t *arena, const char *filename, uint64_t *outSize ) {
 	BUILDER_ASSERT( arena && outSize );
 	uint8_t *result = NULL;
 	FILE *file = fopen( filename, "rb" );
@@ -1095,14 +1133,14 @@ static uint8_t *Builder_ReadEntireFile( arena_t *arena, const char *filename, ui
 	}
 
 	rewind( file );
-	uint8_t* buffer = Builder_ArenaAlloc( arena, uint8_t, fileSize );
+	char *buffer = Builder_ArenaAlloc( arena, char, fileSize );
 	if ( !buffer ) {
 		Builder_Error( "Memory allocation failed for file \"%s\".\n", filename );
 		fclose( file );
 		return NULL;
 	}
 
-	uint64_t readBytes = fread( buffer, sizeof(uint8_t), fileSize, file );
+	uint64_t readBytes = fread( buffer, sizeof( uint8_t ), fileSize, file );
 	if ( readBytes < fileSize ) {
 		Builder_Error( "Failed to read entire file \"%s\".\n", filename );
 		free( buffer );
@@ -1111,14 +1149,16 @@ static uint8_t *Builder_ReadEntireFile( arena_t *arena, const char *filename, ui
 	}
 
 	fclose( file );
-	*outSize = (uint64_t)fileSize;
+
+	*outSize = (uint64_t) fileSize;
+
 	return buffer;
 }
 
 static bool Builder_WriteStringBuilderToFile( arena_t *arena, const stringBuilder_t *sb, const char *filename ) {
 	uint64_t stringLength;
 	const char *str = StringBuilder_ToString( arena, (stringBuilder_t *) sb, &stringLength );
-	return Builder_WriteEntireFile( filename, (uint8_t *) str, stringLength );
+	return Builder_WriteEntireFile( filename, str, stringLength );
 }
 
 static bool HasCommandLineArg( int argc, char **argv, const char *arg ) {
@@ -1330,7 +1370,7 @@ void Builder_AddStringsInternal( StringList *list, const char **strings, uint32_
 	for ( uint32_t stringIndex = 0; stringIndex < count; stringIndex++ ) {
 		const char *string = strings[stringIndex];
 
-		BUILDER_ASSERT( string && string[0] && "Adding an empty entry to a BuildConfig list doesn't do anything." );
+		BUILDER_ASSERT( !Builder_StringIsEmpty( string ) && "Adding an empty entry to a BuildConfig list doesn't do anything." );
 
 		// the string itself isn't copied - almost every entry is a literal, and Config_FormatString() covers the rest
 		Builder_StringListPush( configArena, list, string );
@@ -1702,7 +1742,7 @@ static int ShowUsage( const int exitCode ) {
 		"\n"
 		"    " ARG_CONFIG "<config> (optional):\n"
 		"        Sets the config to build to <config>.\n"
-		"        This must match the name of a config you registered via AddBuildConfig().\n"
+		"        This must match the name of a config you created via CreateBuildConfig().\n"
 		"        If you only registered one config you don't need to specify this.\n"
 		"        If you registered more than one config you must either specify this or set BuilderOptions::defaultConfig.\n"
 		"\n"
@@ -2273,11 +2313,17 @@ typedef struct {
 	const char					*ucrtIncludePath;
 	const char					*umIncludePath;
 	const char					*sharedIncludePath;
+	const char					*winrtIncludePath;
 	const char					*ucrtLibPath;
 	const char					*umLibPath;
 
 	builderWindowsSDKVersion_t	version;
 } builderWindowsSDKInstall_t;
+
+#ifdef _WIN32
+builderMSVCInstall_t		g_msvcInstall = { 0 };
+builderWindowsSDKInstall_t	g_windowsSDKInstall = { 0 };
+#endif
 
 typedef struct {
 	builderWindowsSDKVersion_t	versions[BUILDER_MAX_TOOLCHAIN_VERSIONS];
@@ -2320,6 +2366,8 @@ static bool Builder_GetWindowsSDKInstall( arena_t *results, builderWindowsSDKIns
 	builderFoundWindowsSDKVersionData_t foundData = { 0 };
 	bool found = false;
 
+	DWORD windowsSDKRootLength = 0;
+	const char *winSDKRegKey = "KitsRoot10";
 	const char *winSDKRegPath = "SOFTWARE\\Microsoft\\Windows Kits\\Installed Roots";
 	LSTATUS status = RegOpenKeyExA( HKEY_LOCAL_MACHINE, winSDKRegPath, 0, KEY_QUERY_VALUE | KEY_WOW64_32KEY | KEY_ENUMERATE_SUB_KEYS, &key );
 
@@ -2334,9 +2382,6 @@ static bool Builder_GetWindowsSDKInstall( arena_t *results, builderWindowsSDKIns
 		goto cleanup;
 	}
 
-	const char *winSDKRegKey = "KitsRoot10";
-
-	DWORD windowsSDKRootLength = 0;
 	status = RegQueryValueExA( key, winSDKRegKey, NULL, NULL, NULL, &windowsSDKRootLength );
 
 	if ( status == ERROR_SUCCESS ) {
@@ -2399,11 +2444,12 @@ static bool Builder_GetWindowsSDKInstall( arena_t *results, builderWindowsSDKIns
 		char *ucrtIncludeFolder = Builder_FormatString( results, "%sinclude\\%d.%d.%d.%d\\ucrt", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
 		char *umIncludeFolder = Builder_FormatString( results, "%sinclude\\%d.%d.%d.%d\\um", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
 		char *sharedIncludeFolder = Builder_FormatString( results, "%sinclude\\%d.%d.%d.%d\\shared", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
+		char *winrtIncludeFolder = Builder_FormatString( results, "%sinclude\\%d.%d.%d.%d\\winrt", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
 		char *ucrtLibFolder = Builder_FormatString( results, "%sLib\\%d.%d.%d.%d\\ucrt\\x64", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
 		char *umLibFolder = Builder_FormatString( results, "%sLib\\%d.%d.%d.%d\\um\\x64", windowsSDKRoot, version->v0, version->v1, version->v2, version->v3 );
 
 		uint32_t missingFoldersCount = 0;
-		const char *missingFolders[5] = { 0 };
+		const char *missingFolders[6] = { 0 };
 
 		if ( !Builder_FolderExists( ucrtIncludeFolder ) ) {
 			missingFolders[missingFoldersCount++] = ucrtIncludeFolder;
@@ -2415,6 +2461,10 @@ static bool Builder_GetWindowsSDKInstall( arena_t *results, builderWindowsSDKIns
 
 		if ( !Builder_FolderExists( sharedIncludeFolder ) ) {
 			missingFolders[missingFoldersCount++] = sharedIncludeFolder;
+		}
+
+		if ( !Builder_FolderExists( winrtIncludeFolder ) ) {
+			missingFolders[missingFoldersCount++] = winrtIncludeFolder;
 		}
 
 		if ( !Builder_FolderExists( ucrtLibFolder ) ) {
@@ -2439,6 +2489,7 @@ static bool Builder_GetWindowsSDKInstall( arena_t *results, builderWindowsSDKIns
 				"    include/<version>/ucrt\n"
 				"    include/<version>/um\n"
 				"    include/<version>/shared\n"
+				"    include/<version>/winrt\n"
 				"    Lib/<version>/ucrt/x64\n"
 				"    Lib/<version>/um/x64\n"
 			);
@@ -2460,6 +2511,7 @@ static bool Builder_GetWindowsSDKInstall( arena_t *results, builderWindowsSDKIns
 		outSDK->ucrtIncludePath		= ucrtIncludeFolder;
 		outSDK->umIncludePath		= umIncludeFolder;
 		outSDK->sharedIncludePath	= sharedIncludeFolder;
+		outSDK->winrtIncludePath	= winrtIncludeFolder;
 		outSDK->ucrtLibPath			= ucrtLibFolder;
 		outSDK->umLibPath			= umLibFolder;
 		outSDK->version				= *version;
@@ -2567,8 +2619,14 @@ static bool Builder_GetMSVCInstall( arena_t *results, builderMSVCInstall_t *outI
 		return false;
 	}
 
-	ISetupConfiguration *setupConfig = NULL;
+	bool foundMSVCInstall = false;
+	uint32_t useVersionIndex = 0;
+	builderFoundMSVCInstallData_t foundData = { 0 };
+	IEnumSetupInstances *instances = NULL;
+	ISetupInstance *instance = NULL;
+	ULONG foundInstance = 0;
 
+	ISetupConfiguration *setupConfig = NULL;
 #ifdef __cplusplus
 	hr = CoCreateInstance( CLSID_SetupConfiguration, NULL, CLSCTX_INPROC_SERVER, IID_ISetupConfiguration, (void **) &setupConfig );
 #else
@@ -2585,9 +2643,6 @@ static bool Builder_GetMSVCInstall( arena_t *results, builderMSVCInstall_t *outI
 		goto cleanup;
 	}
 
-	IEnumSetupInstances *instances = NULL;
-	ISetupInstance *instance = NULL;
-
 	hr = setupConfig->vtable->EnumInstances( setupConfig, &instances );
 
 	if ( FAILED( hr ) ) {
@@ -2600,10 +2655,7 @@ static bool Builder_GetMSVCInstall( arena_t *results, builderMSVCInstall_t *outI
 		goto cleanup;
 	}
 
-	ULONG foundInstance = 0;
 	hr = instances->vtable->Next( instances, 1, &instance, &foundInstance );
-
-	builderFoundMSVCInstallData_t foundData = { 0 };
 
 	while ( foundInstance ) {
 		BSTR visualStudioInstallationPathWide = NULL;
@@ -2666,9 +2718,6 @@ static bool Builder_GetMSVCInstall( arena_t *results, builderMSVCInstall_t *outI
 	// newest version first
 	qsort( foundData.installs, foundData.installsCount, sizeof( builderMSVCInstall_t ), Builder_CompareMSVCInstallVersions );
 
-	bool found = false;
-	uint32_t useVersionIndex = 0;
-
 	for ( uint32_t versionIndex = 0; versionIndex < foundData.installsCount; versionIndex++ ) {
 		builderMSVCInstall_t *install = &foundData.installs[versionIndex];
 
@@ -2710,12 +2759,12 @@ static bool Builder_GetMSVCInstall( arena_t *results, builderMSVCInstall_t *outI
 		}
 
 		useVersionIndex = versionIndex;
-		found = true;
+		foundMSVCInstall = true;
 
 		break;
 	}
 
-	if ( !found ) {
+	if ( !foundMSVCInstall ) {
 		success = Builder_MSVCNotInstalled();
 		goto cleanup;
 	}
@@ -2891,8 +2940,6 @@ typedef struct builderCompileContext_t {
 	bool						useMSVCSyntax;
 #if defined( _WIN32 )
 	bool						debugDefineSet;
-	builderMSVCInstall_t		*msvcInstall;
-	builderWindowsSDKInstall_t	*windowsSDKInstall;
 #endif
 } builderCompileContext_t;
 
@@ -2939,9 +2986,6 @@ static const char *Builder_CreateCompilationCommand( arena_t *commandArena, buil
 
 #ifdef _WIN32
 	if ( context->useMSVCSyntax ) {
-		builderMSVCInstall_t *msvcInstall = context->msvcInstall;
-		builderWindowsSDKInstall_t *windowsSDKInstall = context->windowsSDKInstall;
-
 		StringBuilder_Appendf( scratch.arena, &compileArgs, "/nologo " );	// disable MSVC spamming its copyright banner for every compilation unit
 		StringBuilder_Appendf( scratch.arena, &compileArgs, "/c " );
 
@@ -2968,11 +3012,12 @@ static const char *Builder_CreateCompilationCommand( arena_t *commandArena, buil
 		}
 
 		// cl.exe doesn't know where the CRT/Windows SDK headers live unless you're in a Developer Command Prompt, so point it there ourselves
-		StringBuilder_Appendf( scratch.arena, &compileArgs, "/I\"%s\" /I\"%s\" /I\"%s\" /I\"%s\" "
-			, msvcInstall->includePath
-			, windowsSDKInstall->ucrtIncludePath
-			, windowsSDKInstall->umIncludePath
-			, windowsSDKInstall->sharedIncludePath );
+		StringBuilder_Appendf( scratch.arena, &compileArgs, "/I\"%s\" /I\"%s\" /I\"%s\" /I\"%s\" /I\"%s\" "
+			, g_msvcInstall.includePath
+			, g_windowsSDKInstall.ucrtIncludePath
+			, g_windowsSDKInstall.umIncludePath
+			, g_windowsSDKInstall.sharedIncludePath
+			, g_windowsSDKInstall.winrtIncludePath );
 
 		for ( builderStringChunk_t *chunk = config->additionalIncludes.head; chunk; chunk = chunk->next ) {
 			for ( uint32_t includeIndex = 0; includeIndex < chunk->count; includeIndex++ ) {
@@ -3034,7 +3079,9 @@ static const char *Builder_CreateCompilationCommand( arena_t *commandArena, buil
 
 		StringBuilder_Appendf( scratch.arena, &compileArgs, "/showIncludes " );
 
-		Builder_AddSanitizerArgs( &scratch, &compileArgs, config->sanitizers, "/fsanitize" );
+		// clang-cl only accepts the slash form for address
+		// so use the dash form which both it and cl.exe accept for everything
+		Builder_AddSanitizerArgs( &scratch, &compileArgs, config->sanitizers, "-fsanitize" );
 	} else
 #endif
 	{
@@ -3155,7 +3202,8 @@ typedef struct builderCompileJobDependencyOutput_t {
 typedef struct builderCompileJobPool_t {
 	builderCompilePacket_t				*compilePackets;
 	uint32_t							compilePacketCount;
-	bool								compilerIsMSVC;
+	bool								useMSVCSyntax;
+	bool								consolidateCompilerArgs;
 	builderCompileJobDependencyOutput_t	*dependencyOutputs;
 	builderAtomic32_t					dependencyOutputIndex;
 	builderAtomic32_t					nextCompileCommandIndex;
@@ -3166,13 +3214,19 @@ static bool Builder_CompileSourceFile( builderCompileJobPool_t *pool, builderCom
 	scratch_t scratch = Builder_GetScratch( NULL );
 
 	builderCompilePacket_t *compilePacket = &pool->compilePackets[compilePacketIndex];
-	printf( "%s\n", compilePacket->compileCommand );
+
+	// consolidated mode already printed the shared args once, so only show what this file builds into
+	if ( pool->consolidateCompilerArgs ) {
+		printf( "%s -> %s\n", compilePacket->sourceFile, compilePacket->intermediateFile );
+	} else {
+		printf( "%s\n", compilePacket->compileCommand );
+	}
 
 	char *compilerOutput = NULL;
 	int32_t compileResult = Builder_RunProcess( scratch.arena, compilePacket->compileCommand, false, &compilerOutput );
 
 #if defined( _WIN32 )
-	if ( pool->compilerIsMSVC ) {
+	if ( pool->useMSVCSyntax ) {
 		uint32_t fileNameStart = 0;
 		const char *sourceCurrent = compilePacket->sourceFile;
 		for ( uint32_t i = 0; sourceCurrent[i] != '\0'; ++i ) {
@@ -3180,6 +3234,10 @@ static bool Builder_CompileSourceFile( builderCompileJobPool_t *pool, builderCom
 				fileNameStart = i + 1;
 			}
 		}
+
+		// cl echoes the source file name before its /showIncludes notes, clang-cl doesn't
+		// so the dependency block starts at the first include note instead of at the file name
+		const char *includePrefix = "Note: including file: ";
 
 		const char *dependencyStart = NULL;
 		const char *dependencyEnd = NULL;
@@ -3189,29 +3247,29 @@ static bool Builder_CompileSourceFile( builderCompileJobPool_t *pool, builderCom
 			const char *lineStart = current;
 			const char *lineEnd = strchr( current, '\n' );
 			if ( !lineEnd ) {
-				lineEnd = strchr( lineEnd, '\0' );
+				lineEnd = strchr( current, '\0' );
 			}
 
-			if ( !dependencyStart && Builder_StringStartsWith( lineStart, fileName ) ) {
+			bool isIncludeNote = Builder_StringStartsWith( lineStart, includePrefix );
+
+			if ( !dependencyStart && isIncludeNote ) {
 				dependencyStart = lineStart;
-			} else if ( dependencyStart && !dependencyEnd ) {
-				if ( !Builder_StringStartsWith( lineStart, "Note: including file: " ) ) {
-					dependencyEnd = current;
-					printf( "%.*s\n", (int) ( lineEnd - lineStart ), lineStart );
-				}
-			} else {
+			} else if ( dependencyStart && !dependencyEnd && !isIncludeNote ) {
+				dependencyEnd = lineStart;
+			}
+
+			bool inDependencyBlock = dependencyStart && !dependencyEnd;
+			bool isFileNameEcho = ( lineStart == compilerOutput ) && Builder_StringStartsWith( lineStart, fileName );
+
+			if ( !inDependencyBlock && !isFileNameEcho ) {
 				printf( "%.*s\n", (int) ( lineEnd - lineStart ), lineStart );
 			}
 
-			current = lineEnd;
-
-			if ( current ) {
-				current += 1;
-			}
+			current = ( *lineEnd == '\0' ) ? NULL : lineEnd + 1;
 		}
 
 		if ( !dependencyEnd && dependencyStart ) {
-			dependencyEnd = current;
+			dependencyEnd = strchr( dependencyStart, '\0' );
 		}
 
 		if ( dependencyStart && dependencyEnd ) {
@@ -3236,7 +3294,7 @@ static bool Builder_CompileSourceFile( builderCompileJobPool_t *pool, builderCom
 			const char *lineStart = current;
 			const char *lineEnd = strchr( current, '\n' );
 			if ( !lineEnd ) {
-				lineEnd = strchr( lineEnd, '\0' );
+				lineEnd = strchr( current, '\0' );
 			}
 
 			// find the part of the output that is dependencies
@@ -3259,10 +3317,7 @@ static bool Builder_CompileSourceFile( builderCompileJobPool_t *pool, builderCom
 				printf( "%.*s\n", (int) ( lineEnd - lineStart ), lineStart );
 			}
 
-			current = lineEnd;
-			if ( current ) {
-				current += 1;
-			}
+			current = ( *lineEnd == '\0' ) ? NULL : lineEnd + 1;
 		}
 
 		if ( dependencyStart && dependencyEnd ) {
@@ -3606,12 +3661,12 @@ static bool Builder_DoesMapContainDependency( const compileDependencyArray_t *co
 	return false;
 }
 
-static void Builder_ParseDependencyInfo( arena_t *dependencyArena, compileDependencyArray_t *compileDependencyArray, objectToDependencyIndicies_t *dependencyMap, char *compilerOutput, bool compilerIsMSVC ) {
+static void Builder_ParseDependencyInfo( arena_t *dependencyArena, compileDependencyArray_t *compileDependencyArray, objectToDependencyIndicies_t *dependencyMap, char *compilerOutput, bool useMSVCSyntax ) {
 	scratch_t scratch = Builder_GetScratch( dependencyArena );
 
-	if ( compilerIsMSVC ) {
-		// skip first line
-		char *current = strchr( compilerOutput, '\n' ) + 1;
+	if ( useMSVCSyntax ) {
+		// the captured block starts at the first include note
+		char *current = compilerOutput;
 
 		const char *includeDependencyPrefix = "Note: including file: ";
 		const uint64_t includeDependencyPrefixLength = strlen( includeDependencyPrefix );
@@ -3656,8 +3711,8 @@ static void Builder_ParseDependencyInfo( arena_t *dependencyArena, compileDepend
 				break;
 			}
 
-			// /r/n
-			current = dependencyEnd + 2;
+			// cl ends lines with \r\n but clang-cl only uses \n
+			current = dependencyEnd + ( ( *dependencyEnd == '\r' ) ? 2 : 1 );
 
 			if ( !Builder_StringStartsWith( current, includeDependencyPrefix ) ) {
 				break;
@@ -3812,7 +3867,7 @@ static const char * Builder_CreateLinkCommand( arena_t *commandArena, builderLin
 			StringBuilder_Appendf( scratch.arena, &linkerArgs, "/DLL " );
 		}
 
-		if ( !config->removeSymbols ) {
+		if ( !config->removeSymbols && config->binaryType != BINARY_TYPE_STATIC_LIBRARY ) {
 			StringBuilder_Appendf( scratch.arena, &linkerArgs, "/DEBUG " );
 		}
 
@@ -3864,19 +3919,21 @@ static const char * Builder_CreateLinkCommand( arena_t *commandArena, builderLin
 			StringBuilder_Appendf( scratch.arena, &linkerArgs, "/LIBPATH:\"%s\\lib\\windows\" ", linkContext->clangSanitizerResourceDir );
 
 			for ( uint32_t sanitizerBitIndex = 0; sanitizerBitIndex < config->sanitizers; sanitizerBitIndex++ ) {
-				SanitizerFlagBits sanitizerFlagBit = ( 1 << sanitizerBitIndex );
+				SanitizerFlagBits sanitizerFlagBit = (SanitizerFlagBits) ( 1 << sanitizerBitIndex );
 
 				if ( ( config->sanitizers & sanitizerFlagBit ) == 0 ) {
 					continue;
 				}
 
+				// msvc ships sanitizer libs with the same names as clang's, and msvc's lib folder is searched first
+				// so pass clang's by full path otherwise we link msvc's, which clang's runtime isnt compatible with
 				switch ( sanitizerFlagBit ) {
 					case SANITIZER_ADDRESS:
-						StringBuilder_Appendf( scratch.arena, &linkerArgs, "clang_rt.asan_dynamic-x86_64.lib /WHOLEARCHIVE:clang_rt.asan_static_runtime_thunk-x86_64.lib /INFERASANLIBS:NO " );
+						StringBuilder_Appendf( scratch.arena, &linkerArgs, "\"%s\\lib\\windows\\clang_rt.asan_dynamic-x86_64.lib\" /WHOLEARCHIVE:\"%s\\lib\\windows\\clang_rt.asan_static_runtime_thunk-x86_64.lib\" /INFERASANLIBS:NO ", linkContext->clangSanitizerResourceDir, linkContext->clangSanitizerResourceDir );
 						break;
 
 					case SANITIZER_UNDEFINED_BEHAVIOR:
-						StringBuilder_Appendf( scratch.arena, &linkerArgs, "clang_rt.ubsan_standalone-x86_64.lib dbghelp.lib shell32.lib " );
+						StringBuilder_Appendf( scratch.arena, &linkerArgs, "\"%s\\lib\\windows\\clang_rt.ubsan_standalone-x86_64.lib\" dbghelp.lib shell32.lib ", linkContext->clangSanitizerResourceDir );
 						break;
 
 					// memory/leak/thread aren't supported by clang on Windows at all - it already rejects them at compile time
@@ -3949,19 +4006,24 @@ static const char * Builder_CreateLinkCommand( arena_t *commandArena, builderLin
 												Builder_PathEndsWith(additionalLib, ".so" ) ||
 												Builder_PathEndsWith(additionalLib, ".a" ) ||
 												Builder_PathEndsWith(additionalLib, ".dylib" );
+					// libs are named by their real filename, so "libm" means libm.so/libm.a
+					// "-l" adds the "lib" prefix back on itself, so strip ours off
+					const char *libPrefix = "lib";
 
 					if ( isExplicitLibFile ) {
-#if defined( _WIN32 )
+	#if defined( _WIN32 )
 						StringBuilder_Appendf( scratch.arena, &linkerArgs, "%s ", additionalLib );
-#elif defined( __linux__ )
+	#elif defined( __linux__ )
 						StringBuilder_Appendf( scratch.arena, &linkerArgs, "-l:%s ", additionalLib );
-#endif
+	#endif
+					} else if ( Builder_StringStartsWith( additionalLib, libPrefix ) ) {
+						StringBuilder_Appendf( scratch.arena, &linkerArgs, "-l%s ", additionalLib + strlen( libPrefix ) );
 					} else {
-#if defined( _WIN32 )
+	#if defined( _WIN32 )
 						StringBuilder_Appendf( scratch.arena, &linkerArgs, "-l%s ", additionalLib );
-#elif defined( __linux__ )
+	#elif defined( __linux__ )
 						StringBuilder_Appendf( scratch.arena, &linkerArgs, "-l:%s%s ", additionalLib, Builder_GetFileExtensionFromBinaryType( BINARY_TYPE_DYNAMIC_LIBRARY ) );
-#endif
+	#endif
 					}
 				}
 			}
@@ -4022,12 +4084,12 @@ static void Builder_SetCWD( BuilderOptions *options, char **argv ) {
 
 static void Builder_SetCmdArgs( BuilderOptions *options, int argc, char **argv ) {
 	for ( int argIndex = 0; argIndex < argc; argIndex++ ) {
-		if ( Builder_StringStartsWith( argv[argIndex], ARG_HELP_SHORT ) || Builder_StringStartsWith( argv[argIndex], ARG_HELP_LONG ) ) {
+		if ( Builder_StringEquals( argv[argIndex], ARG_HELP_SHORT ) || Builder_StringEquals( argv[argIndex], ARG_HELP_LONG ) ) {
 			ShowUsage( 0 );
 			exit( 0 );
 		}
 
-		if ( Builder_StringStartsWith( argv[argIndex], ARG_VERBOSE_SHORT ) || Builder_StringStartsWith( argv[argIndex], ARG_VERBOSE_LONG ) ) {
+		if ( Builder_StringEquals( argv[argIndex], ARG_VERBOSE_SHORT ) || Builder_StringEquals( argv[argIndex], ARG_VERBOSE_LONG ) ) {
 			options->verboseLogging = true;
 		}
 	}
@@ -4040,10 +4102,6 @@ typedef struct builderBuildContext_t {
 	bool									compilerIsMSVC;
 	bool									compilerIsClangCL;
 	bool									compilerIsGCC;
-#if defined( _WIN32 )
-	builderMSVCInstall_t					*msvcInstall;
-	builderWindowsSDKInstall_t				*windowsSDKInstall;
-#endif
 	char									*clangSanitizerResourceDir;
 	const char								*intermediateFolder;
 	uint32_t								numCPUCores;
@@ -4095,10 +4153,6 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 			.config				= config,
 			.compilerPath		= context->compilerPath,
 			.useMSVCSyntax		= context->compilerIsMSVC || context->compilerIsClangCL,
-#if defined( _WIN32 )
-			.msvcInstall		= context->msvcInstall,
-			.windowsSDKInstall	= context->windowsSDKInstall,
-#endif
 		};
 
 		builderPostBuildConfigData_t *postBuildData = &context->postBuildConfigDependencyData[context->builtConfigs++];
@@ -4115,6 +4169,17 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 				Builder_RewindArena( context->buildScratch->arena, &configStart );
 				return BUILD_RESULT_FAILED;
 			}
+
+#if defined( _WIN32 )
+			// msvc only supports the address sanitizer
+			// the other sanitizers it supports arent exposed by builder because they're specific to msvc
+			// cl.exe only warns about the others and carries on, so the build would silently go ahead without them
+			if ( context->compilerIsMSVC && ( config->sanitizers & ~SANITIZER_ADDRESS ) != 0 ) {
+				Builder_Error( "Config \"%s\" uses sanitizers that MSVC doesn't support.  MSVC only supports SANITIZER_ADDRESS.\n", config->name );
+				Builder_RewindArena( context->buildScratch->arena, &configStart );
+				return BUILD_RESULT_FAILED;
+			}
+#endif
 
 			// hash just the config compile options with the compiler version
 			uint64_t configCompileCommandHash = Builder_HashString( Builder_FormatString( scratch.arena, "%s%s", baseCompileCommand, context->compilerVersionString ) );
@@ -4233,6 +4298,12 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 				}
 			}
 
+			// show the shared args once instead of per file
+			// done here because baseCompileCommand dies with this scratch
+			if ( options->consolidateCompilerArgs && needsCompilePacketCount > 0 ) {
+				printf( "Building with the following command line options for each source file:\n%s\n", baseCompileCommand );
+			}
+
 			Builder_RewindScratch( &scratch );
 		}
 
@@ -4265,10 +4336,10 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 				}
 
 				builderCompileJobPool_t pool = {
-					.compilePackets		= postBuildData->compilePackets,
-					.compilePacketCount	= needsCompilePacketCount,
-					.compilerIsMSVC		= context->compilerIsMSVC,
-					.dependencyOutputs	= dependencyOutputs
+					.compilePackets				= postBuildData->compilePackets,
+					.compilePacketCount			= needsCompilePacketCount,
+					.useMSVCSyntax				= context->compilerIsMSVC || context->compilerIsClangCL,
+					.dependencyOutputs			= dependencyOutputs
 				};
 
 				if ( numAdditionalThreads > 0 ) {
@@ -4339,8 +4410,8 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 					.compilerPath 				= context->compilerPath,
 					.clangSanitizerResourceDir 	= context->clangSanitizerResourceDir,
 #if defined ( _WIN32 )
-					.msvcInstall 				= context->msvcInstall,
-					.windowsSDKInstall 			= context->windowsSDKInstall,
+					.msvcInstall 				= &g_msvcInstall,
+					.windowsSDKInstall 			= &g_windowsSDKInstall,
 					.compilerIsMSVC				= context->compilerIsMSVC,
 					.useMSVCLink 				= useMSVCLink,
 					.debugDefineSet 			= compileContext.debugDefineSet,
@@ -4559,8 +4630,41 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 			} else {
 				printf( "Skipping linking.\n" );
 			}
-
+			
 			linkTimeMS = Builder_TimeMS() - linkTimeStart;
+
+#if defined( _WIN32 )
+			// the asan runtime is a DLL on windows, so the binary wont even start unless the DLL sits next to it
+			// msvc and clang both ship their own copy
+			// msvc picks the debug flavour of the runtime when using the debug CRT
+			if ( useMSVCLink && ( config->sanitizers & SANITIZER_ADDRESS ) && ( config->binaryType != BINARY_TYPE_STATIC_LIBRARY ) ) {
+				const char *dllName = "clang_rt.asan_dynamic-x86_64.dll";
+				const char *dllFolder = NULL;
+
+				if ( context->compilerIsMSVC ) {
+					dllFolder = Builder_FormatString( context->buildScratch->arena, "%s\\bin\\Hostx64\\x64", g_msvcInstall.rootFolder );
+
+					if ( compileContext.debugDefineSet ) {
+						dllName = "clang_rt.asan_dbg_dynamic-x86_64.dll";
+					}
+				} else {
+					dllFolder = Builder_FormatString( context->buildScratch->arena, "%s\\lib\\windows", context->clangSanitizerResourceDir );
+				}
+
+				const char *asanRuntimeSrc = Builder_FormatString( context->buildScratch->arena, "%s\\%s", dllFolder, dllName );
+
+				const char *asanRuntimeDst = dllName;
+				if ( config->binaryFolder ) {
+					asanRuntimeDst = Builder_FormatString( context->buildScratch->arena, "%s%c%s", config->binaryFolder, BUILDER_PATH_SEPARATOR, dllName );
+				}
+
+				if ( !CopyFileA( asanRuntimeSrc, asanRuntimeDst, FALSE ) ) {
+					Builder_Error( "Failed to copy the ASan runtime \"%s\" to \"%s\": GetLastError(): 0x%X\n", asanRuntimeSrc, asanRuntimeDst, GetLastError() );
+					Builder_RewindScratch( context->buildScratch );
+					return BUILD_RESULT_FAILED;
+				}
+			}
+#endif
 		}
 	}
 
@@ -4654,7 +4758,7 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 				.dependencyIndices	= Builder_ArenaAlloc( context->postBuildArena, uint64_t, 16 )
 			};
 
-			Builder_ParseDependencyInfo( context->postBuildArena, compileDependencyArray, dependencyMap, dependencyInfo->dependencyString, context->compilerIsMSVC );
+			Builder_ParseDependencyInfo( context->postBuildArena, compileDependencyArray, dependencyMap, dependencyInfo->dependencyString, context->compilerIsMSVC || context->compilerIsClangCL );
 		}
 
 		Builder_LogVerbose( options, "Outputting config dependencies to %s:\n", postBuildData->dependencyCacheFileName );
@@ -4737,7 +4841,7 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 
 		configDependencies->fileVersion = g_builderDependenciesFileVersion;
 		byteBuffer_t byteBuffer = Builder_ByteBufferFromConfigDependencies( context->postBuildArena, configDependencies );
-		Builder_WriteEntireFile( postBuildData->dependencyCacheFileName, byteBuffer.data, byteBuffer.count );
+		Builder_WriteEntireFile( postBuildData->dependencyCacheFileName, (char *) byteBuffer.data, byteBuffer.count );
 	}
 }
 
@@ -4766,24 +4870,22 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 
 	// only query for windows SDK and MSVC installations after verifying cmd line args and
 #ifdef _WIN32
-	builderWindowsSDKInstall_t windowsSDKInstall = { 0 };
-	if ( !Builder_GetWindowsSDKInstall( buildScratch.arena, &windowsSDKInstall ) ) {
+	if ( !Builder_GetWindowsSDKInstall( buildScratch.arena, &g_windowsSDKInstall ) ) {
 		return 1;
 	}
 
-	builderMSVCInstall_t msvcInstall = { 0 };
-	if ( !Builder_GetMSVCInstall( buildScratch.arena, &msvcInstall ) ) {
+	if ( !Builder_GetMSVCInstall( buildScratch.arena, &g_msvcInstall ) ) {
 		return 1;
 	}
 
 	printf( "\n" );
 #endif
 
-	if ( options->compilerPath && options->compilerPath[0] ) {
+	if ( !Builder_StringIsEmpty( options->compilerPath ) ) {
 		Builder_LogVerbose( options, "Found override compiler backend \"%s\" from BuilderOptions::compilerPath.\n", options->compilerPath );
 	}
 
-	const char *compilerPath = ( options->compilerPath && options->compilerPath[0] ) ? options->compilerPath : "clang";
+	const char *compilerPath = !Builder_StringIsEmpty( options->compilerPath ) ? options->compilerPath : "clang";
 
 	bool compilerIsMSVC = Builder_StringEquals( compilerPath, "cl" ) || Builder_StringEquals( compilerPath, "cl.exe" );
 	bool compilerIsClang = Builder_PathEndsWith( compilerPath, "clang" )
@@ -4814,8 +4916,8 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 	char *compilerVersionString = NULL;
 #ifdef _WIN32
 	if ( compilerIsMSVC ) {
-		compilerPath = msvcInstall.compilerPath;
-		compilerVersionString = Builder_FormatString( buildScratch.arena, "%d.%d.%d", msvcInstall.version.v0, msvcInstall.version.v1, msvcInstall.version.v2 );
+		compilerPath = g_msvcInstall.compilerPath;
+		compilerVersionString = Builder_FormatString( buildScratch.arena, "%d.%d.%d", g_msvcInstall.version.v0, g_msvcInstall.version.v1, g_msvcInstall.version.v2 );
 	} else
 #endif
 	{
@@ -4826,7 +4928,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 		compilerVersionString = Builder_ExtractVersionNumber( buildScratch.arena, versionOutput );
 	}
 
-	if ( options->compilerVersion && options->compilerVersion[0] ) {
+	if ( !Builder_StringIsEmpty( options->compilerVersion ) ) {
 		if ( !Builder_StringEquals( compilerVersionString, options->compilerVersion ) ) {
 			Builder_Warning( "You are using compiler version \"%s\", but \"%s\" was set as BuilderOptions::compilerVersion.  I will continue building anyway, but you may not get what you expect.\n", compilerVersionString, options->compilerVersion );
 		}
@@ -4844,12 +4946,12 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 
 	// cl.exe embeds its own /DEFAULTLIB directives for /fsanitize=... into the object file so link.exe picks the runtime up automatically there
 	// GCC doesnt link via link.exe so it handles its own sanitizer runtime
-	// clang on Windows does neither, it goes through link.exe directly so we have to name its sanitizer runtime libs ourselves which live under its resource directory
+	// clang and clang-cl on Windows do neither, they go through link.exe directly so we have to name their sanitizer runtime libs ourselves which live under the resource directory
 	// we query that once up front and then only use it if some config actually needs it
 	char *clangSanitizerResourceDir = NULL;
 
 #if defined( _WIN32 )
-	if ( compilerIsClang ) {
+	if ( compilerIsClang || compilerIsClangCL ) {
 		// this runs before the target config is known so it looks at every registered config, not just the ones being built
 		bool anyConfigNeedsClangSanitizerLibs = false;
 
@@ -4898,10 +5000,6 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 		.compilerIsMSVC					= compilerIsMSVC,
 		.compilerIsClangCL				= compilerIsClangCL,
 		.compilerIsGCC					= compilerIsGCC,
-#if defined( _WIN32 )
-		.msvcInstall					= &msvcInstall,
-		.windowsSDKInstall				= &windowsSDKInstall,
-#endif
 		.clangSanitizerResourceDir		= clangSanitizerResourceDir,
 		.intermediateFolder				= intermediateFolder,
 		.numCPUCores					= numCPUCores,
@@ -4944,6 +5042,17 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 			options->selfRebuildConfig->binaryFolder = NULL;
 			options->selfRebuildConfig->binaryType = BINARY_TYPE_EXE;
 		}
+
+#if defined( _WIN32 )
+		// GCC ignores #pragma comment( lib ) so the libs that builder.h itself needs must be named explicitly
+		if ( compilerIsGCC ) {
+			AddLibs( options->selfRebuildConfig, "ole32", "oleaut32", "advapi32" );
+
+			// __thread requires libwinpthread-1.dll because GCC on windows links its runtime by default by default
+			// so make the self rebuild config link to it statically to avoid this
+			AddLinkerArguments( options->selfRebuildConfig, "-static" );
+		}
+#endif
 	}
 
 	// the self rebuild goes first so that the source is always the truth
@@ -5052,9 +5161,13 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 		for ( uint32_t configIndex = 0; configIndex < chunk->count; configIndex++ ) {
 			BuildConfig *config = chunk->items[configIndex];
 
-			if ( !config->name || !config->name[0] ) {
+			if ( Builder_StringIsEmpty( config->name ) ) {
 				Builder_Error( "One of your BuildConfigs has no name.  Every config needs one - it's what \"" ARG_CONFIG "\" matches against and what the build log calls it.\n" );
 				return 1;
+			}
+
+			if ( Builder_StringIsEmpty( config->binaryName ) ) {
+				config->binaryName = config->name;
 			}
 
 			// only has to look at the configs after this one, since anything before it already compared against this

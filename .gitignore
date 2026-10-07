@@ -10,6 +10,7 @@ bug_reports
 intermediate
 *.cpp.d
 doc/notes/
+*.rebuild.old
 
 # ignore tools folder, but dont ignore 7zip
 tools/*
@@ -39,16 +40,7 @@ tests/**/*.json
 .vs
 x64
 *.vcxproj.user
-
-#
-# vscode stuff
-#
-.vscode/
-
-#
-# zed stuff
-#
-.zed
+visual_studio/
 
 
 #

@@ -39,7 +39,7 @@ Builder can be used to generate Visual Studio Solutions (.sln and .vcxproj).  Th
 	#include "builder_visual_studio.h"
 
 	int main( int argc, char **argv ) {
-		BuilderOptions options = {};
+		BuilderOptions options = { 0 };
 
 		BuildConfig *config = CreateBuildConfig( &options );
 		*config = (BuildConfig) {
@@ -162,7 +162,8 @@ typedef struct VisualStudioSolution {
 
 	// The command that Visual Studio will invoke when building - this is your build script's own compiled binary
 	// (there is no separate standalone "Builder" executable).
-	// Leave NULL to default to argv[0], i.e. however this build script was itself invoked.
+	// If this is a relative path, it's relative to your build executable.
+	// Leave NULL to default to the absolute path of your build executable.
 	const char			*buildCommand;
 } VisualStudioSolution;
 
@@ -334,7 +335,7 @@ static char *Builder_VSGetAppPath( arena_t *arena ) {
 }
 
 static bool Builder_PathIsAbsolute( const char *path ) {
-	if ( !path || !path[0] ) {
+	if ( Builder_StringIsEmpty( path ) ) {
 		return false;
 	}
 
@@ -364,7 +365,7 @@ static bool Builder_VSIsSourceFile( const char *path ) {
 	static const char *sourceExtensions[] = { ".c", ".cpp", ".cc", ".cxx" };
 
 	for ( size_t i = 0; i < BUILDER_COUNT_OF( sourceExtensions ); i++ ) {
-		if ( Builder_PathHasFileExtension( path, sourceExtensions[i] ) ) {
+		if ( Builder_PathEndsWith( path, sourceExtensions[i] ) ) {
 			return true;
 		}
 	}
@@ -376,7 +377,7 @@ static bool Builder_VSIsHeaderFile( const char *path ) {
 	static const char *headerExtensions[] = { ".h", ".hpp", ".hh", ".hxx", ".inl" };
 
 	for ( size_t i = 0; i < BUILDER_COUNT_OF( headerExtensions ); i++ ) {
-		if ( Builder_PathHasFileExtension( path, headerExtensions[i] ) ) {
+		if ( Builder_PathEndsWith( path, headerExtensions[i] ) ) {
 			return true;
 		}
 	}
@@ -525,7 +526,7 @@ static const char *Builder_VSGetProjectDisplayName( const char *projectName ) {
 // full path to the binary this Visual Studio config builds/debugs
 // respects VisualStudioConfig::nmakeOutput if set, otherwise derives it from config->config
 static const char *Builder_VSGetFullBinaryPath( arena_t *arena, VisualStudioConfig *config ) {
-	if ( config->nmakeOutput && config->nmakeOutput[0] ) {
+	if ( !Builder_StringIsEmpty( config->nmakeOutput ) ) {
 		return config->nmakeOutput;
 	}
 
@@ -581,7 +582,7 @@ static void Builder_VSDeleteOldProjectFilesCallback( arena_t *resultsArena, file
 	static const char *extensionsToDelete[] = { ".sln", ".vcxproj", ".vcxproj.user", ".vcxproj.filters" };
 
 	for ( size_t extensionIndex = 0; extensionIndex < BUILDER_COUNT_OF( extensionsToDelete ); extensionIndex++ ) {
-		if ( Builder_PathHasFileExtension( fileInfo->fullFilename, extensionsToDelete[extensionIndex] ) ) {
+		if ( Builder_PathEndsWith( fileInfo->fullFilename, extensionsToDelete[extensionIndex] ) ) {
 #if defined( _WIN32 )
 			bool deleted = DeleteFileA( fileInfo->fullFilename ) != 0;
 #elif defined( __linux__ )
@@ -650,7 +651,7 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 	{
 		bool validSolution = true;
 
-		if ( !solution->name || !solution->name[0] ) {
+		if ( Builder_StringIsEmpty( solution->name ) ) {
 			Builder_Error( "You never set the name of the solution.  I need that.\n" );
 			validSolution = false;
 		}
@@ -714,13 +715,13 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 
 	scratch_t scratch = Builder_GetScratch( NULL );
 
-	const char *projectFilesPath = ( solution->path && solution->path[0] ) ? solution->path : ".";
+	const char *projectFilesPath = !Builder_StringIsEmpty( solution->path ) ? solution->path : ".";
 
 	// default to the absolute path of the running executable rather than argv[0]
 	// argv[0] can be a bare relative name like "build.exe" that only resolved because of how/where this program happened to be launched from
 	// which wont mean anything once Visual Studio invokes it from the .vcxproj own folder
 	// an explicit override is trusted as given even if its relative
-	const char *rawBuildCommand = ( solution->buildCommand && solution->buildCommand[0] ) ? solution->buildCommand : Builder_VSGetAppPath( scratch.arena );
+	const char *rawBuildCommand = !Builder_StringIsEmpty( solution->buildCommand ) ? solution->buildCommand : Builder_VSGetAppPath( scratch.arena );
 	const char *buildCommand = Builder_PathIsAbsolute( rawBuildCommand ) ? rawBuildCommand : Builder_RelativePathTo( scratch.arena, projectFilesPath, rawBuildCommand );
 
 	// NMake command lines run with the .vcxproj own folder as their working directory
@@ -788,7 +789,7 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 		{
 			bool validProject = true;
 
-			if ( !project->name || !project->name[0] ) {
+			if ( Builder_StringIsEmpty( project->name ) ) {
 				Builder_Error( "There is a Visual Studio Project that doesn't have a name here.  You need to fill that in.\n" );
 				validProject = false;
 			}
@@ -801,7 +802,7 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 			for ( uint32_t configIndex = 0; configIndex < project->configsCount; configIndex++ ) {
 				VisualStudioConfig *config = &project->configs[configIndex];
 
-				if ( !config->name || !config->name[0] ) {
+				if ( Builder_StringIsEmpty( config->name ) ) {
 					Builder_Error( "There is a config for project \"%s\" that doesn't have a name here.  You need to fill that in.\n", project->name );
 					validProject = false;
 					continue;
@@ -813,12 +814,12 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 					continue;
 				}
 
-				if ( !config->config->name || !config->config->name[0] ) {
+				if ( Builder_StringIsEmpty( config->config->name ) ) {
 					Builder_Error( "There is a config for project \"%s\" that doesn't have a name set in its BuildConfig.  You need to fill that in.\n", project->name );
 					validProject = false;
 				}
 
-				if ( config->config->binaryType == BINARY_TYPE_EXE && ( !config->config->binaryFolder || !config->config->binaryFolder[0] ) ) {
+				if ( config->config->binaryType == BINARY_TYPE_EXE && Builder_StringIsEmpty( config->config->binaryFolder ) ) {
 					Builder_Error(
 						"Build config \"%s\" is an executable, but you never specified an output directory when generating the Visual Studio project \"%s\", config \"%s\".\n"
 						"Visual Studio needs this in order to know where to run the executable from when debugging.  You need to set this.\n"
@@ -1155,7 +1156,7 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 						StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t\t<LocalDebuggerDebuggerType>Auto</LocalDebuggerDebuggerType>\n" );
 						StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t\t<LocalDebuggerAttach>false</LocalDebuggerAttach>\n" );
 						StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t\t<LocalDebuggerCommand>%s</LocalDebuggerCommand>\n", fullBinaryPathFromProject );
-						StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t\t<LocalDebuggerWorkingDirectory>%s</LocalDebuggerWorkingDirectory>\n", ( config->runFromDirectory && config->runFromDirectory[0] ) ? config->runFromDirectory : "$(SolutionDir)" );
+						StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t\t<LocalDebuggerWorkingDirectory>%s</LocalDebuggerWorkingDirectory>\n", !Builder_StringIsEmpty( config->runFromDirectory ) ? config->runFromDirectory : "$(SolutionDir)" );
 
 						// if debugger arguments were specified, put those in
 						if ( config->debuggerArguments.count > 0 ) {

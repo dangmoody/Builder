@@ -4405,14 +4405,14 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 			if ( compilePacketCount > 0 ) {
 				builderLinkContext_t linkContext = {
 					.config 					= config,
-					.binaryPath 				= binaryPath,
 					.compilerPath 				= context->compilerPath,
+					.binaryPath 				= binaryPath,
 					.clangSanitizerResourceDir 	= context->clangSanitizerResourceDir,
 #if defined ( _WIN32 )
 					.msvcInstall 				= &g_msvcInstall,
 					.windowsSDKInstall 			= &g_windowsSDKInstall,
-					.compilerIsMSVC				= context->compilerIsMSVC,
 					.useMSVCLink 				= useMSVCLink,
+					.compilerIsMSVC				= context->compilerIsMSVC,
 					.debugDefineSet 			= compileContext.debugDefineSet,
 #endif
 					.compilerIsGCC				= context->compilerIsGCC,
@@ -4714,7 +4714,6 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 		// new mapping as the number of files could have changed
 		// plus if a file compiled we don't want to accidentally have stored stale dependency data
 		{
-			configDependencies->objectFileCount = postBuildData->packetCount;
 			objectToDependencyIndicies_t *objectToDependencyMapping = Builder_ArenaAlloc( context->postBuildArena, objectToDependencyIndicies_t, postBuildData->packetCount );
 			for ( uint32_t packetIndex = 0; packetIndex < postBuildData->compiledPacketCount; ++packetIndex ) {
 				objectToDependencyMapping[packetIndex] = (objectToDependencyIndicies_t) { 0 };
@@ -4725,6 +4724,7 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 				objectToDependencyIndicies_t *objectDependencies = &objectToDependencyMapping[packetIndex];
 				*objectDependencies = (objectToDependencyIndicies_t) { 0 };
 				
+				printf( "Finding old data for %s with hash %llu\n", postBuildData->compilePackets[packetIndex].sourceFile, postBuildData->compilePackets[packetIndex].compileCommandHash );
 				for ( uint64_t objectIndex = 0; objectIndex < configDependencies->objectFileCount; ++objectIndex ) {
 					if ( configDependencies->objectDependencyMap[objectIndex].objectHash == postBuildData->compilePackets[packetIndex].compileCommandHash ) {
 						*objectDependencies = configDependencies->objectDependencyMap[objectIndex];
@@ -4735,6 +4735,7 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 				BUILDER_ASSERT( objectDependencies->objectHash != 0 && "We skipped compilation of a file so should have its dependency data" );
 			}
 
+			configDependencies->objectFileCount = postBuildData->packetCount;
 			configDependencies->objectDependencyMap = objectToDependencyMapping;
 		}
 

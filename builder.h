@@ -4427,14 +4427,8 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 					
 					stringBuilder_t linkerArgs = { 0 };
 
-					const char *insertPosition = linkCommand;
-					if ( Builder_StringContains( insertPosition, " rcs " ) ) {
-						insertPosition = strstr( insertPosition, binaryPath );
-						insertPosition += Builder_Strnlen( binaryPath, BUILDER_MAX_PATH ) + 1;
-					} else {
-						insertPosition = strchr( insertPosition, '\"' ) + 1;
-						insertPosition = strchr( insertPosition, '\"' ) + 2;
-					}
+					const char *insertPosition = strstr( linkCommand, binaryPath );
+					insertPosition += Builder_Strnlen( binaryPath, BUILDER_MAX_PATH ) + 1;
 					StringBuilder_Appendf( scratch.arena, &linkerArgs, "%.*s", (int) ( insertPosition - linkCommand ), linkCommand );
 
 					for ( uint32_t intermediateIndex = 0; intermediateIndex < postBuildData->packetCount; ++intermediateIndex ) {

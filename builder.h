@@ -1112,7 +1112,6 @@ static bool Builder_WriteEntireFile( const char *filename, const char *content, 
 
 static char *Builder_ReadEntireFile( arena_t *arena, const char *filename, uint64_t *outSize ) {
 	BUILDER_ASSERT( arena && outSize );
-	uint8_t *result = NULL;
 	FILE *file = fopen( filename, "rb" );
 
 	if ( !file ) {
@@ -4218,7 +4217,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 				// when we read from a byte buffer we use the count to track how much of it we have read
 				// and the capacity is how much there is to read
 				byteBuffer_t byteBuffer = { 0 };
-				byteBuffer.data = Builder_ReadEntireFile( scratch.arena, postBuildData->dependencyCacheFileName, &byteBuffer.capacity );
+				byteBuffer.data = (uint8_t *) Builder_ReadEntireFile( scratch.arena, postBuildData->dependencyCacheFileName, &byteBuffer.capacity );
 				
 				// no file found means we recompile everything
 				if ( byteBuffer.data ) {
@@ -4429,7 +4428,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 					stringBuilder_t linkerArgs = { 0 };
 
 					const char *insertPosition = linkCommand;
-					if ( Builder_StringContains( insertPosition, "rcs" ) ) {
+					if ( Builder_StringContains( insertPosition, " rcs " ) ) {
 						insertPosition = strstr( insertPosition, binaryPath );
 						insertPosition += Builder_Strnlen( binaryPath, BUILDER_MAX_PATH ) + 1;
 					} else {

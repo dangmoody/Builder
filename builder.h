@@ -4724,7 +4724,8 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 				objectToDependencyIndicies_t *objectDependencies = &objectToDependencyMapping[packetIndex];
 				*objectDependencies = (objectToDependencyIndicies_t) { 0 };
 
-				printf( "Finding old data for %s with hash %" PRIu64 "\n", postBuildData->compilePackets[packetIndex].sourceFile, postBuildData->compilePackets[packetIndex].compileCommandHash );
+				Builder_LogVerbose( options, "Finding old data for %s with hash %" PRIu64 "\n", postBuildData->compilePackets[packetIndex].sourceFile, postBuildData->compilePackets[packetIndex].compileCommandHash );
+
 				for ( uint64_t objectIndex = 0; objectIndex < configDependencies->objectFileCount; ++objectIndex ) {
 					if ( configDependencies->objectDependencyMap[objectIndex].objectHash == postBuildData->compilePackets[packetIndex].compileCommandHash ) {
 						*objectDependencies = configDependencies->objectDependencyMap[objectIndex];

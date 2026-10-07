@@ -1,3 +1,5 @@
+:: TODO: DM: 19/08/2026: if we can have "empty" BuildConfigs that dont actually do any building, does that mean we can have a build.c create a release for us too?
+
 @echo off
 
 set version=%1
@@ -10,56 +12,34 @@ if [%version%]==[] (
 pushd %~dp0
 pushd ..
 
-:: compile release build
-call .\\scripts\\build.bat release
-
-if %errorlevel% NEQ 0 (
-	echo ERROR: Failed to create release build! A release cannot be made while the build is broken
-	exit /B %errorlevel%
-)
-
-:: compile tests
-call .\\scripts\\build_tests.bat release
-
-if %errorlevel% NEQ 0 (
-	echo ERROR: Failed to build the tests! A release cannot be made while the tests dont compile
-	exit /B %errorlevel%
-)
-
-:: run tests
+:: build and run tests
 pushd tests
-call ..\\bin\\builder_tests_release.exe
+
+.\\build_tests.exe
 
 if %errorlevel% NEQ 0 (
-	echo ERROR: Tests failed to run successfully! A release cannot be made while the tests dont work
+	echo ERROR: Failed to build the tests!  A release cannot be made while the tests dont compile
 	exit /B %errorlevel%
 )
+
+.\\builder_tests.exe
+
+if %errorlevel% NEQ 0 (
+	echo ERROR: Tests failed to run successfully!  A release cannot be made while the tests dont work
+	exit /B %errorlevel%
+)
+
 popd
 
-:: Smoke-test that the trimmed Clang can compile a trivial program
-echo Smoke-testing trimmed Clang...
-if not exist releases mkdir releases
-echo int main(void){} > releases\smoke.c
-.\\clang\\bin\\clang.exe -o releases\\smoke_test.exe releases\\smoke.c
-if %errorlevel% NEQ 0 (
-    echo ERROR: Trimmed Clang failed smoke test -- release cannot be made
-    del /q releases\\smoke.c 2>nul
-    exit /B 1
-)
-del /q releases\\smoke.c releases\\smoke_test.exe
-echo Done.
-echo.
+if exist .\\releases\\builder_%version%.zip del .\\releases\\builder_%version%.zip
 
-:: now actually make release package
 set tempFolder=.\\releases\\temp
 
-robocopy    .\\doc        %tempFolder%\\doc   CHANGELOG.txt
-robocopy    .\\doc        %tempFolder%\\doc   Contributing.md
-robocopy    .\\bin        %tempFolder%\\bin   builder.exe
-robocopy    .\\clang\\bin %tempFolder%\\bin   libclang.dll
-robocopy /e .\\clang      %tempFolder%\\clang
+robocopy .\\doc %tempFolder%\\doc CHANGELOG.txt
+robocopy .\\doc %tempFolder%\\doc CHANGELOG_OLD.txt
+robocopy .\\doc %tempFolder%\\doc Contributing.md
 
-.\\tools\\7zip_win64\\7za.exe a -tzip .\\releases\\builder_%version%_win64.zip %tempFolder%\\bin %tempFolder%\\clang include %tempFolder%\\doc README.md LICENSE
+.\\tools\\7zip-win64\\7za.exe a -tzip .\\releases\\builder_%version%.zip builder.h builder_visual_studio.h builder_vs_code.h builder_zed.h builder_compilation_database.h %tempFolder%\\doc README.md LICENSE
 
 rd /s /Q %tempFolder%
 

@@ -493,34 +493,34 @@ TEMPER_TEST_PARAMETRIC( Test_Build, TEMPER_FLAG_SHOULD_RUN,
 
 		// add a file then build again
 		// only the new file should be compiled
-// 		if ( newSourceFile ) {
-// 			// valid C and C++
-// 			// the prototype is there so -Wmissing-prototypes doesnt complain
-// 			const char *newSourceFileContents =
-// 				"void Test_NewFileFunction( void );\n"
-// 				"void Test_NewFileFunction( void ) {}\n";
-//
-// 			bool written = Builder_WriteEntireFile( newSourceFile, newSourceFileContents, strlen( newSourceFileContents ) );
-//
-// 			TEMPER_CHECK_TRUE_QM( written, "Failed to create \"%s\".\n", newSourceFile );
-//
-// 			// dont quit on failure, the new file still needs deleting
-// 			char *output = Test_RunProcess( &testScratch, buildArgs, 0, false );
-//
-// 			uint32_t compiledFileCount = Test_GetCompiledFileCount( output );
-//
-// 			TEMPER_CHECK_TRUE_M( compiledFileCount == 1, "Only \"%s\" should've been compiled after adding it, but %u files were compiled.\n", newSourceFile, compiledFileCount );
-// 		}
+		if ( newSourceFile ) {
+			// valid C and C++
+			// the prototype is there so -Wmissing-prototypes doesnt complain
+			const char *newSourceFileContents =
+				"void Test_NewFileFunction( void );\n"
+				"void Test_NewFileFunction( void ) {}\n";
+
+			bool written = Builder_WriteEntireFile( newSourceFile, newSourceFileContents, strlen( newSourceFileContents ) );
+
+			TEMPER_CHECK_TRUE_QM( written, "Failed to create \"%s\".\n", newSourceFile );
+
+			// dont quit on failure, the new file still needs deleting
+			char *output = Test_RunProcess( &testScratch, buildArgs, 0, false );
+
+			uint32_t compiledFileCount = Test_GetCompiledFileCount( output );
+
+			TEMPER_CHECK_TRUE_M( compiledFileCount == 1, "Only \"%s\" should've been compiled after adding it, but %u files were compiled.\n", newSourceFile, compiledFileCount );
+		}
 
 		// remove the file we just created then build again
 		// the build should succeed
-// 		if ( newSourceFile ) {
-// 			bool deleted = Test_DeleteFile( newSourceFile );
-//
-// 			TEMPER_CHECK_TRUE_M( deleted, "Failed to delete \"%s\".  It's been left behind, delete it by hand.\n", newSourceFile );
-//
-// 			Test_RunProcess( &testScratch, buildArgs, 0, true );
-// 		}
+		if ( newSourceFile ) {
+			bool deleted = Test_DeleteFile( newSourceFile );
+
+			TEMPER_CHECK_TRUE_M( deleted, "Failed to delete \"%s\".  It's been left behind, delete it by hand.\n", newSourceFile );
+
+			Test_RunProcess( &testScratch, buildArgs, 0, true );
+		}
 
 		// delete all generated files and folders
 		// leave this last

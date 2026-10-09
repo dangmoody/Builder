@@ -3294,7 +3294,7 @@ static bool Builder_CompileSourceFile( builderCompileJobPool_t *pool, builderCom
 			dependencyEnd = strchr( dependencyStart, '\0' );
 		}
 
-		if ( dependencyStart && dependencyEnd ) {
+		if ( compileResult == 0 && dependencyStart && dependencyEnd ) {
 			uint64_t dependencyLength = (uint64_t) ( dependencyEnd - dependencyStart );
 			char *dependencyString = Builder_ArenaAlloc( dependencyOutput->arena, char, dependencyLength + 1 );
 			dependencyString[dependencyLength] = '\0';
@@ -3342,7 +3342,7 @@ static bool Builder_CompileSourceFile( builderCompileJobPool_t *pool, builderCom
 			current = ( *lineEnd == '\0' ) ? NULL : lineEnd + 1;
 		}
 
-		if ( dependencyStart && dependencyEnd ) {
+		if ( compileResult == 0 && dependencyStart && dependencyEnd ) {
 			uint64_t dependencyLength = (uint64_t) ( dependencyEnd - dependencyStart );
 			char *dependencyString = Builder_ArenaAlloc( dependencyOutput->arena, char, dependencyLength + 1 );
 			dependencyString[dependencyLength] = '\0';
@@ -4189,6 +4189,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 			if ( !baseCompileCommand ) {
 				Builder_Error( "Failed to create compilation command for config %s!\n", config->name );
 				Builder_RewindArena( context->buildScratch->arena, &configStart );
+				context->builtConfigs--;
 				return BUILD_RESULT_FAILED;
 			}
 
@@ -4199,6 +4200,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 			if ( context->compilerIsMSVC && ( config->sanitizers & ~SANITIZER_ADDRESS ) != 0 ) {
 				Builder_Error( "Config \"%s\" uses sanitizers that MSVC doesn't support.  MSVC only supports SANITIZER_ADDRESS.\n", config->name );
 				Builder_RewindArena( context->buildScratch->arena, &configStart );
+				context->builtConfigs--;
 				return BUILD_RESULT_FAILED;
 			}
 #endif
@@ -4400,7 +4402,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 
 				if ( pool.numFailed > 0 ) {
 					Builder_Error( "Build failed.\n" );
-					Builder_RewindScratch( context->buildScratch );
+					Builder_RewindArena( context->buildScratch->arena, &configStart );
 					return BUILD_RESULT_FAILED;
 				}
 			} else {
@@ -4510,7 +4512,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 
 			if ( shouldLink && config->binaryFolder && !Builder_CreateFolderIfItDoesntExist( config->binaryFolder ) ) {
 				Builder_Error( "Failed to create the binary folder \"%s\".\n", config->binaryFolder );
-				Builder_RewindScratch( context->buildScratch );
+				Builder_RewindArena( context->buildScratch->arena, &configStart );
 
 				// TODO(aiden): check that compilation dependencies were still written
 				return BUILD_RESULT_FAILED;
@@ -4631,7 +4633,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 
 				if ( linkResult != 0 ) {
 					Builder_Error( "Link failed.\n" );
-					Builder_RewindScratch( context->buildScratch );
+					Builder_RewindArena( context->buildScratch->arena, &configStart );
 
 					// force the link to show as a fail
 					postBuildData->configDependencies.binaryWriteTime = 0;
@@ -4676,7 +4678,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 
 				if ( !CopyFileA( asanRuntimeSrc, asanRuntimeDst, FALSE ) ) {
 					Builder_Error( "Failed to copy the ASan runtime \"%s\" to \"%s\": GetLastError(): 0x%X\n", asanRuntimeSrc, asanRuntimeDst, GetLastError() );
-					Builder_RewindScratch( context->buildScratch );
+					Builder_RewindArena( context->buildScratch->arena, &configStart );
 					return BUILD_RESULT_FAILED;
 				}
 			}
@@ -5259,10 +5261,13 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 
 	Builder_CollectConfigsToBuild( buildScratch.arena, targetConfig, &ancestry, &configsToBuild );
 
-	for ( buildConfigPtrChunk_t *chunk = configsToBuild.head; chunk; chunk = chunk->next ) {
+	bool buildFailed = false;
+
+	for ( buildConfigPtrChunk_t *chunk = configsToBuild.head; chunk && !buildFailed; chunk = chunk->next ) {
 		for ( uint32_t configIndex = 0; configIndex < chunk->count; configIndex++ ) {
 			if ( Builder_BuildConfig( &buildContext, options, chunk->items[configIndex] ) == BUILD_RESULT_FAILED ) {
-				return 1;
+				buildFailed = true;
+				break;
 			}
 		}
 	}
@@ -5275,7 +5280,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 	}
 
 	// build summary
-	{
+	if ( !buildFailed ) {
 		Builder_AddBuildSummaryLine( &buildSummaryArena, &buildContext.buildSummary, "Total compile", buildContext.totalCompileTimeMS, NULL );
 		Builder_AddBuildSummaryLine( &buildSummaryArena, &buildContext.buildSummary, "Total link", buildContext.totalLinkTimeMS, NULL );
 		// Builder_AddBuildSummaryLine( &buildSummaryArena, &buildContext.buildSummary, "Total .builder-dependencies read", totalBuilderDepsReadTimeMS, NULL );
@@ -5292,13 +5297,13 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 
 		// separate because we want to get the end timestamp as late as possible
 		printf( "    %-*s : %f ms\n\n", buildContext.buildSummary.lineLength, "Total time", Builder_TimeMS() - totalTimeStart );
-
-		Builder_FreeArenas( &buildSummaryArena, 1 );
 	}
+
+	Builder_FreeArenas( &buildSummaryArena, 1 );
 
 	Builder_RewindScratch( &buildScratch );
 
-	return 0;
+	return buildFailed ? 1 : 0;
 }
 
 #endif // BUILDER_IMPLEMENTATION

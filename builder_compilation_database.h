@@ -129,7 +129,7 @@ bool Builder_GenerateCompilationDatabase( BuilderOptions *options, CompilationDa
 
 	Builder_SetCmdArgs( options, argc, argv );
 
-	Builder_SetCWD( options, argv );
+	Builder_SetCWD( argv );
 
 	scratch_t scratch = Builder_GetScratch( NULL );
 
@@ -229,7 +229,7 @@ bool Builder_GenerateCompilationDatabase( BuilderOptions *options, CompilationDa
 				return false;
 			}
 
-			StringList sourceFiles = Builder_GlobFiles( scratch.arena, &config->sourceFiles, options );
+			StringList sourceFiles = Builder_GlobFiles( scratch.arena, &config->sourceFiles );
 
 			for ( builderStringChunk_t *sourceChunk = sourceFiles.head; sourceChunk; sourceChunk = sourceChunk->next ) {
 				for ( uint32_t sourceFileIndex = 0; sourceFileIndex < sourceChunk->count; sourceFileIndex++ ) {

@@ -452,14 +452,13 @@ static void Builder_VSAddFilesFromPatterns( arena_t *arena,
 											visualStudioFileList_t *headerFiles,
 											visualStudioFileList_t *otherFiles,
 											visualStudioFilterPathList_t *filterPaths,
-											const StringList *filePatterns,
-											const BuilderOptions *options )
+											const StringList *filePatterns )
 {
 	if ( !filePatterns ) {
 		return;
 	}
 
-	StringList globResult = Builder_GlobFiles( arena, filePatterns, options );
+	StringList globResult = Builder_GlobFiles( arena, filePatterns );
 
 	for ( builderStringChunk_t *chunk = globResult.head; chunk; chunk = chunk->next ) {
 		for ( uint32_t fileIndex = 0; fileIndex < chunk->count; fileIndex++ ) {
@@ -645,7 +644,7 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 
 	Builder_SetCmdArgs( options, argc, argv );
 
-	Builder_SetCWD( options, argv );
+	Builder_SetCWD( argv );
 
 	// validate the solution
 	{
@@ -899,10 +898,10 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 		visualStudioFilterPathList_t filterPaths = {};
 
 		for ( uint32_t configIndex = 0; configIndex < project->configsCount; configIndex++ ) {
-			Builder_VSAddFilesFromPatterns( scratch.arena, &sourceFiles, &headerFiles, &otherFiles, &filterPaths, &project->configs[configIndex].config->sourceFiles, options );
+			Builder_VSAddFilesFromPatterns( scratch.arena, &sourceFiles, &headerFiles, &otherFiles, &filterPaths, &project->configs[configIndex].config->sourceFiles );
 		}
 
-		Builder_VSAddFilesFromPatterns( scratch.arena, &sourceFiles, &headerFiles, &otherFiles, &filterPaths, &project->extraFiles, options );
+		Builder_VSAddFilesFromPatterns( scratch.arena, &sourceFiles, &headerFiles, &otherFiles, &filterPaths, &project->extraFiles );
 
 		const char *projectDisplayName = Builder_VSGetProjectDisplayName( project->name );
 

@@ -1123,8 +1123,7 @@ int main( int argc, char **argv ) {
     // all test paths are relative to the tests folder, and Test_CleanupBeforeAnything deletes generated folders
     // recursively from the CWD, so make sure the CWD is the tests folder no matter where we were launched from
     {
-        BuilderOptions options = { 0 };
-        Builder_SetCWD( &options, argv );
+        Builder_SetCWD( argv );
     }
 
 #ifdef _WIN32

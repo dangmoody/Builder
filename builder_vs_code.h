@@ -228,7 +228,7 @@ bool Builder_GenerateVSCodeJSONFiles( BuilderOptions *options, VSCodeJSONOptions
 
 	Builder_SetCmdArgs( options, argc, argv );
 
-	Builder_SetCWD( options, argv );
+	Builder_SetCWD( argv );
 
 	const char *dotVSCodeFolder = ".vscode";
 

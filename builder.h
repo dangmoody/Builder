@@ -846,8 +846,10 @@ static void Builder_Error( const char *fmt, ... ) {
 	Builder_SetConsoleTextColor( CONSOLE_TEXT_COLOR_DEFAULT );
 }
 
-static void Builder_LogVerbose( const BuilderOptions *options, const char *fmt, ... ) {
-	if ( !options->verboseLogging ) {
+static bool g_verboseLogging = false;
+
+static void Builder_LogVerbose( const char *fmt, ... ) {
+	if ( !g_verboseLogging ) {
 		return;
 	}
 
@@ -2005,7 +2007,6 @@ typedef struct {
 	const builderStringSliceArray_t patternSlices;
 	const uint32_t searchPathLen;
 	StringList *globResults;
-	bool verboseLogging;
 } builderGlobVisitCallbackData_t;
 
 // remember to free sliceArray.data
@@ -2165,7 +2166,7 @@ static void Builder_GlobVisitCallback( arena_t *resultsArena, fileInfo_t *fileIn
 	const builderStringSliceArray_t pathSlices = Builder_SliceFilePath( scratch.arena, matchStart );
 
 	if ( Builder_PathMatchesPattern( &callbackData->patternSlices, &pathSlices ) ) {
-		if ( callbackData->verboseLogging ) {
+		if ( g_verboseLogging ) {
 			printf( "VERBOSE:  - Found \"%s\"\n", fileInfo->fullFilename );
 		}
 
@@ -2179,7 +2180,7 @@ static void Builder_GlobVisitCallback( arena_t *resultsArena, fileInfo_t *fileIn
 }
 
 // builds onto whatever arena it's handed - the caller flattens it if it needs to index the result
-static StringList Builder_GlobFiles( arena_t *resultsArena, const StringList *globPatterns, const BuilderOptions *options ) {
+static StringList Builder_GlobFiles( arena_t *resultsArena, const StringList *globPatterns ) {
 	StringList globResult = { 0 };
 
 	scratch_t scratch = Builder_GetScratch( resultsArena );
@@ -2207,7 +2208,7 @@ static StringList Builder_GlobFiles( arena_t *resultsArena, const StringList *gl
 			if ( *pattern == '\0' ) {
 				// should I just let the compile step handle the empty strings?
 				if ( pattern != globPattern ) {
-					Builder_LogVerbose( options, "Adding source file \"%s\" to the list of source files to build with (no glob).\n", globPattern );
+					Builder_LogVerbose( "Adding source file \"%s\" to the list of source files to build with (no glob).\n", globPattern );
 
 					Builder_StringListPush( resultsArena, &globResult, globPattern ); // yes I realise this wasn't globbed \_O_O_/
 				}
@@ -2227,8 +2228,7 @@ static StringList Builder_GlobFiles( arena_t *resultsArena, const StringList *gl
 			builderGlobVisitCallbackData_t callbackData = {
 				.patternSlices = Builder_SliceFilePath( scratch.arena, pattern),
 				.searchPathLen = globPathLen,
-				.globResults = &globResult,
-				.verboseLogging = options->verboseLogging
+				.globResults = &globResult
 			};
 
 			builderFileVisitFlags_t visitFlags = BUILDER_FILE_VISIT_FILES;
@@ -2236,7 +2236,7 @@ static StringList Builder_GlobFiles( arena_t *resultsArena, const StringList *gl
 				visitFlags |= BUILDER_FILE_VISIT_RECURSIVE;
 			}
 
-			Builder_LogVerbose( options, "About to glob all source files found under user-specified pattern \"%s\" to the list of source files to build with:\n", globPattern );
+			Builder_LogVerbose( "About to glob all source files found under user-specified pattern \"%s\" to the list of source files to build with:\n", globPattern );
 
 			if ( !Builder_VisitFiles( resultsArena, searchPath, visitFlags, &Builder_GlobVisitCallback, &callbackData ) ) {
 				printf( "Warning: Found no matches for pattern %s, at search path %s.\n", globPattern, searchPath );
@@ -4076,7 +4076,7 @@ static const char * Builder_CreateLinkCommand( arena_t *commandArena, builderLin
 }
 
 // set CWD to where this EXE lives
-static void Builder_SetCWD( BuilderOptions *options, char **argv ) {
+static void Builder_SetCWD( char **argv ) {
 	char appPath[BUILDER_MAX_PATH] = { 0 };
 	Builder_GetExePath( argv, appPath );
 
@@ -4101,7 +4101,7 @@ static void Builder_SetCWD( BuilderOptions *options, char **argv ) {
 #error Unrecognised platform.
 #endif
 
-	Builder_LogVerbose( options, "Set CWD to \"%s\"\n", appPath );
+	Builder_LogVerbose( "Set CWD to \"%s\"\n", appPath );
 }
 
 static void Builder_SetCmdArgs( BuilderOptions *options, int argc, char **argv ) {
@@ -4114,6 +4114,10 @@ static void Builder_SetCmdArgs( BuilderOptions *options, int argc, char **argv )
 		if ( Builder_StringEquals( argv[argIndex], ARG_VERBOSE_SHORT ) || Builder_StringEquals( argv[argIndex], ARG_VERBOSE_LONG ) ) {
 			options->verboseLogging = true;
 		}
+	}
+
+	if ( options->verboseLogging ) {
+		g_verboseLogging = true;
 	}
 }
 
@@ -4156,7 +4160,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 	uint32_t needsCompilePacketCount = 0;
 
 	if ( config->OnPreBuild ) {
-		Builder_LogVerbose( options, "Found a OnPreBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name ? config->name : "" );
+		Builder_LogVerbose( "Found a OnPreBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name ? config->name : "" );
 
 		config->OnPreBuild( config );
 	}
@@ -4167,7 +4171,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 		printf( "Building config \"%s\":\n", config->name );
 
 		// glob step - flattened into one array because the compile job pool indexes into it by job number
-		StringList globList = Builder_GlobFiles( context->buildScratch->arena, &config->sourceFiles, options );
+		StringList globList = Builder_GlobFiles( context->buildScratch->arena, &config->sourceFiles );
 
 		uint32_t compilePacketCount = globList.count;
 
@@ -4687,7 +4691,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 	}
 
 	if ( config->OnPostBuild ) {
-		Builder_LogVerbose( options, "Found a OnPostBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name ? config->name : "" );
+		Builder_LogVerbose( "Found a OnPostBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name ? config->name : "" );
 
 		config->OnPostBuild( config );
 	}
@@ -4749,7 +4753,7 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 				objectToDependencyIndicies_t *objectDependencies = &objectToDependencyMapping[packetIndex];
 				*objectDependencies = (objectToDependencyIndicies_t) { 0 };
 
-				Builder_LogVerbose( options, "Finding old data for %s with hash %" PRIu64 "\n", postBuildData->compilePackets[packetIndex].sourceFile, postBuildData->compilePackets[packetIndex].compileCommandHash );
+				Builder_LogVerbose( "Finding old data for %s with hash %" PRIu64 "\n", postBuildData->compilePackets[packetIndex].sourceFile, postBuildData->compilePackets[packetIndex].compileCommandHash );
 
 				for ( uint64_t objectIndex = 0; objectIndex < configDependencies->objectFileCount; ++objectIndex ) {
 					if ( configDependencies->objectDependencyMap[objectIndex].objectHash == postBuildData->compilePackets[packetIndex].compileCommandHash ) {
@@ -4781,15 +4785,15 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 			Builder_ParseDependencyInfo( context->postBuildArena, compileDependencyArray, dependencyMap, dependencyInfo->dependencyString, context->compilerIsMSVC || context->compilerIsClangCL );
 		}
 
-		Builder_LogVerbose( options, "Outputting config dependencies to %s:\n", postBuildData->dependencyCacheFileName );
+		Builder_LogVerbose( "Outputting config dependencies to %s:\n", postBuildData->dependencyCacheFileName );
 		for ( uint32_t packetIndex = 0; packetIndex < postBuildData->packetCount; ++packetIndex ) {
 			objectToDependencyIndicies_t *dependencyMap = &configDependencies->objectDependencyMap[packetIndex];
 			builderCompilePacket_t *compilePacket = &postBuildData->compilePackets[packetIndex];
 
-			Builder_LogVerbose( options, "%s has %llu dependenc%s%c\n", compilePacket->sourceFile, dependencyMap->dependencyCount, dependencyMap->dependencyCount != 1 ? "ies" : "y", dependencyMap->dependencyCount ? ':' : '.' );
+			Builder_LogVerbose( "%s has %llu dependenc%s%c\n", compilePacket->sourceFile, dependencyMap->dependencyCount, dependencyMap->dependencyCount != 1 ? "ies" : "y", dependencyMap->dependencyCount ? ':' : '.' );
 			for ( uint64_t mapIndex = 0; mapIndex < dependencyMap->dependencyCount; ++mapIndex ) {
 				const uint64_t dependencyIndex = dependencyMap->dependencyIndices[mapIndex];
-				Builder_LogVerbose( options, "    %s\n", compileDependencyArray->dependencies[dependencyIndex].dependency );
+				Builder_LogVerbose( "    %s\n", compileDependencyArray->dependencies[dependencyIndex].dependency );
 			}
 		}
 
@@ -4814,7 +4818,7 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 					if ( Builder_StringEquals( dependency->libraryName, libFilename ) ) {
 						found = true;
 						if ( !Builder_StringEquals( dependency->libraryPath, libPath ) ) {
-							Builder_LogVerbose( options, "Lib path being updated from %s\n", dependency->libraryPath );
+							Builder_LogVerbose( "Lib path being updated from %s\n", dependency->libraryPath );
 							dependency->libraryPath = libPath;
 
 							// the rest will be updated in 'bulk', this op is not fast so we optimise for it
@@ -4851,12 +4855,12 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 			Builder_GetFileLastWriteTime( dependency->libraryPath, &dependency->writeTime );
 		}
 
-		Builder_LogVerbose( options, "Library (link) dependencies:\n" );
+		Builder_LogVerbose( "Library (link) dependencies:\n" );
 		for ( uint64_t libIndex = 0; libIndex < libraryDependencyArray->count; ++libIndex ) {
 			libraryDependency_t *dependency = &libraryDependencyArray->libraries[libIndex];
-			Builder_LogVerbose( options, "%s:\n", dependency->libraryName );
-			Builder_LogVerbose( options, "	PATH: %s\n", dependency->libraryPath );
-			Builder_LogVerbose( options, "	TIME: %llu\n", dependency->writeTime );
+			Builder_LogVerbose( "%s:\n", dependency->libraryName );
+			Builder_LogVerbose( "	PATH: %s\n", dependency->libraryPath );
+			Builder_LogVerbose( "	TIME: %llu\n", dependency->writeTime );
 		}
 
 		configDependencies->fileVersion = g_builderDependenciesFileVersion;
@@ -4872,7 +4876,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 
 	Builder_SetCmdArgs( options, argc, argv );
 
-	Builder_SetCWD( options, argv );
+	Builder_SetCWD( argv );
 
 	// the self rebuild needs the exe itself, not just its folder
 	char exePath[BUILDER_MAX_PATH] = { 0 };
@@ -4902,7 +4906,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 #endif
 
 	if ( !Builder_StringIsEmpty( options->compilerPath ) ) {
-		Builder_LogVerbose( options, "Found override compiler backend \"%s\" from BuilderOptions::compilerPath.\n", options->compilerPath );
+		Builder_LogVerbose( "Found override compiler backend \"%s\" from BuilderOptions::compilerPath.\n", options->compilerPath );
 	}
 
 	const char *compilerPath = !Builder_StringIsEmpty( options->compilerPath ) ? options->compilerPath : "clang";

@@ -166,7 +166,7 @@ bool Builder_GenerateZedJSONFiles( BuilderOptions *options, ZedJSONOptions *zedO
 
 	Builder_SetCmdArgs( options, argc, argv );
 
-	Builder_SetCWD( options, argv );
+	Builder_SetCWD( argv );
 
 	// everything built in here goes into a file and is then done with - nothing outlives this call
 	scratch_t scratch = Builder_GetScratch( NULL );

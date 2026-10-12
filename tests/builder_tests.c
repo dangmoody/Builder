@@ -1042,6 +1042,29 @@ TEMPER_TEST( TestZedJSON, TEMPER_FLAG_SHOULD_RUN ) {
 	}
 }
 
+TEMPER_TEST( Test10xWorkspace, TEMPER_FLAG_SHOULD_RUN ) {
+	arena_t testScratch = { 0 };
+
+	const char *testFolder = "10x_workspace";
+
+	const char *buildSourceFilename = Builder_FormatString( &testScratch, "%s/build.c", testFolder );
+	const char *buildEXEFilename = Builder_FormatString( &testScratch, "%s/build%s", testFolder, Builder_GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
+
+	// build the build EXE
+	{
+		const char *buildCMDArgs = Builder_FormatString( &testScratch, "%s -o %s %s", Test_GetCompilerPath( COMPILER_CLANG ), buildEXEFilename, buildSourceFilename );
+
+		Test_RunProcess( &testScratch, buildCMDArgs, 0, true );
+	}
+
+	// generate the workspace
+	{
+		const char *buildArgs = Builder_FormatString( &testScratch, "%s --10x", buildEXEFilename );
+
+		Test_RunProcess( &testScratch, buildArgs, 0, true );
+	}
+}
+
 TEMPER_TEST( TestCompilationDatabase, TEMPER_FLAG_SHOULD_RUN ) {
 	arena_t testScratch = { 0 };
 

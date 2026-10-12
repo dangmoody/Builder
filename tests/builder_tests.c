@@ -1137,6 +1137,12 @@ TEMPER_TEST( Test10xWorkspace, TEMPER_FLAG_SHOULD_RUN ) {
 
 			// relative paths would make 10x resolve them against wherever it was launched from
 			TEMPER_CHECK_TRUE_M( !Builder_StringContains( fileContents, "<BuildWorkingDirectory>bin" ), "\"%s\" has a relative BuildWorkingDirectory.\n", workspaceFilename );
+
+			// the dropdown comes from TenXConfig::name, so BuildConfigs that aren't in the workspace (like the self rebuild config) shouldn't show up
+			{
+				const char *debugConfiguration = strstr( fileContents, "<Configuration>Debug</Configuration>" );
+				TEMPER_CHECK_TRUE_M( debugConfiguration && !strstr( debugConfiguration + 1, "<Configuration>Debug</Configuration>" ), "\"%s\" should list the Debug configuration once.\n", workspaceFilename );
+			}
 		}
 	}
 

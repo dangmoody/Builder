@@ -145,15 +145,11 @@ typedef struct TenXPlatform {
 typedef struct TenXConfig
 {
 	// The name of the config as it appears in 10x. E.g. "Debug".
-	// This is different from BuildConfig::name because this one doesn't have to be unique.
+	// Must be unique across TenXWorkspace::configs, but doesn't have to match BuildConfig::name.
 	const char	*name;
 
 	// The BuildConfig this entry builds.
 	BuildConfig	*config;
-
-	// Leave NULL to apply this entry to every platform.
-	// Set it (e.g. "ARM64") to apply it to that platform only. It then replaces the NULL entry with the same name.
-	const char	*platform;
 
 	// Added to the end of the default BuildCommand.
 	// Ignored if you set buildCommand yourself.
@@ -353,13 +349,22 @@ bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspace *works
 		for ( uint32_t configIndex = 0; configIndex < workspace->configsCount; configIndex++ ) {
 			TenXConfig *tenXConfig = &workspace->configs[configIndex];
 
-			if ( !tenXConfig->config ) {
-				if ( !Builder_StringIsEmpty( tenXConfig->name ) ) {
-					Builder_Error( "Config \"%s\" for the 10x Workspace doesn't have a BuildConfig set.  You need to fill that in.\n", tenXConfig->name );
-				} else {
-					Builder_Error( "Config %u for the 10x Workspace doesn't have a name or a BuildConfig set.  You need to fill that in.\n", configIndex );
-				}
+			if ( Builder_StringIsEmpty( tenXConfig->name ) ) {
+				Builder_Error( "Config %u for the 10x Workspace doesn't have a name set.  You need to fill that in.\n", configIndex );
 				validWorkspace = false;
+			} else if ( !tenXConfig->config ) {
+				Builder_Error( "Config \"%s\" for the 10x Workspace doesn't have a BuildConfig set.  You need to fill that in.\n", tenXConfig->name );
+				validWorkspace = false;
+			}
+
+			if ( !Builder_StringIsEmpty( tenXConfig->name ) ) {
+				for ( uint32_t otherIndex = 0; otherIndex < configIndex; otherIndex++ ) {
+					if ( !Builder_StringIsEmpty( workspace->configs[otherIndex].name ) && Builder_StringEquals( workspace->configs[otherIndex].name, tenXConfig->name ) ) {
+						Builder_Error( "10x Workspace has more than one config named \"%s\".  Config names must be unique.\n", tenXConfig->name );
+						validWorkspace = false;
+						break;
+					}
+				}
 			}
 		}
 
@@ -377,6 +382,7 @@ bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspace *works
 
 	if ( workspace->platformCount < 1 )
 	{
+		// default platforms 10x generates
 		static TenXPlatform defaultPlatforms[] = {
 			{ .name = "x64" },
 			{ .name = "Win32" }
@@ -385,7 +391,7 @@ bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspace *works
 		workspace->platforms = defaultPlatforms;
 		workspace->platformCount = 2;
 
-		Builder_Warning( "No platforms defined for 10x Workspace. Appended default 'Win32' platform.\n" );
+		Builder_Warning( "No platforms defined for 10x Workspace. Appended default 'x64' and 'Win32' platforms.\n" );
 	}
 
 	scratch_t scratch = Builder_GetScratch( NULL );
@@ -453,19 +459,11 @@ bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspace *works
 	StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t<AllowAutoErrorUnderlining_v3>%s</AllowAutoErrorUnderlining_v3>\n", Builder_TenXBoolToString( workspace->allowAutoErrorUnderlining ) ) );
 
 	// config names
-	if (options->configs.count > 0) {
-		StringBuilder_Appendf(scratch.arena, &workspaceFileContent, "\t\t<Configurations>\n");
-		for (buildConfigPtrChunk_t *chunk = options->configs.head; chunk; chunk = chunk->next ) {
-			for ( uint32_t configIndex = 0; configIndex < chunk->count; configIndex++ ) {
-				if ( chunk->items[configIndex]->name != 0 ) {
-					StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t<Configuration>%s</Configuration>\n", chunk->items[configIndex]->name ) );
-				}
-			}
-		}
-		StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t</Configurations>\n" );
-	} else {
-		StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t<Configurations></Configurations>" );
+	StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t<Configurations>\n" );
+	for ( uint32_t tenXConfigIndex = 0; tenXConfigIndex < workspace->configsCount; tenXConfigIndex++ ) {
+		StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t<Configuration>%s</Configuration>\n", workspace->configs[tenXConfigIndex].name ) );
 	}
+	StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t</Configurations>\n" );
 
 	// platforms
 	if ( workspace->platformCount > 0 ) {
@@ -738,7 +736,7 @@ bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspace *works
 			TenXConfig *tenXConfig = &workspace->configs[tenXConfigIndex];
 
 			StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t\t<Config>\n" );
-			StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<Name>%s</Name>\n", tenXConfig->config->name ) );
+			StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<Name>%s</Name>\n", tenXConfig->name ) );
 
 			if ( tenXConfig->config->defines.count > 0 ) {
 				StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t\t\t<Defines>\n" );

@@ -12,41 +12,66 @@ int main( int argc, char **argv ) {
 		.sourceFiles	= MakeStringList( "build.c" ),
 	};
 
-	BuildConfig *config = CreateBuildConfig( &options );
-	config->name = "Debug";
-	config->binaryType = BINARY_TYPE_EXE;
-	config->binaryName = "test_generate_10x_workspace";
-	AddSourceFiles( config, "main.c" );
+	BuildConfig *debug = CreateBuildConfig( &options );
+	*debug = (BuildConfig) {
+		.name			= "Debug",
+		.binaryType		= BINARY_TYPE_EXE,
+		.binaryName		= "test_generate_10x_workspace",
+		.binaryFolder	= "bin/debug",
+		.sourceFiles	= MakeStringList( "main.c" ),
+		.defines		= MakeStringList( "TEST_DEBUG" ),
+	};
 
-	if ( HasCommandLineArg( argc, argv, "--release" ) ) {
-		config->binaryFolder = "bin/release";
-	} else {
-		config->binaryFolder = "bin/debug";
-	}
+	BuildConfig *release = CreateBuildConfig( &options );
+	*release = (BuildConfig) {
+		.name			= "Release",
+		.binaryType		= BINARY_TYPE_EXE,
+		.binaryName		= "test_generate_10x_workspace",
+		.binaryFolder	= "bin/release",
+		.sourceFiles	= MakeStringList( "main.c" ),
+		.defines		= MakeStringList( "TEST_RELEASE" ),
+		.optimization	= OPTIMIZATION_PROGRAM_SPEED,
+		.removeSymbols	= true,
+	};
 
-	options.defaultConfig = config;
+	options.defaultConfig = debug;
 
 	if ( HasCommandLineArg( argc, argv, "--10x" ) ) {
-
 		TenXPlatform platforms[] = {
-			{ .name = "Win32" }
+			{ .name = "x64",	.defines = MakeStringList( "TEST_PLATFORM_X64" ) },
+			{ .name = "Win32",	.defines = MakeStringList( "TEST_PLATFORM_WIN32" ) },
 		};
 
 		TenXConfig configs[] = {
-			{ 
-				.name = "Debug",
-				.config = config,
-				.additionalBuildArgs = MakeStringList("--config=Debug"),
-				.rebuildCommand = "Heyhey.exe"
-			}
+			{
+				.name					= "Debug",
+				.config					= debug,
+				.additionalBuildArgs	= MakeStringList( "--config=Debug" ),
+				.runArgs				= MakeStringList( "--verbose" ),
+			},
+			{
+				.name					= "Release",
+				.config					= release,
+				.additionalBuildArgs	= MakeStringList( "--config=Release" ),
+				.prioritiseFiles		= MakeStringList( "main.c" ),
+				.runArgs				= MakeStringList( "--test" ),
+			},
 		};
 
-		TenXWorkspace workspace = { 0 };
-		workspace.name = "Builder_10x_workspaces";
-		workspace.configs = configs;
-		workspace.configsCount = BUILDER_COUNT_OF( configs );
-		workspace.platforms = platforms;
-		workspace.platformCount = BUILDER_COUNT_OF( platforms );
+		TenXWorkspace workspace = {
+			.name					= "test_generate_10x_workspace",
+			.configs				= configs,
+			.configsCount			= BUILDER_COUNT_OF( configs ),
+			.platforms				= platforms,
+			.platformCount			= BUILDER_COUNT_OF( platforms ),
+			.globalDefines			= MakeStringList( "TEST_GLOBAL_DEFINE" ),
+			.includeFilterList		= MakeStringList( "*.c", "*.h" ),
+			.excludeFilterList		= MakeStringList( "bin/*" ),
+			.syncFiles				= true,
+			.recursive				= true,
+			.captureExeOutput		= true,
+			.allowAutoErrorUnderlining	= true,
+		};
 
 		return Builder_Generate10xWorkspace( &options, &workspace, argc, argv ) ? 0 : 1;
 	}

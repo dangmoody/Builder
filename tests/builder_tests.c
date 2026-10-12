@@ -1047,8 +1047,60 @@ TEMPER_TEST( Test10xWorkspace, TEMPER_FLAG_SHOULD_RUN ) {
 
 	const char *testFolder = "10x_workspace";
 
+	const char *exeExtension = Builder_GetFileExtensionFromBinaryType( BINARY_TYPE_EXE );
+
 	const char *buildSourceFilename = Builder_FormatString( &testScratch, "%s/build.c", testFolder );
-	const char *buildEXEFilename = Builder_FormatString( &testScratch, "%s/build%s", testFolder, Builder_GetFileExtensionFromBinaryType( BINARY_TYPE_EXE ) );
+	const char *buildEXEFilename = Builder_FormatString( &testScratch, "%s/build%s", testFolder, exeExtension );
+	const char *workspaceFilename = Builder_FormatString( &testScratch, "%s/test_generate_10x_workspace.10x", testFolder );
+
+	// paths the generator makes absolute, so only the end of them is predictable
+	const char *buildEXEPathEnd = Builder_FormatString( &testScratch, "%c%s%cbuild%s", BUILDER_PATH_SEPARATOR, testFolder, BUILDER_PATH_SEPARATOR, exeExtension );
+	const char *testFolderPathEnd = Builder_FormatString( &testScratch, "%c%s", BUILDER_PATH_SEPARATOR, testFolder );
+
+	StringList expectedEntries = MakeStringList(
+		// top-level settings
+		"<IncludeFilter>*.c,*.h,</IncludeFilter>",
+		"<ExcludeFilter>bin/*,</ExcludeFilter>",
+		"<SyncFiles>True</SyncFiles>",
+		"<Recursive>True</Recursive>",
+		"<ShowEmptyFolders>False</ShowEmptyFolders>",
+		"<CaptureExeOutput>True</CaptureExeOutput>",
+		"<AllowAutoErrorUnderlining_v3>True</AllowAutoErrorUnderlining_v3>",
+		"<Configuration>Debug</Configuration>",
+		"<Configuration>Release</Configuration>",
+		"<Platform>x64</Platform>",
+		"<Platform>Win32</Platform>",
+		"<Define>BUILDER_IMPLEMENTATION</Define>",
+		"<Define>BUILDER_10X_IMPLEMENTATION</Define>",
+		"<Define>TEST_GLOBAL_DEFINE</Define>",
+
+		// one entry per config and platform pair
+		"<Name>Debug:x64</Name>",
+		"<Name>Debug:Win32</Name>",
+		"<Name>Release:x64</Name>",
+		"<Name>Release:Win32</Name>",
+		"</ConfigAndPlatform>",
+
+		Builder_FormatString( &testScratch, "%s --config=Debug</BuildCommand>", buildEXEPathEnd ),
+		Builder_FormatString( &testScratch, "%s --config=Release</BuildCommand>", buildEXEPathEnd ),
+		Builder_FormatString( &testScratch, "%s</BuildWorkingDirectory>", testFolderPathEnd ),
+		Builder_FormatString( &testScratch, "%s</WorkingDirectory>", testFolderPathEnd ),
+		Builder_FormatString( &testScratch, "%s%cbin%cdebug%ctest_generate_10x_workspace%s</Exe>", testFolderPathEnd, BUILDER_PATH_SEPARATOR, BUILDER_PATH_SEPARATOR, BUILDER_PATH_SEPARATOR, exeExtension ),
+		Builder_FormatString( &testScratch, "%s%cbin%crelease%ctest_generate_10x_workspace%s</Exe>", testFolderPathEnd, BUILDER_PATH_SEPARATOR, BUILDER_PATH_SEPARATOR, BUILDER_PATH_SEPARATOR, exeExtension ),
+		"<Arg>--verbose</Arg>",
+		"<Arg>--test</Arg>",
+		"<DebugCommand>$(Executable)</DebugCommand>",
+		"<PrioritiseFile>main.c</PrioritiseFile>",
+
+		// per config and per platform defines
+		"<Define>TEST_DEBUG</Define>",
+		"<Define>TEST_RELEASE</Define>",
+		"<Define>TEST_PLATFORM_X64</Define>",
+		"<Define>TEST_PLATFORM_WIN32</Define>",
+
+		"<TerminalDirectory></TerminalDirectory>",
+		"</N10X>",
+	);
 
 	// build the build EXE
 	{
@@ -1062,6 +1114,37 @@ TEMPER_TEST( Test10xWorkspace, TEMPER_FLAG_SHOULD_RUN ) {
 		const char *buildArgs = Builder_FormatString( &testScratch, "%s --10x", buildEXEFilename );
 
 		Test_RunProcess( &testScratch, buildArgs, 0, true );
+	}
+
+	// check the workspace has everything we asked for
+	{
+		uint64_t fileSize = 0;
+		char *fileData = Builder_ReadEntireFile( &testScratch, workspaceFilename, &fileSize );
+
+		TEMPER_CHECK_TRUE_M( fileData, "Failed to read \"%s\".  It should've been generated.\n", workspaceFilename );
+
+		if ( fileData ) {
+			// file data isnt null terminated
+			const char *fileContents = Builder_FormatString( &testScratch, "%.*s", fileSize, (const char *) fileData );
+
+			for ( builderStringChunk_t *chunk = expectedEntries.head; chunk; chunk = chunk->next ) {
+				for ( uint32_t entryIndex = 0; entryIndex < chunk->count; entryIndex++ ) {
+					const char *expectedEntry = chunk->items[entryIndex];
+
+					TEMPER_CHECK_TRUE_M( Builder_StringContains( fileContents, expectedEntry ), "\"%s\" is missing expected entry: %s\n", workspaceFilename, expectedEntry );
+				}
+			}
+
+			// relative paths would make 10x resolve them against wherever it was launched from
+			TEMPER_CHECK_TRUE_M( !Builder_StringContains( fileContents, "<BuildWorkingDirectory>bin" ), "\"%s\" has a relative BuildWorkingDirectory.\n", workspaceFilename );
+		}
+	}
+
+	// make the test clean up after itself
+	{
+		bool deleted = Test_DeleteFile( workspaceFilename );
+
+		TEMPER_CHECK_TRUE_M( deleted, "Failed to delete file \"%s\".  The tests should properly clean up after themselves.\n", workspaceFilename );
 	}
 }
 

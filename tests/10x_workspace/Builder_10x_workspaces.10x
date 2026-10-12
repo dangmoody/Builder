@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<N10X>
+	<Workspace>
+		<IncludeFilter>*.c,*.cc,*.cpp,*.c++,*.cp,*.cxx,*.h,*.hh,*.hpp,*.h++,*.hp,*.hxx,*.inl,*.cs,*.rs,*.java,*.jav,*.js,*.jsc,*.jsx,*.json,*.cls,*.ts,*.py,*.rpy,*.php,*.php3,*.phl,*.phtml,*.rhtml,*.tpl,*.phps,*.lua,*.html,*.html5,*.htm,*.xml,*.xaml,*.css,*.ssi,*.haml,*.yaml,*.bat,*.wbf,*.wbt,*.txt,*.cmake,*.make,*.makefile,*.mak,*.mk,*.sh,*.bash,*.csv,*.asp,*.pl,*.mac,*.ws,*.vbs,*.perl,*.src,*.rss,*.inc,*.f,*.go,*.prl,*.plx,*.rb,*.lsp,*.lpx,*.ps1,*.command,*.cbl,*.cob,*.qs,*.wxs,*.ph,*.msc,*.glsl,*.hlsl,*.fx,*.vert,*.tesc,*.tese,*.geom,*.frag,*.comp,*.pssl,*.scons,*.cu,*.jai,*.md,</IncludeFilter>
+		<ExcludeFilter></ExcludeFilter>
+		<SyncFiles>False</SyncFiles>
+		<Recursive>False</Recursive>
+		<ShowEmptyFolders>False</ShowEmptyFolders>
+		<IncludeFilesWithoutExt>False</IncludeFilesWithoutExt>
+		<UseVisualStudioEnvBat>False</UseVisualStudioEnvBat>
+		<CaptureExeOutput>False</CaptureExeOutput>
+		<AllowAutoErrorUnderlining>False</AllowAutoErrorUnderlining>
+		<Configurations>
+			<Configuration>Debug</Configuration>
+		</Configurations>
+		<Platforms>
+			<Platform>Win32</Platform>
+		</Platforms>
+		<AdditionalIncludePaths>
+			<AdditionalIncludePath>C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.44.35207\include</AdditionalIncludePath>
+			<AdditionalIncludePath>C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\ucrt</AdditionalIncludePath>
+			<AdditionalIncludePath>C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\um</AdditionalIncludePath>
+			<AdditionalIncludePath>C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\shared</AdditionalIncludePath>
+		</AdditionalIncludePaths>
+		<Defines>
+			<Define>BUILDER_IMPLEMENTATION</Define>
+			<Define>BUILDER_10X_IMPLEMENTATION</Define>
+			<Define>_WIN32</Define>
+			<Define>__clang__</Define>
+		</Defines>
+		<ConfigProperties>
+			<ConfigAndPlatform>
+				<Name>Debug:Win32</Name>
+				<BuildCommand>D:\dev\Builder_dev\tests\10x_workspace\build.exe --config=Debug</BuildCommand>
+				<RebuildCommand>Heyhey.exe --config=Debug</RebuildCommand>
+				<BuildFileCommand></BuildFileCommand>
+				<CleanCommand></CleanCommand>
+			<ConfigAndPlatform>
+		</ConfigProperties>
+	</Workspace>
+</N10X>

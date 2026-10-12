@@ -106,29 +106,61 @@ typedef struct TenXPlatform {
 	StringList  defines;
 } TenXPlatform;
 
-typedef struct TenXConfigAndPlatformOptions {
+typedef struct TenXConfig
+{
 	const char	*name;
-    const char	*path;
-	const char  *buildCommand;
-	const char  *rebuildCommand;
-	const char  *buildFileCommand;
-	const char  *cleanCommand;
-	const char  *buildWorkingDirectory;
-	const char  *fileSyntaxCheckCommand;
-	const char  *cancelCommand;
-	const char  *executablePath;
-	const char  *workingDirectory;
-	const char  *debugCommand;
-	const char  *debuggerPath;
-	const char  *debugSolutionPath;
-	StringList  args;
-	StringList  forceIncludeList;
-	StringList  prioritiseFileList;
-} TenXConfigAndPlatformOptions;
 
-typedef struct TenXWorkspaceOptions {
-	StringList	includeFilterList;
-	StringList	excludeFilterList;
+	// The BuildConfig this entry builds.
+	BuildConfig	*config;
+
+	// Leave NULL to apply this entry to every platform.
+	// Set it (e.g. "ARM64") to apply it to that platform only. It then replaces the NULL entry with the same name.
+	const char	*platform;
+
+	// Added to the end of the default BuildCommand.
+	// Ignored if you set buildCommand yourself.
+	StringList	additionalBuildArgs;
+
+	// ---- Builder has defaults for these ----
+
+	// Leave NULL for: "<build exe>" --config=<config->name> <additionalBuildArgs>
+	const char	*buildCommand;
+
+	// Leave NULL for the folder your build exe is in.
+	const char	*buildWorkingDirectory;
+
+	// Leave NULL for: config->binaryFolder + config->binaryName + extension.
+	const char	*exe;
+
+	// Leave NULL for: $(WorkspaceDirectory)
+	const char	*workingDirectory;
+
+	// Leave NULL for: $(Executable)
+	const char	*debugCommand;
+
+	// Leave NULL to use TenXWorkspace::debuggerExe.
+	const char	*debuggerExe;
+
+	const char	*rebuildCommand;
+	const char	*cleanCommand;
+	const char	*buildFileCommand;
+	const char	*fileSyntaxCheckCommand;
+	const char	*cancelBuild;
+
+	StringList	runArgs;
+} TenXConfig;
+
+typedef struct TenXWorkspace {
+
+	// Workspace filename, without extension. Defaults to BuilderOptions::defaultConfig->name if empty.
+	const char	*name;
+
+	// Destination folder for the workspace file in disk. Defaults to the same folder as your build executable if empty.
+	const char	*path;
+
+	// The command 10x runs to build the project. If empty, builder will default to run your build exe.
+	const char  *buildCommand;
+
 	bool		syncFiles;
 	bool		recursive;
 	bool		showEmptyFolders;
@@ -137,66 +169,19 @@ typedef struct TenXWorkspaceOptions {
 	bool		useVisualStudioEnvBat;
 	bool		captureExeOutput;
 	bool		allowAutoErrorUnderlining;
+
 	TenXPlatform *platforms;
 	uint32_t	 platformCount;
+
+	TenXConfig	*configs;
+	uint32_t	configsCount;
+
 	StringList globalDefines;
 
-	const char	*name;	// workspace filename, "Workspace.10x" if empty
-	const char	*path;	// folder to write the workspace into, next to the build exe if empty
-	const char  *buildCommand;
-	const char  *rebuildCommand;
-	const char  *buildFileCommand;
-	const char  *cleanCommand;
-	const char  *buildWorkingDirectory;
-	const char  *fileSyntaxCheckCommand;
-	const char  *cancelCommand;
-	const char  *executablePath;
-	const char  *workingDirectory;
-	const char  *debugCommand;
-	const char  *debuggerPath;
-	const char  *debugSolutionPath;
-	StringList  args;
-	StringList  forceIncludeList;
-	StringList  prioritiseFileList;
-} TenXWorkspaceOptions;
+	StringList	includeFilterList;
+	StringList	excludeFilterList;
 
-static TenXWorkspaceOptions TenX_CreateDefaultWorkspaceOptions()
-{
-	TenXWorkspaceOptions out = { 0 };
-
-    static TenXPlatform platforms[] = {
-        { .name = "x64" },
-        { .name = "Win32" }
-    };
-
-	out.includeFilterList = MakeStringList("*.c", "*.cc", "*.cpp", "*.c++", "*.cp", "*.cxx", "*.h", "*.hh", "*.hpp", "*.h++", "*.hp", "*.hxx", "*.inl", "*.cs", "*.rs", "*.java", "*.jav", "*.js", "*.jsc", "*.jsx", "*.json", "*.cls", "*.ts", "*.py", "*.rpy", "*.php", "*.php3", "*.phl", "*.phtml", "*.rhtml", "*.tpl", "*.phps", "*.lua", "*.html", "*.html5", "*.htm", "*.xml", "*.xaml", "*.css", "*.ssi", "*.haml", "*.yaml", "*.bat", "*.wbf", "*.wbt", "*.txt", "*.cmake", "*.make", "*.makefile", "*.mak", "*.mk", "*.sh", "*.bash", "*.csv", "*.asp", "*.pl", "*.mac", "*.ws", "*.vbs", "*.perl", "*.src", "*.rss", "*.inc", "*.f", "*.go", "*.prl", "*.plx", "*.rb", "*.lsp", "*.lpx", "*.ps1", "*.command", "*.cbl", "*.cob", "*.qs", "*.wxs", "*.ph", "*.msc", "*.glsl", "*.hlsl", "*.fx", "*.vert", "*.tesc", "*.tese", "*.geom", "*.frag", "*.comp", "*.pssl", "*.scons", "*.cu", "*.jai", "*.md");
-    out.syncFiles = true;
-	out.recursive = true;
-	out.showEmptyFolders = true;
-	out.allowAutoErrorUnderlining = true;
-    out.platforms =  platforms;
-    out.platformCount = BUILDER_COUNT_OF( platforms );
-	out.name = "";
-	out.path = "";
-	out.buildCommand = "";
-	out.rebuildCommand = "";
-	out.buildFileCommand = "";
-	out.cleanCommand = "";
-	out.buildWorkingDirectory = "";
-	out.fileSyntaxCheckCommand = "";
-	out.cancelCommand = "";
-	out.executablePath = "";
-	out.workingDirectory = "";
-	out.debugCommand = "";
-	out.debuggerPath = "";
-	out.debugSolutionPath = "";
-
-	return out;
-}
-
-static const char* TenX_MakeConfigAndPlatformName( BuildConfig *config, TenXPlatform *platform ) {
-    return Builder_FormatString( "%s:%s", config->name , platform->name );
-}
+} TenXWorkspace;
 
 static const char* TenX_StringOrEmpty( const char* string ) {
 	return Builder_StringIsEmpty( string ) ? "" : string;
@@ -206,29 +191,54 @@ static const char* TenX_BoolToString( bool value ) {
 	return value ? "True" : "False";
 }
 
-bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspaceOptions *workspaceOptions, int argc, char **argv );
+bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspace *workspace, int argc, char **argv );
 
-bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspaceOptions *workspaceOptions, int argc, char **argv ) {
+bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspace *workspace, int argc, char **argv ) {
 	BUILDER_ASSERT( options );
 
 	Builder_SetCmdArgs( options, argc, argv );
 	Builder_SetCWD( options, argv );
 
+	// initial workspace validation.
+	bool validWorkspace = true;
+	{
+		if ( workspace->configsCount < 1 ) {
+			Builder_Error( "You must setup at least one config (TenXConfig) when generating when generating a 10x Workspace (TenXWorkspace).\n" );
+			validWorkspace = false;
+		}
+
+		if ( workspace->platformCount == 0 )
+		{
+			TenXPlatform defaultPlatforms[] = {
+				{ .name = "Win32" }
+			};
+
+			workspace->platforms = defaultPlatforms;
+			workspace->configsCount = 1;
+
+			Builder_Warning( "No platforms defined for 10x Workspace. Appended default 'Win32' platform.\n" );
+		}
+
+		if ( !validWorkspace ) {
+			return false;
+		}
+	}
+
 	scratch_t scratch = Builder_GetScratch( NULL );
 
-	const char *workspaceName = !Builder_StringIsEmpty( workspaceOptions->name ) ? workspaceOptions->name : "Workspace.10x";
+	const char *workspaceName = Builder_FormatString( scratch.arena, "%s.10x", !Builder_StringIsEmpty( workspace->name ) ? workspace->name : options->defaultConfig->name );
 
 	// no path means next to the build exe, which Builder_SetCWD() just made the CWD
 	const char *workspaceFilename = workspaceName;
 
-	if ( !Builder_StringIsEmpty( workspaceOptions->path ) ) {
-		if ( !Builder_CreateFolderIfItDoesntExist( workspaceOptions->path ) ) {
-			Builder_Error( "Failed to create \"%s\" folder.\n", workspaceOptions->path );
+	if ( !Builder_StringIsEmpty( workspace->path ) ) {
+		if ( !Builder_CreateFolderIfItDoesntExist( workspace->path ) ) {
+			Builder_Error( "Failed to create \"%s\" folder.\n", workspace->path );
 			Builder_RewindScratch( &scratch );
 			return false;
 		}
 
-		workspaceFilename = Builder_FormatString( scratch.arena, "%s%c%s", workspaceOptions->path, BUILDER_PATH_SEPARATOR, workspaceName );
+		workspaceFilename = Builder_FormatString( scratch.arena, "%s%c%s%s", workspace->path, BUILDER_PATH_SEPARATOR, workspaceName, ".10x" );
 	}
 
 	stringBuilder_t workspaceFileContent = { 0 };
@@ -238,11 +248,10 @@ bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspaceOptions
 	StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t<Workspace>\n" );
 
 	// include filter
-
-	if ( workspaceOptions->includeFilterList.count > 0 ) {
+	if ( workspace->includeFilterList.count > 0 ) {
 		stringBuilder_t includeFilter = { 0 };
 
-		for ( builderStringChunk_t *filterChunk = workspaceOptions->includeFilterList.head; filterChunk; filterChunk = filterChunk->next ) {
+		for ( builderStringChunk_t *filterChunk = workspace->includeFilterList.head; filterChunk; filterChunk = filterChunk->next ) {
 			for ( uint32_t filterChunkIndex = 0; filterChunkIndex < filterChunk->count; filterChunkIndex++ ) {
 				StringBuilder_Appendf(scratch.arena, &includeFilter, Builder_FormatString( scratch.arena, "%s,", filterChunk->items[filterChunkIndex]));
 			}
@@ -254,11 +263,10 @@ bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspaceOptions
 	}
 
 	// exclude filter
-
-	if (workspaceOptions->excludeFilterList.count > 0) {
+	if (workspace->excludeFilterList.count > 0) {
 		stringBuilder_t excludeFilter = { 0 };
 
-		for ( builderStringChunk_t *filterChunk = workspaceOptions->excludeFilterList.head; filterChunk; filterChunk = filterChunk->next ) {
+		for ( builderStringChunk_t *filterChunk = workspace->excludeFilterList.head; filterChunk; filterChunk = filterChunk->next ) {
 			for ( uint32_t filterChunkIndex = 0; filterChunkIndex < filterChunk->count; filterChunkIndex++ ) {
 				StringBuilder_Appendf( scratch.arena, &excludeFilter, Builder_FormatString(scratch.arena, "%s,", filterChunk->items[filterChunkIndex] ) );
 			}
@@ -270,17 +278,15 @@ bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspaceOptions
 	}
 
 	// top-level settings
-
-	StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t<SyncFiles>%s</SyncFiles>\n", TenX_BoolToString( workspaceOptions->syncFiles ) ) );
-	StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t<Recursive>%s</Recursive>\n", TenX_BoolToString( workspaceOptions->recursive ) ) );
-	StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t<ShowEmptyFolders>%s</ShowEmptyFolders>\n", TenX_BoolToString( workspaceOptions->showEmptyFolders ) ) );
-	StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t<IncludeFilesWithoutExt>%s</IncludeFilesWithoutExt>\n", TenX_BoolToString( workspaceOptions->includeFilesWithoutExtension ) ) );
-	StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t<UseVisualStudioEnvBat>%s</UseVisualStudioEnvBat>\n", TenX_BoolToString( workspaceOptions->useVisualStudioEnvBat ) ) );
-	StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t<CaptureExeOutput>%s</CaptureExeOutput>\n", TenX_BoolToString( workspaceOptions->captureExeOutput ) ) );
-	StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t<AllowAutoErrorUnderlining>%s</AllowAutoErrorUnderlining>\n", TenX_BoolToString( workspaceOptions->allowAutoErrorUnderlining ) ) );
+	StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t<SyncFiles>%s</SyncFiles>\n", TenX_BoolToString( workspace->syncFiles ) ) );
+	StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t<Recursive>%s</Recursive>\n", TenX_BoolToString( workspace->recursive ) ) );
+	StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t<ShowEmptyFolders>%s</ShowEmptyFolders>\n", TenX_BoolToString( workspace->showEmptyFolders ) ) );
+	StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t<IncludeFilesWithoutExt>%s</IncludeFilesWithoutExt>\n", TenX_BoolToString( workspace->includeFilesWithoutExtension ) ) );
+	StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t<UseVisualStudioEnvBat>%s</UseVisualStudioEnvBat>\n", TenX_BoolToString( workspace->useVisualStudioEnvBat ) ) );
+	StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t<CaptureExeOutput>%s</CaptureExeOutput>\n", TenX_BoolToString( workspace->captureExeOutput ) ) );
+	StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t<AllowAutoErrorUnderlining>%s</AllowAutoErrorUnderlining>\n", TenX_BoolToString( workspace->allowAutoErrorUnderlining ) ) );
 
 	// config names
-
 	if (options->configs.count > 0) {
 		StringBuilder_Appendf(scratch.arena, &workspaceFileContent, "\t\t<Configurations>\n");
 		for (buildConfigPtrChunk_t *chunk = options->configs.head; chunk; chunk = chunk->next ) {
@@ -296,11 +302,10 @@ bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspaceOptions
 	}
 
 	// platforms
-
-	if ( workspaceOptions->platformCount > 0 ) {
+	if ( workspace->platformCount > 0 ) {
 		StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t<Platforms>\n" );
-		for ( uint32_t platformIndex = 0; platformIndex < workspaceOptions->platformCount; platformIndex++ ) {
-			TenXPlatform *platform = &workspaceOptions->platforms[platformIndex];
+		for ( uint32_t platformIndex = 0; platformIndex < workspace->platformCount; platformIndex++ ) {
+			TenXPlatform *platform = &workspace->platforms[platformIndex];
 
 			if ( !Builder_StringIsEmpty( platform->name ) )
 			{
@@ -313,7 +318,6 @@ bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspaceOptions
 	}
 
 	// additional include paths
-
 	if (options->configs.count > 0)
 	{
 		StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t<AdditionalIncludePaths>\n" );
@@ -347,7 +351,6 @@ bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspaceOptions
 	}
 
 	// global defines
-
 	StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t<Defines>\n" );
 	StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t\t<Define>BUILDER_IMPLEMENTATION</Define>\n" );
 	StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t\t<Define>BUILDER_10X_IMPLEMENTATION</Define>\n" );
@@ -368,7 +371,7 @@ bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspaceOptions
 	StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t\t<Define>_MSC_VER</Define>\n" );
 #endif
 
-	for ( builderStringChunk_t *definesChunk = workspaceOptions->globalDefines.head; definesChunk; definesChunk = definesChunk->next ) {
+	for ( builderStringChunk_t *definesChunk = workspace->globalDefines.head; definesChunk; definesChunk = definesChunk->next ) {
 		for ( uint32_t defineIndex = 0; defineIndex < definesChunk->count; defineIndex++ ) {
 			StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t<Define>%s</Define>\n", definesChunk->items[defineIndex] ) );
 		}
@@ -376,69 +379,132 @@ bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspaceOptions
 	StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t</Defines>\n" );
 
 	// config properties
-
-	if (options->configs.count > 0)
-	{
+	if ( workspace->configsCount > 0 ) {
 		StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t<ConfigProperties>\n" );
-		for ( buildConfigPtrChunk_t *chunk = options->configs.head; chunk; chunk = chunk->next ) {
-			for ( uint32_t configIndex = 0; configIndex < chunk->count; configIndex++ ) {
-				BuildConfig *config = chunk->items[configIndex];
+		for ( uint32_t tenXConfigIndex = 0; tenXConfigIndex < workspace->configsCount; tenXConfigIndex++ ) {
+			TenXConfig *tenXConfig = &workspace->configs[tenXConfigIndex];
 
-				for ( uint32_t platformIndex = 0; platformIndex < workspaceOptions->platformCount; platformIndex++ ) {
-					TenXPlatform *platform = &workspaceOptions->platforms[platformIndex];
+			for ( uint32_t tenXPlatformIndex = 0; tenXPlatformIndex < workspace->platformCount; tenXPlatformIndex++ ) {
+				TenXPlatform *tenXPlatform = &workspace->platforms[tenXPlatformIndex];
 
-					if ( !Builder_StringIsEmpty( platform->name ) )
-					{
-						//<Name>Debug:x64</Name>
-						//<BuildCommand></BuildCommand>
-						//<RebuildCommand></RebuildCommand>
-						//<BuildFileCommand></BuildFileCommand>
-						//<CleanCommand></CleanCommand>
-						//<BuildWorkingDirectory></BuildWorkingDirectory>
-						//<FileSyntaxCheckCommand></FileSyntaxCheckCommand>
-						//<CancelBuild></CancelBuild>
-						//<Exe></Exe>
-						//<Args></Args>
-						//<WorkingDirectory></WorkingDirectory>
-						//<DebugCommand></DebugCommand>
-						//<DebuggerExe></DebuggerExe>
-						//<DebugSln></DebugSln>
-						//<Defines></Defines>
-						//<ForceIncludes></ForceIncludes>
-						//<PrioritiseFiles></PrioritiseFiles>
+				StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t\t<ConfigAndPlatform>\n" );
+				StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<Name>%s:%s</Name>\n", tenXConfig->name, tenXPlatform->name ) );
 
-						StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t\t<ConfigAndPlatform>\n" );
-
-						const char * name = Builder_FormatString( scratch.arena, "%s:%s", config->name, platform->name );
-						StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<Name>%s</Name>\n", name ) );
-						StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<BuildCommand>%s</BuildCommand>\n", TenX_StringOrEmpty( workspaceOptions->buildCommand ) ) );
-						StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<RebuildCommand>%s</RebuildCommand>\n", TenX_StringOrEmpty( workspaceOptions->rebuildCommand ) ) );
-						StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<BuildFileCommand>%s</BuildFileCommand>\n", TenX_StringOrEmpty( workspaceOptions->buildFileCommand ) ) );
-						StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<CleanCommand>%s</CleanCommand>\n", TenX_StringOrEmpty( workspaceOptions->cleanCommand ) ) );
-						StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<BuildWorkingDirectory>%s</BuildWorkingDirectory>\n", TenX_StringOrEmpty( workspaceOptions->buildWorkingDirectory ) ) );
-						StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<FileSyntaxCheckCommand>%s</FileSyntaxCheckCommand>\n", TenX_StringOrEmpty( workspaceOptions->fileSyntaxCheckCommand ) ) );
-						StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<CancelBuild>%s</CancelBuild>\n", TenX_StringOrEmpty( workspaceOptions->cancelCommand ) ) );
-						StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<Exe>%s</Exe>\n", TenX_StringOrEmpty( workspaceOptions->executablePath ) ) );
-
-						if ( workspaceOptions->args.count > 0 ) {
-							StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t\t\t<Args>\n" );
-							for ( builderStringChunk_t *argsChunk = workspaceOptions->args.head; argsChunk; argsChunk = argsChunk->next ) {
-								for ( uint32_t argIndex = 0; argIndex < argsChunk->count; argIndex++ ) {
-									StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t\t<Arg>%s</Arg>\n", argsChunk->items[argIndex] ) );
-								}
-							}
-							StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t\t\t</Args>\n" );
-						} else {
-							StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t\t\t<Args></Args>\n" );
-						}
-
-						StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t\t</ConfigAndPlatform>\n" );
-
-						// C:\dev\Builder_dev\scripts>C:\dev\Builder_dev\tests\builder_tests.exe -t Test10xWorkspace
+				const char *buildCommand = tenXConfig->buildCommand;
+				if ( Builder_StringIsEmpty( buildCommand ) ) {
+					buildCommand = workspace->buildCommand;
+					if ( Builder_StringIsEmpty( buildCommand ) ) {
+						char exePath[BUILDER_MAX_PATH] = { 0 };
+						Builder_GetExePath( argv, exePath );
+						buildCommand = exePath;
 					}
 				}
+
+				if ( tenXConfig->additionalBuildArgs.count > 0 ) {
+					StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<BuildCommand>%s", buildCommand ) );
+					for ( builderStringChunk_t *argsChunk = tenXConfig->additionalBuildArgs.head; argsChunk; argsChunk = argsChunk->next ) {
+						for ( uint32_t argIndex = 0; argIndex < argsChunk->count; argIndex++ ) {
+							StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, " %s", argsChunk->items[argIndex] ) );
+						}
+					}
+					StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "</BuildCommand>\n" );
+				} else {
+					StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<BuildCommand>%s</BuildCommand>\n", buildCommand ) );
+				}
+
+				if( !Builder_StringIsEmpty( tenXConfig->rebuildCommand ) ) {
+					if ( tenXConfig->additionalBuildArgs.count > 0 ) {
+						StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<RebuildCommand>%s", tenXConfig->rebuildCommand ) );
+						for ( builderStringChunk_t *argsChunk = tenXConfig->additionalBuildArgs.head; argsChunk; argsChunk = argsChunk->next ) {
+							for ( uint32_t argIndex = 0; argIndex < argsChunk->count; argIndex++ ) {
+								StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, " %s", argsChunk->items[argIndex] ) );
+							}
+						}
+						StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "</RebuildCommand>\n" );
+					} else {
+						StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<RebuildCommand>%s</RebuildCommand>\n", tenXConfig->rebuildCommand ) );
+					}
+				} else {
+					StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t\t\t<RebuildCommand></RebuildCommand>\n" );
+				}
+
+				if( !Builder_StringIsEmpty( tenXConfig->buildFileCommand ) ) {
+					if ( tenXConfig->additionalBuildArgs.count > 0 ) {
+						StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<BuildFileCommand>%s", tenXConfig->buildFileCommand ) );
+						for ( builderStringChunk_t *argsChunk = tenXConfig->additionalBuildArgs.head; argsChunk; argsChunk = argsChunk->next ) {
+							for ( uint32_t argIndex = 0; argIndex < argsChunk->count; argIndex++ ) {
+								StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, " %s", argsChunk->items[argIndex] ) );
+							}
+						}
+						StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "</BuildFileCommand>\n" );
+					} else {
+						StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<BuildFileCommand>%s</BuildFileCommand>\n", tenXConfig->buildFileCommand ) );
+					}
+				} else {
+					StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t\t\t<BuildFileCommand></BuildFileCommand>\n" );
+				}
+
+				if( !Builder_StringIsEmpty( tenXConfig->cleanCommand ) ) {
+					StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( "\t\t\t\t<CleanCommand>%s</CleanCommand>\n", tenXConfig->cleanCommand ) );
+				} else {
+					StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t\t\t<CleanCommand></CleanCommand>\n" );
+				}
+
+				StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t\t<ConfigAndPlatform>\n" );
 			}
-		}
+				//for ( uint32_t platformIndex = 0; platformIndex < workspace->platformCount; platformIndex++ ) {
+				//	TenXPlatform *platform = &workspace->platforms[platformIndex];
+			//
+			//		if ( !Builder_StringIsEmpty( platform->name ) )
+			//		{
+			//			//<Name>Debug:x64</Name>
+			//			//<BuildCommand></BuildCommand>
+			//			//<RebuildCommand></RebuildCommand>
+			//			//<BuildFileCommand></BuildFileCommand>
+			//			//<CleanCommand></CleanCommand>
+			//			//<BuildWorkingDirectory></BuildWorkingDirectory>
+			//			//<FileSyntaxCheckCommand></FileSyntaxCheckCommand>
+			//			//<CancelBuild></CancelBuild>
+			//			//<Exe></Exe>
+			//			//<Args></Args>
+			//			//<WorkingDirectory></WorkingDirectory>
+			//			//<DebugCommand></DebugCommand>
+			//			//<DebuggerExe></DebuggerExe>
+			//			//<DebugSln></DebugSln>
+			//			//<Defines></Defines>
+			//			//<ForceIncludes></ForceIncludes>
+			//			//<PrioritiseFiles></PrioritiseFiles>
+			//
+			//			// C:\dev\Builder_dev\scripts>C:\dev\Builder_dev\tests\builder_tests.exe -t Test10xWorkspace
+			//			const char * name = Builder_FormatString( scratch.arena, "%s:%s", config->name, platform->name );
+			//			StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<Name>%s</Name>\n", name ) );
+			//			StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<BuildCommand>%s</BuildCommand>\n", TenX_StringOrEmpty( workspace->buildCommand ) ) );
+			//			StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<RebuildCommand>%s</RebuildCommand>\n", TenX_StringOrEmpty( workspace->rebuildCommand ) ) );
+			//			StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<BuildFileCommand>%s</BuildFileCommand>\n", TenX_StringOrEmpty( workspace->buildFileCommand ) ) );
+			//			StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<CleanCommand>%s</CleanCommand>\n", TenX_StringOrEmpty( workspace->cleanCommand ) ) );
+			//			StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<BuildWorkingDirectory>%s</BuildWorkingDirectory>\n", TenX_StringOrEmpty( workspace->buildWorkingDirectory ) ) );
+			//			StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<FileSyntaxCheckCommand>%s</FileSyntaxCheckCommand>\n", TenX_StringOrEmpty( workspace->fileSyntaxCheckCommand ) ) );
+			//			StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<CancelBuild>%s</CancelBuild>\n", TenX_StringOrEmpty( workspace->cancelCommand ) ) );
+			//			StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t<Exe>%s</Exe>\n", TenX_StringOrEmpty( workspace->executablePath ) ) );
+			//
+			//			if ( workspace->args.count > 0 ) {
+			//				StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t\t\t<Args>\n" );
+			//				for ( builderStringChunk_t *argsChunk = workspace->args.head; argsChunk; argsChunk = argsChunk->next ) {
+			//					for ( uint32_t argIndex = 0; argIndex < argsChunk->count; argIndex++ ) {
+			//						StringBuilder_Appendf( scratch.arena, &workspaceFileContent, Builder_FormatString( scratch.arena, "\t\t\t\t\t<Arg>%s</Arg>\n", argsChunk->items[argIndex] ) );
+			//					}
+			//				}
+			//				StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t\t\t</Args>\n" );
+			//			} else {
+			//				StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t\t\t<Args></Args>\n" );
+			//			}
+			//
+			//			StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t\t</ConfigAndPlatform>\n" );
+
+						// C:\dev\Builder_dev\scripts>C:\dev\Builder_dev\tests\builder_tests.exe -t Test10xWorkspace
+			//		}
+				//}
+			}
 		StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t</ConfigProperties>\n" );
 	} else {
 		StringBuilder_Appendf( scratch.arena, &workspaceFileContent, "\t\t<ConfigProperties></ConfigProperties>\n" );

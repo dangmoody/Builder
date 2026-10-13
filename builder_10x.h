@@ -124,11 +124,7 @@ extern "C" {
 
 #include "builder.h"
 
-#ifdef BUILDER_10X_IMPLEMENTATION
-
-#if !defined( BUILDER_IMPLEMENTATION )
-#error "BUILDER_10X_IMPLEMENTATION requires BUILDER_IMPLEMENTATION to also be defined, and \"builder.h\" to be included before \"builder_10x.h\", in this translation unit."
-#endif
+bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspace *workspace, int argc, char **argv );
 
 // A platform in the workspace's platform dropdown (e.g. "x64" or "ARM64").
 // defines are the preprocessor defines 10x uses for this platform.
@@ -280,6 +276,12 @@ typedef struct TenXWorkspace {
 
 } TenXWorkspace;
 
+#ifdef BUILDER_10X_IMPLEMENTATION
+
+#if !defined( BUILDER_IMPLEMENTATION )
+#error "BUILDER_10X_IMPLEMENTATION requires BUILDER_IMPLEMENTATION to also be defined, and \"builder.h\" to be included before \"builder_10x.h\", in this translation unit."
+#endif
+
 static const char *Builder_TenXGetFullCWD( arena_t *arena ) {
 	char cwd[BUILDER_MAX_PATH] = { 0 };
 #if defined( _WIN32 )
@@ -329,8 +331,6 @@ static const char *Builder_TenXStringOrEmpty( const char* string ) {
 static const char* Builder_TenXBoolToString( bool value ) {
 	return value ? "True" : "False";
 }
-
-bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspace *workspace, int argc, char **argv );
 
 bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspace *workspace, int argc, char **argv ) {
 	BUILDER_ASSERT( options );

@@ -124,18 +124,16 @@ extern "C" {
 
 #include "builder.h"
 
-bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspace *workspace, int argc, char **argv );
-
 // A platform in the workspace's platform dropdown (e.g. "x64" or "ARM64").
 // defines are the preprocessor defines 10x uses for this platform.
 typedef struct TenXPlatform {
 	// The name of the platform as it appears in 10x. E.g. "x64".
 	const char	*name;
-
+	
 	// Defines 10x's parser uses when this platform is selected, on top of TenXWorkspace::globalDefines.
 	StringList  defines;
 } TenXPlatform;
-
+	
 // A config in the workspace's config dropdown (e.g. "Debug" or "Release").
 // Each one wraps a BuildConfig and sets the build, run, and debug commands 10x uses for it.
 typedef struct TenXConfig
@@ -143,138 +141,140 @@ typedef struct TenXConfig
 	// The name of the config as it appears in 10x. E.g. "Debug".
 	// Must be unique across TenXWorkspace::configs, but doesn't have to match BuildConfig::name.
 	const char	*name;
-
+	
 	// The BuildConfig this entry builds.
 	BuildConfig	*config;
-
+	
 	// Added to the end of the default BuildCommand.
 	// Ignored if you set buildCommand yourself.
 	StringList	additionalBuildArgs;
-
+	
 	// ---- Builder has defaults for these ----
-
+	
 	// Leave NULL to use TenXWorkspace::buildCommand, or your build exe if that's NULL too.
 	// additionalBuildArgs are appended either way.
 	const char	*buildCommand;
-
+	
 	// Leave NULL for the full path to the folder your build exe is in.
 	const char	*buildWorkingDirectory;
-
+	
 	// The program 10x runs and debugs. Only written for BINARY_TYPE_EXE configs.
 	// Leave NULL for the full path to config->binaryFolder + config->binaryName + extension.
 	const char	*exe;
-
+	
 	// The CWD of the program when 10x runs it.
 	// Leave NULL for the folder your build exe is in.
 	const char	*workingDirectory;
-
+	
 	// Leave NULL for: $(Executable)
 	const char	*debugCommand;
-
+	
 	// Leave NULL to use TenXWorkspace::debuggerExe.
 	const char	*debuggerExe;
-
+	
 	// The Visual Studio solution 10x opens when debugging with Visual Studio.
 	// Leave NULL to use TenXWorkspace::debugSln.
 	const char	*debugSln;
-
+	
 	// ---- Left empty in the workspace file if NULL ----
-
+	
 	// The command 10x runs when you rebuild. additionalBuildArgs are appended to it.
 	const char	*rebuildCommand;
-
+	
 	// The command 10x runs when you clean.
 	const char	*cleanCommand;
-
+	
 	// The command 10x runs to build just the current file. additionalBuildArgs are appended to it.
 	const char	*buildFileCommand;
-
+	
 	// The command 10x runs to syntax check the current file.
 	const char	*fileSyntaxCheckCommand;
-
+	
 	// The command 10x runs to cancel a build that is in progress.
 	const char	*cancelBuild;
-
+	
 	// Command line arguments passed to the program when 10x runs it.
 	StringList	runArgs;
-
+	
 	// Headers 10x's parser treats as included at the top of every file.
 	StringList	forceIncludes;
-
+	
 	// Files 10x parses before everything else.
 	StringList	prioritiseFiles;
-
+	
 } TenXConfig;
-
+	
 // Everything that goes into the generated .10x workspace file.
 // Pass this to Builder_Generate10xWorkspace().
 typedef struct TenXWorkspace {
-
+	
 	// Workspace filename, without extension. Defaults to BuilderOptions::defaultConfig->name if empty.
 	const char	*name;
-
+	
 	// Destination folder for the workspace file in disk. Defaults to the same folder as your build executable if empty.
 	const char	*path;
-
+	
 	// The command 10x runs to build the project. If empty, builder will default to run your build exe.
 	const char  *buildCommand;
-
+	
 	// The debugger 10x uses for every config that doesn't set TenXConfig::debuggerExe.
 	// Leave NULL to use 10x's default debugger.
 	const char	*debuggerExe;
-
+	
 	// The Visual Studio solution 10x opens when debugging, for every config that doesn't set TenXConfig::debugSln.
 	const char	*debugSln;
-
+	
 	// The folder 10x's terminal opens in.
 	const char *terminalDirectory;
-
+	
 	// Keep the workspace's file list in sync with the files on disk.
 	bool		syncFiles;
-
+	
 	// Include files in subfolders, not just the top level.
 	bool		recursive;
-
+	
 	// Show folders in the workspace tree even if no files in them match the filters.
 	bool		showEmptyFolders;
-
+	
 	// Include files with no extension, which includeFilterList can't match.
 	bool		includeFilesWithoutExtension;
-
+	
 	// Treat the workspace as a plain folder instead of a project.
 	bool		isFolder;
-
+	
 	// Run the Visual Studio environment batch file (vcvars) before build commands, so MSVC is on the PATH.
 	bool		useVisualStudioEnvBat;
-
+	
 	// Show your program's output in 10x's output panel when it runs.
 	bool		captureExeOutput;
-
+	
 	// Underline errors in the editor using the build output.
 	bool		allowAutoErrorUnderlining;
-
+	
 	// Platforms in the workspace's platform dropdown.
 	// Leave NULL (and platformCount at 0) for "x64" and "Win32".
 	TenXPlatform *platforms;
 	uint32_t	 platformCount;
-
+	
 	// Configs in the workspace's config dropdown.
 	// One <ConfigAndPlatform> entry is written for every config and platform pair.
 	TenXConfig	*configs;
 	uint32_t	configsCount;
-
+	
 	// Defines 10x's parser uses for every config and platform.
 	// Builder always adds BUILDER_IMPLEMENTATION, BUILDER_10X_IMPLEMENTATION, and the defines for your OS and compiler.
 	StringList globalDefines;
-
+	
 	// Wildcards for the files to include in the workspace. E.g. "*.c".
 	// Leave empty to use tenXDefaultIncludeFilter.
 	StringList	includeFilterList;
-
+	
 	// Wildcards for the files to exclude from the workspace.
 	StringList	excludeFilterList;
-
+	
 } TenXWorkspace;
+
+bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspace *workspace, int argc, char **argv );
 
 #ifdef BUILDER_10X_IMPLEMENTATION
 

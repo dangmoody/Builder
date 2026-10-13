@@ -47,14 +47,17 @@ int main( int argc, char **argv ) {
 				.name					= "Debug",
 				.config					= debug,
 				.additionalBuildArgs	= MakeStringList( "--config=Debug" ),
-				.runArgs				= MakeStringList( "--verbose" ),
+				.runArgs				= "--verbose",
 			},
 			{
 				.name					= "Release",
 				.config					= release,
 				.additionalBuildArgs	= MakeStringList( "--config=Release" ),
 				.prioritiseFiles		= MakeStringList( "main.c" ),
-				.runArgs				= MakeStringList( "--test" ),
+				.binaryName				= "test_generate_10x_workspace_renamed",
+				.binaryRelativePath		= "bin/custom",
+				.runCommand				= "$(Executable) --from-run-command",
+				.runArgs				= "--test --fast",
 			},
 		};
 
@@ -72,6 +75,11 @@ int main( int argc, char **argv ) {
 			.captureExeOutput		= true,
 			.allowAutoErrorUnderlining	= true,
 		};
+
+		// lets the test check the workspace file ends up in TenXWorkspace::path when one is set
+		if ( HasCommandLineArg( argc, argv, "--10x-path" ) ) {
+			workspace.path = "workspace_out";
+		}
 
 		return Builder_Generate10xWorkspace( &options, &workspace, argc, argv ) ? 0 : 1;
 	}

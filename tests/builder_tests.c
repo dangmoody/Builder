@@ -1086,10 +1086,14 @@ TEMPER_TEST( Test10xWorkspace, TEMPER_FLAG_SHOULD_RUN ) {
 		Builder_FormatString( &testScratch, "%s</BuildWorkingDirectory>", testFolderPathEnd ),
 		Builder_FormatString( &testScratch, "%s</WorkingDirectory>", testFolderPathEnd ),
 		Builder_FormatString( &testScratch, "%s%cbin%cdebug%ctest_generate_10x_workspace%s</Exe>", testFolderPathEnd, BUILDER_PATH_SEPARATOR, BUILDER_PATH_SEPARATOR, BUILDER_PATH_SEPARATOR, exeExtension ),
-		Builder_FormatString( &testScratch, "%s%cbin%crelease%ctest_generate_10x_workspace%s</Exe>", testFolderPathEnd, BUILDER_PATH_SEPARATOR, BUILDER_PATH_SEPARATOR, BUILDER_PATH_SEPARATOR, exeExtension ),
-		"<Arg>--verbose</Arg>",
-		"<Arg>--test</Arg>",
+		// Release overrides TenXConfig::binaryName and TenXConfig::binaryRelativePath
+		Builder_FormatString( &testScratch, "%s%cbin%ccustom%ctest_generate_10x_workspace_renamed%s</Exe>", testFolderPathEnd, BUILDER_PATH_SEPARATOR, BUILDER_PATH_SEPARATOR, BUILDER_PATH_SEPARATOR, exeExtension ),
+		"<Args>--verbose</Args>",
+		"<Args>--test --fast</Args>",
 		"<DebugCommand>$(Executable)</DebugCommand>",
+		// TenXConfig::runCommand gets written to the DebugCommand tag
+		"<DebugCommand>$(Executable) --from-run-command</DebugCommand>",
+		"<DebuggerExe></DebuggerExe>",
 		"<PrioritiseFile>main.c</PrioritiseFile>",
 
 		// per config and per platform defines
@@ -1137,6 +1141,16 @@ TEMPER_TEST( Test10xWorkspace, TEMPER_FLAG_SHOULD_RUN ) {
 
 			// relative paths would make 10x resolve them against wherever it was launched from
 			TEMPER_CHECK_TRUE_M( !Builder_StringContains( fileContents, "<BuildWorkingDirectory>bin" ), "\"%s\" has a relative BuildWorkingDirectory.\n", workspaceFilename );
+			TEMPER_CHECK_TRUE_M( !Builder_StringContains( fileContents, "<Exe>bin" ), "\"%s\" has a relative Exe.\n", workspaceFilename );
+
+			// Release overrides the binary folder, so the BuildConfig's one shouldn't be used for it
+			{
+				const char *releaseDefaultExe = Builder_FormatString( &testScratch, "%cbin%crelease%c", BUILDER_PATH_SEPARATOR, BUILDER_PATH_SEPARATOR, BUILDER_PATH_SEPARATOR );
+				TEMPER_CHECK_TRUE_M( !Builder_StringContains( fileContents, releaseDefaultExe ), "\"%s\" should use TenXConfig::binaryRelativePath over BuildConfig::binaryFolder.\n", workspaceFilename );
+			}
+
+			// runArgs is a single string now, so there shouldn't be any per-arg tags
+			TEMPER_CHECK_TRUE_M( !Builder_StringContains( fileContents, "<Arg>" ), "\"%s\" shouldn't contain any <Arg> tags.\n", workspaceFilename );
 
 			// the dropdown comes from TenXConfig::name, so BuildConfigs that aren't in the workspace (like the self rebuild config) shouldn't show up
 			{
@@ -1151,6 +1165,42 @@ TEMPER_TEST( Test10xWorkspace, TEMPER_FLAG_SHOULD_RUN ) {
 		bool deleted = Test_DeleteFile( workspaceFilename );
 
 		TEMPER_CHECK_TRUE_M( deleted, "Failed to delete file \"%s\".  The tests should properly clean up after themselves.\n", workspaceFilename );
+	}
+
+	// generate the workspace again, this time into TenXWorkspace::path
+	{
+		const char *workspaceFolder = Builder_FormatString( &testScratch, "%s/workspace_out", testFolder );
+		const char *workspaceInFolderFilename = Builder_FormatString( &testScratch, "%s/test_generate_10x_workspace.10x", workspaceFolder );
+		const char *doubleExtensionFilename = Builder_FormatString( &testScratch, "%s.10x", workspaceInFolderFilename );
+
+		const char *buildArgs = Builder_FormatString( &testScratch, "%s --10x --10x-path", buildEXEFilename );
+
+		Test_RunProcess( &testScratch, buildArgs, 0, true );
+
+		uint64_t fileSize = 0;
+		char *fileData = Builder_ReadEntireFile( &testScratch, workspaceInFolderFilename, &fileSize );
+
+		TEMPER_CHECK_TRUE_M( fileData, "Failed to read \"%s\".  It should've been generated in TenXWorkspace::path.\n", workspaceInFolderFilename );
+
+		// the extension used to get appended twice when a path was set
+		uint64_t doubleExtensionWriteTime = 0;
+		bool doubleExtensionExists = Builder_GetFileLastWriteTime( doubleExtensionFilename, &doubleExtensionWriteTime );
+		TEMPER_CHECK_TRUE_M( !doubleExtensionExists, "\"%s\" was generated.  The workspace filename shouldn't have the extension twice.\n", doubleExtensionFilename );
+
+		if ( doubleExtensionExists ) {
+			Test_DeleteFile( doubleExtensionFilename );
+		}
+
+		// make the test clean up after itself
+		if ( fileData ) {
+			bool deleted = Test_DeleteFile( workspaceInFolderFilename );
+
+			TEMPER_CHECK_TRUE_M( deleted, "Failed to delete file \"%s\".  The tests should properly clean up after themselves.\n", workspaceInFolderFilename );
+		}
+
+		bool deleted = Test_DeleteFolder( workspaceFolder );
+
+		TEMPER_CHECK_TRUE_M( deleted, "Failed to delete folder \"%s\".  The tests should properly clean up after themselves.\n", workspaceFolder );
 	}
 }
 

@@ -718,9 +718,6 @@ bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspace *works
 		printf( "Done\n" );
 	} else {
 		Builder_Error( "Failed to write \"%s\".\n", workspaceFilename );
-	}
-
-	if ( !wroteFile ) {
 		Builder_RewindScratch( &scratch );
 		return false;
 	}

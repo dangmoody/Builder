@@ -47,6 +47,7 @@ int main( int argc, char **argv ) {
 				.name					= "Debug",
 				.config					= debug,
 				.additionalBuildArgs	= MakeStringList( "--config=Debug" ),
+				.defines				= MakeStringList( "TEST_TENX_DEBUG" ),
 				.runArgs				= "--verbose",
 			},
 			{

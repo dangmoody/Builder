@@ -86,10 +86,12 @@ Builder can be used to generate a 10x workspace (.10x) file:
 					.binaryName				= "my_awesome_program_shipping",
 					.binaryRelativePath		= "bin/shipping",
 					.runCommand				= "$(Executable) --fullscreen",
+					.cleanCommand			= "\"scripts/clean shipping.bat\" --all",
 				},
 			};
 
 			TenXWorkspace workspace = {
+				.name					= "my_awesome_program",
 				.configs				= configs,
 				.configsCount			= BUILDER_COUNT_OF( configs ),
 				.platforms				= platforms,
@@ -116,6 +118,8 @@ You'd then generate the workspace file with:
 That writes "my_awesome_program.10x" next to your build exe, with one entry for every config and platform pair (Debug:x64, Debug:Win32, Release:x64, Release:Win32).
 Each entry builds by running your build exe with that config's additionalBuildArgs, and runs/debugs config->binaryFolder + config->binaryName.
 Set binaryName and binaryRelativePath on a TenXConfig to run/debug a different program instead (like Release does above), and runCommand/runArgs to change how 10x runs it.
+The default build command wraps your build exe's path in quotes, so it still works if the path has spaces in it.
+Commands you set yourself (buildCommand, rebuildCommand, cleanCommand, etc.) are written as is, so quote any paths with spaces in them yourself (like Release's cleanCommand above).
 
 ===========================================================================
 */
@@ -160,10 +164,15 @@ typedef struct TenXConfig
 	// Ignored if you set buildCommand yourself.
 	StringList	additionalBuildArgs;
 
+	// Defines 10x's parser uses for this config only, on top of config->defines and TenXWorkspace::globalDefines.
+	// These only affect 10x's parsing, they don't get passed to the compiler.
+	StringList	defines;
+
 	// ---- Builder has defaults for these ----
 
 	// Leave NULL to use TenXWorkspace::buildCommand, or your build exe if that's NULL too.
 	// additionalBuildArgs are appended either way.
+	// Written as is, so wrap any paths with spaces in them in quotes yourself.
 	const char	*buildCommand;
 
 	// Leave NULL for the full path to the folder your build exe is in.
@@ -197,6 +206,7 @@ typedef struct TenXConfig
 	const char	*debugSln;
 
 	// ---- Left empty in the workspace file if NULL ----
+	// The commands here are written as is, so wrap any paths with spaces in them in quotes yourself.
 
 	// The command 10x runs when you rebuild. additionalBuildArgs are appended to it.
 	const char	*rebuildCommand;
@@ -232,6 +242,7 @@ typedef struct TenXWorkspace {
 	const char	*path;
 
 	// The command 10x runs to build the project. If empty, builder will default to run your build exe.
+	// Written as is, so wrap any paths with spaces in them in quotes yourself.
 	const char  *buildCommand;
 
 	// The debugger 10x uses for every config that doesn't set TenXConfig::debuggerExe.
@@ -452,7 +463,7 @@ bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspace *works
 		};
 
 		workspace->platforms = defaultPlatforms;
-		workspace->platformCount = 2;
+		workspace->platformCount = BUILDER_COUNT_OF( defaultPlatforms );
 
 		Builder_Warning( "No platforms defined for 10x Workspace. Appended default 'x64' and 'Win32' platforms.\n" );
 	}
@@ -487,7 +498,7 @@ bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspace *works
 		Builder_TenXAppendStringList( arena, &workspaceFileContent, &workspace->includeFilterList, "", "," );
 		StringBuilder_Appendf( arena, &workspaceFileContent, "</IncludeFilter>\n" );
 	} else {
-		static const char	*tenXDefaultIncludeFilter = "*.c,*.cc,*.cpp,*.c++,*.cp,*.cxx,*.h,*.hh,*.hpp,*.h++,*.hp,*.hxx,*.inl,*.cs,*.rs,*.java,*.jav,*.js,*.jsc,*.jsx,*.json,*.cls,*.ts,*.py,*.rpy,*.php,*.php3,*.phl,*.phtml,*.rhtml,*.tpl,*.phps,*.lua,*.html,*.html5,*.htm,*.xml,*.xaml,*.css,*.ssi,*.haml,*.yaml,*.bat,*.wbf,*.wbt,*.txt,*.cmake,*.make,*.makefile,*.mak,*.mk,*.sh,*.bash,*.csv,*.asp,*.pl,*.mac,*.ws,*.vbs,*.perl,*.src,*.rss,*.inc,*.f,*.go,*.prl,*.plx,*.rb,*.lsp,*.lpx,*.ps1,*.command,*.cbl,*.cob,*.qs,*.wxs,*.ph,*.msc,*.glsl,*.hlsl,*.fx,*.vert,*.tesc,*.tese,*.geom,*.frag,*.comp,*.pssl,*.scons,*.cu,*.jai,*.md,";
+		static const char *tenXDefaultIncludeFilter = "*.c,*.cc,*.cpp,*.c++,*.cp,*.cxx,*.h,*.hh,*.hpp,*.h++,*.hp,*.hxx,*.inl,*.cs,*.rs,*.java,*.jav,*.js,*.jsc,*.jsx,*.json,*.cls,*.ts,*.py,*.rpy,*.php,*.php3,*.phl,*.phtml,*.rhtml,*.tpl,*.phps,*.lua,*.html,*.html5,*.htm,*.xml,*.xaml,*.css,*.ssi,*.haml,*.yaml,*.bat,*.wbf,*.wbt,*.txt,*.cmake,*.make,*.makefile,*.mak,*.mk,*.sh,*.bash,*.csv,*.asp,*.pl,*.mac,*.ws,*.vbs,*.perl,*.src,*.rss,*.inc,*.f,*.go,*.prl,*.plx,*.rb,*.lsp,*.lpx,*.ps1,*.command,*.cbl,*.cob,*.qs,*.wxs,*.ph,*.msc,*.glsl,*.hlsl,*.fx,*.vert,*.tesc,*.tese,*.geom,*.frag,*.comp,*.pssl,*.scons,*.cu,*.jai,*.md,";
 		StringBuilder_Appendf( arena, &workspaceFileContent, "\t\t<IncludeFilter>%s</IncludeFilter>\n", tenXDefaultIncludeFilter );
 	}
 
@@ -582,12 +593,16 @@ bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspace *works
 		char exePath[BUILDER_MAX_PATH] = { 0 };
 		Builder_GetExePath( argv, exePath );
 
+		// quoted because paths can have spaces in them
+		// a buildCommand set by the user is a whole command line, so that's written as is
+		const char *defaultBuildCommand = Builder_FormatString( arena, "\"%s\"", exePath );
+
 		const char *fullCWD = Builder_TenXGetFullCWD( arena );
 
 		for ( uint32_t tenXConfigIndex = 0; tenXConfigIndex < workspace->configsCount; tenXConfigIndex++ ) {
 			TenXConfig *tenXConfig = &workspace->configs[tenXConfigIndex];
 
-			const char *buildCommand = Builder_TenXFirstNonEmpty( tenXConfig->buildCommand, Builder_TenXFirstNonEmpty( workspace->buildCommand, exePath ) );
+			const char *buildCommand = Builder_TenXFirstNonEmpty( tenXConfig->buildCommand, Builder_TenXFirstNonEmpty( workspace->buildCommand, defaultBuildCommand ) );
 
 			// appended to the build, rebuild, and build file commands
 			stringBuilder_t additionalBuildArgsBuilder = { 0 };
@@ -645,11 +660,12 @@ bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspace *works
 				StringBuilder_Appendf( arena, &workspaceFileContent, "\t\t\t\t<DebuggerExe>%s</DebuggerExe>\n", Builder_TenXStringOrEmpty( Builder_TenXFirstNonEmpty( tenXConfig->debuggerExe, workspace->debuggerExe ) ) );
 				StringBuilder_Appendf( arena, &workspaceFileContent, "\t\t\t\t<DebugSln>%s</DebugSln>\n", Builder_TenXStringOrEmpty( Builder_TenXFirstNonEmpty( tenXConfig->debugSln, workspace->debugSln ) ) );
 
-				// platform and config defines go in the same list
-				if ( tenXPlatform->defines.count > 0 || tenXConfig->config->defines.count > 0 ) {
+				// BuildConfig, TenXConfig, and platform defines go in the same list
+				if ( tenXConfig->config->defines.count > 0 || tenXConfig->defines.count > 0 || tenXPlatform->defines.count > 0 ) {
 					StringBuilder_Appendf( arena, &workspaceFileContent, "\t\t\t\t<Defines>\n" );
-					Builder_TenXAppendListItems( arena, &workspaceFileContent, "\t\t\t\t\t", "Define", &tenXPlatform->defines );
 					Builder_TenXAppendListItems( arena, &workspaceFileContent, "\t\t\t\t\t", "Define", &tenXConfig->config->defines );
+					Builder_TenXAppendListItems( arena, &workspaceFileContent, "\t\t\t\t\t", "Define", &tenXConfig->defines );
+					Builder_TenXAppendListItems( arena, &workspaceFileContent, "\t\t\t\t\t", "Define", &tenXPlatform->defines );
 					StringBuilder_Appendf( arena, &workspaceFileContent, "\t\t\t\t</Defines>\n" );
 				} else {
 					StringBuilder_Appendf( arena, &workspaceFileContent, "\t\t\t\t<Defines></Defines>\n" );

@@ -1081,8 +1081,10 @@ TEMPER_TEST( Test10xWorkspace, TEMPER_FLAG_SHOULD_RUN ) {
 		"<Name>Release:Win32</Name>",
 		"</ConfigAndPlatform>",
 
-		Builder_FormatString( &testScratch, "%s --config=Debug</BuildCommand>", buildEXEPathEnd ),
-		Builder_FormatString( &testScratch, "%s --config=Release</BuildCommand>", buildEXEPathEnd ),
+		// the default build command is the build exe, quoted in case its path has spaces in it
+		"<BuildCommand>\"",
+		Builder_FormatString( &testScratch, "%s\" --config=Debug</BuildCommand>", buildEXEPathEnd ),
+		Builder_FormatString( &testScratch, "%s\" --config=Release</BuildCommand>", buildEXEPathEnd ),
 		Builder_FormatString( &testScratch, "%s</BuildWorkingDirectory>", testFolderPathEnd ),
 		Builder_FormatString( &testScratch, "%s</WorkingDirectory>", testFolderPathEnd ),
 		Builder_FormatString( &testScratch, "%s%cbin%cdebug%ctest_generate_10x_workspace%s</Exe>", testFolderPathEnd, BUILDER_PATH_SEPARATOR, BUILDER_PATH_SEPARATOR, BUILDER_PATH_SEPARATOR, exeExtension ),
@@ -1096,9 +1098,10 @@ TEMPER_TEST( Test10xWorkspace, TEMPER_FLAG_SHOULD_RUN ) {
 		"<DebuggerExe></DebuggerExe>",
 		"<PrioritiseFile>main.c</PrioritiseFile>",
 
-		// per config and per platform defines
+		// per BuildConfig, per TenXConfig, and per platform defines
 		"<Define>TEST_DEBUG</Define>",
 		"<Define>TEST_RELEASE</Define>",
+		"<Define>TEST_TENX_DEBUG</Define>",
 		"<Define>TEST_PLATFORM_X64</Define>",
 		"<Define>TEST_PLATFORM_WIN32</Define>",
 
@@ -1157,6 +1160,16 @@ TEMPER_TEST( Test10xWorkspace, TEMPER_FLAG_SHOULD_RUN ) {
 				const char *debugConfiguration = strstr( fileContents, "<Configuration>Debug</Configuration>" );
 				TEMPER_CHECK_TRUE_M( debugConfiguration && !strstr( debugConfiguration + 1, "<Configuration>Debug</Configuration>" ), "\"%s\" should list the Debug configuration once.\n", workspaceFilename );
 			}
+
+			// TenXConfig::defines only belong to that config, so they should show up once per platform (Debug:x64 and Debug:Win32) and nowhere else
+			{
+				uint32_t tenXDefineCount = 0;
+				for ( const char *found = strstr( fileContents, "<Define>TEST_TENX_DEBUG</Define>" ); found; found = strstr( found + 1, "<Define>TEST_TENX_DEBUG</Define>" ) ) {
+					tenXDefineCount++;
+				}
+
+				TEMPER_CHECK_TRUE_M( tenXDefineCount == 2, "\"%s\" should have TEST_TENX_DEBUG once per Debug platform, but it has it %u times.\n", workspaceFilename, tenXDefineCount );
+			}
 		}
 	}
 
@@ -1201,6 +1214,48 @@ TEMPER_TEST( Test10xWorkspace, TEMPER_FLAG_SHOULD_RUN ) {
 		bool deleted = Test_DeleteFolder( workspaceFolder );
 
 		TEMPER_CHECK_TRUE_M( deleted, "Failed to delete folder \"%s\".  The tests should properly clean up after themselves.\n", workspaceFolder );
+	}
+
+	// generate the workspace from a build exe with spaces in its path
+	// the build command must keep the whole path quoted, otherwise 10x would split it at the first space
+	{
+		const char *spacesEXEFilename = Builder_FormatString( &testScratch, "%s/build with spaces%s", testFolder, exeExtension );
+		const char *spacesEXEPathEnd = Builder_FormatString( &testScratch, "%c%s%cbuild with spaces%s", BUILDER_PATH_SEPARATOR, testFolder, BUILDER_PATH_SEPARATOR, exeExtension );
+
+		const char *buildCMDArgs = Builder_FormatString( &testScratch, "%s -o \"%s\" %s", Test_GetCompilerPath( COMPILER_CLANG ), spacesEXEFilename, buildSourceFilename );
+		Test_RunProcess( &testScratch, buildCMDArgs, 0, true );
+
+		const char *buildArgs = Builder_FormatString( &testScratch, "\"%s\" --10x", spacesEXEFilename );
+		Test_RunProcess( &testScratch, buildArgs, 0, true );
+
+		uint64_t fileSize = 0;
+		char *fileData = Builder_ReadEntireFile( &testScratch, workspaceFilename, &fileSize );
+
+		TEMPER_CHECK_TRUE_M( fileData, "Failed to read \"%s\".  It should've been generated.\n", workspaceFilename );
+
+		if ( fileData ) {
+			// file data isnt null terminated
+			const char *fileContents = Builder_FormatString( &testScratch, "%.*s", fileSize, (const char *) fileData );
+
+			const char *expectedEntries[] = {
+				"<BuildCommand>\"",
+				Builder_FormatString( &testScratch, "%s\" --config=Debug</BuildCommand>", spacesEXEPathEnd ),
+				Builder_FormatString( &testScratch, "%s\" --config=Release</BuildCommand>", spacesEXEPathEnd ),
+			};
+
+			for ( uint32_t entryIndex = 0; entryIndex < BUILDER_COUNT_OF( expectedEntries ); entryIndex++ ) {
+				TEMPER_CHECK_TRUE_M( Builder_StringContains( fileContents, expectedEntries[entryIndex] ), "\"%s\" is missing expected entry: %s\n", workspaceFilename, expectedEntries[entryIndex] );
+			}
+
+			// make the test clean up after itself
+			bool deleted = Test_DeleteFile( workspaceFilename );
+
+			TEMPER_CHECK_TRUE_M( deleted, "Failed to delete file \"%s\".  The tests should properly clean up after themselves.\n", workspaceFilename );
+		}
+
+		bool deleted = Test_DeleteFile( spacesEXEFilename );
+
+		TEMPER_CHECK_TRUE_M( deleted, "Failed to delete file \"%s\".  The tests should properly clean up after themselves.\n", spacesEXEFilename );
 	}
 }
 

@@ -418,7 +418,7 @@ Builder would not have been possible without the following people who deserve, a
 
 * Dale Green
 * [Aiden Knight](https://github.com/aiden-knight) (File globbing, better incremental compilation, Windows dynamic runtime, and lots of other small things)
-* [Ed Owen](https://github.com/eddyowen) (Compilation database support, QoL improvements)
+* [Ed Owen](https://github.com/eddyowen) (10X workspace generation, Compilation database support, QoL improvements)
 * Yann Richeux (Bug fixes)
 * Tom Whitcombe (Visual Studio project generation)
 * Mike Young (Linux platform code)

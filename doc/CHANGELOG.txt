@@ -1,3 +1,19 @@
+v1.1.0, <RELEASE DATE HERE>:
+
+* Added builder_10x.h, for generating 10X workspace (.10x) files (thanks @eddyowen!).
+	* #define BUILDER_10X_IMPLEMENTATION and #include "builder_10x.h", then call Builder_Generate10xWorkspace( BuilderOptions *, TenXWorkspace *, int argc, char **argv ).
+	* TenXWorkspace sets the workspace-wide settings: name, output path, build command, debugger, file filters, global defines, etc.
+	* TenXConfig wraps a BuildConfig and sets the build, run, debug, and clean commands 10X uses for it.
+	* TenXPlatform sets the entries in 10X's platform dropdown, each with their own defines.
+		* Leave TenXWorkspace::platforms empty to get 10X's defaults ("x64" and "Win32").
+	* See the quick start guide at the top of builder_10x.h for a full example.
+* Builder_GenerateVisualStudioSolution(), Builder_GenerateVSCodeJSONFiles(), Builder_GenerateZedJSONFiles(), and Builder_GenerateCompilationDatabase() now self-rebuild your build source file first if BuilderOptions::selfRebuildConfig is set.
+	* Previously this only happened when calling Build(), so generating project files could run with a stale build program.
+* Builder now always prints a message when it finds and runs a BuildConfig's OnPreBuild() or OnPostBuild().
+	* Previously this was only shown with verbose logging enabled.
+
+----------------------------------------------------------------
+
 v1.0.0, 10/10/2026:
 
 This release is now v1.0.0!

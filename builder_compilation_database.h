@@ -131,6 +131,10 @@ bool Builder_GenerateCompilationDatabase( BuilderOptions *options, CompilationDa
 
 	Builder_SetCWD( argv );
 
+	if ( !Builder_SelfRebuild( options, argc, argv ) ) {
+		return false;
+	}
+
 	scratch_t scratch = Builder_GetScratch( NULL );
 
 	const char *compilerPath = !Builder_StringIsEmpty( options->compilerPath ) ? options->compilerPath : "clang";

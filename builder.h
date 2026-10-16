@@ -725,17 +725,17 @@ static bool Builder_StringContains( const char *str, const char *substring ) {
 static const char * Builder_FilenameFromPath( const char *path, uint64_t pathLength ) {
 	const char *filename = path;
 
-    if ( filename ) {
-        filename = path + pathLength;
-        while ( path != --filename ) {
-            if ( *filename == '\\' || *filename == '/' ) {
-                filename++;
-                break;
-            }
-        }
-    }
+	if ( filename ) {
+		filename = path + pathLength;
+		while ( path != --filename ) {
+			if ( *filename == '\\' || *filename == '/' ) {
+				filename++;
+				break;
+			}
+		}
+	}
 
-    return filename;
+	return filename;
 }
 
 static bool Builder_PathEndsWith( const char *path, const char *extension ) {
@@ -1820,7 +1820,7 @@ static uint64_t Builder_AppendHash( const uint64_t inHash, const char *string ) 
 	while ( *string ) {
 		outHash ^= (unsigned char) *(string++);
 		outHash *= UINT64_C(1099511628211);
-  }
+	}
 
 	return outHash;
 }
@@ -1994,19 +1994,19 @@ static bool Builder_VisitFiles( arena_t *results, const char *path, const builde
 // As slice comparison can early out if count is not equal for the price of more memory?
 // We should wait for some more consistent performance benchmarks to test the difference
 typedef struct {
-	const char *begin;
-	uint32_t count;
+	const char	*begin;
+	uint32_t	count;
 } builderStringSlice_t;
 
 typedef struct {
-	builderStringSlice_t *data;
-	uint32_t count;
+	builderStringSlice_t	*data;
+	uint32_t				count;
 } builderStringSliceArray_t;
 
 typedef struct {
-	const builderStringSliceArray_t patternSlices;
-	const uint32_t searchPathLen;
-	StringList *globResults;
+	const builderStringSliceArray_t	patternSlices;
+	const uint32_t					searchPathLen;
+	StringList						*globResults;
 } builderGlobVisitCallbackData_t;
 
 // remember to free sliceArray.data
@@ -2957,11 +2957,11 @@ static uint32_t Builder_AtomicIncrement( builderAtomic32_t *value ) {
 }
 
 typedef struct builderCompileContext_t {
-	BuildConfig					*config;
-	const char					*compilerPath;
-	bool						useMSVCSyntax;
+	BuildConfig	*config;
+	const char	*compilerPath;
+	bool		useMSVCSyntax;
 #if defined( _WIN32 )
-	bool						debugDefineSet;
+	bool		debugDefineSet;
 #endif
 } builderCompileContext_t;
 
@@ -3455,15 +3455,15 @@ typedef struct compileDependencyArray_t {
 } compileDependencyArray_t;
 
 typedef struct libraryDependency_t {
-    uint64_t writeTime;
-    const char *libraryPath;
-    const char *libraryName;
+	uint64_t	writeTime;
+	const char	*libraryPath;
+	const char	*libraryName;
 } libraryDependency_t;
 
 typedef struct libraryDependencyArray_t {
-    uint64_t count;
-    uint64_t capacity;
-    libraryDependency_t *libraries;
+	uint64_t			count;
+	uint64_t			capacity;
+	libraryDependency_t	*libraries;
 } libraryDependencyArray_t;
 
 static const uint64_t g_builderDependenciesFileVersion = 1;
@@ -3474,8 +3474,8 @@ typedef struct builderConfigDependencies_t {
 	uint64_t						fileVersion;
 	uint64_t						linkCommandHash;
 	uint64_t						binaryWriteTime;
-    libraryDependencyArray_t        libraryDependencyArray;
-	uint64_t 						objectFileCount;
+	libraryDependencyArray_t		libraryDependencyArray;
+	uint64_t						objectFileCount;
 	objectToDependencyIndicies_t	*objectDependencyMap;
 	compileDependencyArray_t		compileDependencyArray;
 } builderConfigDependencies_t;
@@ -3562,13 +3562,13 @@ static byteBuffer_t Builder_ByteBufferFromConfigDependencies( arena_t *arena, co
 	Builder_ByteBufferPushU64( arena, &byteBuffer, configDependencies->linkCommandHash );
 	Builder_ByteBufferPushU64( arena, &byteBuffer, configDependencies->binaryWriteTime );
 
-    const libraryDependencyArray_t *libraryDependencyArray = &configDependencies->libraryDependencyArray;
+	const libraryDependencyArray_t *libraryDependencyArray = &configDependencies->libraryDependencyArray;
 	Builder_ByteBufferPushU64( arena, &byteBuffer, libraryDependencyArray->count );
 	for ( uint32_t libIndex = 0; libIndex < libraryDependencyArray->count; ++libIndex ) {
-        const libraryDependency_t *libDependency = &libraryDependencyArray->libraries[libIndex];
-        Builder_ByteBufferPushU64( arena, &byteBuffer, libDependency->writeTime );
-        Builder_ByteBufferPushString( arena, &byteBuffer, libDependency->libraryPath, strlen(libDependency->libraryPath) );
-    }
+		const libraryDependency_t *libDependency = &libraryDependencyArray->libraries[libIndex];
+		Builder_ByteBufferPushU64( arena, &byteBuffer, libDependency->writeTime );
+		Builder_ByteBufferPushString( arena, &byteBuffer, libDependency->libraryPath, strlen(libDependency->libraryPath) );
+	}
 
 	// for incremental compile
 	Builder_ByteBufferPushU64( arena, &byteBuffer, configDependencies->objectFileCount );
@@ -3601,17 +3601,17 @@ static builderConfigDependencies_t Builder_ConfigDependenciesFromByteBuffer( are
 		configDependencies.linkCommandHash = Builder_U64FromByteBuffer( byteBuffer );
 		configDependencies.binaryWriteTime = Builder_U64FromByteBuffer( byteBuffer );
 
-        libraryDependencyArray_t *libraryDependencyArray    = &configDependencies.libraryDependencyArray;
-        libraryDependencyArray->count		= Builder_U64FromByteBuffer( byteBuffer );
-		libraryDependencyArray->capacity		= libraryDependencyArray->count;
-        libraryDependencyArray->libraries	= Builder_ArenaAlloc( arena, libraryDependency_t, libraryDependencyArray->count );
-        for ( uint32_t libIndex = 0; libIndex < libraryDependencyArray->count; ++libIndex ) {
-            libraryDependency_t *libDependency = &libraryDependencyArray->libraries[libIndex];
-            libDependency->writeTime = Builder_U64FromByteBuffer( byteBuffer );
+		libraryDependencyArray_t *libraryDependencyArray	= &configDependencies.libraryDependencyArray;
+		libraryDependencyArray->count		= Builder_U64FromByteBuffer( byteBuffer );
+		libraryDependencyArray->capacity	= libraryDependencyArray->count;
+		libraryDependencyArray->libraries	= Builder_ArenaAlloc( arena, libraryDependency_t, libraryDependencyArray->count );
+		for ( uint32_t libIndex = 0; libIndex < libraryDependencyArray->count; ++libIndex ) {
+			libraryDependency_t *libDependency = &libraryDependencyArray->libraries[libIndex];
+			libDependency->writeTime = Builder_U64FromByteBuffer( byteBuffer );
 			uint64_t pathLength;
-            libDependency->libraryPath = Builder_StringFromByteBuffer( arena, byteBuffer, &pathLength );
-            libDependency->libraryName = Builder_FilenameFromPath( libDependency->libraryPath, pathLength );
-        }
+			libDependency->libraryPath = Builder_StringFromByteBuffer( arena, byteBuffer, &pathLength );
+			libDependency->libraryName = Builder_FilenameFromPath( libDependency->libraryPath, pathLength );
+		}
 
 		// for incremental compile
 		configDependencies.objectFileCount		= Builder_U64FromByteBuffer( byteBuffer );
@@ -3629,7 +3629,7 @@ static builderConfigDependencies_t Builder_ConfigDependenciesFromByteBuffer( are
 		}
 
 		compileDependencyArray_t *compileDependencyArray = &configDependencies.compileDependencyArray;
-		compileDependencyArray->count 			= Builder_U64FromByteBuffer( byteBuffer );
+		compileDependencyArray->count			= Builder_U64FromByteBuffer( byteBuffer );
 		compileDependencyArray->capacity		= compileDependencyArray->count;
 		compileDependencyArray->dependencies	= Builder_ArenaAlloc( arena, compileDependency_t, compileDependencyArray->capacity );
 		for ( uint64_t dependencyIndex = 0; dependencyIndex < compileDependencyArray->count; ++dependencyIndex ) {
@@ -3857,18 +3857,18 @@ static void Builder_GetExePath( char **argv, char *outExePath ) {
 }
 
 typedef struct builderLinkContext_t {
-	 BuildConfig					*config;
-	 const char						*compilerPath;
-	 const char						*binaryPath;
-	 const char						*clangSanitizerResourceDir;
+	BuildConfig					*config;
+	const char					*compilerPath;
+	const char					*binaryPath;
+	const char					*clangSanitizerResourceDir;
 #if defined ( _WIN32 )
-	 builderMSVCInstall_t			*msvcInstall;
-	 builderWindowsSDKInstall_t		*windowsSDKInstall;
-	 bool							useMSVCLink;
-	 bool							compilerIsMSVC;
-	 bool							debugDefineSet;
+	builderMSVCInstall_t		*msvcInstall;
+	builderWindowsSDKInstall_t	*windowsSDKInstall;
+	bool						useMSVCLink;
+	bool						compilerIsMSVC;
+	bool						debugDefineSet;
 #endif
-	bool							compilerIsGCC;
+	bool						compilerIsGCC;
 } builderLinkContext_t;
 
 static const char * Builder_CreateLinkCommand( arena_t *commandArena, builderLinkContext_t *linkContext, builderPostBuildConfigData_t *postBuildData ) {
@@ -4016,9 +4016,9 @@ static const char * Builder_CreateLinkCommand( arena_t *commandArena, builderLin
 				}
 			}
 
-            for ( builderStringChunk_t *chunk = config->additionalLibs.head; chunk; chunk = chunk->next ) {
-                for ( uint32_t libIndex = 0; libIndex < chunk->count; libIndex++ ) {
-                    const char *additionalLib = chunk->items[libIndex];
+			for ( builderStringChunk_t *chunk = config->additionalLibs.head; chunk; chunk = chunk->next ) {
+				for ( uint32_t libIndex = 0; libIndex < chunk->count; libIndex++ ) {
+					const char *additionalLib = chunk->items[libIndex];
 
 					// an explicit filename or path (e.g. "./foo.so", "foo.lib") is passed straight through
 					// "-l" is only correct for bare library names since it adds the "lib" prefix and an extension itself
@@ -4060,7 +4060,7 @@ static const char * Builder_CreateLinkCommand( arena_t *commandArena, builderLin
 			// GCC and clang both link the sanitizer runtime themselves when driving the link, unlike link.exe
 			Builder_AddSanitizerArgs( &scratch, &linkerArgs, config->sanitizers, "-fsanitize" );
 
-            StringBuilder_Appendf( scratch.arena, &linkerArgs, "-Wl,--trace " );
+			StringBuilder_Appendf( scratch.arena, &linkerArgs, "-Wl,--trace " );
 		}
 	}
 
@@ -4122,26 +4122,33 @@ static void Builder_SetCmdArgs( BuilderOptions *options, int argc, char **argv )
 }
 
 typedef struct builderBuildContext_t {
-	scratch_t								*buildScratch;
-	const char								*compilerPath;			// TODO: DM: 21/09/2026: remove this
-	const char								*compilerVersionString;	// TODO: DM: 21/09/2026: remove this
-	bool									compilerIsMSVC;
-	bool									compilerIsClangCL;
-	bool									compilerIsGCC;
-	char									*clangSanitizerResourceDir;
-	const char								*intermediateFolder;
-	uint32_t								numCPUCores;
-	arena_t									*threadResultArenas;
-	arena_t									*postBuildArena;
-	arena_t									*buildSummaryArena;
-	builderPostBuildConfigData_t			*postBuildConfigDependencyData;
+	scratch_t						buildScratch;
+	const char						*compilerPath;			// TODO: DM: 21/09/2026: remove this
+	const char						*compilerVersionString;	// TODO: DM: 21/09/2026: remove this
+	bool							compilerIsMSVC;
+	bool							compilerIsClangCL;
+	bool							compilerIsGCC;
+	char							*clangSanitizerResourceDir;
+	const char						*intermediateFolder;
+	uint32_t						numCPUCores;
+	arena_t							*threadResultArenas;
+	arena_t							postBuildArena;
+
+	// TODO: DM: 30/08/2026: we should probably make that global long lifetime arena that we talked about
+	// there are other things that could and should go on it as well as build summaries
+	arena_t							buildSummaryArena;
+	builderPostBuildConfigData_t	*postBuildConfigDependencyData;
 
 	// accumulated over every config built
-	uint32_t								builtConfigs;
-	buildSummaryList_t						buildSummary;
-	double									totalCompileTimeMS;
-	double									totalLinkTimeMS;
+	uint32_t						builtConfigs;
+	buildSummaryList_t				buildSummary;
+	double							totalCompileTimeMS;
+	double							totalLinkTimeMS;
 } builderBuildContext_t;
+
+static builderBuildContext_t	g_buildContext;
+static bool						g_buildContextInitialized;
+static bool						g_selfRebuildDone;
 
 typedef enum builderBuildResult_t {
 	BUILD_RESULT_SUCCESS	= 0,
@@ -4153,14 +4160,14 @@ typedef enum builderBuildResult_t {
 static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context, BuilderOptions *options, BuildConfig *config ) {
 	// nothing this config allocates is wanted by the next one, the toolchain paths it reads were put on buildScratch before the loop
 	// so they sit below this and the rewind can't reach them
-	arenaRewindSpot_t configStart = Builder_ArenaTell( context->buildScratch->arena );
+	arenaRewindSpot_t configStart = Builder_ArenaTell( context->buildScratch.arena );
 
 	double compileTimeMS = 0.0;
 	double linkTimeMS = 0.0;
 	uint32_t needsCompilePacketCount = 0;
 
 	if ( config->OnPreBuild ) {
-		Builder_LogVerbose( "Found a OnPreBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name ? config->name : "" );
+		printf( "Found a OnPreBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name ? config->name : "" );
 
 		config->OnPreBuild( config );
 	}
@@ -4171,28 +4178,28 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 		printf( "Building config \"%s\":\n", config->name );
 
 		// glob step - flattened into one array because the compile job pool indexes into it by job number
-		StringList globList = Builder_GlobFiles( context->buildScratch->arena, &config->sourceFiles );
+		StringList globList = Builder_GlobFiles( context->buildScratch.arena, &config->sourceFiles );
 
 		uint32_t compilePacketCount = globList.count;
 
 		builderCompileContext_t compileContext = {
-			.config				= config,
-			.compilerPath		= context->compilerPath,
-			.useMSVCSyntax		= context->compilerIsMSVC || context->compilerIsClangCL,
+			.config			= config,
+			.compilerPath	= context->compilerPath,
+			.useMSVCSyntax	= context->compilerIsMSVC || context->compilerIsClangCL,
 		};
 
 		builderPostBuildConfigData_t *postBuildData = &context->postBuildConfigDependencyData[context->builtConfigs++];
 		*postBuildData = (builderPostBuildConfigData_t){ 0 };
 		if ( compilePacketCount > 0 ) {
 			postBuildData->packetCount = compilePacketCount;
-			postBuildData->compilePackets = Builder_ArenaAlloc( context->postBuildArena, builderCompilePacket_t, compilePacketCount );
+			postBuildData->compilePackets = Builder_ArenaAlloc( &context->postBuildArena, builderCompilePacket_t, compilePacketCount );
 
-			scratch_t scratch = Builder_GetScratch( context->buildScratch->arena );
+			scratch_t scratch = Builder_GetScratch( context->buildScratch.arena );
 
 			const char *baseCompileCommand = Builder_CreateCompilationCommand( scratch.arena, &compileContext );
 			if ( !baseCompileCommand ) {
 				Builder_Error( "Failed to create compilation command for config %s!\n", config->name );
-				Builder_RewindArena( context->buildScratch->arena, &configStart );
+				Builder_RewindArena( context->buildScratch.arena, &configStart );
 				context->builtConfigs--;
 				return BUILD_RESULT_FAILED;
 			}
@@ -4203,7 +4210,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 			// cl.exe only warns about the others and carries on, so the build would silently go ahead without them
 			if ( context->compilerIsMSVC && ( config->sanitizers & ~SANITIZER_ADDRESS ) != 0 ) {
 				Builder_Error( "Config \"%s\" uses sanitizers that MSVC doesn't support.  MSVC only supports SANITIZER_ADDRESS.\n", config->name );
-				Builder_RewindArena( context->buildScratch->arena, &configStart );
+				Builder_RewindArena( context->buildScratch.arena, &configStart );
 				context->builtConfigs--;
 				return BUILD_RESULT_FAILED;
 			}
@@ -4221,7 +4228,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 					StringBuilder_Appendf( scratch.arena, &fullCompileCommand, "%s", baseCompileCommand );
 
 					uint64_t compileCommandHash = Builder_AppendHash( configCompileCommandHash, sourceFile );
-					compilePackets[written].intermediateFile = Builder_GetIntermediateFilePath( context->buildScratch->arena, context->intermediateFolder, compileCommandHash, sourceFile );
+					compilePackets[written].intermediateFile = Builder_GetIntermediateFilePath( context->buildScratch.arena, context->intermediateFolder, compileCommandHash, sourceFile );
 					compilePackets[written].compileCommandHash = compileCommandHash;
 
 					StringBuilder_Appendf( scratch.arena, &fullCompileCommand, "%s ", sourceFile );
@@ -4233,14 +4240,14 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 
 					StringBuilder_Appendf( scratch.arena, &fullCompileCommand, "%s ", compilePackets[written].intermediateFile );
 
-					compilePackets[written].compileCommand = StringBuilder_ToString( context->buildScratch->arena, &fullCompileCommand, NULL );
+					compilePackets[written].compileCommand = StringBuilder_ToString( context->buildScratch.arena, &fullCompileCommand, NULL );
 					compilePackets[written].sourceFile = sourceFile;
 
 					++written;
 				}
 			}
 
-			postBuildData->dependencyCacheFileName = Builder_FormatString( context->postBuildArena, "%s%c%s_%" PRIu64 ".builder-dependencies", context->intermediateFolder, BUILDER_PATH_SEPARATOR, config->name, configCompileCommandHash );
+			postBuildData->dependencyCacheFileName = Builder_FormatString( &context->postBuildArena, "%s%c%s_%" PRIu64 ".builder-dependencies", context->intermediateFolder, BUILDER_PATH_SEPARATOR, config->name, configCompileCommandHash );
 			needsCompilePacketCount = compilePacketCount;
 			if ( !options->forceRebuild ) {
 				// when we read from a byte buffer we use the count to track how much of it we have read
@@ -4250,7 +4257,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 
 				// no file found means we recompile everything
 				if ( byteBuffer.data ) {
-					postBuildData->configDependencies = Builder_ConfigDependenciesFromByteBuffer( context->postBuildArena, &byteBuffer );
+					postBuildData->configDependencies = Builder_ConfigDependenciesFromByteBuffer( &context->postBuildArena, &byteBuffer );
 
 					builderConfigDependencies_t *configDependencies = &postBuildData->configDependencies;
 					uint32_t packetIndex = 0;
@@ -4340,7 +4347,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 			const double compileTimeStart = Builder_TimeMS();
 
 			if ( needsCompilePacketCount > 0 ) {
-				scratch_t scratch = Builder_GetScratch( context->buildScratch->arena );
+				scratch_t scratch = Builder_GetScratch( context->buildScratch.arena );
 				postBuildData->compiledPacketCount = needsCompilePacketCount;
 
 				// TODO: DM: 09/08/2026: is it OK to create and destroy a bunch of threads for each config?
@@ -4364,10 +4371,10 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 				}
 
 				builderCompileJobPool_t pool = {
-					.compilePackets				= postBuildData->compilePackets,
-					.compilePacketCount			= needsCompilePacketCount,
-					.useMSVCSyntax				= context->compilerIsMSVC || context->compilerIsClangCL,
-					.dependencyOutputs			= dependencyOutputs
+					.compilePackets		= postBuildData->compilePackets,
+					.compilePacketCount	= needsCompilePacketCount,
+					.useMSVCSyntax		= context->compilerIsMSVC || context->compilerIsClangCL,
+					.dependencyOutputs	= dependencyOutputs
 				};
 
 				if ( numAdditionalThreads > 0 ) {
@@ -4393,7 +4400,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 					dependencyInfoCount += dependencyOutputs[outputIndex].dependencyInfoCount;
 				}
 
-				postBuildData->dependencyInfos = Builder_ArenaAlloc( context->postBuildArena, builderCompileJobDependencyInfo_t, dependencyInfoCount );
+				postBuildData->dependencyInfos = Builder_ArenaAlloc( &context->postBuildArena, builderCompileJobDependencyInfo_t, dependencyInfoCount );
 				postBuildData->dependencyInfoCount = dependencyInfoCount;
 
 				dependencyInfoCount = 0;
@@ -4406,7 +4413,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 
 				if ( pool.numFailed > 0 ) {
 					Builder_Error( "Build failed.\n" );
-					Builder_RewindArena( context->buildScratch->arena, &configStart );
+					Builder_RewindArena( context->buildScratch.arena, &configStart );
 					return BUILD_RESULT_FAILED;
 				}
 			} else {
@@ -4421,7 +4428,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 		{
 			double linkTimeStart = Builder_TimeMS();
 
-			const char *binaryPath = Builder_GetBinaryPath( context->buildScratch->arena, config );
+			const char *binaryPath = Builder_GetBinaryPath( context->buildScratch.arena, config );
 			const char *linkCommand = NULL;
 			uint64_t linkCommandHash = 0;
 			#if defined( _WIN32 )
@@ -4433,26 +4440,26 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 			#endif
 			if ( compilePacketCount > 0 ) {
 				builderLinkContext_t linkContext = {
-					.config 					= config,
-					.compilerPath 				= context->compilerPath,
-					.binaryPath 				= binaryPath,
-					.clangSanitizerResourceDir 	= context->clangSanitizerResourceDir,
+					.config						= config,
+					.compilerPath				= context->compilerPath,
+					.binaryPath					= binaryPath,
+					.clangSanitizerResourceDir	= context->clangSanitizerResourceDir,
 #if defined ( _WIN32 )
-					.msvcInstall 				= &g_msvcInstall,
-					.windowsSDKInstall 			= &g_windowsSDKInstall,
-					.useMSVCLink 				= useMSVCLink,
+					.msvcInstall				= &g_msvcInstall,
+					.windowsSDKInstall			= &g_windowsSDKInstall,
+					.useMSVCLink				= useMSVCLink,
 					.compilerIsMSVC				= context->compilerIsMSVC,
-					.debugDefineSet 			= compileContext.debugDefineSet,
+					.debugDefineSet				= compileContext.debugDefineSet,
 #endif
 					.compilerIsGCC				= context->compilerIsGCC,
 				};
-				linkCommand = Builder_CreateLinkCommand( context->buildScratch->arena, &linkContext, postBuildData );
+				linkCommand = Builder_CreateLinkCommand( context->buildScratch.arena, &linkContext, postBuildData );
 				linkCommandHash = Builder_HashString( linkCommand );
 
 				// insert the .o files after hashing to deal with file order inconsistencies due to globbing and rebuilds
 				// also we really don't need to hash them since we already link if we compiled something
 				{
-					scratch_t scratch = Builder_GetScratch( context->buildScratch->arena );
+					scratch_t scratch = Builder_GetScratch( context->buildScratch.arena );
 
 					stringBuilder_t linkerArgs = { 0 };
 
@@ -4466,7 +4473,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 
 					StringBuilder_Appendf( scratch.arena, &linkerArgs, "%s", insertPosition );
 
-					linkCommand = StringBuilder_ToString( context->buildScratch->arena, &linkerArgs, NULL );
+					linkCommand = StringBuilder_ToString( context->buildScratch.arena, &linkerArgs, NULL );
 					Builder_RewindScratch( &scratch );
 				}
 
@@ -4479,7 +4486,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 
 #if defined ( _WIN32 )
 					if ( useMSVCLink ) {
-						linkCommand = Builder_FormatString( context->buildScratch->arena, "%s /INCREMENTAL:NO", linkCommand );
+						linkCommand = Builder_FormatString( context->buildScratch.arena, "%s /INCREMENTAL:NO", linkCommand );
 					}
 #endif
 				}
@@ -4516,7 +4523,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 
 			if ( shouldLink && config->binaryFolder && !Builder_CreateFolderIfItDoesntExist( config->binaryFolder ) ) {
 				Builder_Error( "Failed to create the binary folder \"%s\".\n", config->binaryFolder );
-				Builder_RewindArena( context->buildScratch->arena, &configStart );
+				Builder_RewindArena( context->buildScratch.arena, &configStart );
 
 				// TODO(aiden): check that compilation dependencies were still written
 				return BUILD_RESULT_FAILED;
@@ -4528,7 +4535,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 				printf( "%s\n", linkCommand );
 
 				char *linkerOutput = NULL;
-				int32_t linkResult = Builder_RunProcess( context->buildScratch->arena, linkCommand, false, &linkerOutput );
+				int32_t linkResult = Builder_RunProcess( context->buildScratch.arena, linkCommand, false, &linkerOutput );
 
 				if ( linkerOutput ) {
 #if defined ( _WIN32 )
@@ -4556,7 +4563,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 									}
 
 									uint64_t libPathLength = ( (uint64_t) libPathEnd ) - ( (uint64_t) libPathStart );
-									const char *library = Builder_FormatString( context->postBuildArena, "%.*s", libPathLength, libPathStart );
+									const char *library = Builder_FormatString( &context->postBuildArena, "%.*s", libPathLength, libPathStart );
 
 									bool found = false;
 									for ( builderStringChunk_t *chunk = postBuildData->linkLibraryOutput.head; chunk && !found; chunk = chunk->next ) {
@@ -4569,7 +4576,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 									}
 
 									if ( !found ) {
-										Builder_StringListPush( context->postBuildArena, &postBuildData->linkLibraryOutput, library );
+										Builder_StringListPush( &context->postBuildArena, &postBuildData->linkLibraryOutput, library );
 									}
 								}
 							} else {
@@ -4582,10 +4589,9 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 								current += 1;
 							}
 						}
-					} else {
-#else
-					{
+					} else
 #endif
+					{
 						const char *current = linkerOutput;
 						while ( current && *current ) {
 							const char *lineStart = current;
@@ -4600,13 +4606,11 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 							const char *filename = Builder_FilenameFromPath( lineStart, lineLength );
 							const char *dotPos = strchr( filename, '.' );
 							const char *spacePos = dotPos ? strchr( dotPos, ' ' ) : NULL;
-							bool isTraceOutput = dotPos && dotPos < lineEnd
-								&& ( !spacePos || spacePos > lineEnd )
-								&& !Builder_StringStartsWith( lineStart, "clang:" );
+							bool isTraceOutput = dotPos && ( dotPos < lineEnd ) && ( !spacePos || spacePos > lineEnd ) && !Builder_StringStartsWith( lineStart, "clang:" );
 							if ( isTraceOutput ) {
 								// TODO: AK: 26/09/2026: What happens if their intermediate and bin folder overlaps? Will we let them do that?
 								if ( !Builder_StringStartsWith( lineStart, context->intermediateFolder ) ) {
-									const char *library = Builder_FormatString( context->postBuildArena, "%.*s", lineLength, lineStart );
+									const char *library = Builder_FormatString( &context->postBuildArena, "%.*s", lineLength, lineStart );
 
 									bool found = false;
 									for ( builderStringChunk_t *chunk = postBuildData->linkLibraryOutput.head; chunk && !found; chunk = chunk->next ) {
@@ -4619,7 +4623,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 									}
 
 									if ( !found ) {
-										Builder_StringListPush( context->postBuildArena, &postBuildData->linkLibraryOutput, library );
+										Builder_StringListPush( &context->postBuildArena, &postBuildData->linkLibraryOutput, library );
 									}
 								}
 							} else {
@@ -4637,7 +4641,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 
 				if ( linkResult != 0 ) {
 					Builder_Error( "Link failed.\n" );
-					Builder_RewindArena( context->buildScratch->arena, &configStart );
+					Builder_RewindArena( context->buildScratch.arena, &configStart );
 
 					// force the link to show as a fail
 					postBuildData->configDependencies.binaryWriteTime = 0;
@@ -4664,25 +4668,25 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 				const char *dllFolder = NULL;
 
 				if ( context->compilerIsMSVC ) {
-					dllFolder = Builder_FormatString( context->buildScratch->arena, "%s\\bin\\Hostx64\\x64", g_msvcInstall.rootFolder );
+					dllFolder = Builder_FormatString( context->buildScratch.arena, "%s\\bin\\Hostx64\\x64", g_msvcInstall.rootFolder );
 
 					if ( compileContext.debugDefineSet ) {
 						dllName = "clang_rt.asan_dbg_dynamic-x86_64.dll";
 					}
 				} else {
-					dllFolder = Builder_FormatString( context->buildScratch->arena, "%s\\lib\\windows", context->clangSanitizerResourceDir );
+					dllFolder = Builder_FormatString( context->buildScratch.arena, "%s\\lib\\windows", context->clangSanitizerResourceDir );
 				}
 
-				const char *asanRuntimeSrc = Builder_FormatString( context->buildScratch->arena, "%s\\%s", dllFolder, dllName );
+				const char *asanRuntimeSrc = Builder_FormatString( context->buildScratch.arena, "%s\\%s", dllFolder, dllName );
 
 				const char *asanRuntimeDst = dllName;
 				if ( config->binaryFolder ) {
-					asanRuntimeDst = Builder_FormatString( context->buildScratch->arena, "%s%c%s", config->binaryFolder, BUILDER_PATH_SEPARATOR, dllName );
+					asanRuntimeDst = Builder_FormatString( context->buildScratch.arena, "%s%c%s", config->binaryFolder, BUILDER_PATH_SEPARATOR, dllName );
 				}
 
 				if ( !CopyFileA( asanRuntimeSrc, asanRuntimeDst, FALSE ) ) {
 					Builder_Error( "Failed to copy the ASan runtime \"%s\" to \"%s\": GetLastError(): 0x%X\n", asanRuntimeSrc, asanRuntimeDst, GetLastError() );
-					Builder_RewindArena( context->buildScratch->arena, &configStart );
+					Builder_RewindArena( context->buildScratch.arena, &configStart );
 					return BUILD_RESULT_FAILED;
 				}
 			}
@@ -4691,7 +4695,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 	}
 
 	if ( config->OnPostBuild ) {
-		Builder_LogVerbose( "Found a OnPostBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name ? config->name : "" );
+		printf( "Found a OnPostBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name ? config->name : "" );
 
 		config->OnPostBuild( config );
 	}
@@ -4705,12 +4709,12 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 	if ( needsCompilePacketCount == 0 ) {
 		suffix = shouldLink ? "(link only)" : "(skipped)";
 	}
-	Builder_AddBuildSummaryLine( context->buildSummaryArena, &context->buildSummary, config->name, compileTimeMS + linkTimeMS, suffix );
+	Builder_AddBuildSummaryLine( &context->buildSummaryArena, &context->buildSummary, config->name, compileTimeMS + linkTimeMS, suffix );
 
 	context->totalCompileTimeMS += compileTimeMS;
 	context->totalLinkTimeMS += linkTimeMS;
 
-	Builder_RewindArena( context->buildScratch->arena, &configStart );
+	Builder_RewindArena( context->buildScratch.arena, &configStart );
 
 	return ( needsCompilePacketCount > 0 ) ? BUILD_RESULT_SUCCESS : BUILD_RESULT_SKIPPED;
 }
@@ -4736,14 +4740,14 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 			*compileDependencyArray = (compileDependencyArray_t) {
 				.count			= 0,
 				.capacity		= dependenciesCapcity,
-				.dependencies	= Builder_ArenaAlloc( context->postBuildArena, compileDependency_t, dependenciesCapcity )
+				.dependencies	= Builder_ArenaAlloc( &context->postBuildArena, compileDependency_t, dependenciesCapcity )
 			};
 		}
 
 		// new mapping as the number of files could have changed
 		// plus if a file compiled we don't want to accidentally have stored stale dependency data
 		{
-			objectToDependencyIndicies_t *objectToDependencyMapping = Builder_ArenaAlloc( context->postBuildArena, objectToDependencyIndicies_t, postBuildData->packetCount );
+			objectToDependencyIndicies_t *objectToDependencyMapping = Builder_ArenaAlloc( &context->postBuildArena, objectToDependencyIndicies_t, postBuildData->packetCount );
 			for ( uint32_t packetIndex = 0; packetIndex < postBuildData->compiledPacketCount; ++packetIndex ) {
 				objectToDependencyMapping[packetIndex] = (objectToDependencyIndicies_t) { 0 };
 			}
@@ -4776,13 +4780,13 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 			objectToDependencyIndicies_t *dependencyMap = &configDependencies->objectDependencyMap[dependencyInfo->compilePacketIndex];
 
 			*dependencyMap = (objectToDependencyIndicies_t ) {
-				.objectHash 		= compilePacket->compileCommandHash,
-				.dependencyCount 	= 0,
+				.objectHash			= compilePacket->compileCommandHash,
+				.dependencyCount	= 0,
 				.dependencyCapacity	= 16,
-				.dependencyIndices	= Builder_ArenaAlloc( context->postBuildArena, uint64_t, 16 )
+				.dependencyIndices	= Builder_ArenaAlloc( &context->postBuildArena, uint64_t, 16 )
 			};
 
-			Builder_ParseDependencyInfo( context->postBuildArena, compileDependencyArray, dependencyMap, dependencyInfo->dependencyString, context->compilerIsMSVC || context->compilerIsClangCL );
+			Builder_ParseDependencyInfo( &context->postBuildArena, compileDependencyArray, dependencyMap, dependencyInfo->dependencyString, context->compilerIsMSVC || context->compilerIsClangCL );
 		}
 
 		Builder_LogVerbose( "Outputting config dependencies to %s:\n", postBuildData->dependencyCacheFileName );
@@ -4801,7 +4805,7 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 		libraryDependencyArray_t *libraryDependencyArray = &configDependencies->libraryDependencyArray;
 		if ( libraryDependencyArray->capacity == 0 && postBuildData->linkLibraryOutput.count ) {
 			libraryDependencyArray->capacity = postBuildData->linkLibraryOutput.count;
-			libraryDependencyArray->libraries = Builder_ArenaAlloc( context->postBuildArena, libraryDependency_t, postBuildData->linkLibraryOutput.count );
+			libraryDependencyArray->libraries = Builder_ArenaAlloc( &context->postBuildArena, libraryDependency_t, postBuildData->linkLibraryOutput.count );
 		}
 
 		// full link means we want to stamp all the old data (chances are it will be 0 anyway)
@@ -4837,7 +4841,7 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 				}
 
 				if ( libraryDependencyArray->count == libraryDependencyArray->capacity ) {
-					libraryDependencyArray->libraries = Builder_ArenaRealloc( context->postBuildArena, libraryDependencyArray->libraries,
+					libraryDependencyArray->libraries = Builder_ArenaRealloc( &context->postBuildArena, libraryDependencyArray->libraries,
 						libraryDependency_t, libraryDependencyArray->capacity, libraryDependencyArray->capacity * 2);
 					libraryDependencyArray->capacity *= 2;
 				}
@@ -4864,42 +4868,31 @@ static void Builder_WriteDependencyCache( builderBuildContext_t *context, Builde
 		}
 
 		configDependencies->fileVersion = g_builderDependenciesFileVersion;
-		byteBuffer_t byteBuffer = Builder_ByteBufferFromConfigDependencies( context->postBuildArena, configDependencies );
+		byteBuffer_t byteBuffer = Builder_ByteBufferFromConfigDependencies( &context->postBuildArena, configDependencies );
 		Builder_WriteEntireFile( postBuildData->dependencyCacheFileName, (char *) byteBuffer.data, byteBuffer.count );
 	}
 }
 
-int Build( BuilderOptions *options, int argc, char **argv ) {
-	double totalTimeStart = Builder_TimeMS();
-
-	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
-
-	Builder_SetCmdArgs( options, argc, argv );
-
-	Builder_SetCWD( argv );
-
-	// the self rebuild needs the exe itself, not just its folder
-	char exePath[BUILDER_MAX_PATH] = { 0 };
-	Builder_GetExePath( argv, exePath );
-
-	// TODO: DM: 30/08/2026: we should probably make that global long lifetime arena that we talked about
-	// there are other things that could and should go on it as well as build summaries
-	arena_t buildSummaryArena = { 0 };
+static bool Builder_InitBuildContext( BuilderOptions *options ) {
+	if ( g_buildContextInitialized ) {
+		return true;
+	}
 
 	// toolchain and compiler paths are used right through to the link step.
 	// this deliberately excludes the config arena: OnPreBuild/OnPostBuild callbacks run inside the loop below, so a
 	// callback calling Add*()/Set*() allocates while this scratch is open.  If the two shared an arena, the per-config
 	// rewind would take whatever the callback added with it and leave the config pointing into reusable memory.
-	scratch_t buildScratch = Builder_GetScratch( Builder_GetConfigArena() );
+	g_buildContext.buildScratch = Builder_GetScratch( Builder_GetConfigArena() );
+	scratch_t *buildScratch = &g_buildContext.buildScratch;
 
 	// only query for windows SDK and MSVC installations after verifying cmd line args and
 #ifdef _WIN32
-	if ( !Builder_GetWindowsSDKInstall( buildScratch.arena, &g_windowsSDKInstall ) ) {
-		return 1;
+	if ( !Builder_GetWindowsSDKInstall( buildScratch->arena, &g_windowsSDKInstall ) ) {
+		return false;
 	}
 
-	if ( !Builder_GetMSVCInstall( buildScratch.arena, &g_msvcInstall ) ) {
-		return 1;
+	if ( !Builder_GetMSVCInstall( buildScratch->arena, &g_msvcInstall ) ) {
+		return false;
 	}
 
 	printf( "\n" );
@@ -4933,7 +4926,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 			"MSVC only supports Windows.  Sorry.\n"
 		);
 
-		return 1;
+		return false;
 	}
 #endif
 
@@ -4941,15 +4934,15 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 #ifdef _WIN32
 	if ( compilerIsMSVC ) {
 		compilerPath = g_msvcInstall.compilerPath;
-		compilerVersionString = Builder_FormatString( buildScratch.arena, "%d.%d.%d", g_msvcInstall.version.v0, g_msvcInstall.version.v1, g_msvcInstall.version.v2 );
+		compilerVersionString = Builder_FormatString( buildScratch->arena, "%d.%d.%d", g_msvcInstall.version.v0, g_msvcInstall.version.v1, g_msvcInstall.version.v2 );
 	} else
 #endif
 	{
-		char *versionCmd = Builder_FormatString( buildScratch.arena, "\"%s\" --version", compilerPath );
+		char *versionCmd = Builder_FormatString( buildScratch->arena, "\"%s\" --version", compilerPath );
 		char *versionOutput = NULL;
 
-		Builder_RunProcess( buildScratch.arena, versionCmd, false, &versionOutput );
-		compilerVersionString = Builder_ExtractVersionNumber( buildScratch.arena, versionOutput );
+		Builder_RunProcess( buildScratch->arena, versionCmd, false, &versionOutput );
+		compilerVersionString = Builder_ExtractVersionNumber( buildScratch->arena, versionOutput );
 	}
 
 	if ( !Builder_StringIsEmpty( options->compilerVersion ) ) {
@@ -4965,7 +4958,7 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 
 	if ( intermediateFolder && !Builder_CreateFolderIfItDoesntExist( intermediateFolder ) ) {
 		Builder_Error( "Failed to create the intermediate folder \"%s\".\n", intermediateFolder );
-		return 1;
+		return false;
 	}
 
 	// cl.exe embeds its own /DEFAULTLIB directives for /fsanitize=... into the object file so link.exe picks the runtime up automatically there
@@ -4989,9 +4982,9 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 		}
 
 		if ( anyConfigNeedsClangSanitizerLibs ) {
-			char *resourceDirCmd = Builder_FormatString( buildScratch.arena, "\"%s\" -print-resource-dir", compilerPath );
+			char *resourceDirCmd = Builder_FormatString( buildScratch->arena, "\"%s\" -print-resource-dir", compilerPath );
 
-			Builder_RunProcess( buildScratch.arena, resourceDirCmd, true, &clangSanitizerResourceDir );
+			Builder_RunProcess( buildScratch->arena, resourceDirCmd, true, &clangSanitizerResourceDir );
 
 			size_t resourceDirLength = clangSanitizerResourceDir ? strlen( clangSanitizerResourceDir ) : 0;
 			while ( resourceDirLength > 0 && ( clangSanitizerResourceDir[resourceDirLength - 1] == '\n' || clangSanitizerResourceDir[resourceDirLength - 1] == '\r' ) ) {
@@ -5000,9 +4993,9 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 
 			if ( resourceDirLength == 0 ) {
 				Builder_Error( "Failed to determine Clang's resource directory (\"%s\") - needed to link the sanitizer runtime on Windows.\n", resourceDirCmd );
-				Builder_RewindScratch( &buildScratch );
+				Builder_RewindScratch( buildScratch );
 
-				return 1;
+				return false;
 			}
 		}
 	}
@@ -5011,172 +5004,212 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 	// we can create the extra arenas we will need for the compilation thread's output here
 	// and the arena we need post build to sort the dependency data we collect over the run
 	uint32_t numCPUCores = Builder_GetNumCPUCores();
-	arena_t postBuildArena = { 0 };
-	arena_t *threadResultArenas = Builder_ArenaAlloc( buildScratch.arena, arena_t, numCPUCores );
+	arena_t *threadResultArenas = Builder_ArenaAlloc( buildScratch->arena, arena_t, numCPUCores );
 	for ( uint32_t arenaIndex = 0; arenaIndex < numCPUCores; ++arenaIndex ) {
 		threadResultArenas[arenaIndex] = (arena_t) { 0 };
 	}
 
-	builderBuildContext_t buildContext = {
-		.buildScratch					= &buildScratch,
-		.compilerPath					= compilerPath,
-		.compilerVersionString			= compilerVersionString,
-		.compilerIsMSVC					= compilerIsMSVC,
-		.compilerIsClangCL				= compilerIsClangCL,
-		.compilerIsGCC					= compilerIsGCC,
-		.clangSanitizerResourceDir		= clangSanitizerResourceDir,
-		.intermediateFolder				= intermediateFolder,
-		.numCPUCores					= numCPUCores,
-		.threadResultArenas				= threadResultArenas,
-		.postBuildArena					= &postBuildArena,
-		.buildSummaryArena				= &buildSummaryArena,
-		.postBuildConfigDependencyData	= Builder_ArenaAlloc( &postBuildArena, builderPostBuildConfigData_t, options->configs.count ),
-	};
+	g_buildContext.compilerPath						= compilerPath;
+	g_buildContext.compilerVersionString			= compilerVersionString;
+	g_buildContext.compilerIsMSVC					= compilerIsMSVC;
+	g_buildContext.compilerIsClangCL				= compilerIsClangCL;
+	g_buildContext.compilerIsGCC					= compilerIsGCC;
+	g_buildContext.clangSanitizerResourceDir		= clangSanitizerResourceDir;
+	g_buildContext.intermediateFolder				= intermediateFolder;
+	g_buildContext.numCPUCores						= numCPUCores;
+	g_buildContext.threadResultArenas				= threadResultArenas;
+	g_buildContext.postBuildConfigDependencyData	= Builder_ArenaAlloc( &g_buildContext.postBuildArena, builderPostBuildConfigData_t, options->configs.count );
+
+	g_buildContextInitialized = true;
+
+	return true;
+}
+
+static bool Builder_SelfRebuild( BuilderOptions *options, int argc, char **argv ) {
+	if ( g_selfRebuildDone ) {
+		return true;
+	}
+
+	g_selfRebuildDone = true;
+
+	if ( !options->selfRebuildConfig ) {
+		return true;
+	}
+
+	if ( !Builder_InitBuildContext( options ) ) {
+		return false;
+	}
+
+	scratch_t *buildScratch = &g_buildContext.buildScratch;
+
+	// the self rebuild needs the exe itself, not just its folder
+	char exePath[BUILDER_MAX_PATH] = { 0 };
+	Builder_GetExePath( argv, exePath );
 
 	// the self rebuild config gets fixed up whether or not we actually build it below
 	// the config name check and the target config filtering further down both read these fields
-	if ( options->selfRebuildConfig ) {
 #if defined( _WIN32 )
-		// if the old binary was left around from the previous rebuild, clean it up now
-		{
-			char *oldBackupPath = Builder_FormatString( buildScratch.arena, "%s.rebuild.old", exePath );
-			DeleteFile( oldBackupPath );
-		}
-#endif
-
-		// point the config at a temp file alongside the exe, whatever the user put in those fields
-		// CWD is already the exe's folder so no binaryFolder is needed
-		{
-			const char *exeName = strrchr( exePath, BUILDER_PATH_SEPARATOR );
-			exeName = exeName ? exeName + 1 : exePath;
-
-			// Builder_GetBinaryPath() adds the platform exe extension back on
-			size_t exeNameLength = strlen( exeName );
-			const char *exeExtension = Builder_GetFileExtensionFromBinaryType( BINARY_TYPE_EXE );
-			if ( Builder_PathEndsWith( exeName, exeExtension ) ) {
-				exeNameLength -= strlen( exeExtension );
-			}
-
-			if ( !options->selfRebuildConfig->name ) {
-				options->selfRebuildConfig->name = "self";
-			}
-
-			options->selfRebuildConfig->binaryName = Builder_FormatString( Builder_GetConfigArena(), "%.*s.rebuild.tmp", (int) exeNameLength, exeName );
-			options->selfRebuildConfig->binaryPathOverride = exePath;
-			options->selfRebuildConfig->binaryFolder = NULL;
-			options->selfRebuildConfig->binaryType = BINARY_TYPE_EXE;
-		}
-
-#if defined( _WIN32 )
-		// GCC ignores #pragma comment( lib ) so the libs that builder.h itself needs must be named explicitly
-		if ( compilerIsGCC ) {
-			AddLibs( options->selfRebuildConfig, "ole32", "oleaut32", "advapi32" );
-
-			// __thread requires libwinpthread-1.dll because GCC on windows links its runtime by default by default
-			// so make the self rebuild config link to it statically to avoid this
-			AddLinkerArguments( options->selfRebuildConfig, "-static" );
-		}
-#endif
+	// if the old binary was left around from the previous rebuild, clean it up now
+	{
+		char *oldBackupPath = Builder_FormatString( buildScratch->arena, "%s.rebuild.old", exePath );
+		DeleteFile( oldBackupPath );
 	}
+#endif
+
+	// point the config at a temp file alongside the exe, whatever the user put in those fields
+	// CWD is already the exe's folder so no binaryFolder is needed
+	{
+		const char *exeName = strrchr( exePath, BUILDER_PATH_SEPARATOR );
+		exeName = exeName ? exeName + 1 : exePath;
+
+		// Builder_GetBinaryPath() adds the platform exe extension back on
+		size_t exeNameLength = strlen( exeName );
+		const char *exeExtension = Builder_GetFileExtensionFromBinaryType( BINARY_TYPE_EXE );
+		if ( Builder_PathEndsWith( exeName, exeExtension ) ) {
+			exeNameLength -= strlen( exeExtension );
+		}
+
+		if ( !options->selfRebuildConfig->name ) {
+			options->selfRebuildConfig->name = "self";
+		}
+
+		options->selfRebuildConfig->binaryName = Builder_FormatString( Builder_GetConfigArena(), "%.*s.rebuild.tmp", (int) exeNameLength, exeName );
+		options->selfRebuildConfig->binaryPathOverride = exePath;
+		options->selfRebuildConfig->binaryFolder = NULL;
+		options->selfRebuildConfig->binaryType = BINARY_TYPE_EXE;
+	}
+
+#if defined( _WIN32 )
+	// GCC ignores #pragma comment( lib ) so the libs that builder.h itself needs must be named explicitly
+	if ( g_buildContext.compilerIsGCC ) {
+		AddLibs( options->selfRebuildConfig, "ole32", "oleaut32", "advapi32" );
+
+		// __thread requires libwinpthread-1.dll because GCC on windows links its runtime by default by default
+		// so make the self rebuild config link to it statically to avoid this
+		AddLinkerArguments( options->selfRebuildConfig, "-static" );
+	}
+#endif
 
 	// the self rebuild goes first so that the source is always the truth
 	// a stale binary would otherwise reject a config name or --config= that only exists in the edited build source, or keep building with old settings
 	// it needs the toolchain and arenas above but not the target config
 	// ARG_SELF_REBUILT says we are the relaunch of a build program that was just rebuilt
 	// skip it in that case, otherwise forceRebuild would rebuild and re-exec every run forever
-	if ( options->selfRebuildConfig && !HasCommandLineArg( argc, argv, ARG_SELF_REBUILT ) ) {
-		builderBuildResult_t selfRebuildResult = Builder_BuildConfig( &buildContext, options, options->selfRebuildConfig );
+	if ( HasCommandLineArg( argc, argv, ARG_SELF_REBUILT ) ) {
+		return true;
+	}
 
-		if ( selfRebuildResult == BUILD_RESULT_FAILED ) {
-			Builder_Error( "Failed to rebuild '%s'.\n", exePath );
-			Builder_RewindScratch( &buildScratch );
-			return 1;
+	builderBuildResult_t selfRebuildResult = Builder_BuildConfig( &g_buildContext, options, options->selfRebuildConfig );
+
+	if ( selfRebuildResult == BUILD_RESULT_FAILED ) {
+		Builder_Error( "Failed to rebuild '%s'.\n", exePath );
+		Builder_RewindScratch( buildScratch );
+		return false;
+	}
+
+	const char *selfTempBinaryPath = Builder_GetBinaryPath( buildScratch->arena, options->selfRebuildConfig );
+
+	// swap the rebuilt binary over the running exe and relaunch with the original argv, so this never falls through
+	if ( selfRebuildResult == BUILD_RESULT_SUCCESS ) {
+		printf( "\"%s\" was stale and got rebuilt.\n", exePath );
+
+		// the relaunch never reaches the cache write after the loop
+		// so if we dont do this the self config would recompile every run
+		Builder_WriteDependencyCache( &g_buildContext, options );
+
+		// atomically swap the freshly built binary into place
+		// never overwrite exePath in place since writing directly into a currently-executing image fails
+#if defined( _WIN32 )
+		// on windows a currently-running process cant MoveFileEx-replace its own on-disk image directly (fails with ERROR_ACCESS_DENIED)
+		// rename it out of the way first, then move the freshly built binary into the now-vacated name
+		// the running image stays mapped and executing under its backup name until this process re-execs below
+		const char *backupBinaryPath = Builder_FormatString( buildScratch->arena, "%s.rebuild.old", exePath );
+
+		if ( !MoveFileEx( exePath, backupBinaryPath, MOVEFILE_REPLACE_EXISTING ) ) {
+			Builder_Error( "Failed to move currently-running '%s' out of the way: 0x%X\n", exePath, GetLastError() );
+			Builder_RewindScratch( buildScratch );
+			return false;
 		}
 
-		const char *selfTempBinaryPath = Builder_GetBinaryPath( buildScratch.arena, options->selfRebuildConfig );
-
-		// swap the rebuilt binary over the running exe and relaunch with the original argv, so this never falls through
-		if ( selfRebuildResult == BUILD_RESULT_SUCCESS ) {
-			printf( "\"%s\" was stale and got rebuilt.\n", exePath );
-
-			// the relaunch never reaches the cache write after the loop
-			// so if we dont do this the self config would recompile every run
-			Builder_WriteDependencyCache( &buildContext, options );
-
-			// atomically swap the freshly built binary into place
-			// never overwrite exePath in place since writing directly into a currently-executing image fails
-#if defined( _WIN32 )
-			// on windows a currently-running process cant MoveFileEx-replace its own on-disk image directly (fails with ERROR_ACCESS_DENIED)
-			// rename it out of the way first, then move the freshly built binary into the now-vacated name
-			// the running image stays mapped and executing under its backup name until this process re-execs below
-			const char *backupBinaryPath = Builder_FormatString( buildScratch.arena, "%s.rebuild.old", exePath );
-
-			if ( !MoveFileEx( exePath, backupBinaryPath, MOVEFILE_REPLACE_EXISTING ) ) {
-				Builder_Error( "Failed to move currently-running '%s' out of the way: 0x%X\n", exePath, GetLastError() );
-				Builder_RewindScratch( &buildScratch );
-				return 1;
-			}
-
-			if ( !MoveFileEx( selfTempBinaryPath, exePath, MOVEFILE_REPLACE_EXISTING ) ) {
-				Builder_Error( "Failed to replace '%s' with rebuilt binary: 0x%X\n", exePath, GetLastError() );
-				Builder_RewindScratch( &buildScratch );
-				return 1;
-			}
+		if ( !MoveFileEx( selfTempBinaryPath, exePath, MOVEFILE_REPLACE_EXISTING ) ) {
+			Builder_Error( "Failed to replace '%s' with rebuilt binary: 0x%X\n", exePath, GetLastError() );
+			Builder_RewindScratch( buildScratch );
+			return false;
+		}
 #elif defined( __linux__ )
-			if ( rename( selfTempBinaryPath, exePath ) != 0 ) {
-				int err = errno;
-				Builder_Error( "Failed to replace '%s' with rebuilt binary: %s\n", exePath, strerror( err ) );
-				Builder_RewindScratch( &buildScratch );
-				return 1;
-			}
-#else
-#error Unrecognised platform.
-#endif
-
-			// re-exec the freshly rebuilt binary with the original argv, plus ARG_SELF_REBUILT so it doesnt rebuild itself and relaunch again
-			// never fall through to running the (now stale-in-memory) code of the process currently executing
-			// exec/spawn dont flush stdio, so anything still buffered (e.g. when stdout is a pipe) would be lost
-			fflush( stdout );
-			fflush( stderr );
-
-#if defined( _WIN32 )
-			stringBuilder_t execArgs = { 0 };
-			StringBuilder_Appendf( buildScratch.arena, &execArgs, "\"%s\" ", exePath );
-
-			for ( int argIndex = 1; argIndex < argc; argIndex++ ) {
-				StringBuilder_Appendf( buildScratch.arena, &execArgs, "\"%s\" ", argv[argIndex] );
-			}
-
-			StringBuilder_Appendf( buildScratch.arena, &execArgs, "\"%s\" ", ARG_SELF_REBUILT );
-
-			const char *execCmd = StringBuilder_ToString( buildScratch.arena, &execArgs, NULL );
-
-			exit( Builder_RunProcess( NULL, execCmd, false, NULL ) );
-#elif defined( __linux__ )
-			// execv wants its own NULL terminated array, so copy argv and tack ARG_SELF_REBUILT on the end
-			char **newArgv = Builder_ArenaAlloc( buildScratch.arena, char *, argc + 2 );
-			memcpy( newArgv, argv, argc * sizeof( char * ) );
-			newArgv[argc] = (char *) ARG_SELF_REBUILT;
-			newArgv[argc + 1] = NULL;
-
-			execv( exePath, newArgv );
-
-			// execv only ever returns on failure, otherwise just carries on
+		if ( rename( selfTempBinaryPath, exePath ) != 0 ) {
 			int err = errno;
-			Builder_Error( "Failed to re-exec '%s': %s\n", exePath, strerror( err ) );
-
-			Builder_RewindScratch( &buildScratch );
-			return 1;
-#endif
+			Builder_Error( "Failed to replace '%s' with rebuilt binary: %s\n", exePath, strerror( err ) );
+			Builder_RewindScratch( buildScratch );
+			return false;
 		}
-
-#if defined( _WIN32 )
-		DeleteFile( selfTempBinaryPath );
-#elif defined( __linux__ )
-		unlink( selfTempBinaryPath );
 #else
 #error Unrecognised platform.
 #endif
+
+		// re-exec the freshly rebuilt binary with the original argv, plus ARG_SELF_REBUILT so it doesnt rebuild itself and relaunch again
+		// never fall through to running the (now stale-in-memory) code of the process currently executing
+		// exec/spawn dont flush stdio, so anything still buffered (e.g. when stdout is a pipe) would be lost
+		fflush( stdout );
+		fflush( stderr );
+
+#if defined( _WIN32 )
+		stringBuilder_t execArgs = { 0 };
+		StringBuilder_Appendf( buildScratch->arena, &execArgs, "\"%s\" ", exePath );
+
+		for ( int argIndex = 1; argIndex < argc; argIndex++ ) {
+			StringBuilder_Appendf( buildScratch->arena, &execArgs, "\"%s\" ", argv[argIndex] );
+		}
+
+		StringBuilder_Appendf( buildScratch->arena, &execArgs, "\"%s\" ", ARG_SELF_REBUILT );
+
+		const char *execCmd = StringBuilder_ToString( buildScratch->arena, &execArgs, NULL );
+
+		exit( Builder_RunProcess( NULL, execCmd, false, NULL ) );
+#elif defined( __linux__ )
+		// execv wants its own NULL terminated array, so copy argv and tack ARG_SELF_REBUILT on the end
+		char **newArgv = Builder_ArenaAlloc( buildScratch->arena, char *, argc + 2 );
+		memcpy( newArgv, argv, argc * sizeof( char * ) );
+		newArgv[argc] = (char *) ARG_SELF_REBUILT;
+		newArgv[argc + 1] = NULL;
+
+		execv( exePath, newArgv );
+
+		// execv only ever returns on failure, otherwise just carries on
+		int err = errno;
+		Builder_Error( "Failed to re-exec '%s': %s\n", exePath, strerror( err ) );
+
+		Builder_RewindScratch( buildScratch );
+		return false;
+#endif
+	}
+
+#if defined( _WIN32 )
+	DeleteFile( selfTempBinaryPath );
+#elif defined( __linux__ )
+	unlink( selfTempBinaryPath );
+#else
+#error Unrecognised platform.
+#endif
+
+	return true;
+}
+
+int Build( BuilderOptions *options, int argc, char **argv ) {
+	double totalTimeStart = Builder_TimeMS();
+
+	printf( "Builder v%d.%d.%d\n\n", BUILDER_VERSION_MAJOR, BUILDER_VERSION_MINOR, BUILDER_VERSION_PATCH );
+
+	Builder_SetCmdArgs( options, argc, argv );
+
+	Builder_SetCWD( argv );
+
+	if ( !Builder_InitBuildContext( options ) ) {
+		return 1;
+	}
+
+	if ( !Builder_SelfRebuild( options, argc, argv ) ) {
+		return 1;
 	}
 
 	// Names can only be checked here.  A config comes out of CreateBuildConfig() blank and gets filled in afterwards,
@@ -5263,49 +5296,49 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 	ConfigPtrList ancestry = { 0 };
 	ConfigPtrList configsToBuild = { 0 };
 
-	Builder_CollectConfigsToBuild( buildScratch.arena, targetConfig, &ancestry, &configsToBuild );
+	Builder_CollectConfigsToBuild( g_buildContext.buildScratch.arena, targetConfig, &ancestry, &configsToBuild );
 
 	bool buildFailed = false;
 
 	for ( buildConfigPtrChunk_t *chunk = configsToBuild.head; chunk && !buildFailed; chunk = chunk->next ) {
 		for ( uint32_t configIndex = 0; configIndex < chunk->count; configIndex++ ) {
-			if ( Builder_BuildConfig( &buildContext, options, chunk->items[configIndex] ) == BUILD_RESULT_FAILED ) {
+			if ( Builder_BuildConfig( &g_buildContext, options, chunk->items[configIndex] ) == BUILD_RESULT_FAILED ) {
 				buildFailed = true;
 				break;
 			}
 		}
 	}
 
-	Builder_WriteDependencyCache( &buildContext, options );
+	Builder_WriteDependencyCache( &g_buildContext, options );
 
 	{
-		Builder_FreeArenas( &postBuildArena, 1 );
-		Builder_FreeArenas( threadResultArenas, numCPUCores );
+		Builder_FreeArenas( &g_buildContext.postBuildArena, 1 );
+		Builder_FreeArenas( g_buildContext.threadResultArenas, g_buildContext.numCPUCores );
 	}
 
 	// build summary
 	if ( !buildFailed ) {
-		Builder_AddBuildSummaryLine( &buildSummaryArena, &buildContext.buildSummary, "Total compile", buildContext.totalCompileTimeMS, NULL );
-		Builder_AddBuildSummaryLine( &buildSummaryArena, &buildContext.buildSummary, "Total link", buildContext.totalLinkTimeMS, NULL );
-		// Builder_AddBuildSummaryLine( &buildSummaryArena, &buildContext.buildSummary, "Total .builder-dependencies read", totalBuilderDepsReadTimeMS, NULL );
-		// Builder_AddBuildSummaryLine( &buildSummaryArena, &buildContext.buildSummary, "Total .builder-dependencies write", totalBuilderDepsWriteTimeMS, NULL );
+		Builder_AddBuildSummaryLine( &g_buildContext.buildSummaryArena, &g_buildContext.buildSummary, "Total compile", g_buildContext.totalCompileTimeMS, NULL );
+		Builder_AddBuildSummaryLine( &g_buildContext.buildSummaryArena, &g_buildContext.buildSummary, "Total link", g_buildContext.totalLinkTimeMS, NULL );
+		// Builder_AddBuildSummaryLine( &g_buildContext.buildSummaryArena, &g_buildContext.buildSummary, "Total .builder-dependencies read", totalBuilderDepsReadTimeMS, NULL );
+		// Builder_AddBuildSummaryLine( &g_buildContext.buildSummaryArena, &g_buildContext.buildSummary, "Total .builder-dependencies write", totalBuilderDepsWriteTimeMS, NULL );
 
 		printf( "Finished:\n" );
-		for ( buildSummaryPtrChunk_t *chunk = buildContext.buildSummary.head; chunk; chunk = chunk->next ) {
+		for ( buildSummaryPtrChunk_t *chunk = g_buildContext.buildSummary.head; chunk; chunk = chunk->next ) {
 			for ( uint32_t lineIndex = 0; lineIndex < chunk->count; lineIndex++ ) {
 				buildSummaryLine_t *line = chunk->items[lineIndex];
 
-				printf( "    %-*s : %f ms %s\n", buildContext.buildSummary.lineLength, line->description, line->timeMS, line->suffix ? line->suffix : "" );
+				printf( "    %-*s : %f ms %s\n", g_buildContext.buildSummary.lineLength, line->description, line->timeMS, line->suffix ? line->suffix : "" );
 			}
 		}
 
 		// separate because we want to get the end timestamp as late as possible
-		printf( "    %-*s : %f ms\n\n", buildContext.buildSummary.lineLength, "Total time", Builder_TimeMS() - totalTimeStart );
+		printf( "    %-*s : %f ms\n\n", g_buildContext.buildSummary.lineLength, "Total time", Builder_TimeMS() - totalTimeStart );
 	}
 
-	Builder_FreeArenas( &buildSummaryArena, 1 );
+	Builder_FreeArenas( &g_buildContext.buildSummaryArena, 1 );
 
-	Builder_RewindScratch( &buildScratch );
+	Builder_RewindScratch( &g_buildContext.buildScratch );
 
 	return buildFailed ? 1 : 0;
 }

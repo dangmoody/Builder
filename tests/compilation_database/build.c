@@ -21,8 +21,8 @@ int main( int argc, char **argv ) {
 		.binaryName			= "test_compilation_database",
 		.binaryFolder		= "bin",
 		.sourceFiles		= MakeStringList( "src/*.c" ),
-		.additionalIncludes	= MakeStringList( "include" ),
 		.defines			= MakeStringList( "HELPER_VALUE=5" ),
+		.additionalIncludes	= MakeStringList( "include" ),
 	};
 
 	options.defaultConfig = config;

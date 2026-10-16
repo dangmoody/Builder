@@ -646,6 +646,10 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 
 	Builder_SetCWD( argv );
 
+	if ( !Builder_SelfRebuild( options, argc, argv ) ) {
+		return false;
+	}
+
 	// validate the solution
 	{
 		bool validSolution = true;

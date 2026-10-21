@@ -1154,7 +1154,7 @@ bool Builder_GenerateVisualStudioSolution( BuilderOptions *options, VisualStudio
 						StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t\t<DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>\n" );	// TODO(DM): do we want to include the other debugger types?
 						StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t\t<LocalDebuggerDebuggerType>Auto</LocalDebuggerDebuggerType>\n" );
 						StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t\t<LocalDebuggerAttach>false</LocalDebuggerAttach>\n" );
-						StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t\t<LocalDebuggerCommand>%s</LocalDebuggerCommand>\n", fullBinaryPathFromProject );
+						StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t\t<LocalDebuggerCommand>%s%c%s</LocalDebuggerCommand>\n", fullBinaryPathFromProject, BUILDER_PATH_SEPARATOR, config->config->name );
 						StringBuilder_Appendf( scratch.arena, &vcxprojUserContent, "\t\t<LocalDebuggerWorkingDirectory>%s</LocalDebuggerWorkingDirectory>\n", !Builder_StringIsEmpty( config->runFromDirectory ) ? config->runFromDirectory : "$(SolutionDir)" );
 
 						// if debugger arguments were specified, put those in

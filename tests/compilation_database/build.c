@@ -8,7 +8,7 @@
 
 int main( int argc, char **argv ) {
 	BuilderOptions options = { 0 };
-	ApplyCompilerOverride( &options, argc, argv );
+	Test_ApplyCompilerOverride( &options, argc, argv );
 
 	options.selfRebuildConfig = CreateBuildConfig( &options );
 	*options.selfRebuildConfig = (BuildConfig) {

@@ -1,6 +1,6 @@
 #pragma once
 
-static void ApplyCompilerOverride( BuilderOptions *options, int argc, char **argv ) {
+static void Test_ApplyCompilerOverride( BuilderOptions *options, int argc, char **argv ) {
 	if ( HasCommandLineArg( argc, argv, "--clang" ) ) {
 		options->compilerPath = "../../tools/clang/bin/clang";
 		options->compilerVersion = "20.1.5";

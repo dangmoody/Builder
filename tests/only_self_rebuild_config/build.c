@@ -7,7 +7,7 @@
 // Build() should refuse with an error rather than trying to build the self rebuild config as the target
 int main( int argc, char **argv ) {
 	BuilderOptions options = { 0 };
-	ApplyCompilerOverride( &options, argc, argv );
+	Test_ApplyCompilerOverride( &options, argc, argv );
 
 	options.selfRebuildConfig = CreateBuildConfig( &options );
 	*options.selfRebuildConfig = (BuildConfig) {

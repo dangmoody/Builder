@@ -882,17 +882,6 @@ typedef struct buildSummaryList_t {
 	uint32_t						lineLength;
 } buildSummaryList_t;
 
-// name of the BuildConfig the user wants built: whatever --config=<name> says, or BuilderOptions::defaultConfig if that arg wasn't given
-static const char *Builder_GetNameOfConfigToBuild( const BuilderOptions *options, int argc, char **argv ) {
-	for ( int argIndex = 0; argIndex < argc; argIndex++ ) {
-		if ( Builder_StringStartsWith( argv[argIndex], ARG_CONFIG ) ) {
-			return argv[argIndex] + strlen( ARG_CONFIG );
-		}
-	}
-
-	return options->defaultConfig ? options->defaultConfig->name : NULL;
-}
-
 static bool Builder_IsWarningLevelAllowed_Clang( const char *warningLevel ) {
 	static const char *allowedWarningLevels[] = { "-Wall", "-Weverything", "-Wextra", "-Wpedantic" };
 
@@ -5210,9 +5199,21 @@ int Build( BuilderOptions *options, int argc, char **argv ) {
 	}
 
 	// validate cmd line args
-	const char *nameOfConfigToBuild = Builder_GetNameOfConfigToBuild( options, argc, argv );
 	BuildConfig *targetConfig = NULL;
 	{
+		const char *nameOfConfigToBuild = NULL;
+		for ( int argIndex = 0; argIndex < argc; argIndex++ ) {
+			if ( Builder_StringStartsWith( argv[argIndex], ARG_CONFIG ) ) {
+				nameOfConfigToBuild = argv[argIndex] + strlen( ARG_CONFIG );
+				break;
+			}
+		}
+
+		if ( !nameOfConfigToBuild && options->defaultConfig ) {
+			printf( "No " ARG_CONFIG " given, building default config \"%s\" (BuilderOptions::defaultConfig).\n", options->defaultConfig->name );
+			nameOfConfigToBuild = options->defaultConfig->name;
+		}
+
 		// the self rebuild config is registered like any other but is never a target
 		uint32_t targetableConfigCount = options->configs.count - ( options->selfRebuildConfig ? 1 : 0 );
 

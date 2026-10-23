@@ -410,7 +410,7 @@ bool Builder_Generate10xWorkspace( BuilderOptions *options, TenXWorkspace *works
 	BUILDER_ASSERT( options );
 
 	Builder_SetCmdArgs( options, argc, argv );
-	Builder_SetCWD( options, argv );
+	Builder_SetCWD( argv );
 
 	// initial workspace validation.
 	bool validWorkspace = true;

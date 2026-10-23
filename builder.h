@@ -4149,7 +4149,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 	uint32_t needsCompilePacketCount = 0;
 
 	if ( config->OnPreBuild ) {
-		Builder_LogVerbose( "Found a OnPreBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name ? config->name : "" );
+		printf( "Found a OnPreBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name ? config->name : "" );
 
 		config->OnPreBuild( config );
 	}
@@ -4681,7 +4681,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 	}
 
 	if ( config->OnPostBuild ) {
-		Builder_LogVerbose( "Found a OnPostBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name ? config->name : "" );
+		printf( "Found a OnPostBuild() func ptr for BuildConfig: \"%s\".  Running...\n", config->name ? config->name : "" );
 
 		config->OnPostBuild( config );
 	}

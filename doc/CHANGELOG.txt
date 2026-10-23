@@ -1,3 +1,16 @@
+v1.0.1, <RELEASE DATE HERE>:
+
+* Added 10X workspace generation via builder_10x.h (thanks @eddyowen!).
+	* #define BUILDER_10X_IMPLEMENTATION before including builder_10x.h.
+	* Call Builder_Generate10xWorkspace( BuilderOptions *, TenXWorkspace *, int argc, char **argv ) to generate a .10x file next to your build exe (or in TenXWorkspace::path, if set).
+	* One workspace entry is generated for every TenXConfig and TenXPlatform pair.
+	* See the quick start guide at the top of builder_10x.h for usage.
+* Builder now tells you when no --config was given and it's building BuilderOptions::defaultConfig instead.
+* Fixed BuilderOptions::consolidateCompilerArgs not doing anything (whoops).
+* Fixed Visual Studio project generation outputting a bad path for <LocalDebuggerCommand>.
+
+----------------------------------------------------------------
+
 v1.0.0, 10/10/2026:
 
 This release is now v1.0.0!

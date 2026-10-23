@@ -4367,6 +4367,7 @@ static builderBuildResult_t Builder_BuildConfig( builderBuildContext_t *context,
 					.compilePackets				= postBuildData->compilePackets,
 					.compilePacketCount			= needsCompilePacketCount,
 					.useMSVCSyntax				= context->compilerIsMSVC || context->compilerIsClangCL,
+					.consolidateCompilerArgs	= options->consolidateCompilerArgs,
 					.dependencyOutputs			= dependencyOutputs
 				};
 

@@ -4,60 +4,66 @@ Distributed under the [MIT License](LICENSE).
 
 ## Intro
 
-Builder is a single header file that you can use to build your C/C++ programs through C/C++ code.
+Builder is an alternative to the old ways of writing build instruct for C/C++ projects. Unlike Make/Premake/CMake or platform specific shell scripts, you write all your build instruction in native C/C++ and can take it anywhere.
 
-Builder is not a compiler.  Builder turns BuildConfigs into compiler and linker arguments, then calls the compiler that you want to use, and then calls the linker.
+Builder itself is not a separate program you install onto your system. It is just a header file you include into a custom C/C++ source file. In this source file, you will use `builder.h` to specify a list of build instructions for your project, then compile that as an isolated program using a supported compiler (see [Choosing a Compiler](#Choosing-a-Compiler) below). When you then want to build your main project you just run your executable Builder binary you just compiled.
 
-It works on Windows (supporting Clang, GCC, and MSVC) and Linux (Clang and GCC).
 
 ## Installation
-
 1. Download the latest release.
 2. Put the header file(s) in your project.
-3. ?????
-4. Profit!
+3. Write your own build instruction in a C/C++ file
+4. Compile your build exeuctable for your project
+5. Profit!!!
+
 
 ## Quick Start Guide
 
-You'll need a build script, which is just C/C++ code:
+As an example, here's a file called `build.c` which is just C/C++ code, into which you include builder. This is our equivalant of a custom `.bat`/`.sh` or `MAKE/CMAKE` file for your project:
 
 ```c
-#define BUILDER_IMPLEMENTATION
+#define BUILDER_IMPLEMENTATION // The main header for Builder follows the STB implementation strategy so you can isolate things if necessary
 #include "builder.h"
 
 int main( int argc, char **argv ) {
 	BuilderOptions options = { 0 };
 
-	BuildConfig *config = CreateBuildConfig( &options );
-	*config = (BuildConfig) {
-		.name			= "my_awesome_program",
-		.sourceFiles	= MakeStringList( "src/my_code.c" ),
+	// Lets create a main configuration for what our USER will be expected to run.
+	BuildConfig *mainConfig = CreateBuildConfig( &options );
+	*mainConfig = (BuildConfig) {
+		.name			= "main", // This is the name of this configuration - which we can invoke from the terminal wtih '--config='
+		.binaryName		= "hello", // On windows this will be "hello.exe", on UNIX just "hello"
+		.sourceFiles	= MakeStringList( "hello_world.c" ),
 	};
 
+	// This is how builder can know to re-trigger builds for itself if you alter this build.c file. This config allows you to tell your build executable how to rebuild itself.
 	options.selfRebuildConfig = CreateBuildConfig( &options );
 	*options.selfRebuildConfig = (BuildConfig) {
 		.name			= "self",
-		.sourceFiles	= MakeStringList( "build.c" ),
+		.sourceFiles	= MakeStringList( "build.c" ), // The name of the file we're in goes here as we're targeting ourselves. If you rename this file, update this too!
 	};
 
+	// Prior to calling the Build function is where you setup all your different configuration information. When you call Build, Builder will start doing all it's magic.
 	return Build( &options, argc, argv );
 }
 ```
 
-For the first ever build you'll need to invoke your compiler manually:
+Now you just need to compile your Builder program for your project.
 
-```
+You only need to do this once because after that it will catch when you alter the `build.c` file and recompile itself.
+
+``` shell
 clang -o build.exe build.c	# Windows
 clang -o build build.c		# Linux
 ```
 
-After that, once your `build.exe` is built you can just call it and, if it needs to, it will rebuild itself (if `BuilderOptions::selfRebuildConfig` is set):
+Now that you've turned your build instructions into an executable called `build.exe` you can just run that and you'll get your app:
 
-```
+``` shell
 build.exe
 ```
 
-Builder sets the working directory to the folder containing your build executable, so all relative paths in your build script are relative to that.
+It will rebuild itself (if `BuilderOptions::selfRebuildConfig` is set) if another builder instance spots this in it's dependency chain. Additionally - Builder sets the working directory to the folder containing your build executable, so all relative paths in your build script are relative to that.
 
 ## Multiple Build Configs
 
